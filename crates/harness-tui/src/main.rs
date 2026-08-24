@@ -38,10 +38,7 @@ fn parse_args() -> Result<Args, String> {
         match argv[i].as_str() {
             "--model" => args.model = Some(need_value(&mut i, "--model")?),
             "--base-url" => args.base_url = Some(need_value(&mut i, "--base-url")?),
-            "--project" => {
-                args.project =
-                    Some(PathBuf::from(need_value(&mut i, "--project")?))
-            }
+            "--project" => args.project = Some(PathBuf::from(need_value(&mut i, "--project")?)),
             "--headless" => {
                 // Task = following words up to the next --flag; none ⇒ stdin.
                 let mut parts: Vec<String> = Vec::new();

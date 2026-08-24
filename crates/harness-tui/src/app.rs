@@ -412,8 +412,8 @@ pub async fn run(
 mod tests {
     use super::*;
     use crate::views;
-    use harness_core::agent::{spawn, LoopConfig};
-    use ratatui::{backend::TestBackend, Terminal};
+    use harness_core::agent::{LoopConfig, spawn};
+    use ratatui::{Terminal, backend::TestBackend};
 
     fn test_app() -> App {
         // Bogus provider URL: handles are valid, no network is touched.
@@ -435,7 +435,13 @@ mod tests {
         let mut out = String::new();
         for row in 0..24 {
             for col in 0..80 {
-                out.push(term.backend().buffer()[(col, row)].symbol().chars().next().unwrap_or(' '));
+                out.push(
+                    term.backend().buffer()[(col, row)]
+                        .symbol()
+                        .chars()
+                        .next()
+                        .unwrap_or(' '),
+                );
             }
             out.push('\n');
         }
@@ -459,7 +465,10 @@ mod tests {
             duration_ms: 3,
             summary: "read_file: src/lib.rs (lines 1–10)".into(),
         });
-        app.on_core_event(Event::UsageUpdated { prompt_tokens: 900, completion_tokens: 100 });
+        app.on_core_event(Event::UsageUpdated {
+            prompt_tokens: 900,
+            completion_tokens: 100,
+        });
         app.on_core_event(Event::ApprovalRequired {
             id: 7,
             tool: "bash".into(),
@@ -475,7 +484,7 @@ mod tests {
         assert!(screen.contains("cargo test"), "{screen}");
         assert!(screen.contains("always prefix"), "{screen}");
         assert!(screen.contains("test-model-x"), "{screen}"); // status bar
-        assert!(screen.contains("1000 tok"), "{screen}");     // usage meter
+        assert!(screen.contains("1000 tok"), "{screen}"); // usage meter
 
         // Answering the modal clears it.
         if let Some(p) = app.pending.take() {
