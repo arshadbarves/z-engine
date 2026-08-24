@@ -148,6 +148,36 @@ pub fn spawn_with_recorder(
     resume: Option<ResumeState>,
     recorder: Option<SessionWriter>,
 ) -> (AgentHandle, EventRx) {
+    let abort_flag = Arc::new(AtomicBool::new(false));
+
+    // Sub-agent runner shares the provider client and the parent's abort
+    // flag so Esc tears down the whole subtree.
+    let sub_client = match Client::new(&cfg.base_url, cfg.api_key.clone()) {
+        Ok(c) => c,
+        Err(e) => {
+            let (_cmd_tx, _cmd_rx) = mpsc::unbounded_channel::<Command>();
+            let (ev_tx, ev_rx) = mpsc::unbounded_channel::<Event>();
+            tokio::spawn(async move {
+                let _ = ev_tx.send(Event::Error(format!("provider init failed: {e}")));
+            });
+            return (AgentHandle { cmd_tx: _cmd_tx }, EventRx { rx: ev_rx });
+        }
+    };
+    let model = cfg.model.clone();
+    let project_root = cfg.project_root.clone();
+    let tmp_dir = cfg.tmp_dir.clone();
+    let sub_abort = Arc::clone(&abort_flag);
+    let runner: crate::tools::SubAgentRunner = Arc::new(move |prompt: String, max_rounds: u32| {
+        let client = sub_client.clone();
+        let model = model.clone();
+        let root = project_root.clone();
+        let tmp = tmp_dir.clone();
+        let abort = Arc::clone(&sub_abort);
+        Box::pin(
+            async move { run_isolated(client, model, root, tmp, abort, &prompt, max_rounds).await },
+        )
+    });
+
     let (cmd_tx, cmd_rx) = mpsc::unbounded_channel::<Command>();
     let (ev_tx, ev_rx) = mpsc::unbounded_channel::<Event>();
 
@@ -158,7 +188,7 @@ pub fn spawn_with_recorder(
             )));
             let registry = ToolRegistry::builtins();
             tokio::spawn(agent_task(
-                cfg, client, perms, registry, cmd_rx, ev_tx, resume, recorder,
+                cfg, client, perms, registry, cmd_rx, ev_tx, resume, recorder, runner, abort_flag,
             ));
         }
         Err(e) => {
@@ -222,14 +252,16 @@ async fn agent_task(
     ev_tx: UnboundedSender<Event>,
     resume: Option<ResumeState>,
     mut recorder: Option<SessionWriter>,
+    runner: crate::tools::SubAgentRunner,
+    abort_flag: Arc<AtomicBool>,
 ) {
-    let abort_flag = Arc::new(AtomicBool::new(false));
     let notes = Arc::new(Mutex::new(NotesStore::default()));
     let mut ctx = ToolCtx::new(
         cfg.project_root.clone(),
         Arc::clone(&perms),
         cfg.tmp_dir.clone(),
-    );
+    )
+    .with_task_runner(runner);
     ctx.notes = Arc::clone(&notes);
     // L0 is rebuilt per-request by l0_message(); nothing to keep here.
     let meter = BudgetMeter::new(cfg.max_context_tokens);
@@ -356,6 +388,133 @@ async fn compact_working_set(
         "context compacted: ~{} -> ~{} tokens ({} tool outputs elided)",
         before, after, outcome.elided_tool_outputs
     )));
+}
+
+/// Isolated sub-agent loop (spec section 9 v0.7): read-only toolset, own
+/// transcript, bounded rounds; returns the final assistant text only.
+async fn run_isolated(
+    client: Client,
+    model: String,
+    project_root: PathBuf,
+    tmp_dir: PathBuf,
+    abort: Arc<AtomicBool>,
+    prompt: &str,
+    max_rounds: u32,
+) -> Result<String, String> {
+    const SUB_SYSTEM: &str = "You are a research sub-agent inside the harness coding agent.\nYou explore a repository read-only to answer one specific question.\nBe efficient: read only what is needed, then report.\nYour final message is delivered verbatim to the parent agent as the answer.\nStructure it as short factual bullet lines.";
+
+    let perms = Arc::new(Mutex::new(PolicyEngine::new(Vec::new())));
+    let mut ctx = ToolCtx::new(project_root.clone(), Arc::clone(&perms), tmp_dir);
+    ctx.abort = Arc::clone(&abort);
+    let registry = ToolRegistry::readonly_subset();
+
+    let mut messages = vec![
+        ChatMessage::system(SUB_SYSTEM),
+        ChatMessage::user(prompt.to_string()),
+    ];
+
+    for round in 1..=max_rounds {
+        if abort.load(Ordering::Relaxed) {
+            return Err("aborted".into());
+        }
+        tracing::debug!(round, "sub-agent round");
+        let request = ChatRequest::new(model.clone(), messages.clone()).with_tools(registry.defs());
+        let mut stream = client.stream_chat(&request, Arc::clone(&abort));
+
+        let mut text = String::new();
+        let mut acc = ToolCallAccumulator::default();
+        // No command watching: sub-agents die with the parent's flag.
+        loop {
+            tokio::select! {
+                item = stream.recv() => match item {
+                    None => break,
+                    Some(Err(e)) => return Err(format!("provider error in sub-agent: {e}")),
+                    Some(Ok(StreamEvent::TextDelta(t))) => text.push_str(&t),
+                    Some(Ok(StreamEvent::ToolCallDelta { index, id, name, args_delta })) => {
+                        acc.absorb(index, id.as_deref(), name.as_deref(), &args_delta);
+                    }
+                    Some(Ok(StreamEvent::Usage(_))) => {}
+                    Some(Ok(StreamEvent::Finish(_))) => {}
+                    Some(Ok(StreamEvent::Done)) => break,
+                },
+                _ = tokio::time::sleep(std::time::Duration::from_millis(200)) => {
+                    if abort.load(Ordering::Relaxed) {
+                        return Err("aborted".into());
+                    }
+                }
+            }
+        }
+
+        let finalized = acc.finish();
+        eprintln!(
+            "[DBG-SUB] round {round} text_len={} finalized={}",
+            text.len(),
+            finalized.len()
+        );
+        let mut complete_calls: Vec<ToolCall> = Vec::new();
+        for call in finalized {
+            match call {
+                AccumulatedToolCall::Complete(c) => complete_calls.push(c),
+                AccumulatedToolCall::MalformedArguments {
+                    id,
+                    name,
+                    raw_arguments,
+                    reason,
+                } => {
+                    let raw_short: String = raw_arguments.chars().take(160).collect();
+                    messages.push(ChatMessage::tool_result(
+                        id,
+                        format!(
+                            "ERROR: arguments not valid JSON ({reason}). You sent: {raw_short}"
+                        ),
+                    ));
+                    let _ = name;
+                }
+                AccumulatedToolCall::MissingId { index } => {
+                    messages.push(ChatMessage::user(format!(
+                        "[harness] tool call index {index} had no id; skipped."
+                    )));
+                }
+            }
+        }
+
+        messages.push(ChatMessage::Assistant {
+            content: (!text.is_empty()).then_some(text),
+            tool_calls: complete_calls.clone(),
+        });
+
+        eprintln!("[DBG-SUB] complete={} returning?", complete_calls.len());
+        if complete_calls.is_empty() {
+            return Ok(messages
+                .last()
+                .and_then(|m| match m {
+                    ChatMessage::Assistant {
+                        content: Some(c), ..
+                    } => Some(c.clone()),
+                    _ => None,
+                })
+                .unwrap_or_default());
+        }
+
+        for call in &complete_calls {
+            if abort.load(Ordering::Relaxed) {
+                return Err("aborted".into());
+            }
+            let input = parse_input(&call.function.arguments);
+            let content = match registry.get(&call.function.name) {
+                Some(tool) => match tool.run(input, &ctx).await {
+                    Ok(out) => out.result,
+                    Err(e) => format!("ERROR: {e}"),
+                },
+                None => format!("ERROR: unknown tool {}", call.function.name),
+            };
+            messages.push(ChatMessage::tool_result(call.id.clone(), content));
+        }
+    }
+
+    Err(format!(
+        "sub-agent hit its {max_rounds}-round limit without concluding"
+    ))
 }
 
 /// Side-request that compresses demoted turns into terse summary bullets.

@@ -15,6 +15,7 @@ pub mod file_state;
 pub mod glob;
 pub mod grep;
 pub mod read_file;
+pub mod task;
 pub mod write_file;
 
 use std::collections::{BTreeSet, HashMap};
@@ -85,7 +86,16 @@ pub struct ToolCtx {
     pub notes: Arc<Mutex<crate::context::notes::NotesStore>>,
     /// Set whenever a file is read/written so the repo map regenerates.
     pub repo_map_dirty: Arc<std::sync::atomic::AtomicBool>,
+    /// Optional spawner for isolated sub-agent research loops (`task` tool).
+    pub task_runner: Option<SubAgentRunner>,
 }
+
+/// Future-yielding executor for isolated sub-loops. Built by the agent
+/// module (which owns the provider client) and attached to the context so
+/// the `task` tool can delegate without knowing about providers.
+pub type SubAgentFuture =
+    std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, String>> + Send>>;
+pub type SubAgentRunner = Arc<dyn Fn(String, u32) -> SubAgentFuture + Send + Sync>;
 
 impl ToolCtx {
     pub fn new(project_root: PathBuf, perms: Arc<Mutex<PolicyEngine>>, tmp_dir: PathBuf) -> Self {
@@ -99,7 +109,14 @@ impl ToolCtx {
             file_state: Arc::new(Mutex::new(file_state::FileStateTracker::default())),
             notes: Arc::new(Mutex::new(crate::context::notes::NotesStore::default())),
             repo_map_dirty: Arc::new(std::sync::atomic::AtomicBool::new(true)),
+            task_runner: None,
         }
+    }
+
+    /// Attach a sub-agent runner (builder style).
+    pub fn with_task_runner(mut self, runner: SubAgentRunner) -> Self {
+        self.task_runner = Some(runner);
+        self
     }
 
     /// Canonicalized best-effort containment check: does `p` (relative to
@@ -248,6 +265,16 @@ impl ToolRegistry {
         &self.order
     }
 
+    /// Read-only subset for sub-agents (spec section 9 v0.7): isolated
+    /// explore/research loops cannot mutate the workspace.
+    pub fn readonly_subset() -> Self {
+        let mut reg = Self::new();
+        reg.register(Arc::new(read_file::ReadFileTool));
+        reg.register(Arc::new(glob::GlobTool));
+        reg.register(Arc::new(grep::GrepTool));
+        reg
+    }
+
     /// Definitions advertised in chat-completion requests.
     pub fn defs(&self) -> Vec<crate::provider::ToolDef> {
         self.order
@@ -269,6 +296,11 @@ impl ToolRegistry {
         reg.register(Arc::new(glob::GlobTool));
         reg.register(Arc::new(grep::GrepTool));
         reg.register(Arc::new(context_notes::UpdateContextNotesTool));
+        reg.register(Arc::new(task::TaskTool));
+
+        // Read-only subset used by sub-agents (spec section 9 v0.7):
+        // isolated loops default to exploration-only capabilities.
+
         reg
     }
 }
