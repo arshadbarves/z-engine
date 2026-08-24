@@ -19,7 +19,12 @@ use std::time::Instant;
 
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
-use crate::context;
+use crate::context::{
+    self,
+    budget::{BudgetMeter, Pressure},
+    compact,
+    notes::NotesStore,
+};
 use crate::perms::{Decision, PolicyEngine};
 use crate::provider::{
     AccumulatedToolCall, ChatMessage, ChatRequest, Client, ProviderError, StreamEvent, ToolCall,
@@ -45,6 +50,10 @@ pub struct LoopConfig {
     pub tmp_dir: PathBuf,
     /// Seed bash-prefix allow rules (from config files).
     pub initial_allow_rules: Vec<String>,
+    /// Context budget (spec §6); drives warnings + auto-compaction.
+    pub max_context_tokens: u32,
+    /// Verbatim L2 tail size for compaction.
+    pub keep_recent_messages: usize,
 }
 
 impl LoopConfig {
@@ -56,6 +65,8 @@ impl LoopConfig {
             project_root: PathBuf::from("."),
             tmp_dir: std::env::temp_dir(),
             initial_allow_rules: Vec::new(),
+            max_context_tokens: 120_000,
+            keep_recent_messages: compact::DEFAULT_KEEP_RECENT,
         }
     }
 }
@@ -81,6 +92,16 @@ impl AgentHandle {
 
     pub fn abort(&self) {
         let _ = self.cmd_tx.send(Command::Abort);
+    }
+
+    /// Force context compaction now (`/compact`).
+    pub fn compact(&self) {
+        let _ = self.cmd_tx.send(Command::Compact);
+    }
+
+    /// Dump the current L1 notes (`/notes`).
+    pub fn request_notes(&self) {
+        let _ = self.cmd_tx.send(Command::RequestNotes);
     }
 
     /// Ask the loop task to finish gracefully.
@@ -130,9 +151,41 @@ pub fn spawn(cfg: LoopConfig) -> (AgentHandle, EventRx) {
 }
 
 struct LoopState {
-    messages: Vec<ChatMessage>,
-    cumulative_usage: Usage,
+    /// Everything between the L0/L1 prefix and the current turn.
+    working: Vec<ChatMessage>,
     approval_counter: u64,
+    /// Last provider-reported usage (authoritative pressure signal).
+    last_usage: Usage,
+    /// Set by Command::Compact.
+    force_compact: bool,
+}
+
+impl LoopState {
+    fn estimate_working(&self) -> u64 {
+        let mut bytes = 0usize;
+        for m in &self.working {
+            let text = match m {
+                ChatMessage::System { content }
+                | ChatMessage::User { content }
+                | ChatMessage::Tool { content, .. } => content.as_str(),
+                ChatMessage::Assistant { content, .. } => content.as_deref().unwrap_or(""),
+            };
+            bytes += text.len();
+        }
+        // ~4 bytes per token for code/English; estimator calibrated in v1.0.
+        (bytes as u64 / 4).max(if bytes > 0 { 1 } else { 0 })
+    }
+
+    fn pressure_tokens(&self) -> u64 {
+        // Provider-reported usage is authoritative once available; before
+        // that, fall back to the local estimator.
+        let reported = self.last_usage.prompt_tokens + self.last_usage.completion_tokens;
+        if reported > 0 {
+            reported
+        } else {
+            self.estimate_working()
+        }
+    }
 }
 
 async fn agent_task(
@@ -144,59 +197,139 @@ async fn agent_task(
     ev_tx: UnboundedSender<Event>,
 ) {
     let abort_flag = Arc::new(AtomicBool::new(false));
-    let ctx = ToolCtx::new(
+    let notes = Arc::new(Mutex::new(NotesStore::default()));
+    let mut ctx = ToolCtx::new(
         cfg.project_root.clone(),
         Arc::clone(&perms),
         cfg.tmp_dir.clone(),
     );
-    let system_prompt = context::build_system_prompt(
-        &cfg.project_root,
-        context::load_agents_md(&cfg.project_root).as_deref(),
-    );
+    ctx.notes = Arc::clone(&notes);
+    // L0 is rebuilt per-request by l0_message(); nothing to keep here.
+    let meter = BudgetMeter::new(cfg.max_context_tokens);
 
     let mut state = LoopState {
-        messages: vec![ChatMessage::system(system_prompt)],
-        cumulative_usage: Usage::default(),
+        working: Vec::new(),
         approval_counter: 0,
+        last_usage: Usage::default(),
+        force_compact: false,
     };
 
     while let Some(command) = next_action(&mut cmd_rx).await {
-        let Command::SubmitMessage(user_text) = command else {
-            continue; // stale Approve/Deny/Abort while idle â ignore
-        };
+        match command {
+            Command::SubmitMessage(user_text) => {
+                state.working.push(ChatMessage::user(user_text));
+                let _ = ev_tx.send(Event::TurnStarted);
 
-        state.messages.push(ChatMessage::user(user_text));
-        let _ = ev_tx.send(Event::TurnStarted);
+                let outcome = run_turn(
+                    &cfg,
+                    &client,
+                    &registry,
+                    &ctx,
+                    &mut state,
+                    &mut cmd_rx,
+                    &ev_tx,
+                    &abort_flag,
+                    &meter,
+                    &notes,
+                )
+                .await;
 
-        let outcome = run_turn(
-            &cfg,
-            &client,
-            &registry,
-            &ctx,
-            &mut state,
-            &mut cmd_rx,
-            &ev_tx,
-            &abort_flag,
-        )
-        .await;
-
-        match outcome {
-            TurnOutcome::Completed => {
-                let _ = ev_tx.send(Event::TurnCompleted {
-                    prompt_tokens: state.cumulative_usage.prompt_tokens,
-                    completion_tokens: state.cumulative_usage.completion_tokens,
-                });
+                match outcome {
+                    TurnOutcome::Completed => {
+                        let _ = ev_tx.send(Event::TurnCompleted {
+                            prompt_tokens: state.last_usage.prompt_tokens,
+                            completion_tokens: state.last_usage.completion_tokens,
+                        });
+                    }
+                    TurnOutcome::Aborted => {
+                        abort_flag.store(false, Ordering::Relaxed);
+                        let _ = ev_tx.send(Event::TurnAborted);
+                    }
+                    TurnOutcome::Failed(msg) => {
+                        let _ = ev_tx.send(Event::Error(msg));
+                    }
+                }
             }
-            TurnOutcome::Aborted => {
-                abort_flag.store(false, Ordering::Relaxed);
-                let _ = ev_tx.send(Event::TurnAborted);
+            Command::Compact => {
+                state.force_compact = true;
+                let _ = ev_tx.send(Event::StatusNote("compaction requested".into()));
             }
-            TurnOutcome::Failed(msg) => {
-                let _ = ev_tx.send(Event::Error(msg));
+            Command::RequestNotes => {
+                let rendered = notes.lock().ok().and_then(|n| n.render_block());
+                let _ = ev_tx.send(Event::StatusNote(
+                    rendered.unwrap_or_else(|| "no context notes recorded".into()),
+                ));
             }
+            _ => { /* stale Approve/Deny/Abort while idle are ignored */ }
         }
     }
     tracing::debug!("agent task exiting");
+}
+
+/// L0 prefix message (system + AGENTS.md), rebuilt per request but
+/// byte-stable across rounds unless AGENTS.md changes.
+fn l0_message(cfg: &LoopConfig) -> ChatMessage {
+    ChatMessage::system(context::build_system_prompt(
+        &cfg.project_root,
+        context::load_agents_md(&cfg.project_root).as_deref(),
+    ))
+}
+
+/// Compaction driver (spec section 6): elide L4, summarize L3 into L1.
+async fn compact_working_set(
+    client: &Client,
+    cfg: &LoopConfig,
+    state: &mut LoopState,
+    notes: &Arc<Mutex<NotesStore>>,
+    ev_tx: &UnboundedSender<Event>,
+) {
+    let before = state.pressure_tokens();
+    let mut outcome = compact::compact(&state.working, cfg.keep_recent_messages, &cfg.tmp_dir);
+
+    if !outcome.summarize_input.is_empty() {
+        let summary = summarize_segment(client, cfg, &outcome.summarize_input).await;
+        if !summary.is_empty() {
+            if let Ok(mut n) = notes.lock() {
+                n.add_summary(summary);
+            }
+        }
+    }
+
+    state.working = std::mem::take(&mut outcome.messages);
+    let after = state.estimate_working();
+    let _ = ev_tx.send(Event::StatusNote(format!(
+        "context compacted: ~{} -> ~{} tokens ({} tool outputs elided)",
+        before, after, outcome.elided_tool_outputs
+    )));
+}
+
+/// Side-request that compresses demoted turns into terse summary bullets.
+async fn summarize_segment(client: &Client, cfg: &LoopConfig, input: &str) -> String {
+    const SUMMARIZER_SYSTEM: &str = "You compress an earlier portion of a coding-agent session.\nOutput terse markdown bullet lines under exactly three headings:\nFACTS / DECISIONS / OPEN THREADS. Keep file paths, names, numbers. No preamble.";
+
+    let clipped: String = input.chars().take(12_000).collect();
+    let req = ChatRequest::new(
+        cfg.model.clone(),
+        vec![
+            ChatMessage::system(SUMMARIZER_SYSTEM),
+            ChatMessage::user(clipped),
+        ],
+    );
+    let abort = Arc::new(AtomicBool::new(false));
+    let mut rx = client.stream_chat(&req, abort);
+    let mut out = String::new();
+    while let Some(item) = rx.recv().await {
+        match item {
+            Ok(StreamEvent::TextDelta(t)) => out.push_str(&t),
+            Ok(StreamEvent::Done) | Ok(StreamEvent::Finish(_)) => {}
+            Ok(_) => {}
+            Err(e) => {
+                tracing::warn!(error = %e, "summarizer stream failed");
+                return String::new();
+            }
+        }
+    }
+    out.trim().to_string()
 }
 
 /// Wait for a meaningful action; channel close / Shutdown ends the task.
@@ -223,6 +356,8 @@ async fn run_turn(
     cmd_rx: &mut UnboundedReceiver<Command>,
     ev_tx: &UnboundedSender<Event>,
     abort_flag: &Arc<AtomicBool>,
+    meter: &BudgetMeter,
+    notes: &Arc<Mutex<NotesStore>>,
 ) -> TurnOutcome {
     let mut rounds: u32 = 0;
 
@@ -238,8 +373,41 @@ async fn run_turn(
             ));
         }
 
+        // ---- pressure management (spec §6) ---------------------------
+        if state.force_compact || meter.level(state.pressure_tokens()) == Pressure::Compact {
+            compact_working_set(client, cfg, state, notes, ev_tx).await;
+            state.force_compact = false;
+        } else if meter.level(state.pressure_tokens()) == Pressure::Warn {
+            let _ = ev_tx.send(Event::StatusNote(format!(
+                "context at {} tokens ({}% of budget)",
+                state.pressure_tokens(),
+                state.pressure_tokens() * 100 / u64::from(meter.max_tokens.max(1))
+            )));
+        }
+        // Eager droppable elision — every round, pressure or not.
+        {
+            let ids = notes
+                .lock()
+                .map(|mut n| n.take_droppable_ids())
+                .unwrap_or_default();
+            let elided = compact::elide_droppable(&mut state.working, &ids, &cfg.tmp_dir);
+            if elided > 0 {
+                let _ = ev_tx.send(Event::StatusNote(format!(
+                    "dropped {elided} marked tool output(s) from context"
+                )));
+            }
+        }
+
+        // ---- assemble L0 + L1 + working ------------------------------
+        let mut request_messages = Vec::with_capacity(state.working.len() + 2);
+        request_messages.push(l0_message(cfg));
+        if let Some(notes_block) = notes.lock().ok().and_then(|n| n.render_block()) {
+            request_messages.push(ChatMessage::system(notes_block));
+        }
+        request_messages.extend(state.working.iter().cloned());
+
         let request =
-            ChatRequest::new(cfg.model.clone(), state.messages.clone()).with_tools(registry.defs());
+            ChatRequest::new(cfg.model.clone(), request_messages).with_tools(registry.defs());
         let mut stream = client.stream_chat(&request, Arc::clone(abort_flag));
 
         // ---- consume the stream --------------------------------------
@@ -251,7 +419,7 @@ async fn run_turn(
             ev_tx,
             &mut text,
             &mut acc,
-            &mut state.cumulative_usage,
+            &mut state.last_usage,
             abort_flag,
         )
         .await;
@@ -287,19 +455,19 @@ async fn run_turn(
                 }
                 AccumulatedToolCall::MissingId { index } => {
                     tracing::warn!(index, "tool-call delta without id; skipped");
-                    state.messages.push(ChatMessage::user(format!(
+                    state.working.push(ChatMessage::user(format!(
                         "[harness] a tool call (index {index}) arrived without an id and was skipped."
                     )));
                 }
             }
         }
 
-        state.messages.push(ChatMessage::Assistant {
+        state.working.push(ChatMessage::Assistant {
             content: (!text.is_empty()).then_some(text),
             tool_calls: complete_calls.clone(),
         });
         for (id, content) in synthetic_errors {
-            state.messages.push(ChatMessage::tool_result(id, content));
+            state.working.push(ChatMessage::tool_result(id, content));
         }
 
         if complete_calls.is_empty() {
@@ -322,7 +490,7 @@ async fn run_turn(
             ExecutionsOutcome::Ran(results) => {
                 for (call_id, content) in results {
                     state
-                        .messages
+                        .working
                         .push(ChatMessage::tool_result(call_id, content));
                 }
             }

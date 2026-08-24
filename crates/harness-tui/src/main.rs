@@ -126,6 +126,8 @@ async fn run(args: Args) -> anyhow::Result<()> {
         project_root: project_root.clone(),
         tmp_dir: std::env::temp_dir(),
         initial_allow_rules: config.permissions.allow.clone(),
+        max_context_tokens: config.max_context_tokens,
+        keep_recent_messages: 12,
     };
 
     if let Some(task) = args.headless_task {

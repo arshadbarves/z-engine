@@ -53,6 +53,7 @@ pub struct App {
     pub pending: Option<PendingApproval>,
     pub turn_active: bool,
     pub model: String,
+    pub max_context_tokens: u32,
     pub session_tag: String,
     pub prompt_tokens: u64,
     pub completion_tokens: u64,
@@ -75,6 +76,7 @@ impl App {
             pending: None,
             turn_active: false,
             model: config.model.clone(),
+            max_context_tokens: config.max_context_tokens,
             session_tag,
             prompt_tokens: 0,
             completion_tokens: 0,
@@ -146,6 +148,22 @@ impl App {
                 let text = self.input.trim().to_string();
                 if text.is_empty() || self.turn_active {
                     return;
+                }
+                // Slash commands never reach the model.
+                match text.as_str() {
+                    "/compact" => {
+                        self.input.clear();
+                        self.blocks
+                            .push(Block::Notice("[compacting context…]".into()));
+                        self.handle.compact();
+                        return;
+                    }
+                    "/notes" => {
+                        self.input.clear();
+                        self.handle.request_notes();
+                        return;
+                    }
+                    _ => {}
                 }
                 self.input.clear();
                 self.history.push_back(text.clone());

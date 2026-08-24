@@ -16,7 +16,7 @@
 use serde_json::Value;
 
 /// Tools that never prompt (safe information gathering).
-const AUTO_ALLOW_TOOLS: &[&str] = &["read_file", "glob", "grep"];
+const AUTO_ALLOW_TOOLS: &[&str] = &["read_file", "glob", "grep", "update_context_notes"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Decision {
