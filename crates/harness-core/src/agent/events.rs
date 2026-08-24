@@ -44,6 +44,8 @@ pub enum Event {
         tool: String,
         input_preview: String,
         suggested_rule: Option<String>,
+        /// Rich preview (e.g. unified diff for write/edit).
+        detail_preview: Option<String>,
     },
     UsageUpdated {
         prompt_tokens: u64,

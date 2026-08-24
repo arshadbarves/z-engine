@@ -37,6 +37,8 @@ pub struct PendingApproval {
     pub tool: String,
     pub input_preview: String,
     pub suggested_rule: Option<String>,
+    /// Rich preview (unified diff) for editing tools.
+    pub detail_preview: Option<String>,
 }
 
 pub struct App {
@@ -276,6 +278,7 @@ impl App {
                 tool,
                 input_preview,
                 suggested_rule,
+                detail_preview,
             } => {
                 self.finish_streaming();
                 self.pending = Some(PendingApproval {
@@ -283,6 +286,7 @@ impl App {
                     tool,
                     input_preview,
                     suggested_rule,
+                    detail_preview,
                 });
             }
             Event::UsageUpdated {
@@ -469,22 +473,30 @@ mod tests {
             prompt_tokens: 900,
             completion_tokens: 100,
         });
-        app.on_core_event(Event::ApprovalRequired {
-            id: 7,
-            tool: "bash".into(),
-            input_preview: r#"{"command":"cargo test"}"#.into(),
-            suggested_rule: Some("cargo test*".into()),
-        });
 
+        // Phase 1: transcript + status before any modal overlays it.
         let screen = draw(&app);
         assert!(screen.contains("you ❯ fix the failing test"), "{screen}");
         assert!(screen.contains("Reading the repo."), "{screen}");
         assert!(screen.contains("read_file"), "{screen}");
-        assert!(screen.contains("approval required"), "{screen}");
-        assert!(screen.contains("cargo test"), "{screen}");
-        assert!(screen.contains("always prefix"), "{screen}");
         assert!(screen.contains("test-model-x"), "{screen}"); // status bar
         assert!(screen.contains("1000 tok"), "{screen}"); // usage meter
+
+        // Phase 2: modal overlays the middle of the screen.
+        app.on_core_event(Event::ApprovalRequired {
+            id: 7,
+            tool: "write_file".into(),
+            input_preview: r#"{"path":"src/lib.rs"}"#.into(),
+            suggested_rule: None,
+            detail_preview: Some(
+                "--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1,2 +1,2 @@\n-fn old() {}\n+fn new() {}\n"
+                    .into(),
+            ),
+        });
+        let screen = draw(&app);
+        assert!(screen.contains("approval required"), "{screen}");
+        assert!(screen.contains("fn new()"), "{screen}"); // syntax-highlighted diff body
+        assert!(screen.contains("always prefix"), "{screen}");
 
         // Answering the modal clears it.
         if let Some(p) = app.pending.take() {
