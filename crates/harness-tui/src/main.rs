@@ -8,8 +8,16 @@ mod views;
 
 use std::path::PathBuf;
 
-use harness_core::agent::{LoopConfig, spawn};
+use harness_core::agent::{LoopConfig, ResumeState, spawn_with_recorder};
 use harness_core::config::{CliOverrides, Config};
+use harness_core::session::{self, SessionWriter};
+
+fn sessions_dir() -> PathBuf {
+    dirs::data_dir()
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .join("harness")
+        .join("sessions")
+}
 
 /// CLI surface for v0.1 (formalized in v1.0).
 #[derive(Debug, Default)]
@@ -24,6 +32,10 @@ struct Args {
     /// Headless companion: auto-approve every gated action (unsafe
     /// convenience for scripted acceptance runs).
     auto_approve: bool,
+    /// Open the session picker at startup.
+    resume: bool,
+    /// Resume a specific session by ULID (or path).
+    session: Option<String>,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -53,6 +65,8 @@ fn parse_args() -> Result<Args, String> {
                 });
             }
             "--auto-approve" => args.auto_approve = true,
+            "--resume" => args.resume = true,
+            "--session" => args.session = Some(need_value(&mut i, "--session")?),
             "--help" | "-h" => {
                 println!(
                     "harness — personal TUI coding agent (v0.1)\n\nUSAGE:\n  harness [--model M] [--base-url URL] [--project DIR]\n          [--headless \"task\" | --headless < task.txt] [--auto-approve]"
@@ -119,6 +133,44 @@ async fn run(args: Args) -> anyhow::Result<()> {
         .clone()
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
+    // ---- session persistence (spec section 8) ------------------------
+    let mut resume_state = None;
+    let mut recorder = None;
+    let mut session_tag: Option<String> = None;
+    if args.resume || args.session.is_some() {
+        let chosen = match &args.session {
+            Some(id) => {
+                // Accept a full path, a bare ULID, or a bare filename.
+                let direct = PathBuf::from(id);
+                let in_dir = sessions_dir().join(id);
+                let with_ext = sessions_dir().join(format!("{id}.jsonl"));
+                [direct, in_dir, with_ext].into_iter().find(|p| p.exists())
+            }
+            None => views::picker::pick_interactive(&sessions_dir())?,
+        };
+        if let Some(path) = chosen {
+            let events = session::read_events(&path)?;
+            let replayed = session::replay(&events);
+            resume_state = Some(ResumeState {
+                working: replayed.working,
+                note_payloads: replayed.notes_replayed,
+            });
+            recorder = Some(SessionWriter::append_to(&path)?);
+            session_tag = path
+                .file_stem()
+                .map(|s| s.to_string_lossy().chars().take(6).collect());
+        }
+    }
+    if recorder.is_none() {
+        let w = SessionWriter::create(&sessions_dir())?;
+        session_tag = w
+            .path
+            .file_stem()
+            .map(|s| s.to_string_lossy().chars().take(6).collect());
+        recorder = Some(w);
+    }
+    let session_tag = session_tag.unwrap_or_else(|| "??????".into());
+
     let lc = LoopConfig {
         model: config.model.clone(),
         base_url: config.base_url.clone(),
@@ -139,7 +191,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
         } else {
             task
         };
-        let (handle, ev_rx) = spawn(lc);
+        let (handle, ev_rx) = spawn_with_recorder(lc, resume_state, recorder);
         return headless::run_one_shot(handle, ev_rx, &task, args.auto_approve).await;
     }
 
@@ -153,9 +205,17 @@ async fn run(args: Args) -> anyhow::Result<()> {
         );
     }
 
-    let (handle, ev_rx) = spawn(lc);
+    let (handle, ev_rx) = spawn_with_recorder(lc, resume_state, recorder);
     let mut terminal = tui_init()?;
-    let res = app::run(&mut terminal, handle, ev_rx, config.clone(), &project_root).await;
+    let res = app::run(
+        &mut terminal,
+        handle,
+        ev_rx,
+        config.clone(),
+        &project_root,
+        session_tag,
+    )
+    .await;
     tui_restore(terminal)?;
     res
 }
