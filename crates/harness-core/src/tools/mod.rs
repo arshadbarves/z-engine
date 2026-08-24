@@ -91,6 +91,9 @@ pub struct ToolCtx {
     pub task_runner: Option<SubAgentRunner>,
     /// Language server when project supports one.
     pub lsp: Option<Arc<crate::lsp::LspClient>>,
+    /// Rendered results of this round's editing tools, drained by the
+    /// reviewer pass (spec section 9 v0.9).
+    pub edit_journal: Arc<Mutex<Vec<String>>>,
 }
 
 /// Future-yielding executor for isolated sub-loops. Built by the agent
@@ -114,7 +117,16 @@ impl ToolCtx {
             repo_map_dirty: Arc::new(std::sync::atomic::AtomicBool::new(true)),
             task_runner: None,
             lsp: None,
+            edit_journal: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    /// Drain recorded edit results (for the reviewer pass).
+    pub fn take_edit_journal(&self) -> Vec<String> {
+        self.edit_journal
+            .lock()
+            .map(|mut j| std::mem::take(&mut *j))
+            .unwrap_or_default()
     }
 
     /// Attach a sub-agent runner (builder style).

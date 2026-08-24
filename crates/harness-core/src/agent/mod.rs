@@ -55,6 +55,8 @@ pub struct LoopConfig {
     pub max_context_tokens: u32,
     /// Verbatim L2 tail size for compaction.
     pub keep_recent_messages: usize,
+    /// Run the post-edit reviewer pass (spec section 9 v0.9).
+    pub review_enabled: bool,
 }
 
 impl LoopConfig {
@@ -68,6 +70,7 @@ impl LoopConfig {
             initial_allow_rules: Vec::new(),
             max_context_tokens: 120_000,
             keep_recent_messages: compact::DEFAULT_KEEP_RECENT,
+            review_enabled: true,
         }
     }
 }
@@ -212,6 +215,8 @@ struct LoopState {
     force_compact: bool,
     /// Rendered repository symbol map, regenerated when dirty.
     repo_map_text: Option<String>,
+    /// The active task text (reviewer prompt context).
+    current_task: String,
 }
 
 impl LoopState {
@@ -281,6 +286,7 @@ async fn agent_task(
         last_usage: Usage::default(),
         force_compact: false,
         repo_map_text: None,
+        current_task: String::new(),
     };
     // Seed from a previous session's transcript (resume).
     if let Some(rs) = resume {
@@ -301,6 +307,7 @@ async fn agent_task(
     while let Some(command) = next_action(&mut cmd_rx).await {
         match command {
             Command::SubmitMessage(user_text) => {
+                state.current_task = user_text.clone();
                 if let Some(w) = recorder.as_mut() {
                     let _ = w.record(&SessionEvent::UserMsg {
                         text: user_text.clone(),
@@ -397,6 +404,55 @@ async fn compact_working_set(
         "context compacted: ~{} -> ~{} tokens ({} tool outputs elided)",
         before, after, outcome.elided_tool_outputs
     )));
+}
+
+/// Post-edit reviewer (spec section 9 v0.9): a side-request that audits
+/// this round's diffs against the original task. Returns findings text, or
+/// None for "no findings" / transport failure (never blocks the turn).
+async fn run_review(
+    client: &Client,
+    model: &str,
+    task: &str,
+    edit_results: &[String],
+) -> Option<String> {
+    const REVIEWER_SYSTEM: &str = "You are the code reviewer inside the harness coding agent.\nGiven the user's task and the diffs just applied, list CONCRETE problems: bugs, missed requirements, broken invariants, dangerous side effects.\nIgnore style. Reference files/lines when possible.\nIf everything is fine, reply with exactly: NO_FINDINGS";
+
+    let mut body = String::from("# Original task\n");
+    body.push_str(task.trim());
+    body.push_str("\n\n# Edits applied this round\n");
+    for (i, entry) in edit_results.iter().enumerate() {
+        let clipped: String = entry.chars().take(3_000).collect();
+        let _ =
+            std::fmt::Write::write_fmt(&mut body, format_args!("\n## Edit {}\n{clipped}\n", i + 1));
+    }
+
+    let req = ChatRequest::new(
+        model.to_string(),
+        vec![
+            ChatMessage::system(REVIEWER_SYSTEM),
+            ChatMessage::user(body),
+        ],
+    );
+    let abort = Arc::new(AtomicBool::new(false));
+    let mut rx = client.stream_chat(&req, abort);
+    let mut out = String::new();
+    while let Some(item) = rx.recv().await {
+        match item {
+            Ok(StreamEvent::TextDelta(t)) => out.push_str(&t),
+            Ok(StreamEvent::Done) | Ok(StreamEvent::Finish(_)) => {}
+            Ok(_) => {}
+            Err(e) => {
+                tracing::warn!(error = %e, "reviewer stream failed");
+                return None;
+            }
+        }
+    }
+    let out = out.trim().to_string();
+    if out.is_empty() || out.contains("NO_FINDINGS") {
+        None
+    } else {
+        Some(out)
+    }
 }
 
 /// Isolated sub-agent loop (spec section 9 v0.7): read-only toolset, own
@@ -753,6 +809,24 @@ async fn run_turn(
                     state
                         .working
                         .push(ChatMessage::tool_result(call_id, content));
+                }
+
+                // Reviewer pass (spec section 9 v0.9): after a batch that
+                // edited files, ask a side-model to audit the diffs.
+                let journal = ctx.take_edit_journal();
+                if cfg.review_enabled && !journal.is_empty() {
+                    match run_review(client, &cfg.model, &state.current_task, &journal).await {
+                        Some(findings) => {
+                            let _ =
+                                ev_tx.send(Event::StatusNote("reviewer posted findings".into()));
+                            state
+                                .working
+                                .push(ChatMessage::user(format!("[harness reviewer]\n{findings}")));
+                        }
+                        None => {
+                            let _ = ev_tx.send(Event::StatusNote("reviewer: no findings".into()));
+                        }
+                    }
                 }
             }
             ExecutionsOutcome::Aborted => return TurnOutcome::Aborted,

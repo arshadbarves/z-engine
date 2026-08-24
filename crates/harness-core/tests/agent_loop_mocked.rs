@@ -56,7 +56,7 @@ async fn chat_handler(State(script): State<Script>, req: axum::extract::Request)
         body_text.len(),
         &body_text[..body_text.len().min(120)]
     );
-    script.requests.lock().unwrap().push(body_text);
+    script.requests.lock().unwrap().push(body_text.clone());
 
     let sub_count = if is_sub_request {
         SUB_REQUESTS.fetch_add(1, Ordering::SeqCst)
@@ -89,6 +89,23 @@ async fn chat_handler(State(script): State<Script>, req: axum::extract::Request)
                 }]
             })
         };
+        return build_stream_response(format!("data: {}\n\ndata: [DONE]\n\n", body));
+    }
+
+    // Reviewer side-requests get scripted verdicts.
+    if body_text.contains("code reviewer") {
+        let content = if body_text.contains("NO_FINDINGS_PLEASE") {
+            "NO_FINDINGS"
+        } else {
+            "FINDING: OFF_BY_ONE_RISK in calc.txt"
+        };
+        let body = serde_json::json!({
+            "choices": [{
+                "index": 0,
+                "delta": {"content": content},
+                "finish_reason": "stop"
+            }]
+        });
         return build_stream_response(format!("data: {}\n\ndata: [DONE]\n\n", body));
     }
 
@@ -149,6 +166,7 @@ fn cfg_for(base_url: String, project_root: &std::path::Path) -> LoopConfig {
         initial_allow_rules: vec!["echo*".to_string()],
         max_context_tokens: 100_000,
         keep_recent_messages: 12,
+        review_enabled: false,
     }
 }
 
@@ -745,6 +763,7 @@ async fn long_session_compaction_preserves_coherence() {
         initial_allow_rules: vec![],
         max_context_tokens: 100_000,
         keep_recent_messages: 4,
+        review_enabled: false,
     };
     let (handle, mut ev) = spawn(cfg);
     handle.submit("ingest big file");
@@ -948,6 +967,7 @@ async fn repo_map_answers_where_defined_without_grep() {
         initial_allow_rules: vec![],
         max_context_tokens: 100_000,
         keep_recent_messages: 12,
+        review_enabled: false,
     };
     let (handle, mut ev) = spawn(cfg);
     handle.submit("where is zebra_fn defined?");
@@ -1003,6 +1023,7 @@ async fn repo_map_refreshes_after_edit() {
         initial_allow_rules: vec![],
         max_context_tokens: 100_000,
         keep_recent_messages: 12,
+        review_enabled: false,
     };
     cfg.initial_allow_rules.clear();
     let (handle, mut ev) = spawn(cfg);
@@ -1069,6 +1090,7 @@ async fn subagent_exploration_stays_out_of_parent_context() {
         initial_allow_rules: vec![],
         max_context_tokens: 100_000,
         keep_recent_messages: 12,
+        review_enabled: false,
     };
     let (handle, mut ev) = spawn(cfg);
     handle.submit("explore broadly");
@@ -1128,5 +1150,119 @@ async fn subagent_exploration_stays_out_of_parent_context() {
     assert!(
         parent_delta < 1000,
         "summary bloated parent: {parent_delta}B"
+    );
+}
+
+#[tokio::test]
+async fn reviewer_posts_findings_after_edit_batch() {
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(tmp.path().join("calc.txt"), "value = 1\n").unwrap();
+
+    let script = Script::default();
+    // R0: read the target first (read-before-edit enforcement).
+    script.push(format!(
+        "{}{}{}{}",
+        text_delta("reading"),
+        tool_call_delta(0, Some("rvr"), Some("read_file"), r#"{"path":"calc.txt"}"#),
+        finish_json("tool_calls", 5, 5),
+        done()
+    ));
+    // R1: edit a file (gated -> approved once).
+    script.push(format!(
+        "{}{}{}{}",
+        text_delta("editing"),
+        tool_call_delta(
+            0,
+            Some("rv0"),
+            Some("edit_file"),
+            r#"{"path":"calc.txt","old_string":"value = 1","new_string":"value = 2"}"#
+        ),
+        finish_json("tool_calls", 10, 10),
+        done()
+    ));
+    // R2 (post-review): model responds to findings.
+    script.push(format!(
+        "{}{}{}",
+        text_delta("addressed."),
+        finish_json("stop", 20, 20),
+        done()
+    ));
+
+    let base = serve(script.clone()).await;
+    let mut cfg = cfg_for(base.clone(), tmp.path());
+    cfg.review_enabled = true;
+    let (handle, mut ev) = spawn(cfg);
+    handle.submit("bump value");
+
+    // Approve the edit.
+    let approval = wait_for(&mut ev, |e| matches!(e, Event::ApprovalRequired { .. })).await;
+    let Event::ApprovalRequired { id, .. } = approval else {
+        unreachable!()
+    };
+    handle.approve(id, ApprovalDecision::Once);
+
+    let completed = wait_for(&mut ev, |e| matches!(e, Event::TurnCompleted { .. })).await;
+    assert!(matches!(completed, Event::TurnCompleted { .. }));
+
+    // Reviewer ran and its findings entered the parent context.
+    let bodies = script.requests_snapshot();
+    let reviewer_calls = bodies
+        .iter()
+        .filter(|b| b.contains("code reviewer"))
+        .count();
+    assert_eq!(reviewer_calls, 1, "exactly one reviewer side-request");
+    assert!(
+        bodies
+            .iter()
+            .any(|b| b.contains("[harness reviewer]") && b.contains("OFF_BY_ONE_RISK")),
+        "findings never reached parent context"
+    );
+}
+
+#[tokio::test]
+async fn reviewer_no_findings_stays_silent() {
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(tmp.path().join("a.txt"), "x\n").unwrap();
+
+    let script = Script::default();
+    script.push(format!(
+        "{}{}{}{}",
+        text_delta("e"),
+        tool_call_delta(
+            0,
+            Some("z0"),
+            Some("write_file"),
+            r#"{"path":"out.txt","content":"ok"}"#
+        ),
+        finish_json("tool_calls", 5, 5),
+        done()
+    ));
+    script.push(format!(
+        "{}{}{}",
+        text_delta("done."),
+        finish_json("stop", 8, 8),
+        done()
+    ));
+
+    let base = serve(script.clone()).await;
+    let mut cfg = cfg_for(base.clone(), tmp.path());
+    cfg.review_enabled = true;
+    let (handle, mut ev) = spawn(cfg);
+    handle.submit("write out NO_FINDINGS_PLEASE");
+
+    let approval = wait_for(&mut ev, |e| matches!(e, Event::ApprovalRequired { .. })).await;
+    let Event::ApprovalRequired { id, .. } = approval else {
+        unreachable!()
+    };
+    handle.approve(id, ApprovalDecision::Once);
+
+    let completed = wait_for(&mut ev, |e| matches!(e, Event::TurnCompleted { .. })).await;
+    assert!(matches!(completed, Event::TurnCompleted { .. }));
+
+    let bodies = script.requests_snapshot();
+    assert!(bodies.iter().any(|b| b.contains("code reviewer")));
+    assert!(
+        !bodies.iter().any(|b| b.contains("[harness reviewer]")),
+        "NO_FINDINGS must not inject a message"
     );
 }

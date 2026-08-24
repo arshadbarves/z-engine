@@ -186,6 +186,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
         initial_allow_rules: config.permissions.allow.clone(),
         max_context_tokens: config.max_context_tokens,
         keep_recent_messages: 12,
+        review_enabled: config.review_enabled,
     };
 
     if let Some(task) = args.headless_task {

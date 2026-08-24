@@ -23,6 +23,8 @@ pub struct Config {
     /// from v0.3 on, the compactor.
     pub max_context_tokens: u32,
     pub permissions: PermissionsConfig,
+    /// Post-edit reviewer pass (spec section 9 v0.9).
+    pub review_enabled: bool,
 }
 
 /// Allowlist rules. v0.1 semantics: entries are `bash` command-prefix rules
@@ -39,6 +41,7 @@ pub struct PartialConfig {
     pub model: Option<String>,
     pub base_url: Option<String>,
     pub max_context_tokens: Option<u32>,
+    pub review_enabled: Option<bool>,
     pub permissions_allow: Option<Vec<String>>,
 }
 
@@ -91,6 +94,7 @@ impl Default for Config {
             base_url: "https://openrouter.ai/api/v1".to_string(),
             max_context_tokens: 120_000,
             permissions: PermissionsConfig::default(),
+            review_enabled: true,
         }
     }
 }
@@ -290,6 +294,7 @@ struct FileFormat {
     model: Option<String>,
     base_url: Option<String>,
     max_context_tokens: Option<u32>,
+    review: Option<bool>,
     permissions: Option<FilePermissions>,
 }
 
@@ -304,6 +309,7 @@ fn parse_partial(text: &str) -> Result<PartialConfig, toml::de::Error> {
         model: f.model,
         base_url: f.base_url,
         max_context_tokens: f.max_context_tokens,
+        review_enabled: f.review,
         permissions_allow: f.permissions.and_then(|p| p.allow),
     })
 }
@@ -317,6 +323,9 @@ fn apply(cfg: &mut Config, partial: &PartialConfig) {
     }
     if let Some(v) = partial.max_context_tokens {
         cfg.max_context_tokens = v;
+    }
+    if let Some(v) = partial.review_enabled {
+        cfg.review_enabled = v;
     }
     if let Some(v) = &partial.permissions_allow {
         cfg.permissions.allow = v.clone();
