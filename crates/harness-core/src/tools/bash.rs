@@ -22,6 +22,7 @@ const MARKER: char = '\u{01}';
 const MARKER_TAG: &str = "HARNESS_CWD:";
 const ABORT_POLL: Duration = Duration::from_millis(150);
 
+#[derive(Debug)]
 pub struct BashTool;
 
 #[async_trait]
