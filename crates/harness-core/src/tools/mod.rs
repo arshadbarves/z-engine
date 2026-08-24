@@ -1,1 +1,265 @@
-//! Built-in tool implementations.
+//! Tool subsystem: the [`Tool`] trait (the only extension seam), the
+//! execution context handed to every tool, the registry advertised to the
+//! model, and shared output-truncation plumbing.
+//!
+//! Loop contract reminders (spec §4.2):
+//! - tool errors are *data*: they become tool-result messages so the model
+//!   can self-correct — they never crash the loop;
+//! - oversized outputs are truncated head+tail for the transcript while the
+//!   full text lands in a temp file whose path is embedded in the result.
+
+pub mod bash;
+pub mod read_file;
+
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+
+use async_trait::async_trait;
+
+use crate::perms::PolicyEngine;
+
+/// Character budget for a tool result entering the transcript.
+pub const MAX_TOOL_OUTPUT_CHARS: usize = 16_000;
+
+/// Errors from tool execution. Display strings go to the model verbatim.
+#[derive(Debug, thiserror::Error)]
+pub enum ToolError {
+    #[error("invalid input for {tool}: {problem}")]
+    InvalidInput { tool: &'static str, problem: String },
+    #[error("{0}")]
+    Failed(String),
+}
+
+/// Result payload of a successful or failed run.
+#[derive(Debug, Clone)]
+pub struct ToolOutput {
+    /// Exact text that enters the transcript as the tool-result content.
+    pub result: String,
+    /// One-line human summary for TUI events.
+    pub summary: String,
+    pub ok: bool,
+}
+
+impl ToolOutput {
+    pub fn success(result: impl Into<String>, summary: impl Into<String>) -> Self {
+        Self {
+            result: result.into(),
+            summary: summary.into(),
+            ok: true,
+        }
+    }
+
+    pub fn failure(result: impl Into<String>, summary: impl Into<String>) -> Self {
+        Self {
+            result: result.into(),
+            summary: summary.into(),
+            ok: false,
+        }
+    }
+}
+
+/// Shared execution context threaded through every tool call.
+#[derive(Clone)]
+pub struct ToolCtx {
+    /// Project root; relative paths resolve against it.
+    pub project_root: PathBuf,
+    /// Persistent working directory across `bash` calls within a session.
+    pub shell_cwd: Arc<Mutex<PathBuf>>,
+    /// Cooperative abort flag — checked by tools between/inside long waits.
+    pub abort: Arc<AtomicBool>,
+    /// Permission engine handle (session rules mutate through this).
+    pub perms: Arc<Mutex<PolicyEngine>>,
+    /// Directory for full-output temp files.
+    pub tmp_dir: PathBuf,
+}
+
+impl ToolCtx {
+    pub fn new(project_root: PathBuf, perms: Arc<Mutex<PolicyEngine>>, tmp_dir: PathBuf) -> Self {
+        let shell_cwd = Arc::new(Mutex::new(project_root.clone()));
+        Self {
+            project_root,
+            shell_cwd,
+            abort: Arc::new(AtomicBool::new(false)),
+            perms,
+            tmp_dir,
+        }
+    }
+
+    pub fn aborted(&self) -> bool {
+        self.abort.load(Ordering::Relaxed)
+    }
+
+    /// Resolve a user-supplied path: absolute paths are used as-is,
+    /// relative ones anchor at the project root.
+    pub fn resolve(&self, p: &Path) -> PathBuf {
+        if p.is_absolute() {
+            p.to_path_buf()
+        } else {
+            self.project_root.join(p)
+        }
+    }
+}
+
+impl std::fmt::Debug for ToolCtx {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ToolCtx")
+            .field("project_root", &self.project_root)
+            .field("shell_cwd", &self.shell_cwd)
+            .field("aborted", &self.aborted())
+            .finish_non_exhaustive()
+    }
+}
+
+/// The single extension seam (spec §4.1). Built-ins and future MCP tools
+/// implement exactly this; the agent loop never knows the difference.
+#[async_trait]
+pub trait Tool: Send + Sync {
+    fn name(&self) -> &str;
+    fn description(&self) -> &str;
+    /// JSON Schema object describing the input.
+    fn parameters_schema(&self) -> serde_json::Value;
+    /// Whether parallel execution alongside other safe tools is OK.
+    /// Mutating/stateful tools (bash) return false.
+    fn concurrency_safe(&self) -> bool {
+        true
+    }
+    async fn run(&self, input: serde_json::Value, ctx: &ToolCtx) -> Result<ToolOutput, ToolError>;
+}
+
+/// Registry of available tools; produces the provider-facing definitions.
+#[derive(Default)]
+pub struct ToolRegistry {
+    tools: HashMap<String, Arc<dyn Tool>>,
+    order: Vec<String>,
+}
+
+impl ToolRegistry {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn register(&mut self, tool: Arc<dyn Tool>) {
+        let name = tool.name().to_string();
+        if !self.tools.contains_key(&name) {
+            self.order.push(name.clone());
+        }
+        self.tools.insert(name, tool);
+    }
+
+    pub fn get(&self, name: &str) -> Option<Arc<dyn Tool>> {
+        self.tools.get(name).cloned()
+    }
+
+    pub fn names(&self) -> &[String] {
+        &self.order
+    }
+
+    /// Definitions advertised in chat-completion requests.
+    pub fn defs(&self) -> Vec<crate::provider::ToolDef> {
+        self.order
+            .iter()
+            .filter_map(|n| self.tools.get(n))
+            .map(|t| crate::provider::ToolDef::function(t.name(), t.description(), t.parameters_schema()))
+            .collect()
+    }
+
+    /// v0.1 built-in set: `bash` + `read_file`.
+    pub fn builtins_v01() -> Self {
+        let mut reg = Self::new();
+        reg.register(Arc::new(read_file::ReadFileTool));
+        reg.register(Arc::new(bash::BashTool));
+        reg
+    }
+}
+
+impl std::fmt::Debug for ToolRegistry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ToolRegistry")
+            .field("tools", &self.order)
+            .finish()
+    }
+}
+
+/// Truncate `output` to fit the transcript budget, preserving head and
+/// tail, and park the complete text in a temp file referenced inline.
+pub fn truncate_with_tempfile(output: &str, ctx: &ToolCtx) -> String {
+    if output.chars().count() <= MAX_TOOL_OUTPUT_CHARS {
+        return output.to_string();
+    }
+
+    let path = next_tempfile_path(ctx);
+    if let Err(e) = std::fs::write(&path, output) {
+        tracing::warn!(%e, "failed writing full tool output tempfile");
+        // Fall back to hard truncation without a pointer.
+    }
+
+    let total = output.chars().count();
+    let budget = MAX_TOOL_OUTPUT_CHARS.saturating_sub(160); // room for marker
+    let head = budget * 60 / 100;
+    let tail = budget - head;
+
+    let mut out = String::with_capacity(MAX_TOOL_OUTPUT_CHARS);
+    out.extend(output.chars().take(head));
+    let omitted = total - head - tail;
+    out.push_str(&format!(
+        "\n[...truncated {omitted} chars; full output: {}]\n",
+        path.display()
+    ));
+    out.extend(output.chars().skip(total - tail));
+    out
+}
+
+/// Write the full output to its own file even when under budget? No — only
+/// truncation spills to disk. This helper just names spill files.
+fn next_tempfile_path(ctx: &ToolCtx) -> PathBuf {
+    let dir = ctx.tmp_dir.join("harness");
+    let _ = std::fs::create_dir_all(&dir);
+    dir.join(format!("out-{}.log", ulid::Ulid::new()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ctx() -> ToolCtx {
+        let tmp = tempfile::tempdir().unwrap();
+        ToolCtx::new(
+            tmp.path().to_path_buf(),
+            Arc::new(Mutex::new(PolicyEngine::new(vec![]))),
+            tmp.path().to_path_buf(),
+        )
+    }
+
+    #[test]
+    fn short_output_passes_through_unmodified() {
+        let c = ctx();
+        assert_eq!(truncate_with_tempfile("hello", &c), "hello");
+    }
+
+    #[test]
+    fn long_output_truncated_head_tail_with_marker_and_spill_file() {
+        let c = ctx();
+        let big: String = "x".repeat(50_000);
+        let out = truncate_with_tempfile(&big, &c);
+
+        assert!(out.len() < MAX_TOOL_OUTPUT_CHARS + 200);
+        assert!(out.starts_with("xxxx"));
+        assert!(out.ends_with("xxxx"));
+        let marker_at = out.find("[...truncated ").unwrap();
+        let path_start = out[marker_at..].find("/").map(|i| marker_at + i).unwrap();
+        let path_end = out[path_start..].find(']').unwrap() + path_start;
+        let spill = PathBuf::from(&out[path_start..path_end]);
+        let full = std::fs::read_to_string(&spill).unwrap();
+        assert_eq!(full.len(), 50_000);
+    }
+
+    #[test]
+    fn multibyte_content_counted_by_chars_not_bytes() {
+        let c = ctx();
+        let big = "é".repeat(20_000); // 40k bytes, 20k chars > budget
+        let out = truncate_with_tempfile(&big, &c);
+        assert!(out.contains("[...truncated"));
+    }
+}
