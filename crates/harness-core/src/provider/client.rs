@@ -274,4 +274,33 @@ mod tests {
         assert_eq!(backoff_delay(3), Duration::from_millis(1_000));
         assert_eq!(backoff_delay(9), MAX_BACKOFF);
     }
+
+    /// Connection-refused must actually be retried with backoff (spec §10),
+    /// not fail fast. Regression guard for the retry classifier.
+    #[tokio::test]
+    async fn connect_refused_backs_off_then_errors() {
+        use crate::provider::{ChatMessage, ChatRequest};
+        let c = Client::new("http://127.0.0.1:9", Some("k".into())).unwrap();
+        let req = ChatRequest::new("m", vec![ChatMessage::user("hi")]);
+        let abort = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let mut rx = c.stream_chat(&req, abort);
+        let started = std::time::Instant::now();
+        let mut last = None;
+        while let Some(item) = rx.recv().await {
+            if let Err(e) = item {
+                last = Some(e);
+            }
+        }
+        let err = last.expect("expected terminal error");
+        // 3 backoffs: 250+500+1000ms minimum across 4 attempts
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed >= Duration::from_millis(1500),
+            "no backoff ({elapsed:?}); err={err}"
+        );
+        assert!(
+            matches!(err, ProviderError::Connect { attempts: 4, .. }),
+            "{err}"
+        );
+    }
 }
