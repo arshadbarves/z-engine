@@ -2,7 +2,7 @@
 //! read-before-edit (spec §7) and detect stale reads (file changed on disk
 //! since the model last saw it).
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -55,6 +55,10 @@ impl FileStateTracker {
 
     pub fn forget(&mut self, path: &Path) {
         self.reads.remove(path);
+    }
+
+    pub fn tracked_paths(&self) -> BTreeSet<PathBuf> {
+        self.reads.keys().cloned().collect()
     }
 }
 

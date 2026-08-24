@@ -7,6 +7,7 @@
 pub mod budget;
 pub mod compact;
 pub mod notes;
+pub mod repo_map;
 
 use std::path::Path;
 
@@ -22,6 +23,8 @@ Operating rules:
 - File paths you pass are relative to the project root unless absolute.
 
 Context management:
+- A repository symbol map is provided in context; prefer reading a listed
+  definition over grepping around.
 - Call `update_context_notes` every few turns with progress, firm decisions
   and things needed later. These notes survive context compaction verbatim.
 - Old large tool outputs show a marker like `[harness:tool-output id=abcd1234]`;

@@ -17,7 +17,7 @@ pub mod grep;
 pub mod read_file;
 pub mod write_file;
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -83,6 +83,8 @@ pub struct ToolCtx {
     pub file_state: Arc<Mutex<file_state::FileStateTracker>>,
     /// L1 context notes shared with the agent loop.
     pub notes: Arc<Mutex<crate::context::notes::NotesStore>>,
+    /// Set whenever a file is read/written so the repo map regenerates.
+    pub repo_map_dirty: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl ToolCtx {
@@ -96,6 +98,7 @@ impl ToolCtx {
             tmp_dir,
             file_state: Arc::new(Mutex::new(file_state::FileStateTracker::default())),
             notes: Arc::new(Mutex::new(crate::context::notes::NotesStore::default())),
+            repo_map_dirty: Arc::new(std::sync::atomic::AtomicBool::new(true)),
         }
     }
 
@@ -120,11 +123,22 @@ impl ToolCtx {
         !canonical.starts_with(&root)
     }
 
-    /// Record a successful read so later edits of this path are permitted.
+    /// Record a successful read so later edits of this path are permitted;
+    /// also flags the repo map for regeneration.
     pub fn note_read(&self, path: &Path) {
+        use std::sync::atomic::Ordering;
         if let Ok(mut fs) = self.file_state.lock() {
             let _ = fs.record_read(path);
         }
+        self.repo_map_dirty.store(true, Ordering::Relaxed);
+    }
+
+    /// Files currently tracked (read/edited) this session.
+    pub fn tracked_paths(&self) -> BTreeSet<PathBuf> {
+        self.file_state
+            .lock()
+            .map(|fs| fs.tracked_paths())
+            .unwrap_or_default()
     }
 
     /// Read-before-edit gate: Ok when never-existed reads are required or

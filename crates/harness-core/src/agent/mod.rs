@@ -180,6 +180,8 @@ struct LoopState {
     last_usage: Usage,
     /// Set by Command::Compact.
     force_compact: bool,
+    /// Rendered repository symbol map, regenerated when dirty.
+    repo_map_text: Option<String>,
 }
 
 impl LoopState {
@@ -237,6 +239,7 @@ async fn agent_task(
         approval_counter: 0,
         last_usage: Usage::default(),
         force_compact: false,
+        repo_map_text: None,
     };
     // Seed from a previous session's transcript (resume).
     if let Some(rs) = resume {
@@ -451,9 +454,21 @@ async fn run_turn(
             }
         }
 
-        // ---- assemble L0 + L1 + working ------------------------------
-        let mut request_messages = Vec::with_capacity(state.working.len() + 2);
+        // ---- assemble L0 + repo map + L1 + working -------------------
+        use std::sync::atomic::Ordering as AtomicOrdering;
+        if ctx.repo_map_dirty.swap(false, AtomicOrdering::Relaxed) || state.repo_map_text.is_none()
+        {
+            state.repo_map_text = Some(context::repo_map::refresh_repo_map(ctx));
+            tracing::debug!("repo map refreshed");
+        }
+
+        let mut request_messages = Vec::with_capacity(state.working.len() + 3);
         request_messages.push(l0_message(cfg));
+        if let Some(map) = &state.repo_map_text {
+            if !map.is_empty() {
+                request_messages.push(ChatMessage::system(map.clone()));
+            }
+        }
         if let Some(notes_block) = notes.lock().ok().and_then(|n| n.render_block()) {
             request_messages.push(ChatMessage::system(notes_block));
         }
