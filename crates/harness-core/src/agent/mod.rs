@@ -12,7 +12,7 @@
 pub mod events;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -33,7 +33,7 @@ use crate::provider::{
 use crate::session::{SessionEvent, SessionWriter};
 use crate::tools::{ToolCtx, ToolError, ToolOutput, ToolRegistry};
 
-pub use events::{Command, Event};
+pub use events::{ApprovalDecision, Command, Event};
 
 /// Safety valve against genuinely runaway loops. Spec says "no hard turn
 /// cap"; 500 consecutive tool rounds is far beyond any real task and only
@@ -83,8 +83,8 @@ impl AgentHandle {
         let _ = self.cmd_tx.send(Command::SubmitMessage(text.into()));
     }
 
-    pub fn approve(&self, id: u64, prefix_rule: Option<String>) {
-        let _ = self.cmd_tx.send(Command::Approve { id, prefix_rule });
+    pub fn approve(&self, id: u64, decision: crate::agent::events::ApprovalDecision) {
+        let _ = self.cmd_tx.send(Command::Approve { id, decision });
     }
 
     pub fn deny(&self, id: u64) {
@@ -683,6 +683,13 @@ async fn execute_calls(
                         input.get("command").and_then(|v| v.as_str()).unwrap_or(""),
                     )
                 });
+                // Outside the project root? Then "persist" is disabled
+                // (spec section 5) and the call always gates on future runs.
+                let target_outside = input
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .map(|p| ctx.is_outside_root(Path::new(p)))
+                    .unwrap_or(false);
                 state.approval_counter += 1;
                 let id = state.approval_counter;
                 let detail = registry
@@ -692,19 +699,40 @@ async fn execute_calls(
                     id,
                     tool: call.function.name.clone(),
                     input_preview: input_preview(&input),
-                    suggested_rule,
+                    suggested_rule: suggested_rule.clone(),
                     detail_preview: detail,
+                    can_persist: !target_outside && call.function.name == "bash",
                 });
 
                 match wait_for_approval(id, cmd_rx, abort_flag).await {
-                    ApprovalResolution::Granted(prefix_rule) => {
-                        if let Some(rule) = prefix_rule {
+                    ApprovalResolution::Granted(decision) => match decision {
+                        crate::agent::events::ApprovalDecision::Once => Verdict::Run,
+                        crate::agent::events::ApprovalDecision::AlwaysSession { rule } => {
                             if let Ok(mut p) = ctx.perms.lock() {
                                 p.add_session_rule(rule);
                             }
+                            Verdict::Run
                         }
-                        Verdict::Run
-                    }
+                        crate::agent::events::ApprovalDecision::AlwaysPersist { rule } => {
+                            match crate::config::persist_bash_rule(&ctx.project_root, &rule) {
+                                Err(e) => {
+                                    tracing::warn!(error = %e, "failed persisting rule");
+                                    let _ = ev_tx.send(Event::StatusNote(format!(
+                                        "could not persist rule: {e}"
+                                    )));
+                                }
+                                Ok(_) => {
+                                    let _ = ev_tx.send(Event::StatusNote(format!(
+                                        "rule \"{rule}\" persisted to .harness/config.toml"
+                                    )));
+                                }
+                            }
+                            if let Ok(mut p) = ctx.perms.lock() {
+                                p.add_session_rule(rule);
+                            }
+                            Verdict::Run
+                        }
+                    },
                     ApprovalResolution::Denied => Verdict::Denied,
                     ApprovalResolution::AbortTurn => return ExecutionsOutcome::Aborted,
                 }
@@ -767,7 +795,7 @@ async fn execute_calls(
 }
 
 enum ApprovalResolution {
-    Granted(Option<String>),
+    Granted(crate::agent::events::ApprovalDecision),
     Denied,
     AbortTurn,
 }
@@ -783,11 +811,8 @@ async fn wait_for_approval(
                 abort_flag.store(true, Ordering::Relaxed);
                 return ApprovalResolution::AbortTurn;
             }
-            Some(Command::Approve {
-                id: got,
-                prefix_rule,
-            }) if got == id => {
-                return ApprovalResolution::Granted(prefix_rule);
+            Some(Command::Approve { id: got, decision }) if got == id => {
+                return ApprovalResolution::Granted(decision);
             }
             Some(Command::Deny { id: got }) if got == id => return ApprovalResolution::Denied,
             Some(Command::Abort) | Some(Command::Shutdown) => {

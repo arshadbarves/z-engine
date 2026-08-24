@@ -1,7 +1,7 @@
 //! One-shot headless runner: submit a task, stream plain-text events,
 //! exit non-zero on failure. Acceptance/CI companion to the TUI.
 
-use harness_core::agent::{AgentHandle, Event, EventRx};
+use harness_core::agent::{AgentHandle, ApprovalDecision, Event, EventRx};
 
 pub async fn run_one_shot(
     handle: AgentHandle,
@@ -39,7 +39,7 @@ pub async fn run_one_shot(
                 }
                 if auto_approve {
                     eprintln!("[auto-approved] {tool} {input_preview}");
-                    handle.approve(id, None);
+                    handle.approve(id, ApprovalDecision::Once);
                 } else {
                     eprintln!(
                         "[denied: non-interactive] {tool} {input_preview}\n\

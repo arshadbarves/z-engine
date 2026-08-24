@@ -96,9 +96,13 @@ impl Default for Config {
 }
 
 impl Config {
-    /// Load configuration from the process environment + global file +
-    /// CLI overrides.
-    pub fn load(cli: &CliOverrides) -> Result<Self, ConfigError> {
+    /// Load configuration from the process environment + config files +
+    /// CLI overrides. `project_root` enables the project-level
+    /// `.harness/config.toml` layer (spec section 8).
+    pub fn load(
+        cli: &CliOverrides,
+        project_root: Option<&std::path::Path>,
+    ) -> Result<Self, ConfigError> {
         let env = EnvVars::from_process_env();
         let global_path = global_config_path(&env);
         let global_text = match &global_path {
@@ -114,13 +118,48 @@ impl Config {
             },
             None => None,
         };
-        Self::layer(global_path.as_deref(), global_text.as_deref(), &env, cli)
+        let project = project_root.map(project_config_path);
+        let project_text = match &project {
+            Some(p) => match std::fs::read_to_string(p) {
+                Ok(t) => Some(t),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+                Err(e) => {
+                    return Err(ConfigError::Read {
+                        path: p.clone(),
+                        source: e,
+                    });
+                }
+            },
+            None => None,
+        };
+        Self::layer_all(
+            global_path.as_deref(),
+            global_text.as_deref(),
+            project.as_deref(),
+            project_text.as_deref(),
+            &env,
+            cli,
+        )
     }
 
     /// Pure layering step — fully unit-testable without touching the FS.
+    /// Kept for compatibility; delegates to [`Self::layer_all`].
     pub fn layer(
         global_path: Option<&std::path::Path>,
         global_text: Option<&str>,
+        env: &EnvVars,
+        cli: &CliOverrides,
+    ) -> Result<Self, ConfigError> {
+        Self::layer_all(global_path, global_text, None, None, env, cli)
+    }
+
+    /// Full ladder: defaults < global < project < env < CLI.
+    /// Allow rules UNION across files; scalars override.
+    pub fn layer_all(
+        global_path: Option<&std::path::Path>,
+        global_text: Option<&str>,
+        project_path: Option<&std::path::Path>,
+        project_text: Option<&str>,
         env: &EnvVars,
         cli: &CliOverrides,
     ) -> Result<Self, ConfigError> {
@@ -134,6 +173,30 @@ impl Config {
                 source,
             })?;
             apply(&mut cfg, &partial);
+        }
+
+        // project file: allow rules UNION, scalars override
+        if let (Some(path), Some(text)) = (project_path, project_text) {
+            let partial = parse_partial(text).map_err(|source| ConfigError::Parse {
+                path: path.to_path_buf(),
+                source,
+            })?;
+            let mut merged = std::mem::take(&mut cfg.permissions.allow);
+            if let Some(rules) = &partial.permissions_allow {
+                for r in rules {
+                    if !merged.contains(r) {
+                        merged.push(r.clone());
+                    }
+                }
+            }
+            apply(
+                &mut cfg,
+                &PartialConfig {
+                    permissions_allow: None,
+                    ..partial
+                },
+            );
+            cfg.permissions.allow = merged;
         }
 
         // environment
@@ -168,6 +231,49 @@ impl Config {
     }
 }
 
+/// Path of the project-level config: `<project>/.harness/config.toml`.
+pub fn project_config_path(project_root: &std::path::Path) -> PathBuf {
+    project_root.join(".harness").join("config.toml")
+}
+
+const PROJECT_CONFIG_HEADER: &str = "# harness project configuration\n# bash prefix rules under [permissions.allow] skip approval for this project.\n";
+
+/// Persist a bash prefix rule into `<project>/.harness/config.toml`
+/// (spec section 5, fourth modal answer). Values survive; comments in an
+/// existing file are not preserved. Duplicate rules are ignored.
+pub fn persist_bash_rule(project_root: &std::path::Path, rule: &str) -> std::io::Result<PathBuf> {
+    let path = project_config_path(project_root);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut fmt: FileFormat = toml::from_str(&text).map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("cannot parse {}: {e}", path.display()),
+        )
+    })?;
+    let mut allow = fmt
+        .permissions
+        .as_ref()
+        .and_then(|p| p.allow.clone())
+        .unwrap_or_default();
+    if !allow.iter().any(|r| r == rule) {
+        allow.push(rule.to_string());
+    }
+    let mut perms = fmt.permissions.take().unwrap_or_default();
+    perms.allow = Some(allow);
+    fmt.permissions = Some(perms);
+
+    let serialized = toml::to_string_pretty(&fmt)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    // Round-tripping drops comments/formatting; we re-add our standard
+    // header so the file is always self-describing.
+    let body = format!("{PROJECT_CONFIG_HEADER}{serialized}");
+    std::fs::write(&path, body)?;
+    Ok(path)
+}
+
 /// Path of the global config file, honoring `HARNESS_CONFIG`.
 /// Spec §8 pins it to `~/.config/harness/config.toml` (deliberately *not*
 /// the platform config dir, so behavior is identical across machines).
@@ -179,7 +285,7 @@ pub fn global_config_path(env: &EnvVars) -> Option<PathBuf> {
 }
 
 /// TOML shape accepted inside a config file.
-#[derive(Debug, Default, serde::Deserialize)]
+#[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
 struct FileFormat {
     model: Option<String>,
     base_url: Option<String>,
@@ -187,7 +293,7 @@ struct FileFormat {
     permissions: Option<FilePermissions>,
 }
 
-#[derive(Debug, Default, serde::Deserialize)]
+#[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
 struct FilePermissions {
     allow: Option<Vec<String>>,
 }
@@ -280,6 +386,39 @@ base_url = "http://from-file/v1/"
     }
 
     #[test]
+    fn project_file_unions_allow_rules_and_overrides_scalars() {
+        let global = "model = \"g\"\n\n[permissions]\nallow = [\"cargo test*\"]\n";
+        let project =
+            "max_context_tokens = 5000\n\n[permissions]\nallow = [\"npm run*\", \"cargo test*\"]\n";
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = Config::layer_all(
+            Some(std::path::Path::new("/tmp/global.toml")),
+            Some(global),
+            Some(&tmp.path().join(".harness/config.toml")),
+            Some(project),
+            &env(None, None),
+            &CliOverrides::default(),
+        )
+        .unwrap();
+        assert_eq!(cfg.model, "g");
+        assert_eq!(cfg.max_context_tokens, 5000);
+        assert_eq!(cfg.permissions.allow, vec!["cargo test*", "npm run*"]);
+    }
+
+    #[test]
+    fn malformed_project_file_is_an_error_too() {
+        let err = Config::layer_all(
+            None,
+            None,
+            Some(std::path::Path::new("/tmp/p.toml")),
+            Some("model = "),
+            &env(None, None),
+            &CliOverrides::default(),
+        );
+        assert!(matches!(err, Err(ConfigError::Parse { .. })));
+    }
+
+    #[test]
     fn malformed_global_file_is_an_error_not_silently_ignored() {
         let err = Config::layer(
             Some(std::path::Path::new("/tmp/x.toml")),
@@ -288,6 +427,46 @@ base_url = "http://from-file/v1/"
             &CliOverrides::default(),
         );
         assert!(matches!(err, Err(ConfigError::Parse { .. })));
+    }
+
+    #[test]
+    fn persisted_rules_roundtrip_and_dedupe() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        persist_bash_rule(root, "cargo test*").unwrap();
+        persist_bash_rule(root, "cargo test*").unwrap(); // dedupe
+        persist_bash_rule(root, "git status").unwrap();
+
+        let text = std::fs::read_to_string(project_config_path(root)).unwrap();
+        assert!(text.starts_with("# harness"));
+        // Layering must now load exactly these rules.
+        let cfg = Config::load(&CliOverrides::default(), Some(root)).unwrap();
+        assert_eq!(cfg.permissions.allow, vec!["cargo test*", "git status"]);
+        // And the engine allows accordingly.
+        assert!(
+            cfg.permissions
+                .allow
+                .iter()
+                .any(|r| rule_like(r, "cargo test --lib"))
+        );
+    }
+
+    fn rule_like(rule: &str, cmd: &str) -> bool {
+        match rule.strip_suffix('*') {
+            Some(p) => cmd.starts_with(p.trim_end()),
+            None => cmd == rule,
+        }
+    }
+
+    #[test]
+    fn malformed_project_config_blocks_persistence() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".harness")).unwrap();
+        std::fs::write(root.join(".harness/config.toml"), "model = ").unwrap();
+        let err = persist_bash_rule(root, "ls*");
+        assert!(err.is_err());
     }
 
     #[test]
