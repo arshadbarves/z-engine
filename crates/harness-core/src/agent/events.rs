@@ -19,6 +19,10 @@ pub enum Command {
     Deny { id: u64 },
     /// Esc / interrupt: abort the current turn instantly, mid-stream OK.
     Abort,
+    /// Slash-command `/compact`: force context compaction now.
+    Compact,
+    /// Slash-command `/notes`: dump the L1 notes block as a status note.
+    RequestNotes,
     /// Graceful shutdown of the agent task.
     Shutdown,
 }

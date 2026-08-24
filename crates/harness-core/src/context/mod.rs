@@ -1,8 +1,12 @@
-//! Context engine — v0.1 slice: stable system-prompt construction and the
-//! AGENTS.md loader. The demotion ladder / notes protocol land in v0.3.
+//! Context engine (spec §6): L0 system prompt + AGENTS.md loader, the L1
+//! notes store, budget metering, and the compaction ladder.
 //!
 //! Stability matters: the system prompt is the provider-cache-friendly L0
 //! prefix, so nothing dynamic (timestamps, trees, counters) belongs here.
+
+pub mod budget;
+pub mod compact;
+pub mod notes;
 
 use std::path::Path;
 
@@ -15,7 +19,13 @@ Operating rules:
 - Verify your work by running the relevant tests/build commands before declaring success.
 - If a command fails, read the error and adapt; do not repeat a failing action unchanged.
 - Ask nothing rhetorically: act with the tools available, then report concisely.
-- File paths you pass are relative to the project root unless absolute."#;
+- File paths you pass are relative to the project root unless absolute.
+
+Context management:
+- Call `update_context_notes` every few turns with progress, firm decisions
+  and things needed later. These notes survive context compaction verbatim.
+- Old large tool outputs show a marker like `[harness:tool-output id=abcd1234]`;
+  when you no longer need one, list its marker in `droppable` to free context."#;
 
 /// Build the L0 system prompt. `agents_md` (if present) is appended
 /// verbatim below the base instructions.

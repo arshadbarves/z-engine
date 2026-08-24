@@ -50,6 +50,16 @@ async fn chat_handler(State(script): State<Script>, req: axum::extract::Request)
         .unwrap()
         .push(String::from_utf8_lossy(&bytes).into_owned());
 
+    if String::from_utf8_lossy(&bytes).contains("compress an earlier portion") {
+        let body = serde_json::json!({
+            "choices": [{
+                "index": 0,
+                "delta": {"content": "- FACTS: THE_SECRET_ZEBRA_GRAZES_AT_NOON appears early in big.txt; big.txt was ingested three times\n- DECISIONS: none\n- OPEN THREADS: report completion"}
+            }]
+        });
+        return build_stream_response(format!("data: {body}\n\ndata: [DONE]\n\n"));
+    }
+
     let next = {
         let mut q = script.responses.lock().unwrap();
         match q.len() {
@@ -58,8 +68,11 @@ async fn chat_handler(State(script): State<Script>, req: axum::extract::Request)
             _ => q.remove(0),
         }
     };
+    build_stream_response(next)
+}
 
-    let chunk = axum::body::Bytes::from(next);
+fn build_stream_response(body: String) -> Response {
+    let chunk = axum::body::Bytes::from(body);
     let stream = futures::stream::once(async move { Ok::<_, std::io::Error>(chunk) });
     Response::builder()
         .status(StatusCode::OK)
@@ -89,6 +102,8 @@ fn cfg_for(base_url: String, project_root: &std::path::Path) -> LoopConfig {
         project_root: project_root.to_path_buf(),
         tmp_dir: project_root.join("tmp-out"),
         initial_allow_rules: vec!["echo*".to_string()],
+        max_context_tokens: 100_000,
+        keep_recent_messages: 12,
     }
 }
 
@@ -625,5 +640,107 @@ async fn edit_without_prior_read_is_refused_then_model_reroutes() {
     assert_eq!(
         std::fs::read_to_string(tmp.path().join("f.txt")).unwrap(),
         "content\n"
+    );
+}
+
+#[tokio::test]
+async fn long_session_compaction_preserves_coherence() {
+    let tmp = tempfile::tempdir().unwrap();
+
+    // A big fixture whose early lines carry a fact that must survive.
+    let mut big = String::from("filler\nfiller\nTHE_SECRET_ZEBRA_GRAZES_AT_NOON\n");
+    for i in 0..1500 {
+        big.push_str(&format!(
+            "line {i}: lorem ipsum dolor sit amet consectetur adipiscing elit\n"
+        ));
+    }
+    std::fs::write(tmp.path().join("big.txt"), &big).unwrap();
+
+    let script = Script::default();
+    // Three heavy read rounds with climbing usage; budget is 100k so the
+    // third crosses the 92% auto-compaction threshold.
+    for (i, (id, prompt)) in [("h1", 30_000u64), ("h2", 55_000), ("h3", 95_000)]
+        .into_iter()
+        .enumerate()
+    {
+        let _ = i;
+        script.push(format!(
+            "{}{}{}{}",
+            text_delta("reading more"),
+            tool_call_delta(
+                0,
+                Some(id),
+                Some("read_file"),
+                r#"{"path":"big.txt","limit":2000}"#
+            ),
+            finish_json("tool_calls", prompt, 10),
+            done()
+        ));
+    }
+    // Final plain answer once compaction has happened.
+    script.push(format!(
+        "{}{}{}",
+        text_delta("all done"),
+        finish_json("stop", 99_999, 5),
+        done()
+    ));
+
+    let base = serve(script.clone()).await;
+    let cfg = LoopConfig {
+        model: "test-model".into(),
+        base_url: base.clone(),
+        api_key: None,
+        project_root: tmp.path().to_path_buf(),
+        tmp_dir: tmp.path().join("tmp-out"),
+        initial_allow_rules: vec![],
+        max_context_tokens: 100_000,
+        keep_recent_messages: 4,
+    };
+    let (handle, mut ev) = spawn(cfg);
+    handle.submit("ingest big file");
+
+    let completed = wait_for(&mut ev, |e| matches!(e, Event::TurnCompleted { .. })).await;
+    let Event::TurnCompleted { .. } = completed else {
+        unreachable!()
+    };
+
+    // The summarizer side-request must have been served (mock answers it
+    // with a summary carrying the secret fact).
+    let saw_summarizer = {
+        let bodies: Vec<String> = script
+            .requests_snapshot()
+            .into_iter()
+            .filter(|b| b.contains("compress an earlier portion"))
+            .collect();
+        !bodies.is_empty()
+    };
+    assert!(saw_summarizer, "summarizer side-request never ran");
+
+    let bodies = script.requests_snapshot();
+    // Some request carried the L1 notes block with the summarized fact.
+    assert!(
+        bodies
+            .iter()
+            .any(|b| b.contains("THE_SECRET_ZEBRA_GRAZES_AT_NOON")
+                && b.contains("Session context notes")),
+        "summary fact never re-entered context"
+    );
+    // Elided markers appear once compaction trimmed old outputs.
+    assert!(
+        bodies.iter().any(|b| b.contains("[harness:elided")),
+        "no elided tool outputs observed"
+    );
+    // Spill files preserve the full earlier outputs.
+    let spills: Vec<_> = std::fs::read_dir(tmp.path().join("tmp-out/harness"))
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .collect();
+    assert!(
+        spills.iter().any(|p| {
+            p.file_name().unwrap().to_string_lossy().starts_with("ctx-")
+                && std::fs::read_to_string(p).unwrap().contains("SECRET_ZEBRA")
+        }),
+        "spill file missing"
     );
 }

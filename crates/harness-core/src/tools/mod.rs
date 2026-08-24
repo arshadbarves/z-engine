@@ -9,6 +9,7 @@
 //!   full text lands in a temp file whose path is embedded in the result.
 
 pub mod bash;
+pub mod context_notes;
 pub mod edit_file;
 pub mod file_state;
 pub mod glob;
@@ -80,6 +81,8 @@ pub struct ToolCtx {
     pub tmp_dir: PathBuf,
     /// Read-before-edit enforcement + staleness detection.
     pub file_state: Arc<Mutex<file_state::FileStateTracker>>,
+    /// L1 context notes shared with the agent loop.
+    pub notes: Arc<Mutex<crate::context::notes::NotesStore>>,
 }
 
 impl ToolCtx {
@@ -92,6 +95,7 @@ impl ToolCtx {
             perms,
             tmp_dir,
             file_state: Arc::new(Mutex::new(file_state::FileStateTracker::default())),
+            notes: Arc::new(Mutex::new(crate::context::notes::NotesStore::default())),
         }
     }
 
@@ -229,6 +233,7 @@ impl ToolRegistry {
         reg.register(Arc::new(edit_file::EditFileTool));
         reg.register(Arc::new(glob::GlobTool));
         reg.register(Arc::new(grep::GrepTool));
+        reg.register(Arc::new(context_notes::UpdateContextNotesTool));
         reg
     }
 }

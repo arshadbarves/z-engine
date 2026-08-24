@@ -12,7 +12,7 @@ use ratatui::widgets::Paragraph;
 
 pub fn render(f: &mut ratatui::Frame, app: &App, area: Rect) {
     let total_tokens = app.prompt_tokens + app.completion_tokens;
-    let budget = 120_000u64; // v0.3 wires Config.max_context_tokens here
+    let budget = u64::from(app.max_context_tokens);
     let ratio = total_tokens as f32 / budget as f32;
 
     let token_style = if ratio >= 0.92 {
