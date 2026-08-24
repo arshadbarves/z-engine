@@ -263,6 +263,15 @@ async fn agent_task(
     )
     .with_task_runner(runner);
     ctx.notes = Arc::clone(&notes);
+    // Language server (spec section 9 v0.8): Rust projects with
+    // rust-analyzer installed get compiler-grade tooling + edit hooks.
+    if let Some(server) = crate::lsp::LspClient::probe(&cfg.project_root) {
+        ctx.lsp = Some(Arc::new(crate::lsp::LspClient::new(
+            &cfg.project_root,
+            server,
+        )));
+        tracing::info!("rust-analyzer attached");
+    }
     // L0 is rebuilt per-request by l0_message(); nothing to keep here.
     let meter = BudgetMeter::new(cfg.max_context_tokens);
 
@@ -1022,6 +1031,7 @@ async fn run_one(
     if ctx.aborted() {
         return "[aborted]".to_string();
     }
+    let input_hook = input.clone();
 
     let result: Result<ToolOutput, ToolError> = match registry.get(&name) {
         Some(tool) => tool.run(input, ctx).await,
@@ -1029,16 +1039,8 @@ async fn run_one(
     };
 
     let duration_ms = started.elapsed().as_millis() as u64;
-    match result {
-        Ok(out) => {
-            let _ = ev_tx.send(Event::ToolCallFinished {
-                name,
-                ok: out.ok,
-                duration_ms,
-                summary: out.summary,
-            });
-            out.result
-        }
+    let mut out = match result {
+        Ok(out) => out,
         Err(e) => {
             let _ = ev_tx.send(Event::ToolCallFinished {
                 name,
@@ -1046,9 +1048,28 @@ async fn run_one(
                 duration_ms,
                 summary: e.to_string(),
             });
-            format!("ERROR: {e}")
+            return format!("ERROR: {e}");
         }
-    }
+    };
+
+    // Diagnostics-after-edit hook: rust-analyzer feedback lands inside the
+    // same tool-result so the model fixes errors immediately (spec 9 v0.8).
+    crate::tools::lsp_tools::maybe_attach_diagnostics(
+        &name,
+        out.ok,
+        &input_hook,
+        ctx,
+        &mut out.result,
+    )
+    .await;
+
+    let _ = ev_tx.send(Event::ToolCallFinished {
+        name,
+        ok: out.ok,
+        duration_ms,
+        summary: out.summary,
+    });
+    out.result
 }
 
 fn input_preview(input: &serde_json::Value) -> String {
