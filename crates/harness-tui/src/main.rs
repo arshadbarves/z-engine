@@ -140,12 +140,11 @@ async fn run(args: Args) -> anyhow::Result<()> {
     if args.resume || args.session.is_some() {
         let chosen = match &args.session {
             Some(id) => {
-                let p = PathBuf::from(id);
-                if p.exists() {
-                    Some(p)
-                } else {
-                    Some(sessions_dir().join(format!("{id}.jsonl")))
-                }
+                // Accept a full path, a bare ULID, or a bare filename.
+                let direct = PathBuf::from(id);
+                let in_dir = sessions_dir().join(id);
+                let with_ext = sessions_dir().join(format!("{id}.jsonl"));
+                [direct, in_dir, with_ext].into_iter().find(|p| p.exists())
             }
             None => views::picker::pick_interactive(&sessions_dir())?,
         };
