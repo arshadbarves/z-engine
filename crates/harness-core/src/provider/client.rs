@@ -37,7 +37,11 @@ pub enum ProviderError {
     #[error("provider returned HTTP {status}: {body}")]
     Http { status: u16, body: String },
     #[error("rate limited ({status}) after {attempts} attempts; {detail}")]
-    RateLimited { status: u16, attempts: u32, detail: String },
+    RateLimited {
+        status: u16,
+        attempts: u32,
+        detail: String,
+    },
     #[error("connection failed after {attempts} attempts: {cause}")]
     Connect { attempts: u32, cause: String },
     #[error("stream interrupted: {0}")]

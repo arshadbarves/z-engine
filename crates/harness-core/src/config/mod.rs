@@ -109,7 +109,7 @@ impl Config {
                     return Err(ConfigError::Read {
                         path: p.clone(),
                         source: e,
-                    })
+                    });
                 }
             },
             None => None,

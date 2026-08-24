@@ -6,10 +6,10 @@ use std::process::Stdio;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::io::AsyncReadExt;
 
-use super::{truncate_with_tempfile, Tool, ToolCtx, ToolError, ToolOutput};
+use super::{Tool, ToolCtx, ToolError, ToolOutput, truncate_with_tempfile};
 
 /// Only these variables pass through to spawned shells (spec §7).
 const ENV_ALLOWLIST: &[&str] = &[
@@ -61,12 +61,10 @@ impl Tool for BashTool {
     }
 
     async fn run(&self, input: Value, ctx: &ToolCtx) -> Result<ToolOutput, ToolError> {
-        let obj = input
-            .as_object()
-            .ok_or_else(|| ToolError::InvalidInput {
-                tool: "bash",
-                problem: "input must be an object".into(),
-            })?;
+        let obj = input.as_object().ok_or_else(|| ToolError::InvalidInput {
+            tool: "bash",
+            problem: "input must be an object".into(),
+        })?;
         let command = obj
             .get("command")
             .and_then(Value::as_str)
@@ -112,7 +110,9 @@ impl Tool for BashTool {
             }
         }
 
-        let mut child = cmd.spawn().map_err(|e| ToolError::Failed(format!("spawn failed: {e}")))?;
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| ToolError::Failed(format!("spawn failed: {e}")))?;
         let stdout_handle = drain(child.stdout.take());
         let stderr_handle = drain(child.stderr.take());
 
@@ -140,9 +140,7 @@ impl Tool for BashTool {
             }
         };
 
-        let stdout = stdout_handle
-            .await
-            .unwrap_or_default();
+        let stdout = stdout_handle.await.unwrap_or_default();
         let mut stderr = stderr_handle.await.unwrap_or_default();
 
         // Harvest + strip the persistent-cwd marker from stderr.
@@ -159,9 +157,7 @@ impl Tool for BashTool {
         let code = status.code().unwrap_or(-1);
         let mut body = String::new();
         if timed_out {
-            body.push_str(&format!(
-                "[killed after {timeout_secs}s timeout]\n"
-            ));
+            body.push_str(&format!("[killed after {timeout_secs}s timeout]\n"));
         } else if ctx.aborted() {
             body.push_str("[aborted by user]\n");
         }
@@ -311,12 +307,9 @@ mod tests {
     async fn timeout_kills_the_process() {
         let tmp = tempfile::tempdir().unwrap();
         let ctx = ctx_in(tmp.path());
-        let out = run_cmd(
-            &ctx,
-            json!({"command": "sleep 30", "timeout_secs": 1}),
-        )
-        .await
-        .unwrap();
+        let out = run_cmd(&ctx, json!({"command": "sleep 30", "timeout_secs": 1}))
+            .await
+            .unwrap();
         assert!(!out.ok);
         assert!(out.result.contains("[killed after 1s timeout]"));
         assert!(out.summary.contains("timed out"));

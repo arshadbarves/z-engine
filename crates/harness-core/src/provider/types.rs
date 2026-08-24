@@ -21,7 +21,9 @@ impl ChatRequest {
             messages,
             tools: Vec::new(),
             stream: true,
-            stream_options: StreamOptions { include_usage: true },
+            stream_options: StreamOptions {
+                include_usage: true,
+            },
         }
     }
 
@@ -289,10 +291,7 @@ mod tests {
 
     #[test]
     fn parses_text_delta() {
-        let ev = parse_chunk_data(
-            r#"{"choices":[{"delta":{"content":"Hi"},"index":0}]}"#,
-        )
-        .unwrap();
+        let ev = parse_chunk_data(r#"{"choices":[{"delta":{"content":"Hi"},"index":0}]}"#).unwrap();
         assert_eq!(ev, vec![StreamEvent::TextDelta("Hi".into())]);
     }
 
@@ -331,12 +330,23 @@ mod tests {
         )
         .unwrap();
         assert!(ev.contains(&StreamEvent::Finish(FinishReason::ToolCalls)));
-        assert!(ev.contains(&StreamEvent::Usage(Usage { prompt_tokens: 10, completion_tokens: 5 })));
+        assert!(ev.contains(&StreamEvent::Usage(Usage {
+            prompt_tokens: 10,
+            completion_tokens: 5
+        })));
     }
 
     #[test]
     fn usage_only_final_chunk_has_no_choices() {
-        let ev = parse_chunk_data(r#"{"choices":[],"usage":{"prompt_tokens":3,"completion_tokens":9}}"#).unwrap();
-        assert_eq!(ev, vec![StreamEvent::Usage(Usage { prompt_tokens: 3, completion_tokens: 9 })]);
+        let ev =
+            parse_chunk_data(r#"{"choices":[],"usage":{"prompt_tokens":3,"completion_tokens":9}}"#)
+                .unwrap();
+        assert_eq!(
+            ev,
+            vec![StreamEvent::Usage(Usage {
+                prompt_tokens: 3,
+                completion_tokens: 9
+            })]
+        );
     }
 }

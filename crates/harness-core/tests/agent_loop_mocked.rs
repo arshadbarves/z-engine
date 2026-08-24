@@ -12,7 +12,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
 use axum::routing::post;
-use harness_core::agent::{spawn, Event, LoopConfig};
+use harness_core::agent::{Event, LoopConfig, spawn};
 
 // ---------------------------------------------------------------------------
 // Mock provider infrastructure
@@ -116,7 +116,9 @@ fn finish_json(reason: &str, prompt: u64, completion: u64) -> String {
 fn tool_call_delta(index: usize, id: Option<&str>, name: Option<&str>, args: &str) -> String {
     let escaped = args.replace('\\', "\\\\").replace('"', "\\\"");
     let id_part = id.map(|i| format!(r#""id":"{i}","#)).unwrap_or_default();
-    let fn_name = name.map(|n| format!(r#""name":"{n}","#)).unwrap_or_default();
+    let fn_name = name
+        .map(|n| format!(r#""name":"{n}","#))
+        .unwrap_or_default();
     sse_event(&format!(
         r#"{{"choices":[{{"index":0,"delta":{{"tool_calls":[{{"index":{index},{id_part}"type":"function","function":{{{fn_name}"arguments":"{escaped}"}}}}]}}}}]}}"#
     ))
@@ -130,7 +132,10 @@ fn done() -> String {
 async fn wait_for(ev: &mut harness_core::agent::EventRx, pred: impl Fn(&Event) -> bool) -> Event {
     let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
     loop {
-        assert!(tokio::time::Instant::now() < deadline, "timed out waiting for event");
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "timed out waiting for event"
+        );
         let e = tokio::time::timeout(Duration::from_millis(500), ev.recv())
             .await
             .ok()
@@ -157,14 +162,24 @@ async fn full_loop_read_then_bash_then_answer() {
     script.push(format!(
         "{}{}{}{}",
         text_delta("Let me look."),
-        tool_call_delta(0, Some("call_read"), Some("read_file"), r#"{"path":"notes.txt"}"#),
+        tool_call_delta(
+            0,
+            Some("call_read"),
+            Some("read_file"),
+            r#"{"path":"notes.txt"}"#
+        ),
         finish_json("tool_calls", 100, 20),
         done()
     ));
     script.push(format!(
         "{}{}{}{}",
         text_delta("Now incrementing."),
-        tool_call_delta(0, Some("call_bash"), Some("bash"), r#"{"command":"echo 42 > out.txt"}"#),
+        tool_call_delta(
+            0,
+            Some("call_bash"),
+            Some("bash"),
+            r#"{"command":"echo 42 > out.txt"}"#
+        ),
         finish_json("tool_calls", 200, 40),
         done()
     ));
@@ -181,30 +196,43 @@ async fn full_loop_read_then_bash_then_answer() {
 
     let _ = wait_for(&mut ev, |e| matches!(e, Event::TurnStarted)).await;
 
-    let finished = wait_for(&mut ev, |e| {
-        matches!(e, Event::ToolCallFinished { name, .. } if name == "read_file")
-    })
+    let finished = wait_for(
+        &mut ev,
+        |e| matches!(e, Event::ToolCallFinished { name, .. } if name == "read_file"),
+    )
     .await;
-    let Event::ToolCallFinished { ok, summary, .. } = finished else { unreachable!() };
+    let Event::ToolCallFinished { ok, summary, .. } = finished else {
+        unreachable!()
+    };
     assert!(ok, "{summary}");
     assert!(summary.contains("notes.txt"));
 
     // `echo*` was pre-allowed → bash runs without any ApprovalRequired.
-    let bash_done = wait_for(&mut ev, |e| {
-        matches!(e, Event::ToolCallFinished { name, .. } if name == "bash")
-    })
+    let bash_done = wait_for(
+        &mut ev,
+        |e| matches!(e, Event::ToolCallFinished { name, .. } if name == "bash"),
+    )
     .await;
-    assert!(matches!(bash_done, Event::ToolCallFinished { ok: true, .. }));
+    assert!(matches!(
+        bash_done,
+        Event::ToolCallFinished { ok: true, .. }
+    ));
 
     let completed = wait_for(&mut ev, |e| matches!(e, Event::TurnCompleted { .. })).await;
-    let Event::TurnCompleted { prompt_tokens, completion_tokens } = completed else {
+    let Event::TurnCompleted {
+        prompt_tokens,
+        completion_tokens,
+    } = completed
+    else {
         unreachable!()
     };
     assert_eq!(prompt_tokens, 300); // latest prompt size wins
     assert_eq!(completion_tokens, 120); // 20 + 40 + 60 cumulative
 
     assert_eq!(
-        std::fs::read_to_string(tmp.path().join("out.txt")).unwrap().trim(),
+        std::fs::read_to_string(tmp.path().join("out.txt"))
+            .unwrap()
+            .trim(),
         "42"
     );
 
@@ -224,13 +252,21 @@ async fn tool_result_is_fed_back_to_the_model() {
         finish_json("tool_calls", 10, 10),
         done()
     ));
-    script.push(format!("{}{}{}", text_delta("got it"), finish_json("stop", 20, 20), done()));
+    script.push(format!(
+        "{}{}{}",
+        text_delta("got it"),
+        finish_json("stop", 20, 20),
+        done()
+    ));
 
     let base = serve(script.clone()).await;
     let (handle, mut ev) = spawn(cfg_for(base, tmp.path()));
     handle.submit("read fact");
 
-    let _ = wait_for(&mut ev, |e| matches!(e, Event::ToolCallFinished { ok: true, .. })).await;
+    let _ = wait_for(&mut ev, |e| {
+        matches!(e, Event::ToolCallFinished { ok: true, .. })
+    })
+    .await;
     let _ = wait_for(&mut ev, |e| matches!(e, Event::TurnCompleted { .. })).await;
 
     // The second POST must carry the tool result back to the model.
@@ -254,7 +290,12 @@ async fn gated_bash_prompt_then_deny_refuses_and_model_adapts() {
     script.push(format!(
         "{}{}{}{}",
         text_delta("rm time"),
-        tool_call_delta(0, Some("c1"), Some("bash"), r#"{"command":"rm dangerous-thing"}"#),
+        tool_call_delta(
+            0,
+            Some("c1"),
+            Some("bash"),
+            r#"{"command":"rm dangerous-thing"}"#
+        ),
         finish_json("tool_calls", 5, 5),
         done()
     ));
@@ -270,7 +311,13 @@ async fn gated_bash_prompt_then_deny_refuses_and_model_adapts() {
     handle.submit("clean up");
 
     let approval = wait_for(&mut ev, |e| matches!(e, Event::ApprovalRequired { .. })).await;
-    let Event::ApprovalRequired { id, tool, input_preview, suggested_rule } = approval else {
+    let Event::ApprovalRequired {
+        id,
+        tool,
+        input_preview,
+        suggested_rule,
+    } = approval
+    else {
         unreachable!()
     };
     assert_eq!(tool, "bash");
@@ -290,17 +337,32 @@ async fn approve_always_prefix_skips_second_prompt() {
     // Two consecutive identical gated commands, then a closing answer.
     script.push(format!(
         "{}{}{}",
-        tool_call_delta(0, Some("c0"), Some("bash"), r#"{"command":"cargo test all"}"#),
+        tool_call_delta(
+            0,
+            Some("c0"),
+            Some("bash"),
+            r#"{"command":"cargo test all"}"#
+        ),
         finish_json("tool_calls", 9, 9),
         done()
     ));
     script.push(format!(
         "{}{}{}",
-        tool_call_delta(0, Some("c1"), Some("bash"), r#"{"command":"cargo test all"}"#),
+        tool_call_delta(
+            0,
+            Some("c1"),
+            Some("bash"),
+            r#"{"command":"cargo test all"}"#
+        ),
         finish_json("tool_calls", 9, 9),
         done()
     ));
-    script.push(format!("{}{}{}", text_delta("all green"), finish_json("stop", 9, 9), done()));
+    script.push(format!(
+        "{}{}{}",
+        text_delta("all green"),
+        finish_json("stop", 9, 9),
+        done()
+    ));
 
     let base = serve(script).await;
     let (handle, mut ev) = spawn(cfg_for(base, tmp.path()));
@@ -308,7 +370,10 @@ async fn approve_always_prefix_skips_second_prompt() {
 
     // First prompt → answer "always this prefix".
     let approval = wait_for(&mut ev, |e| matches!(e, Event::ApprovalRequired { .. })).await;
-    let Event::ApprovalRequired { id, suggested_rule, .. } = approval else {
+    let Event::ApprovalRequired {
+        id, suggested_rule, ..
+    } = approval
+    else {
         unreachable!()
     };
     assert_eq!(suggested_rule.as_deref(), Some("cargo test*"));
@@ -380,7 +445,12 @@ async fn parallel_safe_tools_run_in_one_round() {
         finish_json("tool_calls", 7, 7),
         done()
     ));
-    script.push(format!("{}{}{}", text_delta("both read"), finish_json("stop", 8, 8), done()));
+    script.push(format!(
+        "{}{}{}",
+        text_delta("both read"),
+        finish_json("stop", 8, 8),
+        done()
+    ));
 
     let base = serve(script.clone()).await;
     let (handle, mut ev) = spawn(cfg_for(base, tmp.path()));
@@ -397,15 +467,15 @@ async fn parallel_safe_tools_run_in_one_round() {
 async fn shutdown_stops_the_task() {
     let tmp = tempfile::tempdir().unwrap();
     let script = Script::default();
-    script.push(format!("{}{}{}", text_delta("hi"), finish_json("stop", 1, 1), done()));
+    script.push(format!(
+        "{}{}{}",
+        text_delta("hi"),
+        finish_json("stop", 1, 1),
+        done()
+    ));
     let base = serve(script).await;
     let (handle, mut ev) = spawn(cfg_for(base, tmp.path()));
     handle.shutdown();
     // Once the task exits, the event channel closes (recv → None forever).
-    loop {
-        match ev.recv().await {
-            Some(_) => continue,
-            None => break,
-        }
-    }
+    while ev.recv().await.is_some() {}
 }

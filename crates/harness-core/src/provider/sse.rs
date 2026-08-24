@@ -26,7 +26,8 @@ impl SseParser {
         let mut out = Vec::new();
         while let Some(pos) = self.buf.iter().position(|&b| b == b'\n') {
             let line_bytes: Vec<u8> = self.buf.drain(..=pos).collect();
-            let mut line = String::from_utf8_lossy(&line_bytes[..line_bytes.len() - 1]).into_owned();
+            let mut line =
+                String::from_utf8_lossy(&line_bytes[..line_bytes.len() - 1]).into_owned();
             if line.ends_with('\r') {
                 line.pop();
             }
@@ -117,7 +118,8 @@ mod tests {
 
     const TEXT_SSE: &str = include_str!("../../tests/fixtures/sse/text.sse");
     const TOOL_SINGLE_SSE: &str = include_str!("../../tests/fixtures/sse/tool_single.sse");
-    const TOOL_MULTI_SSE: &str = include_str!("../../tests/fixtures/sse/tool_multi_interleaved.sse");
+    const TOOL_MULTI_SSE: &str =
+        include_str!("../../tests/fixtures/sse/tool_multi_interleaved.sse");
     const USAGE_FINAL_SSE: &str = include_str!("../../tests/fixtures/sse/usage_final.sse");
     const KEEPALIVE_SSE: &str = include_str!("../../tests/fixtures/sse/keepalive_comments.sse");
 
@@ -148,7 +150,10 @@ mod tests {
                 StreamEvent::TextDelta("Hello".into()),
                 StreamEvent::TextDelta(", world".into()),
                 // usage precedes finish within the final chunk by design
-                StreamEvent::Usage(types::Usage { prompt_tokens: 4, completion_tokens: 3 }),
+                StreamEvent::Usage(types::Usage {
+                    prompt_tokens: 4,
+                    completion_tokens: 3
+                }),
                 StreamEvent::Finish(FinishReasonEnum::Stop),
                 StreamEvent::Done,
             ]

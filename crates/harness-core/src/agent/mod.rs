@@ -22,8 +22,8 @@ use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use crate::context;
 use crate::perms::{Decision, PolicyEngine};
 use crate::provider::{
-    AccumulatedToolCall, ChatMessage, ChatRequest, Client, ProviderError,
-    StreamEvent, ToolCall, ToolCallAccumulator, Usage,
+    AccumulatedToolCall, ChatMessage, ChatRequest, Client, ProviderError, StreamEvent, ToolCall,
+    ToolCallAccumulator, Usage,
 };
 use crate::tools::{ToolCtx, ToolError, ToolOutput, ToolRegistry};
 
@@ -111,20 +111,22 @@ pub fn spawn(cfg: LoopConfig) -> (AgentHandle, EventRx) {
     let (ev_tx, ev_rx) = mpsc::unbounded_channel::<Event>();
 
     match Client::new(&cfg.base_url, cfg.api_key.clone()) {
-        Err(e) => {
-            // Surface asynchronously so callers can still attach to events.
-            tokio::spawn(async move {
-                let _ = ev_tx.send(Event::Error(format!("provider init failed: {e}")));
-            });
-            return (AgentHandle { cmd_tx }, EventRx { rx: ev_rx });
-        }
         Ok(client) => {
-            let perms = Arc::new(Mutex::new(PolicyEngine::new(cfg.initial_allow_rules.clone())));
+            let perms = Arc::new(Mutex::new(PolicyEngine::new(
+                cfg.initial_allow_rules.clone(),
+            )));
             let registry = ToolRegistry::builtins_v01();
             tokio::spawn(agent_task(cfg, client, perms, registry, cmd_rx, ev_tx));
-            (AgentHandle { cmd_tx }, EventRx { rx: ev_rx })
+        }
+        Err(e) => {
+            // Surface asynchronously so callers can still attach to events.
+            let ev_tx2 = ev_tx.clone();
+            tokio::spawn(async move {
+                let _ = ev_tx2.send(Event::Error(format!("provider init failed: {e}")));
+            });
         }
     }
+    (AgentHandle { cmd_tx }, EventRx { rx: ev_rx })
 }
 
 struct LoopState {
@@ -142,7 +144,11 @@ async fn agent_task(
     ev_tx: UnboundedSender<Event>,
 ) {
     let abort_flag = Arc::new(AtomicBool::new(false));
-    let ctx = ToolCtx::new(cfg.project_root.clone(), Arc::clone(&perms), cfg.tmp_dir.clone());
+    let ctx = ToolCtx::new(
+        cfg.project_root.clone(),
+        Arc::clone(&perms),
+        cfg.tmp_dir.clone(),
+    );
     let system_prompt = context::build_system_prompt(
         &cfg.project_root,
         context::load_agents_md(&cfg.project_root).as_deref(),
@@ -163,7 +169,14 @@ async fn agent_task(
         let _ = ev_tx.send(Event::TurnStarted);
 
         let outcome = run_turn(
-            &cfg, &client, &registry, &ctx, &mut state, &mut cmd_rx, &ev_tx, &abort_flag,
+            &cfg,
+            &client,
+            &registry,
+            &ctx,
+            &mut state,
+            &mut cmd_rx,
+            &ev_tx,
+            &abort_flag,
         )
         .await;
 
@@ -186,13 +199,11 @@ async fn agent_task(
     tracing::debug!("agent task exiting");
 }
 
-/// Wait for a meaningful action, transparently dropping stale ones.
+/// Wait for a meaningful action; channel close / Shutdown ends the task.
 async fn next_action(cmd_rx: &mut UnboundedReceiver<Command>) -> Option<Command> {
-    loop {
-        match cmd_rx.recv().await {
-            None | Some(Command::Shutdown) => return None,
-            Some(c) => return Some(c),
-        }
+    match cmd_rx.recv().await {
+        None | Some(Command::Shutdown) => None,
+        Some(c) => Some(c),
     }
 }
 
@@ -297,10 +308,22 @@ async fn run_turn(
         // Even when finish_reason â  tool_calls, emitted calls demand execution.
 
         // ---- permissions + execution ---------------------------------
-        match execute_calls(complete_calls, registry, ctx, cmd_rx, ev_tx, state, abort_flag).await {
+        match execute_calls(
+            complete_calls,
+            registry,
+            ctx,
+            cmd_rx,
+            ev_tx,
+            state,
+            abort_flag,
+        )
+        .await
+        {
             ExecutionsOutcome::Ran(results) => {
                 for (call_id, content) in results {
-                    state.messages.push(ChatMessage::tool_result(call_id, content));
+                    state
+                        .messages
+                        .push(ChatMessage::tool_result(call_id, content));
                 }
             }
             ExecutionsOutcome::Aborted => return TurnOutcome::Aborted,
@@ -410,8 +433,9 @@ async fn execute_calls(
             Decision::Allow => Verdict::Run,
             Decision::Gate => {
                 let suggested_rule = (call.function.name == "bash").then(|| {
-                    PolicyEngine::suggested_rule(input.get("command").and_then(|v| v.as_str())
-                        .unwrap_or(""))
+                    PolicyEngine::suggested_rule(
+                        input.get("command").and_then(|v| v.as_str()).unwrap_or(""),
+                    )
                 });
                 state.approval_counter += 1;
                 let id = state.approval_counter;
@@ -482,7 +506,10 @@ async fn execute_calls(
         .iter()
         .enumerate()
         .map(|(idx, call)| {
-            let content = outcomes.get(&idx).cloned().unwrap_or_else(|| refusal.to_string());
+            let content = outcomes
+                .get(&idx)
+                .cloned()
+                .unwrap_or_else(|| refusal.to_string());
             (call.id.clone(), content)
         })
         .collect();
@@ -506,7 +533,10 @@ async fn wait_for_approval(
                 abort_flag.store(true, Ordering::Relaxed);
                 return ApprovalResolution::AbortTurn;
             }
-            Some(Command::Approve { id: got, prefix_rule }) if got == id => {
+            Some(Command::Approve {
+                id: got,
+                prefix_rule,
+            }) if got == id => {
                 return ApprovalResolution::Granted(prefix_rule);
             }
             Some(Command::Deny { id: got }) if got == id => return ApprovalResolution::Denied,
@@ -525,7 +555,12 @@ fn parse_input(arguments: &str) -> serde_json::Value {
 
 /// Execute one allowed/approved call: events + timing + error mapping.
 /// Errors become `"ERROR: â¦"` transcript text (self-correction path).
-async fn run_one(call: ToolCall, ctx: &ToolCtx, registry: &ToolRegistry, ev_tx: &UnboundedSender<Event>) -> String {
+async fn run_one(
+    call: ToolCall,
+    ctx: &ToolCtx,
+    registry: &ToolRegistry,
+    ev_tx: &UnboundedSender<Event>,
+) -> String {
     let started = Instant::now();
     let input = parse_input(&call.function.arguments);
     let preview = input_preview(&input);

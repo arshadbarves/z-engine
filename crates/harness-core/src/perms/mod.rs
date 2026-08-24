@@ -151,8 +151,14 @@ mod tests {
     #[test]
     fn dangerous_commands_never_accidentally_match() {
         let e = engine(&["rm -rf /tmp/scratch*"]);
-        assert_eq!(e.decide("bash", &json!({"command": "rm -rf /tmp/scratch/x"})), Decision::Allow);
-        assert_eq!(e.decide("bash", &json!({"command": "rm -rf /"})), Decision::Gate);
+        assert_eq!(
+            e.decide("bash", &json!({"command": "rm -rf /tmp/scratch/x"})),
+            Decision::Allow
+        );
+        assert_eq!(
+            e.decide("bash", &json!({"command": "rm -rf /"})),
+            Decision::Gate
+        );
     }
 
     #[test]
@@ -169,13 +175,19 @@ mod tests {
 
     #[test]
     fn suggested_rule_uses_two_tokens() {
-        assert_eq!(PolicyEngine::suggested_rule("cargo test --lib foo"), "cargo test*");
+        assert_eq!(
+            PolicyEngine::suggested_rule("cargo test --lib foo"),
+            "cargo test*"
+        );
         assert_eq!(PolicyEngine::suggested_rule("make"), "make*");
     }
 
     #[test]
     fn leading_whitespace_in_command_is_trimmed() {
         let e = engine(&["cargo build*"]);
-        assert_eq!(e.decide_command("   cargo build --release  "), Decision::Allow);
+        assert_eq!(
+            e.decide_command("   cargo build --release  "),
+            Decision::Allow
+        );
     }
 }

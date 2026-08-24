@@ -11,7 +11,10 @@ pub enum Command {
     SubmitMessage(String),
     /// Approval modal answered "yes" — optionally persisting a bash-prefix
     /// rule for the rest of the session ("always this prefix").
-    Approve { id: u64, prefix_rule: Option<String> },
+    Approve {
+        id: u64,
+        prefix_rule: Option<String>,
+    },
     /// Approval modal answered "no".
     Deny { id: u64 },
     /// Esc / interrupt: abort the current turn instantly, mid-stream OK.

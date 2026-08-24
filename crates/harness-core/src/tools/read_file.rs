@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 
 use super::{Tool, ToolCtx, ToolError, ToolOutput};
@@ -52,12 +52,10 @@ impl Tool for ReadFileTool {
     }
 
     async fn run(&self, input: Value, ctx: &ToolCtx) -> Result<ToolOutput, ToolError> {
-        let obj = input
-            .as_object()
-            .ok_or_else(|| ToolError::InvalidInput {
-                tool: "read_file",
-                problem: "input must be an object".into(),
-            })?;
+        let obj = input.as_object().ok_or_else(|| ToolError::InvalidInput {
+            tool: "read_file",
+            problem: "input must be an object".into(),
+        })?;
         let raw_path = obj
             .get("path")
             .and_then(Value::as_str)
@@ -89,7 +87,10 @@ impl Tool for ReadFileTool {
                     .map(|m| m.len())
                     .unwrap_or_default();
                 let msg = format!("[binary file; {size} bytes; not displayed]");
-                return Ok(ToolOutput::success(msg, format!("read_file: {display_path} (binary)")));
+                return Ok(ToolOutput::success(
+                    msg,
+                    format!("read_file: {display_path} (binary)"),
+                ));
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 return Ok(ToolOutput::failure(
@@ -138,13 +139,14 @@ impl Tool for ReadFileTool {
 
         if number == 0 {
             let msg = "[empty file]\n".to_string();
-            return Ok(ToolOutput::success(msg, format!("read_file: {display_path} (empty)")));
+            return Ok(ToolOutput::success(
+                msg,
+                format!("read_file: {display_path} (empty)"),
+            ));
         }
         if shown_first == 0 {
             return Ok(ToolOutput::failure(
-                format!(
-                    "ERROR: offset {offset} is past end of file ({number} lines total)"
-                ),
+                format!("ERROR: offset {offset} is past end of file ({number} lines total)"),
                 format!("read_file: {display_path} (bad offset)"),
             ));
         }
@@ -263,10 +265,7 @@ mod tests {
         std::fs::write(tmp.path().join("e.txt"), "").unwrap();
         let ctx = ctx_in(tmp.path());
         let out = ReadFileTool
-            .run(
-                json!({"path": tmp.path().join("e.txt")}),
-                &ctx,
-            )
+            .run(json!({"path": tmp.path().join("e.txt")}), &ctx)
             .await
             .unwrap();
         assert!(out.result.contains("[empty file]"));

@@ -161,7 +161,9 @@ impl ToolRegistry {
         self.order
             .iter()
             .filter_map(|n| self.tools.get(n))
-            .map(|t| crate::provider::ToolDef::function(t.name(), t.description(), t.parameters_schema()))
+            .map(|t| {
+                crate::provider::ToolDef::function(t.name(), t.description(), t.parameters_schema())
+            })
             .collect()
     }
 

@@ -34,17 +34,13 @@ pub enum AccumulatedToolCall {
         reason: String,
     },
     /// A delta stream existed for this index but no id was ever provided.
-    MissingId { index: usize },
+    MissingId {
+        index: usize,
+    },
 }
 
 impl ToolCallAccumulator {
-    pub fn absorb(
-        &mut self,
-        index: usize,
-        id: Option<&str>,
-        name: Option<&str>,
-        args_delta: &str,
-    ) {
+    pub fn absorb(&mut self, index: usize, id: Option<&str>, name: Option<&str>, args_delta: &str) {
         let p = self.partial.entry(index).or_default();
         if let Some(id) = id {
             if p.id.is_none() {
@@ -110,7 +106,11 @@ mod tests {
 
     fn accumulate_stream(sse: &str) -> Vec<AccumulatedToolCall> {
         let mut dec = SseDecoder::new();
-        let events: Vec<_> = dec.feed(sse.as_bytes()).into_iter().chain(dec.finish()).collect();
+        let events: Vec<_> = dec
+            .feed(sse.as_bytes())
+            .into_iter()
+            .chain(dec.finish())
+            .collect();
         let mut acc = ToolCallAccumulator::default();
         for ev in events {
             if let StreamEvent::ToolCallDelta {
@@ -162,8 +162,7 @@ mod tests {
         // bash args were delivered whole on index 1 before read_file's tail
         match &out[1] {
             AccumulatedToolCall::Complete(c) => {
-                let args: serde_json::Value =
-                    serde_json::from_str(&c.function.arguments).unwrap();
+                let args: serde_json::Value = serde_json::from_str(&c.function.arguments).unwrap();
                 assert_eq!(args["command"], "pwd");
             }
             other => panic!("expected complete bash call, got {other:?}"),
