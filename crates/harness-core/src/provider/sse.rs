@@ -147,8 +147,9 @@ mod tests {
             vec![
                 StreamEvent::TextDelta("Hello".into()),
                 StreamEvent::TextDelta(", world".into()),
-                StreamEvent::Finish(FinishReasonEnum::Stop),
+                // usage precedes finish within the final chunk by design
                 StreamEvent::Usage(types::Usage { prompt_tokens: 4, completion_tokens: 3 }),
+                StreamEvent::Finish(FinishReasonEnum::Stop),
                 StreamEvent::Done,
             ]
         );

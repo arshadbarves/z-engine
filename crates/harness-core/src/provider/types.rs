@@ -246,6 +246,14 @@ pub(crate) fn parse_chunk_data(data: &str) -> Result<Vec<StreamEvent>, serde_jso
     let chunk: SseChunk = serde_json::from_str(data)?;
     let mut events = Vec::new();
 
+    // Usage before Finish: consumers may stop at the finish marker, and
+    // both often arrive in the same final chunk.
+    if let Some(usage) = chunk.usage {
+        if usage.prompt_tokens != 0 || usage.completion_tokens != 0 {
+            events.push(StreamEvent::Usage(usage));
+        }
+    }
+
     for choice in &chunk.choices {
         if let Some(delta) = &choice.delta {
             if let Some(text) = &delta.content {
@@ -270,11 +278,6 @@ pub(crate) fn parse_chunk_data(data: &str) -> Result<Vec<StreamEvent>, serde_jso
         }
         if let Some(reason) = &choice.finish_reason {
             events.push(StreamEvent::Finish(FinishReason::from_wire(reason)));
-        }
-    }
-    if let Some(usage) = chunk.usage {
-        if usage.prompt_tokens != 0 || usage.completion_tokens != 0 {
-            events.push(StreamEvent::Usage(usage));
         }
     }
     Ok(events)

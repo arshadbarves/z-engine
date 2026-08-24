@@ -248,7 +248,7 @@ async fn run_turn(
         match outcome {
             StreamOutcome::Aborted => return TurnOutcome::Aborted,
             StreamOutcome::Failed(e) => return TurnOutcome::Failed(e.to_string()),
-            StreamOutcome::Finished | StreamOutcome::DoneNoFinish => {}
+            StreamOutcome::Completed => {}
         }
 
         // ---- assemble the assistant message --------------------------
@@ -309,8 +309,7 @@ async fn run_turn(
 }
 
 enum StreamOutcome {
-    Finished,
-    DoneNoFinish,
+    Completed,
     Aborted,
     Failed(ProviderError),
 }
@@ -331,7 +330,7 @@ async fn consume_stream(
         tokio::select! {
             item = stream.recv() => {
                 match item {
-                    None => return StreamOutcome::Finished,
+                    None => break,
                     Some(Err(e)) => return StreamOutcome::Failed(e),
                     Some(Ok(ev)) => match ev {
                         StreamEvent::TextDelta(t) => {
@@ -352,11 +351,10 @@ async fn consume_stream(
                                 completion_tokens: usage_out.completion_tokens,
                             });
                         }
-                        StreamEvent::Finish(r) => {
-                            tracing::debug!(?r, "stream finished");
-                            return StreamOutcome::Finished;
-                        }
-                        StreamEvent::Done => return StreamOutcome::DoneNoFinish,
+                        // Non-terminal: usage may still arrive in later
+                        // chunks (or already did in this batch).
+                        StreamEvent::Finish(_) => {}
+                        StreamEvent::Done => break,
                     },
                 }
             }
@@ -375,6 +373,7 @@ async fn consume_stream(
             }
         }
     }
+    StreamOutcome::Completed
 }
 
 enum ExecutionsOutcome {
