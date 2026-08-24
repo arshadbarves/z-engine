@@ -16,7 +16,14 @@
 use serde_json::Value;
 
 /// Tools that never prompt (safe information gathering).
-const AUTO_ALLOW_TOOLS: &[&str] = &["read_file", "glob", "grep", "update_context_notes"];
+const AUTO_ALLOW_TOOLS: &[&str] = &[
+    "read_file",
+    "glob",
+    "grep",
+    "update_context_notes",
+    // Sub-agent delegation is read-only by construction (spec section 9 v0.7).
+    "task",
+];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Decision {
