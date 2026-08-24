@@ -23,6 +23,9 @@ const AUTO_ALLOW_TOOLS: &[&str] = &[
     "update_context_notes",
     // Sub-agent delegation is read-only by construction (spec section 9 v0.7).
     "task",
+    "go_to_definition",
+    "find_references",
+    "lsp_diagnostics",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]

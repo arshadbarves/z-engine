@@ -218,6 +218,61 @@ pub fn refresh_repo_map(ctx: &crate::tools::ToolCtx) -> String {
     render(&outlines, &tracked, &corpus, BUDGET_CHARS)
 }
 
+/// Find the identifier covering a 1-based line/column via tree-sitter.
+pub fn identifier_at(path: &Path, line: usize, col: usize) -> Option<String> {
+    let src = std::fs::read_to_string(path).ok()?;
+    let mut parser = tree_sitter::Parser::new();
+    parser
+        .set_language(&tree_sitter_rust::LANGUAGE.into())
+        .ok()?;
+    let tree = parser.parse(&src, None)?;
+    let root = tree.root_node();
+    // 0-based offsets
+    let row = line.saturating_sub(1);
+    let column = col.saturating_sub(1);
+
+    fn descend<'a>(
+        node: tree_sitter::Node<'a>,
+        row: usize,
+        column: usize,
+        src: &'a str,
+    ) -> Option<String> {
+        if !(node.start_position().row <= row && node.end_position().row >= row) {
+            return None;
+        }
+        // Prefer the deepest named child containing the point.
+        let mut best: Option<tree_sitter::Node> = None;
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            let sp = child.start_position();
+            let ep = child.end_position();
+            let contains = (sp.row < row || (sp.row == row && sp.column <= column))
+                && (ep.row > row || (ep.row == row && ep.column >= column));
+            if contains {
+                match best {
+                    Some(b)
+                        if b.start_position() == child.start_position()
+                            && b.end_position() == child.end_position() => {}
+                    None => best = Some(child),
+                    _ => {}
+                }
+                if let Some(found) = descend(child, row, column, src) {
+                    return Some(found);
+                }
+                best = best.or(Some(child));
+                let _ = &mut best;
+            }
+        }
+        if node.kind() == "identifier" {
+            let text = node.utf8_text(src.as_bytes()).ok()?.to_string();
+            return Some(text);
+        }
+        best.and_then(|b| descend(b, row, column, src))
+    }
+
+    descend(root, row, column, &src)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -265,6 +320,15 @@ mod hidden {}
     #[test]
     fn garbage_returns_none_not_panic() {
         assert!(extract_rust("\u{0}\u{1}\u{2}").is_none());
+    }
+
+    #[test]
+    fn identifier_at_finds_symbol_under_cursor() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("s.rs");
+        std::fs::write(&p, SAMPLE).unwrap();
+        let id = identifier_at(&p, 19, 12); // somewhere inside "zebra_fn" name on its def line
+        assert_eq!(id.as_deref(), Some("zebra_fn"));
     }
 
     #[test]

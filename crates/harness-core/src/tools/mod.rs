@@ -14,6 +14,7 @@ pub mod edit_file;
 pub mod file_state;
 pub mod glob;
 pub mod grep;
+pub mod lsp_tools;
 pub mod read_file;
 pub mod task;
 pub mod write_file;
@@ -88,6 +89,8 @@ pub struct ToolCtx {
     pub repo_map_dirty: Arc<std::sync::atomic::AtomicBool>,
     /// Optional spawner for isolated sub-agent research loops (`task` tool).
     pub task_runner: Option<SubAgentRunner>,
+    /// Language server when project supports one.
+    pub lsp: Option<Arc<crate::lsp::LspClient>>,
 }
 
 /// Future-yielding executor for isolated sub-loops. Built by the agent
@@ -110,6 +113,7 @@ impl ToolCtx {
             notes: Arc::new(Mutex::new(crate::context::notes::NotesStore::default())),
             repo_map_dirty: Arc::new(std::sync::atomic::AtomicBool::new(true)),
             task_runner: None,
+            lsp: None,
         }
     }
 
