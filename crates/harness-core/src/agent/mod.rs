@@ -115,7 +115,7 @@ pub fn spawn(cfg: LoopConfig) -> (AgentHandle, EventRx) {
             let perms = Arc::new(Mutex::new(PolicyEngine::new(
                 cfg.initial_allow_rules.clone(),
             )));
-            let registry = ToolRegistry::builtins_v01();
+            let registry = ToolRegistry::builtins();
             tokio::spawn(agent_task(cfg, client, perms, registry, cmd_rx, ev_tx));
         }
         Err(e) => {
@@ -439,11 +439,15 @@ async fn execute_calls(
                 });
                 state.approval_counter += 1;
                 let id = state.approval_counter;
+                let detail = registry
+                    .get(&call.function.name)
+                    .and_then(|t| t.approval_preview(&input, ctx));
                 let _ = ev_tx.send(Event::ApprovalRequired {
                     id,
                     tool: call.function.name.clone(),
                     input_preview: input_preview(&input),
                     suggested_rule,
+                    detail_preview: detail,
                 });
 
                 match wait_for_approval(id, cmd_rx, abort_flag).await {

@@ -9,7 +9,12 @@
 //!   full text lands in a temp file whose path is embedded in the result.
 
 pub mod bash;
+pub mod edit_file;
+pub mod file_state;
+pub mod glob;
+pub mod grep;
 pub mod read_file;
+pub mod write_file;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -73,6 +78,8 @@ pub struct ToolCtx {
     pub perms: Arc<Mutex<PolicyEngine>>,
     /// Directory for full-output temp files.
     pub tmp_dir: PathBuf,
+    /// Read-before-edit enforcement + staleness detection.
+    pub file_state: Arc<Mutex<file_state::FileStateTracker>>,
 }
 
 impl ToolCtx {
@@ -84,7 +91,48 @@ impl ToolCtx {
             abort: Arc::new(AtomicBool::new(false)),
             perms,
             tmp_dir,
+            file_state: Arc::new(Mutex::new(file_state::FileStateTracker::default())),
         }
+    }
+
+    /// Record a successful read so later edits of this path are permitted.
+    pub fn note_read(&self, path: &Path) {
+        if let Ok(mut fs) = self.file_state.lock() {
+            let _ = fs.record_read(path);
+        }
+    }
+
+    /// Read-before-edit gate: Ok when never-existed reads are required or
+    /// satisfied; Err carries the model-facing refusal text.
+    pub fn require_read_for_mutation(
+        &self,
+        _tool: &'static str,
+        resolved: &Path,
+        exists: bool,
+    ) -> Result<(), ToolError> {
+        let guard = self
+            .file_state
+            .lock()
+            .map_err(|_| ToolError::Failed("file state lock poisoned".into()))?;
+        if !exists {
+            return Ok(()); // creating new files needs no prior read
+        }
+        if !guard.was_read(resolved) {
+            return Err(ToolError::Failed(format!(
+                "refusing to modify {} without reading it first — call read_file on this path, then retry",
+                resolved.display()
+            )));
+        }
+        if guard.is_stale(resolved) {
+            return Err(ToolError::Failed(format!(
+                "{} changed on disk since your last read — re-read it before editing",
+                resolved.display()
+            )));
+        }
+        drop(guard);
+        // Refresh the snapshot to the post-edit state after callers write;
+        // they call note_read themselves.
+        Ok(())
     }
 
     pub fn aborted(&self) -> bool {
@@ -124,6 +172,11 @@ pub trait Tool: Send + Sync {
     /// Mutating/stateful tools (bash) return false.
     fn concurrency_safe(&self) -> bool {
         true
+    }
+    /// Rich human/model-facing preview shown in the approval modal for gated
+    /// calls (e.g. a unified diff). None falls back to raw input JSON.
+    fn approval_preview(&self, _input: &serde_json::Value, _ctx: &ToolCtx) -> Option<String> {
+        None
     }
     async fn run(&self, input: serde_json::Value, ctx: &ToolCtx) -> Result<ToolOutput, ToolError>;
 }
@@ -167,11 +220,15 @@ impl ToolRegistry {
             .collect()
     }
 
-    /// v0.1 built-in set: `bash` + `read_file`.
-    pub fn builtins_v01() -> Self {
+    /// Built-in toolset (grows each version).
+    pub fn builtins() -> Self {
         let mut reg = Self::new();
         reg.register(Arc::new(read_file::ReadFileTool));
         reg.register(Arc::new(bash::BashTool));
+        reg.register(Arc::new(write_file::WriteFileTool));
+        reg.register(Arc::new(edit_file::EditFileTool));
+        reg.register(Arc::new(glob::GlobTool));
+        reg.register(Arc::new(grep::GrepTool));
         reg
     }
 }
@@ -182,6 +239,15 @@ impl std::fmt::Debug for ToolRegistry {
             .field("tools", &self.order)
             .finish()
     }
+}
+
+/// Unified diff text between two versions of a file.
+pub fn unified_diff(old: &str, new: &str, display_path: &str) -> String {
+    similar::TextDiff::from_lines(old, new)
+        .unified_diff()
+        .context_radius(2)
+        .header(&format!("a/{display_path}"), &format!("b/{display_path}"))
+        .to_string()
 }
 
 /// Truncate `output` to fit the transcript budget, preserving head and

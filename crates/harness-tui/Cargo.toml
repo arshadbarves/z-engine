@@ -22,6 +22,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 ulid.workspace = true
 dirs.workspace = true
+syntect.workspace = true
 
 [lints]
 workspace = true

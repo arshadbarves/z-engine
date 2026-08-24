@@ -1,8 +1,9 @@
 //! View modules: chat transcript, input box, approval modal, status bar.
 
-mod approval;
+pub mod approval;
 mod chat;
 mod statusbar;
+pub mod syntax;
 
 use crate::app::App;
 use ratatui::layout::{Constraint, Layout};

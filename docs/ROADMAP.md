@@ -5,7 +5,7 @@ Mirrors spec §9. Each version: tests green · clippy clean · demo done · tagg
 - [x] **v0.1 — Walking skeleton** — workspace; SSE provider w/ streamed tool-call deltas;
       agent loop (approvals, abort, parallel tools); TUI chat/input/status/approval modal;
       tools `bash` + `read_file`; mocked-provider integration suite; headless acceptance mode
-- [ ] v0.2 — Editing (`write_file`, `edit_file` ladder + read-before-edit, `glob`, `grep`, diff modal)
+- [x] v0.2 — Editing (`write_file`, `edit_file` ladder + read-before-edit, `glob`, `grep`, diff modal)
 - [ ] v0.3 — Context engine (AGENTS.md ✓ already, token meter, `/compact`, notes, demotion, auto-compaction)
 - [ ] v0.4 — Sessions (JSONL persistence, resume, picker)
 - [ ] v0.5 — Permissions hardening (persistent allowlists, config layering, outside-root guard)
@@ -20,3 +20,4 @@ Mirrors spec §9. Each version: tests green · clippy clean · demo done · tagg
 | Version | Date | Task | Result |
 |---|---|---|---|
 | v0.1 | 2026-08-24 | failing-test fix in tmp/acceptance-v01 via OpenRouter | PASS — model ran tests, read lib.rs, hit macOS `sed -i` failure, self-corrected via python3, tests green (2/2) |
+| v0.2 | 2026-08-24 | multi-file priority feature in tmp/acceptance-v02 via OpenRouter | PASS — 2×read_file + 3×edit_file (diff previews auto-approved) + 1×bash across tasks.rs/main.rs; 4/4 tests; CLI `[P3] write docs` verified |

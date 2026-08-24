@@ -29,8 +29,14 @@ pub async fn run_one_shot(
                 id,
                 tool,
                 input_preview,
+                detail_preview,
                 ..
             }) => {
+                if let Some(diff) = &detail_preview {
+                    for line in diff.lines().take(12) {
+                        eprintln!("  {line}");
+                    }
+                }
                 if auto_approve {
                     eprintln!("[auto-approved] {tool} {input_preview}");
                     handle.approve(id, None);

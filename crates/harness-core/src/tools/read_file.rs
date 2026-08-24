@@ -83,6 +83,7 @@ impl Tool for ReadFileTool {
         // Binary sniff before committing to a full read.
         match sniff_binary(&path).await {
             Ok(true) => {
+                ctx.note_read(&path);
                 let size = std::fs::metadata(&path)
                     .map(|m| m.len())
                     .unwrap_or_default();
@@ -144,6 +145,7 @@ impl Tool for ReadFileTool {
                 format!("read_file: {display_path} (empty)"),
             ));
         }
+        ctx.note_read(&path);
         if shown_first == 0 {
             return Ok(ToolOutput::failure(
                 format!("ERROR: offset {offset} is past end of file ({number} lines total)"),
