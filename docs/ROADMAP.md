@@ -10,7 +10,7 @@ Mirrors spec §9. Each version: tests green · clippy clean · demo done · tagg
 - [x] v0.4 — Sessions (JSONL persistence, resume, picker)
 - [x] v0.5 — Permissions hardening (persistent allowlists, config layering, outside-root guard)
 - [x] v0.6 — Repo map (tree-sitter)
-- [ ] v0.7 — Subagents (`task`)
+- [x] v0.7 — Subagents (`task`)
 - [ ] v0.8 — LSP (rust-analyzer, diagnostics hook)
 - [ ] v0.9 — Review pass + MCP
 - [ ] v1.0 — Polish & distribution
@@ -25,3 +25,4 @@ Mirrors spec §9. Each version: tests green · clippy clean · demo done · tagg
 | v0.4 | 2026-08-24 | kill -9 mid-task → --session resume → continue (mocked) + live plant/recall codeword across restart | PASS — transcript survived SIGKILL incl. round-1 tool result; resumed request carried full prior context; live model answered "MANGO-77" from a previous process's session |
 | v0.4b | 2026-08-24 | live layering proof in tmp/acceptance-v01 | PASS — `echo hello-layering` denied pre-config, executes after `.harness/config.toml` allow=["echo*"]; mocked e2e proves AlwaysPersist writes rule + zero re-prompts; outside-root write disables persist |
 | v0.6 | 2026-08-24 | "where is process-group kill defined?" on harness itself | PASS — answered kill_tree @ crates/harness-core/src/tools/bash.rs from injected symbol map; single read_file, zero greps |
+| v0.7 | 2026-08-24 | task-tool delegation on harness repo (mocked token-delta e2e + live OpenRouter) | PASS — sub explored read-only, parent context delta <1KB vs ~4.4KB sub burn; live run listed all 10 tools/*.rs via delegation |
