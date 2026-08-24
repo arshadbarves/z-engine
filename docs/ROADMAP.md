@@ -19,4 +19,4 @@ Mirrors spec §9. Each version: tests green · clippy clean · demo done · tagg
 
 | Version | Date | Task | Result |
 |---|---|---|---|
-| v0.1 | pending | failing-test fix in scratch repo | — |
+| v0.1 | 2026-08-24 | failing-test fix in tmp/acceptance-v01 via OpenRouter | PASS — model ran tests, read lib.rs, hit macOS `sed -i` failure, self-corrected via python3, tests green (2/2) |
