@@ -9,7 +9,7 @@ Mirrors spec §9. Each version: tests green · clippy clean · demo done · tagg
 - [x] v0.3 — Context engine (AGENTS.md ✓ already, token meter, `/compact`, notes, demotion, auto-compaction)
 - [x] v0.4 — Sessions (JSONL persistence, resume, picker)
 - [x] v0.5 — Permissions hardening (persistent allowlists, config layering, outside-root guard)
-- [ ] v0.6 — Repo map (tree-sitter)
+- [x] v0.6 — Repo map (tree-sitter)
 - [ ] v0.7 — Subagents (`task`)
 - [ ] v0.8 — LSP (rust-analyzer, diagnostics hook)
 - [ ] v0.9 — Review pass + MCP
@@ -24,3 +24,4 @@ Mirrors spec §9. Each version: tests green · clippy clean · demo done · tagg
 | v0.3 | 2026-08-24 | synthetic >100k-token session (auto-compaction at 95% budget) + live smoke re-run of v0.1 scenario | PASS — summarizer side-request fired, secret fact survived via L1 notes, elision markers + spill files verified; live headless smoke green |
 | v0.4 | 2026-08-24 | kill -9 mid-task → --session resume → continue (mocked) + live plant/recall codeword across restart | PASS — transcript survived SIGKILL incl. round-1 tool result; resumed request carried full prior context; live model answered "MANGO-77" from a previous process's session |
 | v0.4b | 2026-08-24 | live layering proof in tmp/acceptance-v01 | PASS — `echo hello-layering` denied pre-config, executes after `.harness/config.toml` allow=["echo*"]; mocked e2e proves AlwaysPersist writes rule + zero re-prompts; outside-root write disables persist |
+| v0.6 | 2026-08-24 | "where is process-group kill defined?" on harness itself | PASS — answered kill_tree @ crates/harness-core/src/tools/bash.rs from injected symbol map; single read_file, zero greps |

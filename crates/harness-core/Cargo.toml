@@ -24,6 +24,8 @@ regex.workspace = true
 ignore.workspace = true
 similar.workspace = true
 strsim.workspace = true
+tree-sitter.workspace = true
+tree-sitter-rust.workspace = true
 
 [dev-dependencies]
 axum.workspace = true
