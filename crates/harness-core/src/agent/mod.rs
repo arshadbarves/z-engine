@@ -23,13 +23,14 @@ use crate::context::{
     self,
     budget::{BudgetMeter, Pressure},
     compact,
-    notes::NotesStore,
+    notes::{NotesInput, NotesStore},
 };
 use crate::perms::{Decision, PolicyEngine};
 use crate::provider::{
     AccumulatedToolCall, ChatMessage, ChatRequest, Client, ProviderError, StreamEvent, ToolCall,
     ToolCallAccumulator, Usage,
 };
+use crate::session::{SessionEvent, SessionWriter};
 use crate::tools::{ToolCtx, ToolError, ToolOutput, ToolRegistry};
 
 pub use events::{Command, Event};
@@ -128,6 +129,25 @@ impl EventRx {
 
 /// Spawn the agent task. Returns a command handle and the event feed.
 pub fn spawn(cfg: LoopConfig) -> (AgentHandle, EventRx) {
+    spawn_with_recorder(cfg, None, None)
+}
+
+/// Preloaded conversation state for `--resume`.
+#[derive(Debug, Default)]
+pub struct ResumeState {
+    pub working: Vec<ChatMessage>,
+    /// Raw note payloads: either `update_context_notes` argument objects or
+    /// plain compaction-summary lines.
+    pub note_payloads: Vec<String>,
+}
+
+/// Spawn with an optional session recorder (persistence) and optional
+/// replayed state (resume).
+pub fn spawn_with_recorder(
+    cfg: LoopConfig,
+    resume: Option<ResumeState>,
+    recorder: Option<SessionWriter>,
+) -> (AgentHandle, EventRx) {
     let (cmd_tx, cmd_rx) = mpsc::unbounded_channel::<Command>();
     let (ev_tx, ev_rx) = mpsc::unbounded_channel::<Event>();
 
@@ -137,7 +157,9 @@ pub fn spawn(cfg: LoopConfig) -> (AgentHandle, EventRx) {
                 cfg.initial_allow_rules.clone(),
             )));
             let registry = ToolRegistry::builtins();
-            tokio::spawn(agent_task(cfg, client, perms, registry, cmd_rx, ev_tx));
+            tokio::spawn(agent_task(
+                cfg, client, perms, registry, cmd_rx, ev_tx, resume, recorder,
+            ));
         }
         Err(e) => {
             // Surface asynchronously so callers can still attach to events.
@@ -188,6 +210,7 @@ impl LoopState {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn agent_task(
     cfg: LoopConfig,
     client: Client,
@@ -195,6 +218,8 @@ async fn agent_task(
     registry: ToolRegistry,
     mut cmd_rx: UnboundedReceiver<Command>,
     ev_tx: UnboundedSender<Event>,
+    resume: Option<ResumeState>,
+    mut recorder: Option<SessionWriter>,
 ) {
     let abort_flag = Arc::new(AtomicBool::new(false));
     let notes = Arc::new(Mutex::new(NotesStore::default()));
@@ -213,10 +238,30 @@ async fn agent_task(
         last_usage: Usage::default(),
         force_compact: false,
     };
+    // Seed from a previous session's transcript (resume).
+    if let Some(rs) = resume {
+        state.working = rs.working;
+        if let Ok(mut n) = notes.lock() {
+            for payload in rs.note_payloads {
+                match serde_json::from_str::<NotesInput>(&payload) {
+                    Ok(input) => {
+                        n.merge(&input.progress, &input.decisions, &input.needs_later);
+                        n.mark_droppable(&input.droppable);
+                    }
+                    Err(_) => n.add_summary(payload),
+                }
+            }
+        }
+    }
 
     while let Some(command) = next_action(&mut cmd_rx).await {
         match command {
             Command::SubmitMessage(user_text) => {
+                if let Some(w) = recorder.as_mut() {
+                    let _ = w.record(&SessionEvent::UserMsg {
+                        text: user_text.clone(),
+                    });
+                }
                 state.working.push(ChatMessage::user(user_text));
                 let _ = ev_tx.send(Event::TurnStarted);
 
@@ -231,6 +276,7 @@ async fn agent_task(
                     &abort_flag,
                     &meter,
                     &notes,
+                    &mut recorder,
                 )
                 .await;
 
@@ -282,6 +328,7 @@ async fn compact_working_set(
     state: &mut LoopState,
     notes: &Arc<Mutex<NotesStore>>,
     ev_tx: &UnboundedSender<Event>,
+    recorder: &mut Option<SessionWriter>,
 ) {
     let before = state.pressure_tokens();
     let mut outcome = compact::compact(&state.working, cfg.keep_recent_messages, &cfg.tmp_dir);
@@ -289,6 +336,11 @@ async fn compact_working_set(
     if !outcome.summarize_input.is_empty() {
         let summary = summarize_segment(client, cfg, &outcome.summarize_input).await;
         if !summary.is_empty() {
+            if let Some(w) = recorder.as_mut() {
+                let _ = w.record(&SessionEvent::Note {
+                    text: summary.clone(),
+                });
+            }
             if let Ok(mut n) = notes.lock() {
                 n.add_summary(summary);
             }
@@ -358,6 +410,7 @@ async fn run_turn(
     abort_flag: &Arc<AtomicBool>,
     meter: &BudgetMeter,
     notes: &Arc<Mutex<NotesStore>>,
+    recorder: &mut Option<SessionWriter>,
 ) -> TurnOutcome {
     let mut rounds: u32 = 0;
 
@@ -375,7 +428,7 @@ async fn run_turn(
 
         // ---- pressure management (spec §6) ---------------------------
         if state.force_compact || meter.level(state.pressure_tokens()) == Pressure::Compact {
-            compact_working_set(client, cfg, state, notes, ev_tx).await;
+            compact_working_set(client, cfg, state, notes, ev_tx, recorder).await;
             state.force_compact = false;
         } else if meter.level(state.pressure_tokens()) == Pressure::Warn {
             let _ = ev_tx.send(Event::StatusNote(format!(
@@ -462,11 +515,30 @@ async fn run_turn(
             }
         }
 
+        if let Some(w) = recorder.as_mut() {
+            let _ = w.record(&SessionEvent::AssistantMsg {
+                content: (!text.is_empty()).then(|| text.clone()),
+                tool_calls: complete_calls
+                    .iter()
+                    .map(|c| crate::session::PersistedToolCall {
+                        id: c.id.clone(),
+                        name: c.function.name.clone(),
+                        arguments: c.function.arguments.clone(),
+                    })
+                    .collect(),
+            });
+        }
         state.working.push(ChatMessage::Assistant {
             content: (!text.is_empty()).then_some(text),
             tool_calls: complete_calls.clone(),
         });
         for (id, content) in synthetic_errors {
+            if let Some(w) = recorder.as_mut() {
+                let _ = w.record(&SessionEvent::ToolResult {
+                    tool_call_id: id.clone(),
+                    content: content.clone(),
+                });
+            }
             state.working.push(ChatMessage::tool_result(id, content));
         }
 
@@ -489,6 +561,12 @@ async fn run_turn(
         {
             ExecutionsOutcome::Ran(results) => {
                 for (call_id, content) in results {
+                    if let Some(w) = recorder.as_mut() {
+                        let _ = w.record(&SessionEvent::ToolResult {
+                            tool_call_id: call_id.clone(),
+                            content: content.clone(),
+                        });
+                    }
                     state
                         .working
                         .push(ChatMessage::tool_result(call_id, content));

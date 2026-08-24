@@ -62,8 +62,13 @@ pub struct App {
 }
 
 impl App {
-    fn new(handle: AgentHandle, events: EventRx, config: &Config, project_root: &Path) -> Self {
-        let session_tag = ulid_short();
+    fn new(
+        handle: AgentHandle,
+        events: EventRx,
+        config: &Config,
+        project_root: &Path,
+        session_tag: String,
+    ) -> Self {
         tracing::info!(project = %project_root.display(), %session_tag, "session started");
         Self {
             handle,
@@ -360,17 +365,6 @@ impl App {
     }
 }
 
-fn ulid_short() -> String {
-    let raw = ulid::Ulid::new().to_string();
-    raw.chars()
-        .rev()
-        .take(6)
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect()
-}
-
 // ---------------------------------------------------------------------------
 // The loop
 // ---------------------------------------------------------------------------
@@ -381,12 +375,13 @@ pub async fn run(
     events: EventRx,
     config: Config,
     project_root: &Path,
+    session_tag: String,
 ) -> anyhow::Result<()> {
     use crossterm::ExecutableCommand;
     use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 
     std::io::stdout().execute(EnableMouseCapture)?;
-    let mut app = App::new(handle, events, &config, project_root);
+    let mut app = App::new(handle, events, &config, project_root, session_tag);
     let mut reader = EventStream::new();
 
     app.blocks.push(Block::Notice(format!(
@@ -447,7 +442,13 @@ mod tests {
             max_context_tokens: 120_000,
             permissions: Default::default(),
         };
-        App::new(handle, ev_rx, &config, Path::new("/tmp"))
+        App::new(
+            handle,
+            ev_rx,
+            &config,
+            Path::new("/tmp"),
+            "tst123".to_string(),
+        )
     }
 
     fn draw(app: &App) -> String {

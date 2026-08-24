@@ -1,7 +1,8 @@
 //! View modules: chat transcript, input box, approval modal, status bar.
 
 pub mod approval;
-mod chat;
+pub mod chat;
+pub mod picker;
 mod statusbar;
 pub mod syntax;
 
