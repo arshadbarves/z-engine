@@ -7,7 +7,7 @@ use crossterm::event::{
     Event as CtEvent, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEventKind,
 };
 use futures::StreamExt;
-use harness_core::agent::{AgentHandle, Event, EventRx};
+use harness_core::agent::{AgentHandle, ApprovalDecision, Event, EventRx};
 use harness_core::config::Config;
 use ratatui::Terminal;
 
@@ -39,6 +39,8 @@ pub struct PendingApproval {
     pub suggested_rule: Option<String>,
     /// Rich preview (unified diff) for editing tools.
     pub detail_preview: Option<String>,
+    /// Whether "persist to project config" is offered.
+    pub can_persist: bool,
 }
 
 pub struct App {
@@ -113,35 +115,57 @@ impl App {
         if let Some(pending) = self.pending.take() {
             let ctrl_c = k.modifiers.contains(KeyModifiers::CONTROL)
                 && matches!(k.code, KeyCode::Char('c') | KeyCode::Char('C'));
+            let rule_for = |p: &PendingApproval| {
+                p.suggested_rule.clone().unwrap_or_else(|| {
+                    harness_core::perms::PolicyEngine::suggested_rule(
+                        p.input_preview
+                            .get(10..)
+                            .map(|s| s.trim_matches('"'))
+                            .unwrap_or(""),
+                    )
+                })
+            };
             match k.code {
                 KeyCode::Char('y') | KeyCode::Char('Y') => {
-                    self.handle.approve(pending.id, None);
+                    self.handle.approve(pending.id, ApprovalDecision::Once);
                     self.blocks.push(Block::Notice(format!(
-                        "✓ approved once: {} {}",
+                        "\u{2713} approved once: {} {}",
                         pending.tool, pending.input_preview
                     )));
                 }
-                KeyCode::Char('a') | KeyCode::Char('A') => {
-                    self.handle
-                        .approve(pending.id, pending.suggested_rule.clone());
+                KeyCode::Char('s') | KeyCode::Char('S') => {
+                    let rule = rule_for(&pending);
+                    self.handle.approve(
+                        pending.id,
+                        ApprovalDecision::AlwaysSession { rule: rule.clone() },
+                    );
                     self.blocks.push(Block::Notice(format!(
-                        "✓ always this prefix [{}]: {}",
-                        pending.suggested_rule.as_deref().unwrap_or("?"),
-                        pending.input_preview
+                        "\u{2713} always this prefix [{rule}] (session)"
+                    )));
+                }
+                KeyCode::Char('p') | KeyCode::Char('P') if pending.can_persist => {
+                    let rule = rule_for(&pending);
+                    self.handle.approve(
+                        pending.id,
+                        ApprovalDecision::AlwaysPersist { rule: rule.clone() },
+                    );
+                    self.blocks.push(Block::Notice(format!(
+                        "\u{2713} persisted [{}] to .harness/config.toml",
+                        rule
                     )));
                 }
                 KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
                     self.handle.deny(pending.id);
                     self.blocks.push(Block::Notice(format!(
-                        "✗ denied: {} {}",
+                        "\u{2717} denied: {} {}",
                         pending.tool, pending.input_preview
                     )));
                 }
                 _ if ctrl_c => {
-                    // Ctrl-C during approval == deny (spec §10).
+                    // Ctrl-C during approval == deny (spec section 10).
                     self.handle.deny(pending.id);
                     self.blocks
-                        .push(Block::Notice("✗ denied via Ctrl-C".into()));
+                        .push(Block::Notice("x denied via Ctrl-C".into()));
                 }
                 _ => self.pending = Some(pending), // unknown key: keep modal
             }
@@ -302,6 +326,7 @@ impl App {
                 input_preview,
                 suggested_rule,
                 detail_preview,
+                can_persist,
             } => {
                 self.finish_streaming();
                 self.pending = Some(PendingApproval {
@@ -310,6 +335,7 @@ impl App {
                     input_preview,
                     suggested_rule,
                     detail_preview,
+                    can_persist,
                 });
             }
             Event::UsageUpdated {
@@ -511,6 +537,7 @@ mod tests {
                 "--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1,2 +1,2 @@\n-fn old() {}\n+fn new() {}\n"
                     .into(),
             ),
+            can_persist: true,
         });
         let screen = draw(&app);
         assert!(screen.contains("approval required"), "{screen}");

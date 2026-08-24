@@ -99,6 +99,27 @@ impl ToolCtx {
         }
     }
 
+    /// Canonicalized best-effort containment check: does `p` (relative to
+    /// project root or absolute) resolve inside the project? Used to force
+    /// gating and disable persistence for outside-root targets.
+    pub fn is_outside_root(&self, p: &Path) -> bool {
+        let resolved = self.resolve(p);
+        let canonical = if resolved.exists() {
+            std::fs::canonicalize(&resolved).ok()
+        } else {
+            resolved
+                .parent()
+                .and_then(|parent| std::fs::canonicalize(parent).ok())
+                .map(|parent| parent.join(resolved.file_name().unwrap_or_default()))
+        };
+        let Some(canonical) = canonical else {
+            return true; // cannot anchor => treat as outside
+        };
+        let root =
+            std::fs::canonicalize(&self.project_root).unwrap_or_else(|_| self.project_root.clone());
+        !canonical.starts_with(&root)
+    }
+
     /// Record a successful read so later edits of this path are permitted.
     pub fn note_read(&self, path: &Path) {
         if let Ok(mut fs) = self.file_state.lock() {

@@ -100,11 +100,17 @@ fn init_logging() {
     }
 }
 
-async fn load_config_and_key(args: &Args) -> anyhow::Result<(Config, Option<String>)> {
-    let cfg = Config::load(&CliOverrides {
-        model: args.model.clone(),
-        base_url: args.base_url.clone(),
-    })?;
+async fn load_config_and_key(
+    args: &Args,
+    project_root: Option<&std::path::Path>,
+) -> anyhow::Result<(Config, Option<String>)> {
+    let cfg = Config::load(
+        &CliOverrides {
+            model: args.model.clone(),
+            base_url: args.base_url.clone(),
+        },
+        project_root,
+    )?;
     let key = std::env::var("HARNESS_API_KEY").ok();
     Ok((cfg, key))
 }
@@ -126,12 +132,12 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn run(args: Args) -> anyhow::Result<()> {
-    let cfg = load_config_and_key(&args).await?;
-    let (config, api_key) = cfg;
     let project_root = args
         .project
         .clone()
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+    let cfg = load_config_and_key(&args, Some(project_root.as_path())).await?;
+    let (config, api_key) = cfg;
 
     // ---- session persistence (spec section 8) ------------------------
     let mut resume_state = None;

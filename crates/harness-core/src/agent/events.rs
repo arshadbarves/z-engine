@@ -4,17 +4,21 @@
 //! [`Command`]s flow the other way (spec §3). These types are the *only*
 //! coupling between the two worlds.
 
+/// Scope of an approval answer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ApprovalDecision {
+    Once,
+    AlwaysSession { rule: String },
+    AlwaysPersist { rule: String },
+}
+
 /// UI → core directives.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Command {
     /// User submitted a new task message.
     SubmitMessage(String),
-    /// Approval modal answered "yes" — optionally persisting a bash-prefix
-    /// rule for the rest of the session ("always this prefix").
-    Approve {
-        id: u64,
-        prefix_rule: Option<String>,
-    },
+    /// Approval modal answered "yes" with a scope (see ApprovalDecision).
+    Approve { id: u64, decision: ApprovalDecision },
     /// Approval modal answered "no".
     Deny { id: u64 },
     /// Esc / interrupt: abort the current turn instantly, mid-stream OK.
@@ -50,6 +54,9 @@ pub enum Event {
         suggested_rule: Option<String>,
         /// Rich preview (e.g. unified diff for write/edit).
         detail_preview: Option<String>,
+        /// False when the target lies outside the project root — "persist"
+        /// is disabled there (spec section 5).
+        can_persist: bool,
     },
     UsageUpdated {
         prompt_tokens: u64,
