@@ -1,0 +1,11 @@
+# rust
+/target
+
+# local harness state (allowlists etc.)
+.harness/
+
+# scratch/demo repos used for acceptance runs
+/tmp/
+
+# logs
+*.log
