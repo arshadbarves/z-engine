@@ -6,6 +6,7 @@
 
 pub mod budget;
 pub mod compact;
+pub mod cost;
 pub mod notes;
 pub mod repo_map;
 

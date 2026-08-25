@@ -240,14 +240,25 @@ fn run_fallback(
         tool: "grep",
         problem: format!("bad pattern `{pattern}`: {e}"),
     })?;
-    let gs = glob.map(|g| {
-        GlobSetHolder(
-            GlobSetBuilder::new()
-                .add(Glob::new(g).expect("glob compiled earlier? validated here"))
-                .build()
-                .expect("valid glob"),
-        )
-    });
+    // Model-supplied: validate instead of panicking (v1.0 error audit).
+    let gs = match glob {
+        Some(g) => {
+            let glob = Glob::new(g).map_err(|e| ToolError::InvalidInput {
+                tool: "grep",
+                problem: format!("bad glob `{g}`: {e}"),
+            })?;
+            Some(GlobSetHolder(
+                GlobSetBuilder::new()
+                    .add(glob)
+                    .build()
+                    .map_err(|e| ToolError::InvalidInput {
+                        tool: "grep",
+                        problem: format!("bad glob set: {e}"),
+                    })?,
+            ))
+        }
+        None => None,
+    };
 
     let walker = ignore::WalkBuilder::new(&ctx.project_root)
         .hidden(true)

@@ -25,6 +25,7 @@ pub struct Config {
     pub permissions: PermissionsConfig,
     /// Post-edit reviewer pass (spec section 9 v0.9).
     pub review_enabled: bool,
+    /// Post-edit reviewer pass (spec section 9 v0.9).
     /// MCP stdio servers (spec section 9 v0.9).
     pub mcp_servers: Vec<crate::mcp::McpServerConfig>,
 }
