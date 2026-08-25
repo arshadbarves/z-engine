@@ -94,6 +94,11 @@ fn parse_line(line: &str) -> Option<SessionEvent> {
     }
 }
 
+/// Delete a session file (used by the GUI sessions manager).
+pub fn delete_session(path: &Path) -> std::io::Result<()> {
+    std::fs::remove_file(path)
+}
+
 /// Read all well-formed events from a session file.
 pub fn read_events(path: &Path) -> std::io::Result<Vec<SessionEvent>> {
     let f = File::open(path)?;

@@ -283,6 +283,34 @@ pub fn persist_bash_rule(project_root: &std::path::Path, rule: &str) -> std::io:
     Ok(path)
 }
 
+/// Remove a bash prefix rule from `<project>/.harness/config.toml`.
+/// Missing file or absent rule are treated as success (idempotent).
+pub fn remove_bash_rule(project_root: &std::path::Path, rule: &str) -> std::io::Result<()> {
+    let path = project_config_path(project_root);
+    let text = match std::fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e),
+    };
+    let mut fmt: FileFormat = toml::from_str(&text).map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("cannot parse {}: {e}", path.display()),
+        )
+    })?;
+    if let Some(perms) = fmt.permissions.as_mut() {
+        if let Some(list) = perms.allow.as_mut() {
+            list.retain(|r| r != rule);
+        }
+    }
+    let body = format!(
+        "{PROJECT_CONFIG_HEADER}{}",
+        toml::to_string_pretty(&fmt)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e),)?
+    );
+    std::fs::write(&path, body)
+}
+
 /// Path of the global config file, honoring `HARNESS_CONFIG`.
 /// Spec §8 pins it to `~/.config/harness/config.toml` (deliberately *not*
 /// the platform config dir, so behavior is identical across machines).

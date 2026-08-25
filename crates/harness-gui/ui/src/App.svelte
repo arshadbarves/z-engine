@@ -1,8 +1,52 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { messages, busy, initEvents, submitLocal } from "./lib/events";
-import { set_mode } from "./lib/commands";
-  import { submit, abort, invoke } from "./lib/commands";
+import { submit, abort, set_mode, invoke } from "./lib/commands";
+import { writable } from "svelte/store";
+
+interface SessionEntry {
+  path: string;
+  ulid: string;
+  firstUserMsg: string | null;
+  modifiedMs: number;
+}
+const sessions = writable<SessionEntry[]>([]);
+
+async function refreshSessions() {
+  try {
+    const list = (await invoke("list_sessions")) as SessionEntry[];
+    list.sort((a, b) => Number(b.modifiedMs) - Number(a.modifiedMs));
+    sessions.set(list);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function openSession(path: string) {
+  messages.set([]);
+  await invoke("start_session", { resumePath: path });
+  await refreshSessions();
+}
+
+async function newTask() {
+  messages.set([]);
+  await invoke("start_session", { resumePath: null });
+  await refreshSessions();
+}
+
+async function delSession(path: string) {
+  if (!confirm("Delete this session transcript?")) return;
+  await invoke("delete_session", { path });
+  await refreshSessions();
+}
+
+function relTime(ms: number): string {
+  const d = Date.now() - ms;
+  if (d < 60_000) return "now";
+  if (d < 3_600_000) return `${Math.floor(d / 60_000)}m`;
+  if (d < 86_400_000) return `${Math.floor(d / 3_600_000)}h`;
+  return `${Math.floor(d / 86_400_000)}d`;
+}
 
   let input = "";
   let transcriptEl: HTMLElement;
@@ -40,7 +84,40 @@ import { set_mode } from "./lib/commands";
 <main class="app">
   <aside class="sidebar">
     <div class="brand">harness</div>
-    <div class="side-note">desktop v0.1</div>
+    <button class="newtask" onclick={() => void newTask()}>＋ New task</button>
+    <div class="sess-head">
+      <span>sessions</span>
+      <button class="mini" title="refresh" onclick={() => void refreshSessions()}>↻</button>
+    </div>
+    <div class="sessions">
+      {#each $sessions as s (s.path)}
+        <div
+          class="session"
+          role="button"
+          tabindex="0"
+          onclick={() => void openSession(s.path)}
+          onkeydown={(e) => e.key === "Enter" && void openSession(s.path)}
+        >
+          <div class="sess-preview">{s.firstUserMsg ?? "(empty)"}</div>
+          <div class="sess-meta">
+            <span>{s.ulid.slice(0, 6)}</span>
+            <span>{relTime(Number(s.modifiedMs))}</span>
+            <button
+              class="del"
+              title="delete"
+              onclick={(e) => {
+                e.stopPropagation();
+                void delSession(s.path);
+              }}>✕</button
+            >
+          </div>
+        </div>
+      {:else}
+        <div class="sess-empty">no sessions yet</div>
+      {/each}
+    </div>
+    <div class="spacer"></div>
+    <div class="side-note">TUI remains available for<br />keyboard-only use</div>
   </aside>
 
   <section class="chat">
@@ -129,6 +206,57 @@ import { set_mode } from "./lib/commands";
     margin-bottom: 8px;
   }
   .side-note { color: #666; font-size: 12px; }
+  .newtask {
+    background: #10262a;
+    color: #7fd7e1;
+    border: 1px solid #14505a;
+    border-radius: 8px;
+    padding: 8px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .sess-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    color: #666;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+  }
+  .mini { background: none; border: none; color: #7fd7e1; cursor: pointer; }
+  .sessions { overflow-y: auto; max-height: 55vh; display: flex; flex-direction: column; gap: 4px; }
+  .session {
+    padding: 7px 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .session:hover, .session:focus { background: #191d22; border-color: #2a2e35; outline: none; }
+  .sess-preview {
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sess-meta {
+    display: flex;
+    gap: 8px;
+    color: #666;
+    font-size: 11px;
+    align-items: center;
+  }
+  .del {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: #a55;
+    cursor: pointer;
+  }
+  .del:hover { color: #ff7070; }
+  .sess-empty { color: #555; font-size: 12px; }
+  .spacer { flex: 1; }
   .chat { display: flex; flex-direction: column; min-width: 0; height: 100%; }
   .transcript {
     flex: 1;

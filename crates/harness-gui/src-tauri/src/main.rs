@@ -7,14 +7,45 @@
 
 use harness_core::agent::{AgentHandle, EventRx, spawn_with_recorder};
 use harness_core::config::{CliOverrides, Config};
-use std::path::PathBuf;
+use serde_json::json;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 
 /// Shared application state managed by Tauri.
+#[derive(Clone)]
+struct AppCtx {
+    project_root: PathBuf,
+}
+
 #[derive(Default)]
 struct GuiState {
     handle: Mutex<Option<AgentHandle>>,
+    ctx: Mutex<Option<AppCtx>>,
+}
+
+fn build_loop_config(cfg: &Config, project_root: &Path) -> harness_core::agent::LoopConfig {
+    harness_core::agent::LoopConfig {
+        model: cfg.model.clone(),
+        base_url: cfg.base_url.clone(),
+        api_key: resolve_api_key(),
+        project_root: project_root.to_path_buf(),
+        tmp_dir: std::env::temp_dir(),
+        initial_allow_rules: cfg.permissions.allow.clone(),
+        max_context_tokens: cfg.max_context_tokens,
+        keep_recent_messages: 12,
+        review_enabled: cfg.review_enabled,
+        mcp_servers: cfg.mcp_servers.clone(),
+        auto_allow_tools: vec![],
+        initial_mode: harness_core::agent::PermissionMode::Normal,
+    }
+}
+
+fn sessions_dir() -> PathBuf {
+    dirs::data_dir()
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .join("harness")
+        .join("sessions")
 }
 
 fn resolve_api_key() -> Option<String> {
@@ -129,6 +160,111 @@ fn deny(id: u64, state: tauri::State<'_, GuiState>) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(serde::Serialize, Debug)]
+pub struct SessionEntry {
+    pub path: String,
+    pub ulid: String,
+    pub first_user_msg: Option<String>,
+    pub modified_ms: u128,
+}
+
+#[tauri::command]
+fn list_sessions() -> Result<Vec<SessionEntry>, String> {
+    use std::time::UNIX_EPOCH;
+    Ok(harness_core::session::list_sessions(&sessions_dir())
+        .into_iter()
+        .map(|s| SessionEntry {
+            modified_ms: s
+                .modified
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0),
+            path: s.path.to_string_lossy().into_owned(),
+            ulid: s.ulid,
+            first_user_msg: s.first_user_msg,
+        })
+        .collect())
+}
+
+#[tauri::command]
+fn delete_session(path: String) -> Result<(), String> {
+    harness_core::session::delete_session(Path::new(&path)).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn remove_permission_rule(rule: String, state: tauri::State<'_, GuiState>) -> Result<(), String> {
+    let guard = state.ctx.lock().map_err(|_| "state poisoned")?;
+    let Some(ctx) = guard.as_ref() else {
+        return Err("not initialized".into());
+    };
+    harness_core::config::remove_bash_rule(&ctx.project_root, &rule).map_err(|e| e.to_string())
+}
+
+/// Start a fresh agent loop; when `resume_path` is given, replay that
+/// transcript first. Shuts down any previous loop.
+#[tauri::command]
+fn start_session(
+    resume_path: Option<String>,
+    state: tauri::State<'_, GuiState>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    // 1. stop previous loop (its EventRx drops → forwarder exits)
+    {
+        let guard = state.handle.lock().map_err(|_| "state poisoned")?;
+        if let Some(h) = guard.as_ref() {
+            h.shutdown();
+        }
+    }
+
+    let ctx_guard = state.ctx.lock().map_err(|_| "state poisoned")?;
+    let ctx = ctx_guard.as_ref().ok_or("not initialized")?;
+    let cfg =
+        Config::load(&Default::default(), Some(&ctx.project_root)).map_err(|e| e.to_string())?;
+    let lc = build_loop_config(&cfg, &ctx.project_root);
+
+    let recorder: Option<harness_core::session::SessionWriter>;
+    let recorder_path: Option<PathBuf>;
+    let resume_state;
+    match &resume_path {
+        Some(p) => {
+            let events =
+                harness_core::session::read_events(Path::new(p)).map_err(|e| e.to_string())?;
+            let replayed = harness_core::session::replay(&events);
+            resume_state = Some(harness_core::agent::ResumeState {
+                working: replayed.working,
+                note_payloads: replayed.notes_replayed,
+            });
+            let w = harness_core::session::SessionWriter::append_to(Path::new(p))
+                .map_err(|e| e.to_string())?;
+            recorder_path = Some(w.path.clone());
+            recorder = Some(w);
+        }
+        None => {
+            resume_state = None;
+            let w = harness_core::session::SessionWriter::create(&sessions_dir())
+                .map_err(|e| e.to_string())?;
+            recorder_path = Some(w.path.clone());
+            recorder = Some(w);
+        }
+    }
+
+    let (handle, ev_rx) = spawn_with_recorder(lc, resume_state, recorder);
+    *state.handle.lock().map_err(|_| "state poisoned")? = Some(handle);
+
+    let window = app
+        .get_webview_window("main")
+        .ok_or("main window missing")?;
+    forward_events(ev_rx, window);
+
+    let ulid = recorder_path
+        .as_ref()
+        .and_then(|p| p.file_stem().map(|s| s.to_string_lossy().into_owned()))
+        .unwrap_or_default();
+    app.emit("sessionChanged", json!({ "ulid": ulid }))
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 fn forward_events(mut rx: EventRx, window: tauri::WebviewWindow) {
     tokio::spawn(async move {
         while let Some(ev) = rx.recv().await {
@@ -201,7 +337,11 @@ fn main() {
             };
 
             let (handle, ev_rx) = spawn_with_recorder(lc, None, None);
-            *app.state::<GuiState>().handle.lock().unwrap() = Some(handle);
+            {
+                let st = app.state::<GuiState>();
+                *st.handle.lock().unwrap() = Some(handle);
+                *st.ctx.lock().unwrap() = Some(AppCtx { project_root });
+            }
 
             let window = app
                 .get_webview_window("main")
@@ -218,7 +358,11 @@ fn main() {
             set_model,
             approve,
             approve_with_rule,
-            deny
+            deny,
+            list_sessions,
+            delete_session,
+            remove_permission_rule,
+            start_session
         ])
         .run(tauri::generate_context!())
         .expect("error while running harness GUI");
