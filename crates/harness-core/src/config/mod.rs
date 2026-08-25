@@ -283,6 +283,23 @@ pub fn persist_bash_rule(project_root: &std::path::Path, rule: &str) -> std::io:
     Ok(path)
 }
 
+/// List bash prefix rules persisted in `<project>/.harness/config.toml`.
+pub fn list_bash_rules(project_root: &std::path::Path) -> std::io::Result<Vec<String>> {
+    let path = project_config_path(project_root);
+    let text = match std::fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e),
+    };
+    let fmt: FileFormat = toml::from_str(&text).map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("cannot parse {}: {e}", path.display()),
+        )
+    })?;
+    Ok(fmt.permissions.and_then(|p| p.allow).unwrap_or_default())
+}
+
 /// Remove a bash prefix rule from `<project>/.harness/config.toml`.
 /// Missing file or absent rule are treated as success (idempotent).
 pub fn remove_bash_rule(project_root: &std::path::Path, rule: &str) -> std::io::Result<()> {

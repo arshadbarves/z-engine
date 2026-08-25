@@ -11,6 +11,9 @@ interface SessionEntry {
   modifiedMs: number;
 }
 const sessions = writable<SessionEntry[]>([]);
+const rules = writable<string[]>([]);
+let showSettings = false;
+let newRule = "";
 
 async function refreshSessions() {
   try {
@@ -38,6 +41,32 @@ async function delSession(path: string) {
   if (!confirm("Delete this session transcript?")) return;
   await invoke("delete_session", { path });
   await refreshSessions();
+}
+
+async function refreshRules() {
+  try {
+    rules.set((await invoke("list_permission_rules")) as string[]);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function addRule() {
+  const r = newRule.trim();
+  if (!r) return;
+  await invoke("save_permission_rule", { rule: r });
+  newRule = "";
+  await refreshRules();
+}
+
+async function delRule(r: string) {
+  await invoke("remove_permission_rule", { rule: r });
+  await refreshRules();
+}
+
+async function toggleSettings() {
+  showSettings = !showSettings;
+  if (showSettings) await refreshRules();
 }
 
 function relTime(ms: number): string {
@@ -89,6 +118,8 @@ function relTime(ms: number): string {
       <span>sessions</span>
       <button class="mini" title="refresh" onclick={() => void refreshSessions()}>↻</button>
     </div>
+    <div style="flex:1"></div>
+    <button class="gear" onclick={() => void toggleSettings()}>⚙ Settings</button>
     <div class="sessions">
       {#each $sessions as s (s.path)}
         <div

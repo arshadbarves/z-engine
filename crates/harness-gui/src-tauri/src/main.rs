@@ -192,6 +192,27 @@ fn delete_session(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn list_permission_rules(state: tauri::State<'_, GuiState>) -> Result<Vec<String>, String> {
+    let guard = state.ctx.lock().map_err(|_| "state poisoned")?;
+    let Some(ctx) = guard.as_ref() else {
+        return Err("not initialized".into());
+    };
+    harness_core::config::list_bash_rules(&ctx.project_root).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_permission_rule(rule: String, state: tauri::State<'_, GuiState>) -> Result<(), String> {
+    let guard = state.ctx.lock().map_err(|_| "state poisoned")?;
+    let Some(ctx) = guard.as_ref() else {
+        return Err("not initialized".into());
+    };
+    let _ = rule;
+    harness_core::config::persist_bash_rule(&ctx.project_root, &rule)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn remove_permission_rule(rule: String, state: tauri::State<'_, GuiState>) -> Result<(), String> {
     let guard = state.ctx.lock().map_err(|_| "state poisoned")?;
     let Some(ctx) = guard.as_ref() else {
@@ -360,6 +381,8 @@ fn main() {
             approve_with_rule,
             deny,
             list_sessions,
+            list_permission_rules,
+            save_permission_rule,
             delete_session,
             remove_permission_rule,
             start_session
