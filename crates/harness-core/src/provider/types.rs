@@ -153,6 +153,7 @@ impl Usage {
 #[derive(Debug, Clone, PartialEq)]
 pub enum StreamEvent {
     TextDelta(String),
+    ReasoningDelta(String),
     ToolCallDelta {
         index: usize,
         id: Option<String>,
@@ -210,6 +211,10 @@ pub(crate) struct SseChoice {
 pub(crate) struct SseDelta {
     #[serde(default)]
     content: Option<String>,
+    /// Reasoning/thinking tokens (OpenRouter `reasoning_content`, some
+    /// providers `reasoning`).
+    #[serde(default, alias = "reasoning")]
+    reasoning_content: Option<String>,
     #[serde(default)]
     tool_calls: Option<Vec<SseToolCallDelta>>,
 }
@@ -261,6 +266,11 @@ pub(crate) fn parse_chunk_data(data: &str) -> Result<Vec<StreamEvent>, serde_jso
             if let Some(text) = &delta.content {
                 if !text.is_empty() {
                     events.push(StreamEvent::TextDelta(text.clone()));
+                }
+            }
+            if let Some(r) = &delta.reasoning_content {
+                if !r.is_empty() {
+                    events.push(StreamEvent::ReasoningDelta(r.clone()));
                 }
             }
             if let Some(calls) = &delta.tool_calls {

@@ -45,6 +45,13 @@ pub struct App {
     pub completion_tokens: u64,
     quit_hint_until: Option<std::time::Instant>,
     pub should_quit: bool,
+    /// Project directory name shown in the status pill.
+    pub project_name: String,
+    /// Thinking-stream state (collapsed after completion).
+    thinking_printed: bool,
+    thinking_chars: u64,
+    /// When the current turn started (drives the elapsed spinner).
+    turn_started_at: Option<std::time::Instant>,
 }
 
 impl App {
@@ -73,6 +80,27 @@ impl App {
             completion_tokens: 0,
             quit_hint_until: None,
             should_quit: false,
+            project_name: project_root
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| project_root.to_string_lossy().into_owned()),
+            thinking_printed: false,
+            thinking_chars: 0,
+            turn_started_at: None,
+        }
+    }
+
+    /// Close an open thinking block with its collapsed summary line.
+    fn close_thinking(&mut self, p: &mut Printer) {
+        if self.thinking_printed {
+            p.println_spans(&[AnsiSpan {
+                text: format!("✻ thinking collapsed ({} chars)", self.thinking_chars),
+                fg: Some(crate::term::Rgb::GRAY),
+                bold: false,
+                dim: true,
+            }]);
+            self.thinking_printed = false;
+            self.thinking_chars = 0;
         }
     }
 
@@ -166,6 +194,7 @@ impl App {
                 }
                 self.history_pos = None;
                 self.turn_active = true;
+                self.turn_started_at = Some(std::time::Instant::now());
                 self.handle.submit(text.clone());
                 p.println_spans(&[
                     span("you ❯ ", Rgb::CYAN, true),
@@ -317,8 +346,25 @@ impl App {
     pub fn on_core_event(&mut self, ev: Event, p: &mut Printer) {
         match ev {
             Event::TurnStarted => {}
-            Event::TokenDelta(t) => p.push_stream(t),
+            Event::ReasoningDelta(r) => {
+                if !self.thinking_printed {
+                    p.println_spans(&[AnsiSpan {
+                        text: "✻ thinking…".into(),
+                        fg: Some(crate::term::Rgb::GRAY),
+                        bold: false,
+                        dim: true,
+                    }]);
+                    self.thinking_printed = true;
+                    self.thinking_chars = 0;
+                }
+                self.thinking_chars += r.chars().count() as u64;
+            }
+            Event::TokenDelta(t) => {
+                self.close_thinking(&mut *p);
+                p.push_stream(t);
+            }
             Event::ToolCallStarted { name, preview } => {
+                self.close_thinking(&mut *p);
                 p.end_stream();
                 p.println_spans(&[span_yellow(format!("⚙ {name} ─ {preview}"))]);
             }
@@ -341,6 +387,7 @@ impl App {
                 can_persist,
                 bash_command,
             } => {
+                self.close_thinking(&mut *p);
                 p.end_stream();
                 p.println_spans(&[span("⚠ approval required", Rgb::YELLOW, true)]);
                 p.println_plain(format!("  tool: {tool}"));
@@ -399,15 +446,20 @@ impl App {
             }
             Event::StatusNote(s) => p.println_spans(&[span_dim(s)]),
             Event::TurnCompleted { .. } => {
+                self.close_thinking(&mut *p);
                 p.end_stream();
                 self.turn_active = false;
+                self.turn_started_at = None;
             }
             Event::TurnAborted => {
+                self.close_thinking(&mut *p);
                 p.end_stream();
                 p.println_spans(&[span_dim("■ aborted")]);
                 self.turn_active = false;
+                self.turn_started_at = None;
             }
             Event::Error(msg) => {
+                self.close_thinking(&mut *p);
                 p.end_stream();
                 p.println_spans(&[AnsiSpan {
                     text: format!("ERROR: {msg}"),
@@ -465,20 +517,25 @@ fn span_plain(text: impl Into<String>) -> AnsiSpan {
 
 /// Bottom two rows: status pill above prompt.
 fn bottom_text(app: &App) -> (String, String) {
-    let status = format!(
-        " {} · {} · tok {}/{} · session {}",
+    let mut status = format!(
+        " {} · {} · {} · tok {}/{}",
+        app.project_name,
         app.ui_mode.label(),
         app.model,
         app.prompt_tokens,
         app.completion_tokens,
-        app.session_tag,
     );
+    if app.turn_active {
+        if let Some(t) = app.turn_started_at {
+            status.push_str(&format!(" · working {}s", t.elapsed().as_secs()));
+        }
+    }
     let prompt = if app.turn_active {
-        "  ... working  ".to_string()
-    } else if let Some(pend) = &app.pending {
-        format!("  approval pending: {} ", pend.tool)
+        "❯ …".to_string()
+    } else if let Some(_pend) = &app.pending {
+        "❯ (approval above) ".to_string()
     } else {
-        format!("> {}", app.input)
+        format!("❯ {}", app.input)
     };
     (status, prompt)
 }
@@ -519,6 +576,9 @@ pub async fn run(
     use std::io::Write;
     std::io::stdout().flush().ok();
 
+    let mut tick = tokio::time::interval(std::time::Duration::from_millis(500));
+    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
     let result = loop {
         while let Some(ev) = app.events.try_recv() {
             app.on_core_event(ev, &mut p);
@@ -546,6 +606,7 @@ pub async fn run(
                 Some(e) => app.on_core_event(e, &mut p),
                 None => break Ok(()),
             },
+            _ = tick.tick() => {} // drives the elapsed-time spinner
         }
     };
 

@@ -506,7 +506,7 @@ dependencies = [
 
 [[package]]
 name = "harness-core"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -532,7 +532,7 @@ dependencies = [
 
 [[package]]
 name = "harness-tui"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "crossterm",

@@ -579,6 +579,7 @@ async fn run_isolated(
                     None => break,
                     Some(Err(e)) => return Err(format!("provider error in sub-agent: {e}")),
                     Some(Ok(StreamEvent::TextDelta(t))) => text.push_str(&t),
+                    Some(Ok(StreamEvent::ReasoningDelta(_))) => {}
                     Some(Ok(StreamEvent::ToolCallDelta { index, id, name, args_delta })) => {
                         acc.absorb(index, id.as_deref(), name.as_deref(), &args_delta);
                     }
@@ -947,6 +948,9 @@ async fn consume_stream(
                         StreamEvent::TextDelta(t) => {
                             text.push_str(&t);
                             let _ = ev_tx.send(Event::TokenDelta(t));
+                        }
+                        StreamEvent::ReasoningDelta(r) => {
+                            let _ = ev_tx.send(Event::ReasoningDelta(r));
                         }
                         StreamEvent::ToolCallDelta { index, id, name, args_delta } => {
                             acc.absorb(index, id.as_deref(), name.as_deref(), &args_delta);

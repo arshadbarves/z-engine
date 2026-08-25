@@ -63,6 +63,7 @@ pub enum Command {
 pub enum Event {
     TurnStarted,
     TokenDelta(String),
+    ReasoningDelta(String),
     ToolCallStarted {
         name: String,
         preview: String,

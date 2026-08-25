@@ -14,6 +14,9 @@ pub async fn run_one_shot(
 
     loop {
         match ev.recv().await {
+            Some(Event::ReasoningDelta(_)) => {
+                eprintln!("[thinking…]");
+            }
             Some(Event::TokenDelta(t)) => {
                 use std::io::Write;
                 print!("{t}");
