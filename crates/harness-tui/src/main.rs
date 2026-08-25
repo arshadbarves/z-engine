@@ -4,6 +4,7 @@
 
 mod app;
 mod headless;
+mod term;
 mod views;
 
 use std::path::PathBuf;
@@ -54,6 +55,8 @@ struct Args {
     /// Headless companion: auto-approve every gated action (unsafe
     /// convenience for scripted acceptance runs).
     auto_approve: bool,
+    /// Starting permission mode (default|accept-edits|plan).
+    permission_mode: Option<String>,
     /// Open the session picker at startup.
     resume: bool,
     /// Resume a specific session by ULID (or path).
@@ -88,6 +91,9 @@ fn parse_args() -> Result<Args, String> {
             }
             "--auto-approve" => args.auto_approve = true,
             "--resume" => args.resume = true,
+            "--permission-mode" => {
+                args.permission_mode = Some(need_value(&mut i, "--permission-mode")?)
+            }
             "--session" => args.session = Some(need_value(&mut i, "--session")?),
             "--help" | "-h" => {
                 println!(
@@ -212,6 +218,11 @@ async fn run(args: Args) -> anyhow::Result<()> {
         review_enabled: config.review_enabled,
         mcp_servers: config.mcp_servers.clone(),
         auto_allow_tools: vec![],
+        initial_mode: match args.permission_mode.as_deref() {
+            Some("accept-edits") => harness_core::agent::PermissionMode::AutoAcceptEdits,
+            Some("plan") => harness_core::agent::PermissionMode::Plan,
+            _ => harness_core::agent::PermissionMode::Normal,
+        },
     };
 
     if let Some(task) = args.headless_task {
@@ -247,42 +258,23 @@ async fn run(args: Args) -> anyhow::Result<()> {
         }
     }
 
+    let initial_mode = match args.permission_mode.as_deref() {
+        Some("accept-edits") => harness_core::agent::PermissionMode::AutoAcceptEdits,
+        Some("plan") => harness_core::agent::PermissionMode::Plan,
+        _ => harness_core::agent::PermissionMode::Normal,
+    };
     let (handle, ev_rx) = spawn_with_recorder(lc, resume_state, recorder);
-    let mut terminal = tui_init()?;
+    use crossterm::terminal::enable_raw_mode;
+    enable_raw_mode()?;
     let res = app::run(
-        &mut terminal,
         handle,
         ev_rx,
         config.clone(),
         &project_root,
         session_tag,
+        initial_mode,
     )
     .await;
-    tui_restore(terminal)?;
+    crossterm::terminal::disable_raw_mode()?;
     res
-}
-
-type Tui = ratatui::Terminal<ratatui::backend::CrosstermBackend<std::io::Stdout>>;
-
-fn tui_init() -> anyhow::Result<Tui> {
-    use crossterm::ExecutableCommand;
-    use crossterm::terminal::{EnterAlternateScreen, SetTitle, enable_raw_mode};
-    let mut stdout = std::io::stdout();
-    enable_raw_mode()?;
-    stdout.execute(EnterAlternateScreen)?;
-    stdout.execute(SetTitle("harness"))?;
-    crossterm::execute!(
-        std::io::stdout(),
-        crossterm::terminal::Clear(crossterm::terminal::ClearType::All)
-    )?;
-    let backend = ratatui::backend::CrosstermBackend::new(std::io::stdout());
-    Ok(ratatui::Terminal::new(backend)?)
-}
-
-fn tui_restore(mut t: Tui) -> anyhow::Result<()> {
-    use crossterm::terminal::{LeaveAlternateScreen, disable_raw_mode};
-    crossterm::execute!(std::io::stdout(), LeaveAlternateScreen)?;
-    disable_raw_mode()?;
-    t.show_cursor()?;
-    Ok(())
 }

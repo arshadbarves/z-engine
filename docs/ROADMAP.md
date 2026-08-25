@@ -29,3 +29,16 @@ Mirrors spec §9. Each version: tests green · clippy clean · demo done · tagg
 | v0.8 | 2026-08-24 | deliberately broken edit reported + fixed without manual cargo check | PASS — edit_file result carried `[lsp EE0277] cannot add &str to i32` via cargo-check hook; model quoted it verbatim and fixed; go_to_definition/find_references/lsp_diagnostics tools registered |
 | v0.9 | 2026-08-24 | seeded bug caught by review pass + third-party MCP server usable | PASS — reviewer findings injected as user-role message after edit batch (mocked + live); python echo MCP server registered from project config and called by the model (`PONG:live-mcp-check`) |
 | v1.0 | 2026-08-26 | error audit (8 runtime unwraps → 1 real fix), cost table live in status bar, README, `cargo install --path crates/harness-tui`, v1.0.0 | PASS — install verified, help shows v1.0.0, live demo completed with usage accounting; **week-long daily-driver validation handed to the owner** |
+
+## v1.1 — Interaction parity (post-1.0)
+
+- [x] Inline renderer (no alt-screen/mouse capture) — native scrollback + selection restored
+- [x] Wheel direction fixed; streaming append-only
+- [x] Approval keys: 1/y once · 2/a/s session · 3/p persist · 4/n/Esc/Ctrl-C deny (legacy 'a' regression fixed)
+- [x] Shift+Tab permission modes: normal / auto-accept edits / plan (+ `--permission-mode` flag); PLAN blocks mutations without prompting
+- [x] Slash commands: /help /clear /cost /status /quit added (/compact /notes existed)
+- Live: accept-edits auto-approved an edit; plan mode blocked edit_file with notice
+
+| Version | Date | Task | Result |
+|---|---|---|---|
+| v1.1 | 2026-08-26 | pty parity drive + live mode demos | PASS — see checklist above |

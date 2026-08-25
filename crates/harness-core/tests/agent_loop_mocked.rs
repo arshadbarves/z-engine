@@ -169,6 +169,7 @@ fn cfg_for(base_url: String, project_root: &std::path::Path) -> LoopConfig {
         review_enabled: false,
         mcp_servers: vec![],
         auto_allow_tools: vec![],
+        initial_mode: harness_core::agent::PermissionMode::Normal,
     }
 }
 
@@ -768,6 +769,7 @@ async fn long_session_compaction_preserves_coherence() {
         review_enabled: false,
         mcp_servers: vec![],
         auto_allow_tools: vec![],
+        initial_mode: harness_core::agent::PermissionMode::Normal,
     };
     let (handle, mut ev) = spawn(cfg);
     handle.submit("ingest big file");
@@ -974,6 +976,7 @@ async fn repo_map_answers_where_defined_without_grep() {
         review_enabled: false,
         mcp_servers: vec![],
         auto_allow_tools: vec![],
+        initial_mode: harness_core::agent::PermissionMode::Normal,
     };
     let (handle, mut ev) = spawn(cfg);
     handle.submit("where is zebra_fn defined?");
@@ -1032,6 +1035,7 @@ async fn repo_map_refreshes_after_edit() {
         review_enabled: false,
         mcp_servers: vec![],
         auto_allow_tools: vec![],
+        initial_mode: harness_core::agent::PermissionMode::Normal,
     };
     cfg.initial_allow_rules.clear();
     let (handle, mut ev) = spawn(cfg);
@@ -1101,6 +1105,7 @@ async fn subagent_exploration_stays_out_of_parent_context() {
         review_enabled: false,
         mcp_servers: vec![],
         auto_allow_tools: vec![],
+        initial_mode: harness_core::agent::PermissionMode::Normal,
     };
     let (handle, mut ev) = spawn(cfg);
     handle.submit("explore broadly");
@@ -1333,5 +1338,57 @@ async fn mcp_echo_tool_roundtrips() {
     assert!(
         bodies.iter().any(|b| b.contains("PONG:ping-marker")),
         "echo result never reached the model"
+    );
+}
+
+#[tokio::test]
+async fn plan_mode_blocks_mutations_without_prompting() {
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(tmp.path().join("t.txt"), "original\n").unwrap();
+
+    let script = Script::default();
+    script.push(format!(
+        "{}{}{}{}",
+        text_delta("trying an edit"),
+        tool_call_delta(
+            0,
+            Some("p1"),
+            Some("edit_file"),
+            r#"{"path":"t.txt","old_string":"original","new_string":"changed"}"#
+        ),
+        finish_json("tool_calls", 6, 6),
+        done()
+    ));
+    script.push(format!(
+        "{}{}{}",
+        text_delta("stayed in plan."),
+        finish_json("stop", 7, 7),
+        done()
+    ));
+
+    let base = serve(script.clone()).await;
+    let mut cfg = cfg_for(base, tmp.path());
+    cfg.initial_mode = harness_core::agent::PermissionMode::Plan;
+    let (handle, mut ev) = spawn(cfg);
+    handle.submit("try to edit");
+
+    // Drain until completion, asserting no approval ever surfaces.
+    let mut saw_approval = false;
+    loop {
+        match tokio::time::timeout(Duration::from_millis(500), ev.recv()).await {
+            Ok(Some(Event::ApprovalRequired { .. })) => saw_approval = true,
+            Ok(Some(Event::ToolCallFinished {
+                ok: false, summary, ..
+            })) if summary.contains("plan mode blocked") => {}
+            Ok(Some(Event::TurnCompleted { .. })) => break,
+            Ok(Some(_)) => {}
+            Ok(None) => break,
+            Err(_) => continue,
+        }
+    }
+    assert!(!saw_approval, "plan mode surfaced an approval");
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("t.txt")).unwrap(),
+        "original\n"
     );
 }

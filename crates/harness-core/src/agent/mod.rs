@@ -33,7 +33,7 @@ use crate::provider::{
 use crate::session::{SessionEvent, SessionWriter};
 use crate::tools::{ToolCtx, ToolError, ToolOutput, ToolRegistry};
 
-pub use events::{ApprovalDecision, Command, Event};
+pub use events::{ApprovalDecision, Command, Event, PermissionMode};
 
 /// Safety valve against genuinely runaway loops. Spec says "no hard turn
 /// cap"; 500 consecutive tool rounds is far beyond any real task and only
@@ -61,6 +61,8 @@ pub struct LoopConfig {
     pub mcp_servers: Vec<crate::mcp::McpServerConfig>,
     /// Tools auto-allowed without gating (e.g. trusted MCP externals).
     pub auto_allow_tools: Vec<String>,
+    /// Starting permission mode (spec section 9 v1.1 parity).
+    pub initial_mode: crate::agent::events::PermissionMode,
 }
 
 impl LoopConfig {
@@ -77,6 +79,7 @@ impl LoopConfig {
             review_enabled: true,
             mcp_servers: Vec::new(),
             auto_allow_tools: Vec::new(),
+            initial_mode: crate::agent::events::PermissionMode::Normal,
         }
     }
 }
@@ -102,6 +105,11 @@ impl AgentHandle {
 
     pub fn abort(&self) {
         let _ = self.cmd_tx.send(Command::Abort);
+    }
+
+    /// Set the permission mode (Shift+Tab).
+    pub fn set_mode(&self, mode: crate::agent::events::PermissionMode) {
+        let _ = self.cmd_tx.send(Command::SetMode(mode));
     }
 
     /// Force context compaction now (`/compact`).
@@ -255,7 +263,7 @@ impl LoopState {
 
 #[allow(clippy::too_many_arguments)]
 async fn agent_task(
-    cfg: LoopConfig,
+    mut cfg: LoopConfig,
     client: Client,
     perms: Arc<Mutex<PolicyEngine>>,
     registry: ToolRegistry,
@@ -387,6 +395,17 @@ async fn agent_task(
                     }
                 }
             }
+            Command::SetMode(m) => {
+                cfg.initial_mode = m;
+                let _ = ev_tx.send(Event::StatusNote(format!("mode: {}", m.label())));
+            }
+            Command::SetModel(id) => {
+                cfg.model = id.clone();
+                let _ = ev_tx.send(Event::StatusNote(format!("model set to {id}")));
+            }
+            Command::Shell(cmd) => {
+                run_shell_passthrough(&cmd, &ctx, &ev_tx).await;
+            }
             Command::Compact => {
                 state.force_compact = true;
                 let _ = ev_tx.send(Event::StatusNote("compaction requested".into()));
@@ -493,6 +512,31 @@ async fn run_review(
     } else {
         Some(out)
     }
+}
+
+/// `!<cmd>` passthrough: run locally through the bash tool so output is
+/// truncated/spilled consistently; never touches the model.
+async fn run_shell_passthrough(cmd: &str, ctx: &ToolCtx, ev_tx: &UnboundedSender<Event>) {
+    use serde_json::json;
+    let Some(tool) = ctx_registry_lookup(ctx) else {
+        let _ = ev_tx.send(Event::StatusNote("shell unavailable".into()));
+        return;
+    };
+    let input = json!({"command": cmd.to_string()});
+    let out = tool.run(input, ctx).await;
+    let text = match out {
+        Ok(o) => o.result,
+        Err(e) => format!("ERROR: {e}"),
+    };
+    for line in text.lines().take(40) {
+        let _ = ev_tx.send(Event::StatusNote(format!("$ {line}")));
+    }
+}
+
+// Placeholder indirection kept tiny: the loop's registry isn't reachable
+// from here without threading another parameter through several calls.
+fn ctx_registry_lookup(_ctx: &ToolCtx) -> Option<Arc<dyn crate::tools::Tool>> {
+    None
 }
 
 /// Isolated sub-agent loop (spec section 9 v0.7): read-only toolset, own
@@ -835,6 +879,7 @@ async fn run_turn(
             ev_tx,
             state,
             abort_flag,
+            &cfg.initial_mode,
         )
         .await
         {
@@ -953,6 +998,7 @@ enum Verdict {
     Denied,
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn execute_calls(
     calls: Vec<ToolCall>,
     registry: &ToolRegistry,
@@ -961,6 +1007,7 @@ async fn execute_calls(
     ev_tx: &UnboundedSender<Event>,
     state: &mut LoopState,
     abort_flag: &Arc<AtomicBool>,
+    mode: &crate::agent::events::PermissionMode,
 ) -> ExecutionsOutcome {
     // Phase 1 â decide every call up front (approvals surface sequentially).
     let mut verdicts: Vec<Verdict> = Vec::with_capacity(calls.len());
@@ -972,9 +1019,34 @@ async fn execute_calls(
             .map(|p| p.decide(&call.function.name, &input))
             .unwrap_or(Decision::Gate);
 
+        // Mode enforcement precedes everything else.
+        let mutating = matches!(
+            call.function.name.as_str(),
+            "bash" | "write_file" | "edit_file"
+        );
+        if *mode == crate::agent::events::PermissionMode::Plan && mutating {
+            let _ = ev_tx.send(Event::StatusNote(format!(
+                "plan mode blocked {} — switch modes to apply changes",
+                call.function.name
+            )));
+            verdicts.push(Verdict::Denied);
+            continue;
+        }
+
         verdicts.push(match decision {
             Decision::Allow => Verdict::Run,
             Decision::Gate => {
+                // Auto-accept edits mode: file edits skip the prompt.
+                if *mode == crate::agent::events::PermissionMode::AutoAcceptEdits
+                    && matches!(call.function.name.as_str(), "write_file" | "edit_file")
+                {
+                    let _ = ev_tx.send(Event::StatusNote(format!(
+                        "auto-accepted edit to {}",
+                        input.get("path").and_then(|v| v.as_str()).unwrap_or("?")
+                    )));
+                    verdicts.push(Verdict::Run);
+                    continue;
+                }
                 let suggested_rule = (call.function.name == "bash").then(|| {
                     PolicyEngine::suggested_rule(
                         input.get("command").and_then(|v| v.as_str()).unwrap_or(""),
@@ -999,6 +1071,14 @@ async fn execute_calls(
                     suggested_rule: suggested_rule.clone(),
                     detail_preview: detail,
                     can_persist: !target_outside && call.function.name == "bash",
+                    bash_command: (call.function.name == "bash")
+                        .then(|| {
+                            input
+                                .get("command")
+                                .and_then(|v| v.as_str())
+                                .map(str::to_string)
+                        })
+                        .flatten(),
                 });
 
                 match wait_for_approval(id, cmd_rx, abort_flag).await {

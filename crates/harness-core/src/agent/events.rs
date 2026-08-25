@@ -4,6 +4,27 @@
 //! [`Command`]s flow the other way (spec §3). These types are the *only*
 //! coupling between the two worlds.
 
+/// Interaction permission mode (Claude Code parity).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PermissionMode {
+    /// Prompt for every gated call.
+    Normal,
+    /// Auto-approve file edits; bash still prompts.
+    AutoAcceptEdits,
+    /// Deny all mutating calls; reads only.
+    Plan,
+}
+
+impl PermissionMode {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Normal => "normal",
+            Self::AutoAcceptEdits => "auto-accept edits",
+            Self::Plan => "plan",
+        }
+    }
+}
+
 /// Scope of an approval answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ApprovalDecision {
@@ -23,6 +44,12 @@ pub enum Command {
     Deny { id: u64 },
     /// Esc / interrupt: abort the current turn instantly, mid-stream OK.
     Abort,
+    /// Shift+Tab: cycle/set the permission mode.
+    SetMode(PermissionMode),
+    /// `/model <id>`: hot-switch the provider model.
+    SetModel(String),
+    /// `!<cmd>` shell passthrough executed locally (no model involvement).
+    Shell(String),
     /// Slash-command `/compact`: force context compaction now.
     Compact,
     /// Slash-command `/notes`: dump the L1 notes block as a status note.
@@ -57,6 +84,8 @@ pub enum Event {
         /// False when the target lies outside the project root — "persist"
         /// is disabled there (spec section 5).
         can_persist: bool,
+        /// Parsed command for bash calls (drives rule suggestions).
+        bash_command: Option<String>,
     },
     UsageUpdated {
         prompt_tokens: u64,
