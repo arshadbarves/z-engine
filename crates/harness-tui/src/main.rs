@@ -187,6 +187,8 @@ async fn run(args: Args) -> anyhow::Result<()> {
         max_context_tokens: config.max_context_tokens,
         keep_recent_messages: 12,
         review_enabled: config.review_enabled,
+        mcp_servers: config.mcp_servers.clone(),
+        auto_allow_tools: vec![],
     };
 
     if let Some(task) = args.headless_task {

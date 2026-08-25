@@ -468,6 +468,7 @@ mod tests {
             max_context_tokens: 120_000,
             permissions: Default::default(),
             review_enabled: true,
+            mcp_servers: vec![],
         };
         App::new(
             handle,

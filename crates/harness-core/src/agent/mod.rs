@@ -57,6 +57,10 @@ pub struct LoopConfig {
     pub keep_recent_messages: usize,
     /// Run the post-edit reviewer pass (spec section 9 v0.9).
     pub review_enabled: bool,
+    /// External MCP stdio servers to register at startup (v0.9).
+    pub mcp_servers: Vec<crate::mcp::McpServerConfig>,
+    /// Tools auto-allowed without gating (e.g. trusted MCP externals).
+    pub auto_allow_tools: Vec<String>,
 }
 
 impl LoopConfig {
@@ -71,6 +75,8 @@ impl LoopConfig {
             max_context_tokens: 120_000,
             keep_recent_messages: compact::DEFAULT_KEEP_RECENT,
             review_enabled: true,
+            mcp_servers: Vec::new(),
+            auto_allow_tools: Vec::new(),
         }
     }
 }
@@ -260,6 +266,35 @@ async fn agent_task(
     runner: crate::tools::SubAgentRunner,
     abort_flag: Arc<AtomicBool>,
 ) {
+    // Register external MCP tools (spec section 9 v0.9). Failures are
+    // logged and skipped: a broken server must not kill the session.
+    let mut registry = registry;
+    for srv_cfg in &cfg.mcp_servers {
+        let conn = crate::mcp::McpConnection::new(
+            &srv_cfg.name,
+            &srv_cfg.command,
+            &srv_cfg.args,
+            &cfg.project_root,
+        );
+        match conn.ensure().await {
+            Err(e) => {
+                tracing::warn!(server = %srv_cfg.name, error = %e, "mcp server failed to start")
+            }
+            Ok(()) => {
+                for info in conn.list_tools().await {
+                    let tool = crate::mcp::tool_adapter::McpTool {
+                        conn: Arc::new(conn.clone()),
+                        info,
+                    };
+                    registry.register(Arc::new(tool));
+                }
+                let _ = ev_tx.send(Event::StatusNote(format!(
+                    "registered mcp server '{}'",
+                    srv_cfg.name
+                )));
+            }
+        }
+    }
     let notes = Arc::new(Mutex::new(NotesStore::default()));
     let mut ctx = ToolCtx::new(
         cfg.project_root.clone(),
@@ -268,6 +303,11 @@ async fn agent_task(
     )
     .with_task_runner(runner);
     ctx.notes = Arc::clone(&notes);
+    if let Ok(mut p) = perms.lock() {
+        for t in &cfg.auto_allow_tools {
+            p.allow_tool(t);
+        }
+    }
     // Language server (spec section 9 v0.8): Rust projects with
     // rust-analyzer installed get compiler-grade tooling + edit hooks.
     if let Some(server) = crate::lsp::LspClient::probe(&cfg.project_root) {

@@ -167,6 +167,8 @@ fn cfg_for(base_url: String, project_root: &std::path::Path) -> LoopConfig {
         max_context_tokens: 100_000,
         keep_recent_messages: 12,
         review_enabled: false,
+        mcp_servers: vec![],
+        auto_allow_tools: vec![],
     }
 }
 
@@ -764,6 +766,8 @@ async fn long_session_compaction_preserves_coherence() {
         max_context_tokens: 100_000,
         keep_recent_messages: 4,
         review_enabled: false,
+        mcp_servers: vec![],
+        auto_allow_tools: vec![],
     };
     let (handle, mut ev) = spawn(cfg);
     handle.submit("ingest big file");
@@ -968,6 +972,8 @@ async fn repo_map_answers_where_defined_without_grep() {
         max_context_tokens: 100_000,
         keep_recent_messages: 12,
         review_enabled: false,
+        mcp_servers: vec![],
+        auto_allow_tools: vec![],
     };
     let (handle, mut ev) = spawn(cfg);
     handle.submit("where is zebra_fn defined?");
@@ -1024,6 +1030,8 @@ async fn repo_map_refreshes_after_edit() {
         max_context_tokens: 100_000,
         keep_recent_messages: 12,
         review_enabled: false,
+        mcp_servers: vec![],
+        auto_allow_tools: vec![],
     };
     cfg.initial_allow_rules.clear();
     let (handle, mut ev) = spawn(cfg);
@@ -1091,6 +1099,8 @@ async fn subagent_exploration_stays_out_of_parent_context() {
         max_context_tokens: 100_000,
         keep_recent_messages: 12,
         review_enabled: false,
+        mcp_servers: vec![],
+        auto_allow_tools: vec![],
     };
     let (handle, mut ev) = spawn(cfg);
     handle.submit("explore broadly");
@@ -1264,5 +1274,65 @@ async fn reviewer_no_findings_stays_silent() {
     assert!(
         !bodies.iter().any(|b| b.contains("[harness reviewer]")),
         "NO_FINDINGS must not inject a message"
+    );
+}
+
+#[tokio::test]
+async fn mcp_echo_tool_roundtrips() {
+    use harness_core::config::Config;
+    use harness_core::mcp::McpServerConfig;
+
+    let tmp = tempfile::tempdir().unwrap();
+    // Project config registers the echo server (tests project layering too).
+    std::fs::create_dir_all(tmp.path().join(".harness")).unwrap();
+    std::fs::write(
+        tmp.path().join(".harness/config.toml"),
+        "[mcp.servers.echo]\ncommand = \"python3\"\nargs = [\"scripts/mcp_echo_server.py\"]\n",
+    )
+    .unwrap();
+
+    let loaded = Config::load(&Default::default(), Some(tmp.path())).unwrap();
+    assert_eq!(loaded.mcp_servers.len(), 1);
+    // Rewrite the relative script path to an absolute one.
+    let mut srv = loaded.mcp_servers[0].clone();
+    srv.args = vec![format!(
+        "{}/../../scripts/mcp_echo_server.py",
+        env!("CARGO_MANIFEST_DIR")
+    )];
+
+    let script = Script::default();
+    script.push(format!(
+        "{}{}{}{}",
+        text_delta("calling echo"),
+        tool_call_delta(0, Some("m1"), Some("echo"), r#"{"text":"ping-marker"}"#),
+        finish_json("tool_calls", 5, 5),
+        done()
+    ));
+    script.push(format!(
+        "{}{}{}",
+        text_delta("got pong."),
+        finish_json("stop", 8, 8),
+        done()
+    ));
+
+    let base = serve(script.clone()).await;
+    let mut cfg = cfg_for(base, tmp.path());
+    cfg.mcp_servers = vec![srv];
+    cfg.auto_allow_tools = vec!["echo".into()];
+    let (handle, mut ev) = spawn(cfg);
+    handle.submit("use echo");
+
+    let _ = wait_for(
+        &mut ev,
+        |e| matches!(e, Event::ToolCallFinished { name, .. } if name == "echo"),
+    )
+    .await;
+    let completed = wait_for(&mut ev, |e| matches!(e, Event::TurnCompleted { .. })).await;
+    assert!(matches!(completed, Event::TurnCompleted { .. }));
+
+    let bodies = script.requests_snapshot();
+    assert!(
+        bodies.iter().any(|b| b.contains("PONG:ping-marker")),
+        "echo result never reached the model"
     );
 }

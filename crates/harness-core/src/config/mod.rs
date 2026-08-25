@@ -25,6 +25,8 @@ pub struct Config {
     pub permissions: PermissionsConfig,
     /// Post-edit reviewer pass (spec section 9 v0.9).
     pub review_enabled: bool,
+    /// MCP stdio servers (spec section 9 v0.9).
+    pub mcp_servers: Vec<crate::mcp::McpServerConfig>,
 }
 
 /// Allowlist rules. v0.1 semantics: entries are `bash` command-prefix rules
@@ -42,6 +44,7 @@ pub struct PartialConfig {
     pub base_url: Option<String>,
     pub max_context_tokens: Option<u32>,
     pub review_enabled: Option<bool>,
+    pub mcp_servers: Option<Vec<crate::mcp::McpServerConfig>>,
     pub permissions_allow: Option<Vec<String>>,
 }
 
@@ -95,6 +98,7 @@ impl Default for Config {
             max_context_tokens: 120_000,
             permissions: PermissionsConfig::default(),
             review_enabled: true,
+            mcp_servers: Vec::new(),
         }
     }
 }
@@ -296,6 +300,20 @@ struct FileFormat {
     max_context_tokens: Option<u32>,
     review: Option<bool>,
     permissions: Option<FilePermissions>,
+    mcp: Option<McpFileSection>,
+}
+
+#[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
+struct McpFileSection {
+    #[serde(default)]
+    servers: std::collections::BTreeMap<String, McpServerEntry>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+struct McpServerEntry {
+    command: String,
+    #[serde(default)]
+    args: Vec<String>,
 }
 
 #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
@@ -311,6 +329,16 @@ fn parse_partial(text: &str) -> Result<PartialConfig, toml::de::Error> {
         max_context_tokens: f.max_context_tokens,
         review_enabled: f.review,
         permissions_allow: f.permissions.and_then(|p| p.allow),
+        mcp_servers: f.mcp.map(|m| {
+            m.servers
+                .into_iter()
+                .map(|(name, e)| crate::mcp::McpServerConfig {
+                    name,
+                    command: e.command,
+                    args: e.args,
+                })
+                .collect()
+        }),
     })
 }
 
@@ -326,6 +354,21 @@ fn apply(cfg: &mut Config, partial: &PartialConfig) {
     }
     if let Some(v) = partial.review_enabled {
         cfg.review_enabled = v;
+    }
+    if let Some(v) = &partial.mcp_servers {
+        // union by name; later layers win on command/args
+        for srv in v {
+            if let Some(existing) = cfg.mcp_servers.iter_mut().find(|s| s.name == srv.name) {
+                existing.command = srv.command.clone();
+                existing.args = srv.args.clone();
+            } else {
+                cfg.mcp_servers.push(crate::mcp::McpServerConfig {
+                    name: srv.name.clone(),
+                    command: srv.command.clone(),
+                    args: srv.args.clone(),
+                });
+            }
+        }
     }
     if let Some(v) = &partial.permissions_allow {
         cfg.permissions.allow = v.clone();
