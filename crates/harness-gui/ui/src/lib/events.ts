@@ -1,5 +1,4 @@
 import { listen } from "@tauri-apps/api/event";
-import { writable, get } from "svelte/store";
 
 export type MsgKind =
   | "user"
@@ -14,48 +13,91 @@ export interface Msg {
   id: number;
   kind: MsgKind;
   text: string;
-  /** live-updated while streaming */
   streaming?: boolean;
   ok?: boolean;
-  /** approval metadata */
   approvalId?: number;
   canPersist?: boolean;
   suggestedRule?: string | null;
   bashCommand?: string | null;
 }
 
-export const messages = writable<Msg[]>([]);
-export const busy = writable(false);
+type Listener = () => void;
+
+let messages: Msg[] = [];
+let busy = false;
+const listeners = new Set<Listener>();
+
+function emitChange() {
+  for (const l of listeners) l();
+}
+
+export const transcriptStore = {
+  subscribe(l: Listener) {
+    listeners.add(l);
+    return () => {
+      listeners.delete(l);
+    };
+  },
+  getSnapshot(): Msg[] {
+    return messages;
+  },
+};
+
+export const busyStore = {
+  subscribe(l: Listener) {
+    listeners.add(l);
+    return () => {
+      listeners.delete(l);
+    };
+  },
+  getSnapshot(): boolean {
+    return busy;
+  },
+};
 
 let nextId = 1;
 let assistantBuf = "";
+let assistantMsgId = -1;
 let thinkingOpen = false;
+let thinkingMsgId = -1;
 let thinkingChars = 0;
+let openToolId = -1;
 
 function push(kind: MsgKind, text: string, extra?: Partial<Msg>): number {
   const id = nextId++;
-  messages.update((m) => [...m, { id, kind, text, ...extra }]);
+  messages = [...messages, { id, kind, text, ...extra }];
+  emitChange();
   return id;
 }
+
 function update(id: number, text: string, extra?: Partial<Msg>) {
-  messages.update((m) => m.map((x) => (x.id === id ? { ...x, text, ...extra } : x)));
+  messages = messages.map((m: Msg) =>
+    m.id === id ? { ...m, text, ...extra } : m,
+  );
+  emitChange();
+}
+
+function endAssistant() {
+  if (assistantMsgId >= 0) {
+    update(assistantMsgId, assistantBuf, { streaming: false });
+    assistantBuf = "";
+    assistantMsgId = -1;
+  }
 }
 
 function closeThinking() {
   if (thinkingOpen) {
-    update(thinkingMsgId, `✻ thinking collapsed (${thinkingChars} chars)`, {
-      kind: "notice",
-    });
+    update(
+      thinkingMsgId,
+      `✻ thinking collapsed (${thinkingChars} chars)`,
+      { kind: "notice", streaming: false },
+    );
     thinkingOpen = false;
     thinkingChars = 0;
   }
 }
 
-let thinkingMsgId = -1;
-
-type AppEvent = { type: string; [k: string]: unknown };
-
-function handle(ev: AppEvent) {
+function handle(ev: { type: string;[k: string]: unknown }) {
   switch (ev.type) {
     case "tokenDelta": {
       closeThinking();
@@ -80,55 +122,55 @@ function handle(ev: AppEvent) {
     case "toolCallStarted": {
       closeThinking();
       endAssistant();
-      push("tool", `⚙ ${ev.name} ─ ${ev.preview}`);
+      openToolId = push("tool", `⚙ ${ev.name} ─ ${ev.preview}`, { streaming: true });
       break;
     }
     case "toolCallFinished": {
       const ok = Boolean(ev.ok);
-      push(ok ? "notice" : "error", `${ok ? "✓" : "✗"} ${ev.name} ─ ${ev.summary}`);
+      if (openToolId >= 0) {
+        update(openToolId, `${ok ? "✓" : "✗"} ${ev.name} ─ ${ev.summary}`, {
+          streaming: false,
+          ok,
+        });
+        openToolId = -1;
+      } else {
+        push(ok ? "notice" : "error", `${ok ? "✓" : "✗"} ${ev.name} ─ ${ev.summary}`);
+      }
       break;
     }
     case "approvalRequired": {
       closeThinking();
       endAssistant();
-      push(
-        "approval",
-        `⚠ approval required: ${ev.tool}\n${ev.inputPreview}` +
-          (ev.bashCommand ? `\ncommand: ${ev.bashCommand}` : ""),
-      );
+      busy = false;
+      push("approval", `⚠ approval required — ${ev.tool}`, {
+        approvalId: Number(ev.id),
+        canPersist: Boolean(ev.canPersist),
+        suggestedRule: (ev.suggestedRule as string | null) ?? null,
+        bashCommand: (ev.bashCommand as string | null) ?? null,
+        text:
+          `⚠ approval required — ${ev.tool}\n` +
+          `input: ${ev.inputPreview}` +
+          (ev.detailPreview ? `\n${ev.detailPreview}` : ""),
+      });
       break;
     }
     case "usageUpdated":
-      break; // meter handled via separate store later
+      break;
     case "statusNote":
       push("notice", String(ev.text ?? ""));
       break;
     case "turnCompleted":
-      closeThinking();
-      endAssistant();
-      busy.set(false);
-      break;
     case "turnAborted":
       closeThinking();
       endAssistant();
-      busy.set(false);
+      busy = false;
       break;
     case "error":
       closeThinking();
       endAssistant();
-      busy.set(false);
+      busy = false;
       push("error", `ERROR: ${ev.message}`);
       break;
-  }
-}
-
-let assistantMsgId = -1;
-let openToolId = -1;
-function endAssistant() {
-  if (assistantMsgId >= 0) {
-    update(assistantMsgId, assistantBuf, { streaming: false });
-    assistantBuf = "";
-    assistantMsgId = -1;
   }
 }
 
@@ -138,9 +180,13 @@ export function submitLocal(text: string) {
   push("user", text);
 }
 
-export async function initEvents() {
-  await listen<AppEvent>("appEvent", (e) => handle(e.payload));
+export function setBusy(v: boolean) {
+  busy = v;
+  emitChange();
 }
 
-// silence unused warnings for helpers used across phases
-void get;
+export async function initEvents() {
+  await listen<{ type: string;[k: string]: unknown }>("appEvent", (e) =>
+    handle(e.payload),
+  );
+}

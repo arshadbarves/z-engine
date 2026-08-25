@@ -1,31 +1,18 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Harness",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "identifier": "dev.harness.gui",
   "build": {
-    "beforeDevCommand": "npm --prefix ../ui run dev",
-    "devUrl": "http://localhost:5173",
-    "beforeBuildCommand": "npm --prefix ../ui run build",
     "frontendDist": "../ui/dist"
   },
   "app": {
-    "windows": [
-      {
-        "title": "harness",
-        "width": 1100,
-        "height": 760,
-        "minWidth": 720,
-        "minHeight": 520
-      }
-    ],
     "security": {
       "csp": null
     }
   },
   "bundle": {
-    "active": true,
-    "targets": ["app"],
+    "active": false,
     "icon": ["icons/icon.png"]
   }
 }

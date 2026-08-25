@@ -3,8 +3,8 @@ exclude = ["tmp"]
 resolver = "3"
 members = [
     "crates/harness-core",
-    "crates/harness-tui",
     "crates/harness-gui/src-tauri",
+    "crates/harness-tui",
 ]
 
 [workspace.package]

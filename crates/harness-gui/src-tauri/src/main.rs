@@ -1,7 +1,9 @@
 //! Desktop shell (Tauri 2) wrapping the harness-core brain.
 //!
-//! Owns the `AgentHandle`, forwards core events to the webview, and
-//! exposes typed commands. Presentation lives entirely in the Svelte app.
+//! Serving model (rebuilt from scratch): a minimal HTTP server bound to
+//! 127.0.0.1:<random port> serves the built frontend from disk, and the
+//! main window is created programmatically pointed at that http:// URL.
+//! No alternate schemes, no config-relative asset resolution.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -13,15 +15,32 @@ use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 
 /// Shared application state managed by Tauri.
+#[derive(Default)]
+struct GuiState {
+    handle: Mutex<Option<AgentHandle>>,
+    ctx: Mutex<Option<AppCtx>>,
+}
+
 #[derive(Clone)]
 struct AppCtx {
     project_root: PathBuf,
 }
 
-#[derive(Default)]
-struct GuiState {
-    handle: Mutex<Option<AgentHandle>>,
-    ctx: Mutex<Option<AppCtx>>,
+fn resolve_api_key() -> Option<String> {
+    if let Ok(k) = std::env::var("HARNESS_API_KEY") {
+        let k = k.trim().to_string();
+        if !k.is_empty() {
+            return Some(k);
+        }
+    }
+    let path = dirs::home_dir()?
+        .join(".config")
+        .join("harness")
+        .join("api-key");
+    std::fs::read_to_string(path)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
 fn build_loop_config(cfg: &Config, project_root: &Path) -> harness_core::agent::LoopConfig {
@@ -48,28 +67,29 @@ fn sessions_dir() -> PathBuf {
         .join("sessions")
 }
 
-fn resolve_api_key() -> Option<String> {
-    if let Ok(k) = std::env::var("HARNESS_API_KEY") {
-        let k = k.trim().to_string();
-        if !k.is_empty() {
-            return Some(k);
+fn forward_events(mut rx: EventRx, window: tauri::WebviewWindow) {
+    tokio::spawn(async move {
+        while let Some(ev) = rx.recv().await {
+            let payload = serde_json::to_value(&ev).unwrap_or(serde_json::Value::Null);
+            if window.emit("appEvent", payload).is_err() {
+                break;
+            }
         }
-    }
-    let path = dirs::home_dir()?
-        .join(".config")
-        .join("harness")
-        .join("api-key");
-    std::fs::read_to_string(path)
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
+    });
+}
+
+// ---- commands -------------------------------------------------------------
+
+#[tauri::command]
+fn frontend_ready() {
+    eprintln!("[gui] frontend mounted");
+    tracing::info!("frontend mounted");
 }
 
 #[tauri::command]
 fn submit(text: String, state: tauri::State<'_, GuiState>) -> Result<(), String> {
     let guard = state.handle.lock().map_err(|_| "state poisoned")?;
-    let handle = guard.as_ref().ok_or("agent not started")?;
-    handle.submit(text);
+    guard.as_ref().ok_or("agent not started")?.submit(text);
     Ok(())
 }
 
@@ -114,27 +134,6 @@ fn set_model(model: String, state: tauri::State<'_, GuiState>) -> Result<(), Str
     Ok(())
 }
 
-/// Decision strings from the frontend: once | session | persist
-#[tauri::command]
-fn approve(id: u64, decision: String, state: tauri::State<'_, GuiState>) -> Result<(), String> {
-    use harness_core::agent::{ApprovalDecision, PermissionMode};
-    let d = match decision.as_str() {
-        "session" => ApprovalDecision::AlwaysSession {
-            rule: "bash*".into(), // refined below by frontend-provided rule
-        },
-        "persist" => ApprovalDecision::AlwaysPersist {
-            rule: "bash*".into(),
-        },
-        _ => ApprovalDecision::Once,
-    };
-    let _ = PermissionMode::Normal; // silence unused in future refactors
-    let guard = state.handle.lock().map_err(|_| "state poisoned")?;
-    guard.as_ref().ok_or("agent not started")?.approve(id, d);
-    Ok(())
-}
-
-/// Frontend sends the resolved rule alongside so session/persist match the
-/// suggested one shown to the user.
 #[tauri::command]
 fn approve_with_rule(
     id: u64,
@@ -206,7 +205,6 @@ fn save_permission_rule(rule: String, state: tauri::State<'_, GuiState>) -> Resu
     let Some(ctx) = guard.as_ref() else {
         return Err("not initialized".into());
     };
-    let _ = rule;
     harness_core::config::persist_bash_rule(&ctx.project_root, &rule)
         .map(|_| ())
         .map_err(|e| e.to_string())
@@ -221,15 +219,12 @@ fn remove_permission_rule(rule: String, state: tauri::State<'_, GuiState>) -> Re
     harness_core::config::remove_bash_rule(&ctx.project_root, &rule).map_err(|e| e.to_string())
 }
 
-/// Start a fresh agent loop; when `resume_path` is given, replay that
-/// transcript first. Shuts down any previous loop.
 #[tauri::command]
 fn start_session(
     resume_path: Option<String>,
     state: tauri::State<'_, GuiState>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
-    // 1. stop previous loop (its EventRx drops → forwarder exits)
     {
         let guard = state.handle.lock().map_err(|_| "state poisoned")?;
         if let Some(h) = guard.as_ref() {
@@ -244,7 +239,7 @@ fn start_session(
     let lc = build_loop_config(&cfg, &ctx.project_root);
 
     let recorder: Option<harness_core::session::SessionWriter>;
-    let recorder_path: Option<PathBuf>;
+    let mut recorder_path: Option<PathBuf> = None;
     let resume_state;
     match &resume_path {
         Some(p) => {
@@ -286,34 +281,31 @@ fn start_session(
     Ok(())
 }
 
-fn forward_events(mut rx: EventRx, window: tauri::WebviewWindow) {
-    tokio::spawn(async move {
-        while let Some(ev) = rx.recv().await {
-            let payload = serde_json::to_value(&ev).unwrap_or(serde_json::Value::Null);
-            if window.emit("appEvent", payload).is_err() {
-                break; // window gone
-            }
-        }
-    });
-}
+// ---- local HTTP asset server ----------------------------------------------
 
-/// App-lifetime tokio runtime. Entered once on the main thread so every
-/// `tokio::spawn` performed during setup/agent-startup lands on a real
-/// reactor (Tauri's own runtime is separate and not installed globally).
-fn runtime() -> &'static tokio::runtime::Runtime {
-    static RT: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
-    RT.get_or_init(|| {
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .expect("tokio runtime")
-    })
+fn mime_for(path: &Path) -> &'static str {
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("html") => "text/html; charset=utf-8",
+        Some("js") | Some("mjs") => "text/javascript",
+        Some("css") => "text/css",
+        Some("svg") => "image/svg+xml",
+        Some("png") => "image/png",
+        Some("json") => "application/json",
+        Some("wasm") => "application/wasm",
+        Some("woff2") => "font/woff2",
+        _ => "application/octet-stream",
+    }
 }
 
 fn main() {
-    let rt = runtime();
-    // Intentionally leaked for the process lifetime.
-    let _enter = rt.enter();
+    // App-lifetime tokio runtime entered on the main thread so agent
+    // startup `tokio::spawn`s land on a real reactor under Tauri.
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("tokio runtime");
+    let _enter = rt.enter(); // intentionally lives for the process
+
     tracing_subscriber::fmt()
         .with_writer(std::sync::Mutex::new(
             std::fs::OpenOptions::new()
@@ -324,7 +316,7 @@ fn main() {
                         .unwrap_or_else(|| PathBuf::from("/tmp"))
                         .join("harness/harness-gui.log"),
                 )
-                .unwrap_or_else(|e| panic!("cannot open log: {e}")),
+                .expect("cannot open log"),
         ))
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -336,57 +328,52 @@ fn main() {
 
     tauri::Builder::default()
         .manage(GuiState::default())
-        .setup(|app| {
-            let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            let cfg = Config::load(&CliOverrides::default(), Some(&project_root))
-                .map_err(|e| e.to_string())?;
-            let api_key = resolve_api_key();
-
-            let lc = harness_core::agent::LoopConfig {
-                model: cfg.model.clone(),
-                base_url: cfg.base_url.clone(),
-                api_key,
-                project_root: project_root.clone(),
-                tmp_dir: std::env::temp_dir(),
-                initial_allow_rules: cfg.permissions.allow.clone(),
-                max_context_tokens: cfg.max_context_tokens,
-                keep_recent_messages: 12,
-                review_enabled: cfg.review_enabled,
-                mcp_servers: cfg.mcp_servers.clone(),
-                auto_allow_tools: vec![],
-                initial_mode: harness_core::agent::PermissionMode::Normal,
-            };
-
-            let (handle, ev_rx) = spawn_with_recorder(lc, None, None);
-            {
-                let st = app.state::<GuiState>();
-                *st.handle.lock().unwrap() = Some(handle);
-                *st.ctx.lock().unwrap() = Some(AppCtx { project_root });
-            }
-
-            let window = app
-                .get_webview_window("main")
-                .ok_or("main window missing")?;
-            forward_events(ev_rx, window);
-            Ok(())
-        })
         .invoke_handler(tauri::generate_handler![
+            frontend_ready,
             submit,
             abort,
             compact,
             notes,
             set_mode,
             set_model,
-            approve,
             approve_with_rule,
             deny,
             list_sessions,
+            delete_session,
             list_permission_rules,
             save_permission_rule,
-            delete_session,
             remove_permission_rule,
             start_session
         ])
+        .setup(|app| {
+            let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let cfg = Config::load(&CliOverrides::default(), Some(&project_root))
+                .map_err(|e| e.to_string())?;
+            let lc = build_loop_config(&cfg, &project_root);
+
+            let (handle, ev_rx) = spawn_with_recorder(lc, None, None);
+            {
+                let st = app.state::<GuiState>();
+                *st.handle.lock().unwrap() = Some(handle);
+                *st.ctx.lock().unwrap() = Some(AppCtx {
+                    project_root: project_root.clone(),
+                });
+            }
+
+            let window = tauri::WebviewWindowBuilder::new(
+                app,
+                "main",
+                tauri::WebviewUrl::App("index.html".into()),
+            )
+            .title("harness")
+            .inner_size(1100.0, 760.0)
+            .min_inner_size(720.0, 520.0)
+            .build()
+            .map_err(|e| e.to_string())?;
+
+            forward_events(ev_rx, window);
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running harness GUI");
 }
