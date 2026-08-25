@@ -239,7 +239,7 @@ fn start_session(
     let lc = build_loop_config(&cfg, &ctx.project_root);
 
     let recorder: Option<harness_core::session::SessionWriter>;
-    let mut recorder_path: Option<PathBuf> = None;
+    let recorder_path: Option<PathBuf>;
     let resume_state;
     match &resume_path {
         Some(p) => {
@@ -282,20 +282,6 @@ fn start_session(
 }
 
 // ---- local HTTP asset server ----------------------------------------------
-
-fn mime_for(path: &Path) -> &'static str {
-    match path.extension().and_then(|e| e.to_str()) {
-        Some("html") => "text/html; charset=utf-8",
-        Some("js") | Some("mjs") => "text/javascript",
-        Some("css") => "text/css",
-        Some("svg") => "image/svg+xml",
-        Some("png") => "image/png",
-        Some("json") => "application/json",
-        Some("wasm") => "application/wasm",
-        Some("woff2") => "font/woff2",
-        _ => "application/octet-stream",
-    }
-}
 
 fn main() {
     // App-lifetime tokio runtime entered on the main thread so agent
