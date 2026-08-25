@@ -5,7 +5,8 @@
 //! coupling between the two worlds.
 
 /// Interaction permission mode (Claude Code parity).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum PermissionMode {
     /// Prompt for every gated call.
     Normal,
@@ -26,7 +27,8 @@ impl PermissionMode {
 }
 
 /// Scope of an approval answer.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum ApprovalDecision {
     Once,
     AlwaysSession { rule: String },
@@ -99,4 +101,60 @@ pub enum Event {
     },
     TurnAborted,
     Error(String),
+}
+
+/// JSON contract shared with the GUI frontend (camelCase, tagged by `type`).
+impl serde::Serialize for Event {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde_json::json;
+        let v = match self {
+            Event::TurnStarted => json!({"type": "turnStarted"}),
+            Event::TokenDelta(t) => json!({"type": "tokenDelta", "text": t}),
+            Event::ReasoningDelta(r) => json!({"type": "reasoningDelta", "text": r}),
+            Event::ToolCallStarted { name, preview } => json!({
+                "type": "toolCallStarted", "name": name, "preview": preview
+            }),
+            Event::ToolCallFinished {
+                name,
+                ok,
+                duration_ms,
+                summary,
+            } => json!({
+                "type": "toolCallFinished", "name": name, "ok": ok,
+                "durationMs": duration_ms, "summary": summary
+            }),
+            Event::ApprovalRequired {
+                id,
+                tool,
+                input_preview,
+                suggested_rule,
+                detail_preview,
+                can_persist,
+                bash_command,
+            } => json!({
+                "type": "approvalRequired", "id": id, "tool": tool,
+                "inputPreview": input_preview, "suggestedRule": suggested_rule,
+                "detailPreview": detail_preview, "canPersist": can_persist,
+                "bashCommand": bash_command
+            }),
+            Event::UsageUpdated {
+                prompt_tokens,
+                completion_tokens,
+            } => json!({
+                "type": "usageUpdated",
+                "promptTokens": prompt_tokens, "completionTokens": completion_tokens
+            }),
+            Event::StatusNote(s) => json!({"type": "statusNote", "text": s}),
+            Event::TurnCompleted {
+                prompt_tokens,
+                completion_tokens,
+            } => json!({
+                "type": "turnCompleted",
+                "promptTokens": prompt_tokens, "completionTokens": completion_tokens
+            }),
+            Event::TurnAborted => json!({"type": "turnAborted"}),
+            Event::Error(m) => json!({"type": "error", "message": m}),
+        };
+        v.serialize(serializer)
+    }
 }

@@ -9,3 +9,8 @@
 
 # logs
 *.log
+
+# gui
+crates/harness-gui/ui/node_modules/
+crates/harness-gui/ui/dist/
+crates/harness-gui/src-tauri/gen/

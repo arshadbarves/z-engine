@@ -1,7 +1,11 @@
 [workspace]
 exclude = ["tmp"]
 resolver = "3"
-members = ["crates/harness-core", "crates/harness-tui"]
+members = [
+    "crates/harness-core",
+    "crates/harness-tui",
+    "crates/harness-gui/src-tauri",
+]
 
 [workspace.package]
 version = "1.1.0"
