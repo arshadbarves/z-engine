@@ -4,7 +4,6 @@
 
 mod app;
 mod headless;
-mod term;
 mod views;
 
 use std::path::PathBuf;
@@ -263,10 +262,16 @@ async fn run(args: Args) -> anyhow::Result<()> {
         Some("plan") => harness_core::agent::PermissionMode::Plan,
         _ => harness_core::agent::PermissionMode::Normal,
     };
-    let (handle, ev_rx) = spawn_with_recorder(lc, resume_state, recorder);
-    use crossterm::terminal::enable_raw_mode;
+    use crossterm::ExecutableCommand;
+    use crossterm::terminal::{EnterAlternateScreen, enable_raw_mode};
     enable_raw_mode()?;
+    std::io::stdout().execute(EnterAlternateScreen)?;
+    let backend = ratatui::backend::CrosstermBackend::new(std::io::stdout());
+    let mut terminal = ratatui::Terminal::new(backend)?;
+
+    let (handle, ev_rx) = spawn_with_recorder(lc, resume_state, recorder);
     let res = app::run(
+        &mut terminal,
         handle,
         ev_rx,
         config.clone(),
@@ -275,6 +280,9 @@ async fn run(args: Args) -> anyhow::Result<()> {
         initial_mode,
     )
     .await;
-    crossterm::terminal::disable_raw_mode()?;
+
+    use crossterm::terminal::{LeaveAlternateScreen, disable_raw_mode};
+    crossterm::execute!(std::io::stdout(), LeaveAlternateScreen)?;
+    disable_raw_mode()?;
     res
 }
