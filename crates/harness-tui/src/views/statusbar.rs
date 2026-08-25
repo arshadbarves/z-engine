@@ -5,6 +5,7 @@
 //! with v0.3).
 
 use crate::app::App;
+use harness_core::context::cost;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -48,7 +49,14 @@ pub fn render(f: &mut ratatui::Frame, app: &App, area: Rect) {
             format!("{total_tokens} tok ({:.0}%)", ratio * 100.0),
             token_style,
         ),
-        Span::raw(" · $–"),
+        Span::raw(" · "),
+        {
+            let usd = cost::cost_usd(app.pricing, app.prompt_tokens, app.completion_tokens);
+            match usd {
+                Some(c) => Span::raw(format!("${c:.4}")),
+                None => Span::raw("$–").style(Style::default().fg(Color::DarkGray)),
+            }
+        },
         Span::raw(" · session "),
         Span::styled(app.session_tag.clone(), Style::default().fg(Color::Cyan)),
     ]);

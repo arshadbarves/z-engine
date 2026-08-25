@@ -69,7 +69,8 @@ fn parse_args() -> Result<Args, String> {
             "--session" => args.session = Some(need_value(&mut i, "--session")?),
             "--help" | "-h" => {
                 println!(
-                    "harness — personal TUI coding agent (v0.1)\n\nUSAGE:\n  harness [--model M] [--base-url URL] [--project DIR]\n          [--headless \"task\" | --headless < task.txt] [--auto-approve]"
+                    "harness v{} - personal TUI coding agent\n\nUSAGE:\n  harness [--model M] [--base-url URL] [--project DIR]\n          [--resume | --session ULID]\n          [--headless \"task\" | --headless < task.txt] [--auto-approve]",
+                    env!("CARGO_PKG_VERSION")
                 );
                 std::process::exit(0);
             }

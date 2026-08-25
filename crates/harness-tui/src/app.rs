@@ -59,6 +59,8 @@ pub struct App {
     pub session_tag: String,
     pub prompt_tokens: u64,
     pub completion_tokens: u64,
+    /// Resolved pricing for the active model, if known.
+    pub pricing: Option<harness_core::context::cost::Pricing>,
     quit_hint_until: Option<std::time::Instant>,
     pub should_quit: bool,
 }
@@ -87,6 +89,7 @@ impl App {
             session_tag,
             prompt_tokens: 0,
             completion_tokens: 0,
+            pricing: harness_core::context::cost::for_model(&config.model),
             quit_hint_until: None,
             should_quit: false,
         }
