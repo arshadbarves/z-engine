@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { messages, busy, initEvents, submitLocal } from "./lib/events";
-  import { submit, abort } from "./lib/commands";
+import { set_mode } from "./lib/commands";
+  import { submit, abort, invoke } from "./lib/commands";
 
   let input = "";
   let transcriptEl: HTMLElement;
@@ -48,6 +49,28 @@
         <div class={`msg ${m.kind}${m.streaming ? " streaming" : ""}`}>
           {#if m.kind === "assistant"}
             {@html m.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br/>")}
+          {:else if m.kind === "approval"}
+            <div class="approval-body">{m.text}</div>
+            <div class="approval-actions">
+              <button class="ok" onclick={() => invoke("approve_with_rule", m.bashCommand ? {
+                  id: m.approvalId, decision: "session",
+                  rule: (m.bashCommand ?? "").split(/\s+/).slice(0, 2).join(" ") + "*",
+                } : { id: m.approvalId, decision: "session", rule: "bash*" })}>
+                2 · Always (session)
+              </button>
+              {#if m.canPersist}
+                <button class="ok" onclick={() => invoke("approve_with_rule", {
+                    id: m.approvalId, decision: "persist",
+                    rule: m.suggestedRule ?? "bash*",
+                  })}>
+                  3 · Persist
+                </button>
+              {/if}
+              <button class="deny" onclick={() => invoke("deny", { id: m.approvalId })}>
+                4 · Deny
+              </button>
+              <span class="hint">1/y = once only</span>
+            </div>
           {:else}
             {m.text}
           {/if}
@@ -56,12 +79,20 @@
     </div>
 
     <div class="composer">
+      <select
+        class="mode"
+        title="permission mode"
+        onchange={(e) => set_mode((e.currentTarget as HTMLSelectElement).value)}
+      >
+        <option value="normal">normal</option>
+        <option value="accept-edits">auto-accept edits</option>
+        <option value="plan">plan</option>
+      </select>
       <textarea
         rows="2"
         placeholder={($busy ? "working… (Stop to abort)" : "type a task — Shift+Enter for newline")}
         bind:value={input}
         onkeydown={onKeydown}
-        disabled={$busy && false}
       />
       {#if $busy}
         <button class="stop" onclick={() => abort()}>■ Stop</button>
@@ -145,6 +176,14 @@
     padding: 0 16px;
     font-weight: 600;
     cursor: pointer;
+  }
+  .mode {
+    background: #171a1f;
+    color: #e8eaed;
+    border: 1px solid #2a2e35;
+    border-radius: 8px;
+    padding: 6px;
+    align-self: end;
   }
   .send { background: #00b7c7; color: #082226; }
   .send:disabled { opacity: 0.4; cursor: default; }

@@ -112,6 +112,11 @@ impl AgentHandle {
         let _ = self.cmd_tx.send(Command::SetMode(mode));
     }
 
+    /// Hot-switch the provider model (`/model <id>`).
+    pub fn set_model(&self, model: impl Into<String>) {
+        let _ = self.cmd_tx.send(Command::SetModel(model.into()));
+    }
+
     /// Force context compaction now (`/compact`).
     pub fn compact(&self) {
         let _ = self.cmd_tx.send(Command::Compact);

@@ -56,6 +56,79 @@ fn compact(state: tauri::State<'_, GuiState>) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn notes(state: tauri::State<'_, GuiState>) -> Result<(), String> {
+    let guard = state.handle.lock().map_err(|_| "state poisoned")?;
+    guard.as_ref().ok_or("agent not started")?.request_notes();
+    Ok(())
+}
+
+#[tauri::command]
+fn set_mode(mode: String, state: tauri::State<'_, GuiState>) -> Result<(), String> {
+    use harness_core::agent::PermissionMode;
+    let m = match mode.as_str() {
+        "accept-edits" | "auto-accept edits" => PermissionMode::AutoAcceptEdits,
+        "plan" => PermissionMode::Plan,
+        _ => PermissionMode::Normal,
+    };
+    let guard = state.handle.lock().map_err(|_| "state poisoned")?;
+    guard.as_ref().ok_or("agent not started")?.set_mode(m);
+    Ok(())
+}
+
+#[tauri::command]
+fn set_model(model: String, state: tauri::State<'_, GuiState>) -> Result<(), String> {
+    let guard = state.handle.lock().map_err(|_| "state poisoned")?;
+    guard.as_ref().ok_or("agent not started")?.set_model(model);
+    Ok(())
+}
+
+/// Decision strings from the frontend: once | session | persist
+#[tauri::command]
+fn approve(id: u64, decision: String, state: tauri::State<'_, GuiState>) -> Result<(), String> {
+    use harness_core::agent::{ApprovalDecision, PermissionMode};
+    let d = match decision.as_str() {
+        "session" => ApprovalDecision::AlwaysSession {
+            rule: "bash*".into(), // refined below by frontend-provided rule
+        },
+        "persist" => ApprovalDecision::AlwaysPersist {
+            rule: "bash*".into(),
+        },
+        _ => ApprovalDecision::Once,
+    };
+    let _ = PermissionMode::Normal; // silence unused in future refactors
+    let guard = state.handle.lock().map_err(|_| "state poisoned")?;
+    guard.as_ref().ok_or("agent not started")?.approve(id, d);
+    Ok(())
+}
+
+/// Frontend sends the resolved rule alongside so session/persist match the
+/// suggested one shown to the user.
+#[tauri::command]
+fn approve_with_rule(
+    id: u64,
+    decision: String,
+    rule: String,
+    state: tauri::State<'_, GuiState>,
+) -> Result<(), String> {
+    use harness_core::agent::ApprovalDecision;
+    let d = match decision.as_str() {
+        "session" => ApprovalDecision::AlwaysSession { rule },
+        "persist" => ApprovalDecision::AlwaysPersist { rule },
+        _ => ApprovalDecision::Once,
+    };
+    let guard = state.handle.lock().map_err(|_| "state poisoned")?;
+    guard.as_ref().ok_or("agent not started")?.approve(id, d);
+    Ok(())
+}
+
+#[tauri::command]
+fn deny(id: u64, state: tauri::State<'_, GuiState>) -> Result<(), String> {
+    let guard = state.handle.lock().map_err(|_| "state poisoned")?;
+    guard.as_ref().ok_or("agent not started")?.deny(id);
+    Ok(())
+}
+
 fn forward_events(mut rx: EventRx, window: tauri::WebviewWindow) {
     tokio::spawn(async move {
         while let Some(ev) = rx.recv().await {
@@ -67,7 +140,23 @@ fn forward_events(mut rx: EventRx, window: tauri::WebviewWindow) {
     });
 }
 
+/// App-lifetime tokio runtime. Entered once on the main thread so every
+/// `tokio::spawn` performed during setup/agent-startup lands on a real
+/// reactor (Tauri's own runtime is separate and not installed globally).
+fn runtime() -> &'static tokio::runtime::Runtime {
+    static RT: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+    RT.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("tokio runtime")
+    })
+}
+
 fn main() {
+    let rt = runtime();
+    // Intentionally leaked for the process lifetime.
+    let _enter = rt.enter();
     tracing_subscriber::fmt()
         .with_writer(std::sync::Mutex::new(
             std::fs::OpenOptions::new()
@@ -120,7 +209,17 @@ fn main() {
             forward_events(ev_rx, window);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![submit, abort, compact])
+        .invoke_handler(tauri::generate_handler![
+            submit,
+            abort,
+            compact,
+            notes,
+            set_mode,
+            set_model,
+            approve,
+            approve_with_rule,
+            deny
+        ])
         .run(tauri::generate_context!())
         .expect("error while running harness GUI");
 }

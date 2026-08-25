@@ -17,6 +17,11 @@ export interface Msg {
   /** live-updated while streaming */
   streaming?: boolean;
   ok?: boolean;
+  /** approval metadata */
+  approvalId?: number;
+  canPersist?: boolean;
+  suggestedRule?: string | null;
+  bashCommand?: string | null;
 }
 
 export const messages = writable<Msg[]>([]);
@@ -118,6 +123,7 @@ function handle(ev: AppEvent) {
 }
 
 let assistantMsgId = -1;
+let openToolId = -1;
 function endAssistant() {
   if (assistantMsgId >= 0) {
     update(assistantMsgId, assistantBuf, { streaming: false });
