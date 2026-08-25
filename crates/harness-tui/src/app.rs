@@ -467,6 +467,8 @@ mod tests {
             base_url: "http://127.0.0.1:1/v1".into(),
             max_context_tokens: 120_000,
             permissions: Default::default(),
+            review_enabled: true,
+            mcp_servers: vec![],
         };
         App::new(
             handle,

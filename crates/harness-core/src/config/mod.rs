@@ -23,6 +23,10 @@ pub struct Config {
     /// from v0.3 on, the compactor.
     pub max_context_tokens: u32,
     pub permissions: PermissionsConfig,
+    /// Post-edit reviewer pass (spec section 9 v0.9).
+    pub review_enabled: bool,
+    /// MCP stdio servers (spec section 9 v0.9).
+    pub mcp_servers: Vec<crate::mcp::McpServerConfig>,
 }
 
 /// Allowlist rules. v0.1 semantics: entries are `bash` command-prefix rules
@@ -39,6 +43,8 @@ pub struct PartialConfig {
     pub model: Option<String>,
     pub base_url: Option<String>,
     pub max_context_tokens: Option<u32>,
+    pub review_enabled: Option<bool>,
+    pub mcp_servers: Option<Vec<crate::mcp::McpServerConfig>>,
     pub permissions_allow: Option<Vec<String>>,
 }
 
@@ -91,6 +97,8 @@ impl Default for Config {
             base_url: "https://openrouter.ai/api/v1".to_string(),
             max_context_tokens: 120_000,
             permissions: PermissionsConfig::default(),
+            review_enabled: true,
+            mcp_servers: Vec::new(),
         }
     }
 }
@@ -290,7 +298,22 @@ struct FileFormat {
     model: Option<String>,
     base_url: Option<String>,
     max_context_tokens: Option<u32>,
+    review: Option<bool>,
     permissions: Option<FilePermissions>,
+    mcp: Option<McpFileSection>,
+}
+
+#[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
+struct McpFileSection {
+    #[serde(default)]
+    servers: std::collections::BTreeMap<String, McpServerEntry>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+struct McpServerEntry {
+    command: String,
+    #[serde(default)]
+    args: Vec<String>,
 }
 
 #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
@@ -304,7 +327,18 @@ fn parse_partial(text: &str) -> Result<PartialConfig, toml::de::Error> {
         model: f.model,
         base_url: f.base_url,
         max_context_tokens: f.max_context_tokens,
+        review_enabled: f.review,
         permissions_allow: f.permissions.and_then(|p| p.allow),
+        mcp_servers: f.mcp.map(|m| {
+            m.servers
+                .into_iter()
+                .map(|(name, e)| crate::mcp::McpServerConfig {
+                    name,
+                    command: e.command,
+                    args: e.args,
+                })
+                .collect()
+        }),
     })
 }
 
@@ -317,6 +351,24 @@ fn apply(cfg: &mut Config, partial: &PartialConfig) {
     }
     if let Some(v) = partial.max_context_tokens {
         cfg.max_context_tokens = v;
+    }
+    if let Some(v) = partial.review_enabled {
+        cfg.review_enabled = v;
+    }
+    if let Some(v) = &partial.mcp_servers {
+        // union by name; later layers win on command/args
+        for srv in v {
+            if let Some(existing) = cfg.mcp_servers.iter_mut().find(|s| s.name == srv.name) {
+                existing.command = srv.command.clone();
+                existing.args = srv.args.clone();
+            } else {
+                cfg.mcp_servers.push(crate::mcp::McpServerConfig {
+                    name: srv.name.clone(),
+                    command: srv.command.clone(),
+                    args: srv.args.clone(),
+                });
+            }
+        }
     }
     if let Some(v) = &partial.permissions_allow {
         cfg.permissions.allow = v.clone();

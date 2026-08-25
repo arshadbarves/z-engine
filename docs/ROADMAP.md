@@ -12,7 +12,7 @@ Mirrors spec §9. Each version: tests green · clippy clean · demo done · tagg
 - [x] v0.6 — Repo map (tree-sitter)
 - [x] v0.7 — Subagents (`task`)
 - [ ] v0.8 — LSP (rust-analyzer, diagnostics hook)
-- [ ] v0.9 — Review pass + MCP
+- [x] v0.9 — Review pass + MCP
 - [ ] v1.0 — Polish & distribution
 
 ## Live acceptance runs
@@ -27,3 +27,4 @@ Mirrors spec §9. Each version: tests green · clippy clean · demo done · tagg
 | v0.6 | 2026-08-24 | "where is process-group kill defined?" on harness itself | PASS — answered kill_tree @ crates/harness-core/src/tools/bash.rs from injected symbol map; single read_file, zero greps |
 | v0.7 | 2026-08-24 | task-tool delegation on harness repo (mocked token-delta e2e + live OpenRouter) | PASS — sub explored read-only, parent context delta <1KB vs ~4.4KB sub burn; live run listed all 10 tools/*.rs via delegation |
 | v0.8 | 2026-08-24 | deliberately broken edit reported + fixed without manual cargo check | PASS — edit_file result carried `[lsp EE0277] cannot add &str to i32` via cargo-check hook; model quoted it verbatim and fixed; go_to_definition/find_references/lsp_diagnostics tools registered |
+| v0.9 | 2026-08-24 | seeded bug caught by review pass + third-party MCP server usable | PASS — reviewer findings injected as user-role message after edit batch (mocked + live); python echo MCP server registered from project config and called by the model (`PONG:live-mcp-check`) |

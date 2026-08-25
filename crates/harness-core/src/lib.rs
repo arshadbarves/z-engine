@@ -8,6 +8,7 @@ pub mod agent;
 pub mod config;
 pub mod context;
 pub mod lsp;
+pub mod mcp;
 pub mod perms;
 pub mod provider;
 pub mod session;

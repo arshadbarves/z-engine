@@ -138,6 +138,10 @@ impl Tool for EditFileTool {
         let diff = unified_diff(&current, &rep.new_content, &disp);
         let body = format!("{disp}: edited (match: {})\n{diff}", rep.rung);
         let result = truncate_with_tempfile(&body, ctx);
+        // Reviewer journal entry (spec section 9 v0.9).
+        if let Ok(mut j) = ctx.edit_journal.lock() {
+            j.push(result.clone());
+        }
         tracing::debug!(path = %disp, rung = rep.rung, "edit_file done");
         Ok(ToolOutput::success(
             result,

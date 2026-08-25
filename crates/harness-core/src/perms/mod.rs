@@ -38,13 +38,22 @@ pub enum Decision {
 pub struct PolicyEngine {
     /// Session-scoped bash command-prefix rules (`cargo test*` style).
     bash_prefix_rules: Vec<String>,
+    /// Whole tools auto-allowed (e.g. trusted MCP externals).
+    allowed_tools: std::collections::BTreeSet<String>,
 }
 
 impl PolicyEngine {
     pub fn new(initial_rules: Vec<String>) -> Self {
         Self {
             bash_prefix_rules: initial_rules,
+            allowed_tools: Default::default(),
         }
+    }
+
+    /// Auto-allow an entire tool by name (never overrides the gate for
+    /// outside-root targets, which is enforced separately).
+    pub fn allow_tool(&mut self, name: &str) {
+        self.allowed_tools.insert(name.to_string());
     }
 
     pub fn add_session_rule(&mut self, rule: String) {
@@ -60,6 +69,9 @@ impl PolicyEngine {
     /// Decide for a tool invocation. `input` must already be a JSON object;
     /// malformed input gates (never silently allows).
     pub fn decide(&self, tool: &str, input: &Value) -> Decision {
+        if self.allowed_tools.contains(tool) {
+            return Decision::Allow;
+        }
         match tool {
             t if AUTO_ALLOW_TOOLS.contains(&t) => Decision::Allow,
             "bash" => {

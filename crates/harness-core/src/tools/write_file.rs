@@ -105,6 +105,10 @@ impl Tool for WriteFileTool {
         };
         let body = format!("wrote {} to {disp}\n{diff}", content.len());
         let result = truncate_with_tempfile(&body, ctx);
+        // Reviewer journal (spec section 9 v0.9): loop drains after round.
+        if let Ok(mut j) = ctx.edit_journal.lock() {
+            j.push(result.clone());
+        }
         tracing::debug!(path = %disp, bytes = content.len(), existed, "write_file done");
         Ok(ToolOutput::success(result, format!("wrote {disp}")))
     }
