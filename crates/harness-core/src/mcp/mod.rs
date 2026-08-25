@@ -7,7 +7,6 @@
 
 pub mod tool_adapter;
 
-use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -45,24 +44,26 @@ struct Shared {
 }
 
 /// A live connection to one MCP server.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct McpConnection {
     inner: Arc<McpInner>,
 }
 
-pub struct McpInner {
-    pub name: String,
-    pub command: String,
-    pub args: Vec<String>,
-    pub project_root: PathBuf,
-    pub shared: Arc<Shared>,
-    pub conn: Mutex<Option<Conn>>,
-    pub next_id: AtomicI64,
+#[derive(Debug)]
+struct McpInner {
+    name: String,
+    command: String,
+    args: Vec<String>,
+    project_root: PathBuf,
+    shared: Arc<Shared>,
+    conn: Mutex<Option<Conn>>,
+    next_id: AtomicI64,
 }
 
 #[derive(Debug)]
 struct Conn {
-    child: Child,
+    /// Held so the server dies with the client (kill_on_drop at spawn).
+    _child: Child,
     stdin: tokio::process::ChildStdin,
 }
 
@@ -123,7 +124,10 @@ impl McpConnection {
         let stdin = child.stdin.take().expect("stdin piped");
         let stdout = child.stdout.take().expect("stdout piped");
 
-        *self.inner.conn.lock().await = Some(Conn { child, stdin });
+        *self.inner.conn.lock().await = Some(Conn {
+            _child: child,
+            stdin,
+        });
         self.inner.shared.dead.store(false, Ordering::Relaxed);
 
         // Reader: newline-delimited JSON-RPC.
@@ -267,12 +271,6 @@ impl McpConnection {
             .flush()
             .await
             .map_err(|e| format!("mcp flush: {e}"))
-    }
-
-    async fn notify(&self, method: &str) -> Result<(), String> {
-        self.ensure().await?;
-        let body = json!({"jsonrpc":"2.0","method":method});
-        self.write_line(&body.to_string()).await
     }
 }
 

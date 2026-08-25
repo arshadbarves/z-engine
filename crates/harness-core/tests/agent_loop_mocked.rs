@@ -1280,7 +1280,6 @@ async fn reviewer_no_findings_stays_silent() {
 #[tokio::test]
 async fn mcp_echo_tool_roundtrips() {
     use harness_core::config::Config;
-    use harness_core::mcp::McpServerConfig;
 
     let tmp = tempfile::tempdir().unwrap();
     // Project config registers the echo server (tests project layering too).
