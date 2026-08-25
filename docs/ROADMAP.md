@@ -42,3 +42,12 @@ Mirrors spec §9. Each version: tests green · clippy clean · demo done · tagg
 | Version | Date | Task | Result |
 |---|---|---|---|
 | v1.1 | 2026-08-26 | pty parity drive + live mode demos | PASS — see checklist above |
+
+## GUI — desktop application v0.1 (post-1.0)
+
+- [x] M0 scaffold — Tauri 2 shell owning AgentHandle; EventRx → webview `appEvent`; Svelte 5 streaming transcript; Send/Stop composer (`834b0da`)
+- [x] M1 chat parity — approve/approve_with_rule/deny/set_mode/set_model commands; tool start+finish merge into one card; approval cards with buttons + rule suggestions; thinking stream/collapse; runtime fix (app-lifetime tokio runtime entered for Tauri) (`ec39fc6`)
+- [x] M2 sessions & permissions — list/open/delete/new sessions via core API with replay-resume; settings panel CRUD for persisted bash rules (`2754878`, `5652d9d`)
+- [x] M3 packaging — scripts/package-gui.sh assembles Harness.app (Info.plist, RGBA icon, ad-hoc codesign); bundled binary verified launching (`14:42` build)
+
+Design doc: docs/design/gui-v0.1.md · TUI frozen at v1.1.x as keyboard-only client.
