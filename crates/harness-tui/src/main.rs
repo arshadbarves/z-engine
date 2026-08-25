@@ -12,6 +12,28 @@ use harness_core::agent::{LoopConfig, ResumeState, spawn_with_recorder};
 use harness_core::config::{CliOverrides, Config};
 use harness_core::session::{self, SessionWriter};
 
+/// API-key resolution order:
+/// 1. `HARNESS_API_KEY` environment variable (spec section 8),
+/// 2. `~/.config/harness/api-key` file (convenience; single line, trimmed).
+///
+/// Returns None only when neither is present/usable.
+fn resolve_api_key() -> Option<String> {
+    if let Ok(k) = std::env::var("HARNESS_API_KEY") {
+        let k = k.trim().to_string();
+        if !k.is_empty() {
+            return Some(k);
+        }
+    }
+    let path = dirs::home_dir()?
+        .join(".config")
+        .join("harness")
+        .join("api-key");
+    std::fs::read_to_string(path)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
 fn sessions_dir() -> PathBuf {
     dirs::data_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
@@ -112,7 +134,7 @@ async fn load_config_and_key(
         },
         project_root,
     )?;
-    let key = std::env::var("HARNESS_API_KEY").ok();
+    let key = resolve_api_key();
     Ok((cfg, key))
 }
 
@@ -205,14 +227,24 @@ async fn run(args: Args) -> anyhow::Result<()> {
         return headless::run_one_shot(handle, ev_rx, &task, args.auto_approve).await;
     }
 
-    if std::env::var("HARNESS_API_KEY").is_err()
-        && !config.base_url.contains("localhost")
-        && !config.base_url.contains("127.0.0.1")
-    {
-        eprintln!(
-            "warning: HARNESS_API_KEY is not set; provider calls will fail \
-             (local servers like Ollama don't need one)"
-        );
+    match resolve_api_key() {
+        Some(k) => {
+            let tail: String = k.chars().rev().take(4).collect();
+            tracing::info!(key_tail = %tail, "auth resolved");
+            if config.base_url.contains("openrouter.ai") && !k.starts_with("sk-or-") {
+                eprintln!(
+                    "note: key does not look like an OpenRouter key (expected prefix sk-or-)"
+                );
+            }
+        }
+        None => {
+            if !config.base_url.contains("localhost") && !config.base_url.contains("127.0.0.1") {
+                eprintln!(
+                    "warning: no API key found (set HARNESS_API_KEY or create \\
+                     ~/.config/harness/api-key); provider calls will fail"
+                );
+            }
+        }
     }
 
     let (handle, ev_rx) = spawn_with_recorder(lc, resume_state, recorder);

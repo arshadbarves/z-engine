@@ -64,7 +64,9 @@ command = "python3"
 args = ["scripts/mcp_echo_server.py"]
 ```
 
-The API key never enters config files: `HARNESS_API_KEY` only.
+API key: `HARNESS_API_KEY` env var, or a single-line file at
+`~/.config/harness/api-key` (checked as a fallback; trimmed of whitespace).
+It never lives in config.toml.
 
 ## Tools the model gets
 
