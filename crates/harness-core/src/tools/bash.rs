@@ -3,11 +3,12 @@
 
 use std::path::Path;
 use std::process::Stdio;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use serde_json::{Value, json};
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncBufReadExt, AsyncReadExt};
 
 use super::{Tool, ToolCtx, ToolError, ToolOutput, truncate_with_tempfile};
 
@@ -99,6 +100,9 @@ impl Tool for BashTool {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .env_clear();
+        // If the agent task is dropped mid-command (window closed, task
+        // cancelled), the child must die with it rather than orphan.
+        cmd.kill_on_drop(true);
         // Own process group ⇒ timeouts/aborts can kill the whole tree
         // (grandchildren like `sleep` would otherwise inherit the pipes and
         // keep draining blocked until they exit naturally).
@@ -113,7 +117,15 @@ impl Tool for BashTool {
         let mut child = cmd
             .spawn()
             .map_err(|e| ToolError::Failed(format!("spawn failed: {e}")))?;
-        let stdout_handle = drain(child.stdout.take());
+        // stdout is drained line-by-line so each completed line streams to
+        // the UI (Event::ToolOutputDelta) while the command still runs.
+        let out_tx = Arc::clone(&ctx.output_tx);
+        let stdout_handle = drain_with_callback(child.stdout.take(), move |line| {
+            let _ = out_tx.send(crate::tools::ToolOutputChunk {
+                tool_name: "bash".to_string(),
+                text: format!("{line}\n"),
+            });
+        });
         let stderr_handle = drain(child.stderr.take());
 
         let timeout_dur = Duration::from_secs(timeout_secs);
@@ -144,10 +156,17 @@ impl Tool for BashTool {
         let mut stderr = stderr_handle.await.unwrap_or_default();
 
         // Harvest + strip the persistent-cwd marker from stderr.
+        let mut body_hint_outside: Option<std::path::PathBuf> = None;
         let new_cwd = extract_marker(&mut stderr);
         if let Some(dir) = new_cwd {
-            if let Ok(mut guard) = ctx.shell_cwd.lock() {
-                if dir.is_dir() {
+            // Containment: a `cd /etc` (or any escape from the project
+            // root) must not silently re-anchor the persistent shell —
+            // later relative-path mutations there would bypass the
+            // accept-edits gating. Ignore the drift and tell the model.
+            if ctx.is_outside_root(&dir) {
+                body_hint_outside = Some(dir);
+            } else if dir.is_dir() {
+                if let Ok(mut guard) = ctx.shell_cwd.lock() {
                     tracing::debug!(from = %guard.display(), to = %dir.display(), "shell cwd changed");
                     *guard = dir;
                 }
@@ -156,6 +175,13 @@ impl Tool for BashTool {
 
         let code = status.code().unwrap_or(-1);
         let mut body = String::new();
+        if let Some(dir) = &body_hint_outside {
+            body.push_str(&format!(
+                "[harness] ignored `cd {}`: it leaves the project root; the working directory stays at {}\n",
+                dir.display(),
+                start_cwd.display()
+            ));
+        }
         if timed_out {
             body.push_str(&format!("[killed after {timeout_secs}s timeout]\n"));
         } else if ctx.aborted() {
@@ -215,6 +241,36 @@ where
             let _ = p.read_to_end(&mut buf).await;
         }
         String::from_utf8_lossy(&buf).into_owned()
+    })
+}
+
+/// Read a pipe line-by-line, call `on_line` for each complete line, and
+/// return the full accumulated text.
+fn drain_with_callback<R>(
+    pipe: Option<R>,
+    mut on_line: impl FnMut(String) + Send + 'static,
+) -> tokio::task::JoinHandle<String>
+where
+    R: tokio::io::AsyncRead + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        let mut all = Vec::new();
+        if let Some(p) = pipe {
+            let mut reader = tokio::io::BufReader::new(p);
+            let mut line = String::new();
+            loop {
+                line.clear();
+                match reader.read_line(&mut line).await {
+                    Ok(0) => break,
+                    Ok(_) => {
+                        all.extend_from_slice(line.as_bytes());
+                        on_line(line.trim_end_matches('\n').to_string());
+                    }
+                    Err(_) => break,
+                }
+            }
+        }
+        String::from_utf8_lossy(&all).into_owned()
     })
 }
 
@@ -353,6 +409,31 @@ mod tests {
         let ctx = ctx_in(tmp.path());
         assert!(run_cmd(&ctx, json!([1, 2])).await.is_err());
         assert!(run_cmd(&ctx, json!({"command": "   "})).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn streams_stdout_lines_to_output_tx() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut ctx = ctx_in(tmp.path());
+        let (utx, mut urx) = tokio::sync::mpsc::unbounded_channel();
+        ctx.output_tx = Arc::new(utx);
+        let out = run_cmd(
+            &ctx,
+            json!({"command": "echo line-one; sleep 0.1; echo line-two"}),
+        )
+        .await
+        .unwrap();
+        assert!(out.ok);
+        // by the time the tool returns, every completed line must have been
+        // streamed through the context channel
+        let mut got = Vec::new();
+        while let Ok(c) = urx.try_recv() {
+            assert_eq!(c.tool_name, "bash");
+            got.push(c.text);
+        }
+        assert_eq!(got.len(), 2);
+        assert_eq!(got[0], "line-one\n");
+        assert_eq!(got[1], "line-two\n");
     }
 
     #[test]

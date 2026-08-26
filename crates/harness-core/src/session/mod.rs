@@ -16,12 +16,12 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SessionEvent {
     /// The initial environment description for a session.
-    Meta {
-        model: String,
-        project_root: String,
-    },
+    Meta { model: String, project_root: String },
     UserMsg {
         text: String,
+        /// Attached images as data URLs (vision input); usually empty.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        images: Vec<String>,
     },
     /// One assistant turn: prose plus any tool calls it emitted.
     AssistantMsg {
@@ -35,9 +35,7 @@ pub enum SessionEvent {
         content: String,
     },
     /// Compaction summaries and similar durable annotations (L1).
-    Note {
-        text: String,
-    },
+    Note { text: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -122,6 +120,9 @@ pub struct SessionSummary {
     /// First user message, for picker previews.
     pub first_user_msg: Option<String>,
     pub modified: std::time::SystemTime,
+    /// Project root recorded in the session's `Meta` event — lets the GUI
+    /// group transcripts under their workspace.
+    pub project_root: Option<String>,
 }
 
 /// List sessions under `sessions_dir`, newest first.
@@ -143,20 +144,25 @@ pub fn list_sessions(sessions_dir: &Path) -> Vec<SessionSummary> {
             .metadata()
             .and_then(|m| m.modified())
             .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
-        let first_user_msg = read_events(&path)
-            .ok()
-            .and_then(|events| {
-                events.into_iter().find_map(|ev| match ev {
-                    SessionEvent::UserMsg { text } => Some(text),
-                    _ => None,
-                })
+        let events = read_events(&path).ok();
+        let first_user_msg = events.as_deref().and_then(|events| {
+            events.iter().find_map(|ev| match ev {
+                SessionEvent::UserMsg { text, .. } => Some(text.clone()),
+                _ => None,
             })
-            .map(|t| t.chars().take(80).collect());
+        });
+        let project_root = events.as_deref().and_then(|events| {
+            events.iter().find_map(|ev| match ev {
+                SessionEvent::Meta { project_root, .. } => Some(project_root.clone()),
+                _ => None,
+            })
+        });
         out.push(SessionSummary {
             path,
             ulid,
-            first_user_msg,
+            first_user_msg: first_user_msg.map(|t| t.chars().take(80).collect()),
             modified,
+            project_root,
         });
     }
     out.sort_by_key(|s| std::cmp::Reverse(s.modified));
@@ -183,8 +189,8 @@ pub fn replay(events: &[SessionEvent]) -> Replayed {
     for ev in events {
         match ev {
             SessionEvent::Meta { .. } => {}
-            SessionEvent::UserMsg { text } => {
-                working.push(ChatMessage::user(text.clone()));
+            SessionEvent::UserMsg { text, images } => {
+                working.push(ChatMessage::user_with_images(text.clone(), images));
             }
             SessionEvent::AssistantMsg {
                 content,
@@ -254,6 +260,7 @@ mod tests {
             },
             SessionEvent::UserMsg {
                 text: "fix it".into(),
+                images: vec![],
             },
             SessionEvent::AssistantMsg {
                 content: Some("looking".into()),
@@ -314,7 +321,10 @@ mod tests {
     #[test]
     fn replay_drops_trailing_orphaned_tool_round() {
         let events = vec![
-            SessionEvent::UserMsg { text: "go".into() },
+            SessionEvent::UserMsg {
+                text: "go".into(),
+                images: vec![],
+            },
             SessionEvent::AssistantMsg {
                 content: None,
                 tool_calls: vec![PersistedToolCall {
@@ -342,11 +352,13 @@ mod tests {
         older
             .record(&SessionEvent::UserMsg {
                 text: "old task".into(),
+                images: vec![],
             })
             .unwrap();
         newer
             .record(&SessionEvent::UserMsg {
                 text: "new task".into(),
+                images: vec![],
             })
             .unwrap();
 

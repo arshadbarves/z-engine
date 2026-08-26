@@ -4,7 +4,8 @@
 //! OpenRouter families; anything unknown falls back to the configured
 //! default so the status bar stays honest (`$–` when truly unknowable).
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// Per-model USD/MTok pricing pair.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Pricing {
     pub usd_per_mtok_input: f64,
     pub usd_per_mtok_output: f64,

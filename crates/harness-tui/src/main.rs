@@ -213,15 +213,14 @@ async fn run(args: Args) -> anyhow::Result<()> {
         tmp_dir: std::env::temp_dir(),
         initial_allow_rules: config.permissions.allow.clone(),
         max_context_tokens: config.max_context_tokens,
+        max_output_tokens: config.max_output_tokens,
+        hooks: config.hooks.clone(),
+        compact_at_percent: config.compact_at_percent,
         keep_recent_messages: 12,
         review_enabled: config.review_enabled,
         mcp_servers: config.mcp_servers.clone(),
         auto_allow_tools: vec![],
-        initial_mode: match args.permission_mode.as_deref() {
-            Some("accept-edits") => harness_core::agent::PermissionMode::AutoAcceptEdits,
-            Some("plan") => harness_core::agent::PermissionMode::Plan,
-            _ => harness_core::agent::PermissionMode::Normal,
-        },
+        initial_mode: parse_mode(args.permission_mode.as_deref()),
     };
 
     if let Some(task) = args.headless_task {
@@ -257,20 +256,29 @@ async fn run(args: Args) -> anyhow::Result<()> {
         }
     }
 
-    let initial_mode = match args.permission_mode.as_deref() {
-        Some("accept-edits") => harness_core::agent::PermissionMode::AutoAcceptEdits,
-        Some("plan") => harness_core::agent::PermissionMode::Plan,
-        _ => harness_core::agent::PermissionMode::Normal,
-    };
+    let initial_mode = parse_mode(args.permission_mode.as_deref());
     use crossterm::ExecutableCommand;
     use crossterm::terminal::{EnterAlternateScreen, enable_raw_mode};
     enable_raw_mode()?;
     std::io::stdout().execute(EnterAlternateScreen)?;
+    // From this point every exit path must restore the terminal. A Drop
+    // guard covers panics and early `?` returns alike — without it a
+    // crash strands the user's shell in raw mode / alternate screen.
+    struct TermGuard;
+    impl Drop for TermGuard {
+        fn drop(&mut self) {
+            use crossterm::terminal::{LeaveAlternateScreen, disable_raw_mode};
+            let _ = crossterm::execute!(std::io::stdout(), LeaveAlternateScreen);
+            let _ = disable_raw_mode();
+        }
+    }
+    let _term_guard = TermGuard;
+
     let backend = ratatui::backend::CrosstermBackend::new(std::io::stdout());
     let mut terminal = ratatui::Terminal::new(backend)?;
 
     let (handle, ev_rx) = spawn_with_recorder(lc, resume_state, recorder);
-    let res = app::run(
+    app::run(
         &mut terminal,
         handle,
         ev_rx,
@@ -279,10 +287,13 @@ async fn run(args: Args) -> anyhow::Result<()> {
         session_tag,
         initial_mode,
     )
-    .await;
+    .await
+}
 
-    use crossterm::terminal::{LeaveAlternateScreen, disable_raw_mode};
-    crossterm::execute!(std::io::stdout(), LeaveAlternateScreen)?;
-    disable_raw_mode()?;
-    res
+fn parse_mode(s: Option<&str>) -> harness_core::agent::PermissionMode {
+    match s {
+        Some("accept-edits") => harness_core::agent::PermissionMode::AutoAcceptEdits,
+        Some("plan") => harness_core::agent::PermissionMode::Plan,
+        _ => harness_core::agent::PermissionMode::Normal,
+    }
 }

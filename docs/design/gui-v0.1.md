@@ -1,6 +1,7 @@
 # harness-gui — Desktop App Design (v0.1)
 
-Status: **design for review** · Owner decisions locked: Tauri 2 + Svelte 5 · macOS-only first · MVP includes sessions + settings.
+Status: **design for review** · Owner decisions locked: Tauri 2 · macOS-only first · MVP includes sessions + settings.
+Frontend note: v0.1 shipped on **React 19 + Vite** (rebuild from the original Svelte 5 scaffold); store/rune semantics map 1:1.
 
 ## 1. Goals
 
@@ -47,8 +48,13 @@ everything flows through `AgentHandle` commands and `EventRx` events.
 | `read_session` | path | `session::read_events` |
 | `delete_session` | path | fs delete (+confirm in UI) |
 | `start_session` | {resume_path?} | spawn_with_recorder(+replay), swaps GuiState.handle |
-| `get_config` | — | layered `Config` (redacted) |
+| `get_config` | — | layered `Config` (redacted) + pricing + MCP table |
 | `save_permission_rule` | rule | `config::persist_bash_rule` |
+| `save_general` | {model?, base_url?, max_context_tokens?, review?} | `config::persist_general` (+ hot set_model) |
+| `set_cost_override` / `remove_cost_override` | model, usd/mtok | `config::set_cost_override` / `remove_cost_override` |
+| `list_mcp_servers` | — | resolved MCP server table |
+| `test_mcp_server` | name | spawn + handshake + tools/list |
+| `list_project_files` | query | gitignore-lite walk for the @file picker |
 
 ### 2.2 Events (Rust → frontend)
 
@@ -85,8 +91,13 @@ No agent-loop changes.
   while streaming unless user scrolled up; `↓ N new` jump pill when detached.
 - **Composer**: auto-growing textarea (Shift+Enter newline), Send button +
   `⏎`; Stop button replaces Send while streaming; slash-command popup
-  (`/help…`) filtered as typed; token + cost meter right-aligned from
-  UsageUpdated events.
+  (`/compact`, `/notes`) filtered as typed; `@file` picker — typing `@`
+  opens a filtered project-file list (gitignore-lite walk via
+  `list_project_files`), Enter inserts the relative path; token + cost
+  meter right-aligned from UsageUpdated events (cost from resolved
+  pricing; tokens only for unknown models). `⌘K` opens a command palette
+  mixing actions (new task, compact, notes, rewind, settings, mode,
+  model presets) with recent sessions.
 
 ### 4.2 Message card types
 
@@ -95,8 +106,9 @@ No agent-loop changes.
 | user | Right-accent bubble, plain text |
 | assistant | Markdown (GFM: code blocks w/ highlight, lists, tables) |
 | thinking | Dim block; streams live; auto-collapses to `✻ thought (N chars)`; click header toggles body |
-| tool-call | Card: icon+name+args preview; states: ⟳ running (elapsed timer + live stdout tail, last ~10 lines) → done ✓/✗ collapsed to one line (summary); click expands full output (monospace, wrap toggle); spilled-output link opens temp file path |
-| approval | Highlighted card: tool name, args table, unified diff (syntax-highlighted, expandable), four buttons `Approve once / Session rule / Persist rule / Deny`, persisted-rules hint; buttons disabled outside project scope for persist |
+| tool-call | Card: icon+name+args preview; states: ⟳ running (elapsed timer + live stdout tail, last ~10 lines, streamed via `ToolOutputDelta` from the bash drain) → done ✓/✗ collapsed to one line (summary + duration); click expands full output (monospace); spilled-output link opens temp file path |
+| approval | Highlighted card: tool name, args table, unified diff (syntax-highlighted; collapsed above 15 lines with a toggle), four buttons `Approve once / Session rule / Persist rule / Deny`, persisted-rules hint; buttons disabled outside project scope for persist |
+| thinking | Dim block; streams live with char count; auto-collapses to `✻ thought (N chars)`; click header toggles the retained body |
 | notice/error | Centered dim / red text |
 
 ### 4.3 Permission modes
@@ -118,10 +130,12 @@ of transcript.
 
 ## 5. Frontend architecture
 
-- Svelte 5 runes stores: `transcript.ts` (append/update by event type),
-  `approvals.ts`, `sessions.ts`, `settings.ts`, `connection.ts` (invoke/listen wrappers).
-- Rendering: markdown via `marked` + `shiki` (or `highlight.js`) for blocks;
-  diffs via `diff2html`-style renderer or hand-rolled unified view.
+- React 19 + Vite (TypeScript), module-level external stores consumed via
+  `useSyncExternalStore`: `events.ts` (transcript/busy/usage/mode/draft),
+  `configStore.ts` (resolved config + pricing); `commands.ts` wraps invoke.
+- Rendering: markdown via `react-markdown` + `remark-gfm`; code blocks and
+  unified diffs via `react-syntax-highlighter` (Prism, one-dark).
+- Store logic is unit-tested with vitest (`src/lib/*.test.ts`).
 - All provider/model knowledge stays in Rust; frontend is presentation-only.
 
 ## 6. Edge cases

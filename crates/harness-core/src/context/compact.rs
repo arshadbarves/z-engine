@@ -19,7 +19,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use crate::provider::ChatMessage;
+use crate::provider::{ChatMessage, ContentPart};
 
 /// How many trailing messages stay verbatim (L2 window).
 pub const DEFAULT_KEEP_RECENT: usize = 12;
@@ -153,6 +153,19 @@ pub fn compact(messages: &[ChatMessage], keep_recent: usize, tmp_dir: &Path) -> 
             }
             ChatMessage::User { content } => {
                 summary_parts.push(format!("[user] {content}"));
+                outcome.dropped_prose_messages += 1;
+            }
+            ChatMessage::UserMulti { content } => {
+                // Vision turns are rare and expensive to re-create —
+                // summarize the text parts, drop the image payloads.
+                let texts: Vec<&str> = content
+                    .iter()
+                    .filter_map(|p| match p {
+                        ContentPart::Text { text } => Some(text.as_str()),
+                        _ => None,
+                    })
+                    .collect();
+                summary_parts.push(format!("[user] {}", texts.join(" ")));
                 outcome.dropped_prose_messages += 1;
             }
             ChatMessage::Assistant {

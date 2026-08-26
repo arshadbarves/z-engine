@@ -24,14 +24,20 @@ pub fn pick_interactive(sessions_dir: &std::path::Path) -> io::Result<Option<std
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     stdout.execute(EnterAlternateScreen)?;
+    // Panic/early-return safe: the guard restores the terminal however we
+    // leave this scope.
+    struct TermGuard;
+    impl Drop for TermGuard {
+        fn drop(&mut self) {
+            let _ = std::io::stdout().execute(LeaveAlternateScreen);
+            let _ = disable_raw_mode();
+        }
+    }
+    let _guard = TermGuard;
+
     let backend = CrosstermBackend::new(stdout);
     let mut term = Terminal::new(backend)?;
-    let result = run_loop(&mut term, &sessions);
-
-    let mut stdout = io::stdout();
-    stdout.execute(LeaveAlternateScreen)?;
-    disable_raw_mode()?;
-    result
+    run_loop(&mut term, &sessions)
 }
 
 fn run_loop(

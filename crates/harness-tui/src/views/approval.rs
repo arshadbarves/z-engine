@@ -165,7 +165,11 @@ fn wrap_preview(text: &str, width: usize) -> String {
 }
 
 fn centered_rect(percent_x: u16, height: u16, r: Rect) -> Rect {
-    let w = (r.width.saturating_mul(percent_x) / 100).clamp(24, r.width);
+    // `clamp(min, max)` panics when min > max — i.e. any terminal
+    // narrower than 24 columns would crash the whole app mid-draw.
+    let w = (r.width.saturating_mul(percent_x) / 100)
+        .min(r.width)
+        .max(24.min(r.width));
     let x = r.x + (r.width.saturating_sub(w)) / 2;
     let h = height.min(r.height.saturating_sub(2));
     let y = r.y + (r.height.saturating_sub(h)) / 2;

@@ -11,7 +11,7 @@
 
 pub mod events;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -27,8 +27,8 @@ use crate::context::{
 };
 use crate::perms::{Decision, PolicyEngine};
 use crate::provider::{
-    AccumulatedToolCall, ChatMessage, ChatRequest, Client, ProviderError, StreamEvent, ToolCall,
-    ToolCallAccumulator, Usage,
+    AccumulatedToolCall, ChatMessage, ChatRequest, Client, ContentPart, ProviderError, StreamEvent,
+    ToolCall, ToolCallAccumulator, Usage,
 };
 use crate::session::{SessionEvent, SessionWriter};
 use crate::tools::{ToolCtx, ToolError, ToolOutput, ToolRegistry};
@@ -53,6 +53,12 @@ pub struct LoopConfig {
     pub initial_allow_rules: Vec<String>,
     /// Context budget (spec §6); drives warnings + auto-compaction.
     pub max_context_tokens: u32,
+    /// Explicit per-request output ceiling (max_tokens).
+    pub max_output_tokens: u32,
+    /// Lifecycle shell hooks (`session_start`, `turn_completed`).
+    pub hooks: BTreeMap<String, String>,
+    /// Auto-compaction trigger point as a percent of the budget.
+    pub compact_at_percent: u8,
     /// Verbatim L2 tail size for compaction.
     pub keep_recent_messages: usize,
     /// Run the post-edit reviewer pass (spec section 9 v0.9).
@@ -75,6 +81,9 @@ impl LoopConfig {
             tmp_dir: std::env::temp_dir(),
             initial_allow_rules: Vec::new(),
             max_context_tokens: 120_000,
+            max_output_tokens: 16_384,
+            hooks: BTreeMap::new(),
+            compact_at_percent: 92,
             keep_recent_messages: compact::DEFAULT_KEEP_RECENT,
             review_enabled: true,
             mcp_servers: Vec::new(),
@@ -92,7 +101,15 @@ pub struct AgentHandle {
 
 impl AgentHandle {
     pub fn submit(&self, text: impl Into<String>) {
-        let _ = self.cmd_tx.send(Command::SubmitMessage(text.into()));
+        self.submit_with_images(text, Vec::new());
+    }
+
+    /// Submit a task with attached images (data URLs) for vision models.
+    pub fn submit_with_images(&self, text: impl Into<String>, images: Vec<String>) {
+        let _ = self.cmd_tx.send(Command::SubmitMessage {
+            text: text.into(),
+            images,
+        });
     }
 
     pub fn approve(&self, id: u64, decision: crate::agent::events::ApprovalDecision) {
@@ -117,6 +134,12 @@ impl AgentHandle {
         let _ = self.cmd_tx.send(Command::SetModel(model.into()));
     }
 
+    /// Pick the reasoning effort for reasoning-capable models; `None`
+    /// stops sending the parameter entirely.
+    pub fn set_reasoning_effort(&self, effort: Option<String>) {
+        let _ = self.cmd_tx.send(Command::SetReasoningEffort(effort));
+    }
+
     /// Force context compaction now (`/compact`).
     pub fn compact(&self) {
         let _ = self.cmd_tx.send(Command::Compact);
@@ -125,6 +148,22 @@ impl AgentHandle {
     /// Dump the current L1 notes (`/notes`).
     pub fn request_notes(&self) {
         let _ = self.cmd_tx.send(Command::RequestNotes);
+    }
+
+    /// Rewind: restore files touched by the last checkpointed turn.
+    pub fn revert_last_turn(&self) {
+        let _ = self.cmd_tx.send(Command::RevertLastTurn);
+    }
+
+    /// Per-message revert: restore all file changes from run-turn `keep`
+    /// (the user message being reverted) and every later turn.
+    pub fn revert_to_turn(&self, keep: u64) {
+        let _ = self.cmd_tx.send(Command::RevertToTurn(keep));
+    }
+
+    /// `!<cmd>` local shell passthrough (never reaches the model).
+    pub fn shell(&self, cmd: impl Into<String>) {
+        let _ = self.cmd_tx.send(Command::Shell(cmd.into()));
     }
 
     /// Ask the loop task to finish gracefully.
@@ -188,6 +227,7 @@ pub fn spawn_with_recorder(
     let model = cfg.model.clone();
     let project_root = cfg.project_root.clone();
     let tmp_dir = cfg.tmp_dir.clone();
+    let max_output = cfg.max_output_tokens;
     let sub_abort = Arc::clone(&abort_flag);
     let runner: crate::tools::SubAgentRunner = Arc::new(move |prompt: String, max_rounds: u32| {
         let client = sub_client.clone();
@@ -195,9 +235,12 @@ pub fn spawn_with_recorder(
         let root = project_root.clone();
         let tmp = tmp_dir.clone();
         let abort = Arc::clone(&sub_abort);
-        Box::pin(
-            async move { run_isolated(client, model, root, tmp, abort, &prompt, max_rounds).await },
-        )
+        Box::pin(async move {
+            run_isolated(
+                client, model, root, tmp, abort, &prompt, max_rounds, max_output,
+            )
+            .await
+        })
     });
 
     let (cmd_tx, cmd_rx) = mpsc::unbounded_channel::<Command>();
@@ -236,6 +279,8 @@ struct LoopState {
     repo_map_text: Option<String>,
     /// The active task text (reviewer prompt context).
     current_task: String,
+    /// Reasoning effort for reasoning-capable models; `None` = omit param.
+    reasoning_effort: Option<String>,
 }
 
 impl LoopState {
@@ -246,6 +291,21 @@ impl LoopState {
                 ChatMessage::System { content }
                 | ChatMessage::User { content }
                 | ChatMessage::Tool { content, .. } => content.as_str(),
+                ChatMessage::UserMulti { content } => {
+                    let mut n = 0usize;
+                    for part in content {
+                        if let ContentPart::Text { text } = part {
+                            n += text.len();
+                        }
+                        if let ContentPart::ImageUrl { image_url } = part {
+                            // Rough vision-token proxy: data URLs are big.
+                            n += image_url.url.len() / 4;
+                        }
+                    }
+                    // handled below via push
+                    bytes += n;
+                    continue;
+                }
                 ChatMessage::Assistant { content, .. } => content.as_deref().unwrap_or(""),
             };
             bytes += text.len();
@@ -309,18 +369,35 @@ async fn agent_task(
         }
     }
     let notes = Arc::new(Mutex::new(NotesStore::default()));
+    let (output_tx, mut output_rx) =
+        tokio::sync::mpsc::unbounded_channel::<crate::tools::ToolOutputChunk>();
     let mut ctx = ToolCtx::new(
         cfg.project_root.clone(),
         Arc::clone(&perms),
         cfg.tmp_dir.clone(),
     )
     .with_task_runner(runner);
+    ctx.output_tx = Arc::new(output_tx);
     ctx.notes = Arc::clone(&notes);
+
+    // Forward live tool output to the UI.
+    {
+        let ev_tx2 = ev_tx.clone();
+        tokio::spawn(async move {
+            while let Some(chunk) = output_rx.recv().await {
+                let _ = ev_tx2.send(Event::ToolOutputDelta {
+                    tool_name: chunk.tool_name,
+                    text: chunk.text,
+                });
+            }
+        });
+    }
     if let Ok(mut p) = perms.lock() {
         for t in &cfg.auto_allow_tools {
             p.allow_tool(t);
         }
     }
+    run_hook(&cfg.hooks, "session_start", &cfg.project_root, &ev_tx).await;
     // Language server (spec section 9 v0.8): Rust projects with
     // rust-analyzer installed get compiler-grade tooling + edit hooks.
     if let Some(server) = crate::lsp::LspClient::probe(&cfg.project_root) {
@@ -331,7 +408,8 @@ async fn agent_task(
         tracing::info!("rust-analyzer attached");
     }
     // L0 is rebuilt per-request by l0_message(); nothing to keep here.
-    let meter = BudgetMeter::new(cfg.max_context_tokens);
+    let meter =
+        BudgetMeter::new(cfg.max_context_tokens).with_compact_percent(cfg.compact_at_percent);
 
     let mut state = LoopState {
         working: Vec::new(),
@@ -340,6 +418,7 @@ async fn agent_task(
         force_compact: false,
         repo_map_text: None,
         current_task: String::new(),
+        reasoning_effort: None,
     };
     // Seed from a previous session's transcript (resume).
     if let Some(rs) = resume {
@@ -359,14 +438,21 @@ async fn agent_task(
 
     while let Some(command) = next_action(&mut cmd_rx).await {
         match command {
-            Command::SubmitMessage(user_text) => {
+            Command::SubmitMessage {
+                text: user_text,
+                images,
+            } => {
                 state.current_task = user_text.clone();
+                ctx.begin_checkpoint_turn();
                 if let Some(w) = recorder.as_mut() {
                     let _ = w.record(&SessionEvent::UserMsg {
                         text: user_text.clone(),
+                        images: images.clone(),
                     });
                 }
-                state.working.push(ChatMessage::user(user_text));
+                state
+                    .working
+                    .push(ChatMessage::user_with_images(&user_text, &images));
                 let _ = ev_tx.send(Event::TurnStarted);
 
                 let outcome = run_turn(
@@ -390,6 +476,7 @@ async fn agent_task(
                             prompt_tokens: state.last_usage.prompt_tokens,
                             completion_tokens: state.last_usage.completion_tokens,
                         });
+                        run_hook(&cfg.hooks, "turn_completed", &cfg.project_root, &ev_tx).await;
                     }
                     TurnOutcome::Aborted => {
                         abort_flag.store(false, Ordering::Relaxed);
@@ -408,9 +495,20 @@ async fn agent_task(
                 cfg.model = id.clone();
                 let _ = ev_tx.send(Event::StatusNote(format!("model set to {id}")));
             }
-            Command::Shell(cmd) => {
-                run_shell_passthrough(&cmd, &ctx, &ev_tx).await;
+            Command::SetReasoningEffort(effort) => {
+                state.reasoning_effort = effort.clone();
+                let note = match effort {
+                    Some(e) => format!("reasoning effort: {e}"),
+                    None => "reasoning effort: default (param omitted)".to_string(),
+                };
+                let _ = ev_tx.send(Event::StatusNote(note));
             }
+            Command::Shell(cmd) => match registry.get("bash") {
+                Some(bash) => run_shell_passthrough(&cmd, bash, &ctx, &ev_tx).await,
+                None => {
+                    let _ = ev_tx.send(Event::StatusNote("shell unavailable".into()));
+                }
+            },
             Command::Compact => {
                 state.force_compact = true;
                 let _ = ev_tx.send(Event::StatusNote("compaction requested".into()));
@@ -421,10 +519,141 @@ async fn agent_task(
                     rendered.unwrap_or_else(|| "no context notes recorded".into()),
                 ));
             }
+            Command::RevertLastTurn => {
+                let out = ctx.checkpoints.revert_last_turn();
+                use std::sync::atomic::Ordering;
+                ctx.repo_map_dirty.store(true, Ordering::Relaxed);
+                let root = &cfg.project_root;
+                let names: Vec<String> = out
+                    .restored
+                    .iter()
+                    .map(|p| {
+                        p.strip_prefix(root)
+                            .unwrap_or(p)
+                            .to_string_lossy()
+                            .into_owned()
+                    })
+                    .collect();
+                let note = if out.restored.is_empty() && out.errors.is_empty() {
+                    "rewind: nothing to revert".to_string()
+                } else {
+                    let mut s = format!("rewound {} file(s)", out.restored.len());
+                    if !names.is_empty() {
+                        let shown: Vec<String> = names.iter().take(3).cloned().collect();
+                        s.push_str(": ");
+                        s.push_str(&shown.join(", "));
+                        if names.len() > 3 {
+                            s.push_str(&format!(" +{}", names.len() - 3));
+                        }
+                    }
+                    if !out.errors.is_empty() {
+                        s.push_str(&format!(" ({} failed)", out.errors.len()));
+                    }
+                    s
+                };
+                for e in &out.errors {
+                    tracing::warn!(error = %e, "revert restore failed");
+                }
+                let _ = ev_tx.send(Event::StatusNote(note));
+            }
+            Command::RevertToTurn(keep) => {
+                let out = ctx.checkpoints.revert_to_turn(keep);
+                use std::sync::atomic::Ordering;
+                ctx.repo_map_dirty.store(true, Ordering::Relaxed);
+                let root = &cfg.project_root;
+                let names: Vec<String> = out
+                    .restored
+                    .iter()
+                    .map(|p| {
+                        p.strip_prefix(root)
+                            .unwrap_or(p)
+                            .to_string_lossy()
+                            .into_owned()
+                    })
+                    .collect();
+                let note = if out.restored.is_empty() && out.errors.is_empty() {
+                    format!(
+                        "rewind: no file changes recorded at or after turn {keep} \
+                         (checkpoints do not survive an app restart)"
+                    )
+                } else {
+                    let mut s = format!(
+                        "rewound {} file(s) to before turn {keep}",
+                        out.restored.len()
+                    );
+                    if out.evicted_gaps {
+                        s.push_str(" (warning: some older checkpoints were evicted and cannot be restored)");
+                    }
+                    if !names.is_empty() {
+                        let shown: Vec<String> = names.iter().take(3).cloned().collect();
+                        s.push_str(": ");
+                        s.push_str(&shown.join(", "));
+                        if names.len() > 3 {
+                            s.push_str(&format!(" +{}", names.len() - 3));
+                        }
+                    }
+                    if !out.errors.is_empty() {
+                        s.push_str(&format!(" ({} failed)", out.errors.len()));
+                    }
+                    s
+                };
+                for e in &out.errors {
+                    tracing::warn!(error = %e, "revert-to-turn restore failed");
+                }
+                let _ = ev_tx.send(Event::StatusNote(note));
+            }
             _ => { /* stale Approve/Deny/Abort while idle are ignored */ }
         }
     }
     tracing::debug!("agent task exiting");
+}
+
+/// Run a lifecycle hook (`[hooks]` in config.toml) with a hard timeout.
+/// stdout becomes a status note; failures are reported but never fatal.
+async fn run_hook(
+    hooks: &BTreeMap<String, String>,
+    event: &str,
+    root: &Path,
+    ev_tx: &UnboundedSender<Event>,
+) {
+    let Some(cmd) = hooks.get(event) else {
+        return;
+    };
+    let output = tokio::time::timeout(
+        std::time::Duration::from_secs(15),
+        tokio::process::Command::new("sh")
+            .arg("-c")
+            .arg(cmd)
+            .current_dir(root)
+            .env("HARNESS_EVENT", event)
+            .env("HARNESS_PROJECT_ROOT", root)
+            .output(),
+    )
+    .await;
+    match output {
+        Ok(Ok(out)) if out.status.success() => {
+            let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !text.is_empty() {
+                let _ = ev_tx.send(Event::StatusNote(format!("[hook:{event}] {text}")));
+            }
+        }
+        Ok(Ok(out)) => {
+            let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            let _ = ev_tx.send(Event::StatusNote(format!(
+                "[hook:{event}] failed (exit {}): {}",
+                out.status,
+                err.chars().take(160).collect::<String>()
+            )));
+        }
+        Ok(Err(e)) => {
+            tracing::warn!(event, error = %e, "hook spawn failed");
+        }
+        Err(_) => {
+            let _ = ev_tx.send(Event::StatusNote(format!(
+                "[hook:{event}] timed out after 15s"
+            )));
+        }
+    }
 }
 
 /// L0 prefix message (system + AGENTS.md), rebuilt per request but
@@ -521,14 +750,15 @@ async fn run_review(
 
 /// `!<cmd>` passthrough: run locally through the bash tool so output is
 /// truncated/spilled consistently; never touches the model.
-async fn run_shell_passthrough(cmd: &str, ctx: &ToolCtx, ev_tx: &UnboundedSender<Event>) {
+async fn run_shell_passthrough(
+    cmd: &str,
+    bash: Arc<dyn crate::tools::Tool>,
+    ctx: &ToolCtx,
+    ev_tx: &UnboundedSender<Event>,
+) {
     use serde_json::json;
-    let Some(tool) = ctx_registry_lookup(ctx) else {
-        let _ = ev_tx.send(Event::StatusNote("shell unavailable".into()));
-        return;
-    };
     let input = json!({"command": cmd.to_string()});
-    let out = tool.run(input, ctx).await;
+    let out = bash.run(input, ctx).await;
     let text = match out {
         Ok(o) => o.result,
         Err(e) => format!("ERROR: {e}"),
@@ -538,14 +768,9 @@ async fn run_shell_passthrough(cmd: &str, ctx: &ToolCtx, ev_tx: &UnboundedSender
     }
 }
 
-// Placeholder indirection kept tiny: the loop's registry isn't reachable
-// from here without threading another parameter through several calls.
-fn ctx_registry_lookup(_ctx: &ToolCtx) -> Option<Arc<dyn crate::tools::Tool>> {
-    None
-}
-
 /// Isolated sub-agent loop (spec section 9 v0.7): read-only toolset, own
 /// transcript, bounded rounds; returns the final assistant text only.
+#[allow(clippy::too_many_arguments)]
 async fn run_isolated(
     client: Client,
     model: String,
@@ -554,6 +779,7 @@ async fn run_isolated(
     abort: Arc<AtomicBool>,
     prompt: &str,
     max_rounds: u32,
+    max_output_tokens: u32,
 ) -> Result<String, String> {
     const SUB_SYSTEM: &str = "You are a research sub-agent inside the harness coding agent.\nYou explore a repository read-only to answer one specific question.\nBe efficient: read only what is needed, then report.\nYour final message is delivered verbatim to the parent agent as the answer.\nStructure it as short factual bullet lines.";
 
@@ -572,7 +798,9 @@ async fn run_isolated(
             return Err("aborted".into());
         }
         tracing::debug!(round, "sub-agent round");
-        let request = ChatRequest::new(model.clone(), messages.clone()).with_tools(registry.defs());
+        let request = ChatRequest::new(model.clone(), messages.clone())
+            .with_tools(registry.defs())
+            .with_max_tokens(max_output_tokens);
         let mut stream = client.stream_chat(&request, Arc::clone(&abort));
 
         let mut text = String::new();
@@ -601,12 +829,8 @@ async fn run_isolated(
         }
 
         let finalized = acc.finish();
-        eprintln!(
-            "[DBG-SUB] round {round} text_len={} finalized={}",
-            text.len(),
-            finalized.len()
-        );
         let mut complete_calls: Vec<ToolCall> = Vec::new();
+        let mut synthetic_errors: Vec<(String, String)> = Vec::new();
         for call in finalized {
             match call {
                 AccumulatedToolCall::Complete(c) => complete_calls.push(c),
@@ -617,13 +841,20 @@ async fn run_isolated(
                     reason,
                 } => {
                     let raw_short: String = raw_arguments.chars().take(160).collect();
-                    messages.push(ChatMessage::tool_result(
-                        id,
+                    synthetic_errors.push((
+                        id.clone(),
                         format!(
                             "ERROR: arguments not valid JSON ({reason}). You sent: {raw_short}"
                         ),
                     ));
-                    let _ = name;
+                    // Keep the call on the wire so the error pairs up.
+                    complete_calls.push(ToolCall {
+                        id,
+                        function: crate::provider::FunctionCall {
+                            name: name.unwrap_or_default(),
+                            arguments: raw_arguments,
+                        },
+                    });
                 }
                 AccumulatedToolCall::MissingId { index } => {
                     messages.push(ChatMessage::user(format!(
@@ -633,12 +864,15 @@ async fn run_isolated(
             }
         }
 
+        // Assistant message must precede its tool results on the wire.
         messages.push(ChatMessage::Assistant {
             content: (!text.is_empty()).then_some(text),
             tool_calls: complete_calls.clone(),
         });
+        for (id, err) in synthetic_errors {
+            messages.push(ChatMessage::tool_result(id, err));
+        }
 
-        eprintln!("[DBG-SUB] complete={} returning?", complete_calls.len());
         if complete_calls.is_empty() {
             return Ok(messages
                 .last()
@@ -788,8 +1022,14 @@ async fn run_turn(
         }
         request_messages.extend(state.working.iter().cloned());
 
-        let request =
+        let mut request =
             ChatRequest::new(cfg.model.clone(), request_messages).with_tools(registry.defs());
+        // Explicit output ceiling: without it gateways assume the model
+        // maximum and pre-charge credits against that worst case.
+        request = request.with_max_tokens(cfg.max_output_tokens);
+        if let Some(effort) = state.reasoning_effort.clone() {
+            request = request.with_reasoning_effort(effort);
+        }
         let mut stream = client.stream_chat(&request, Arc::clone(abort_flag));
 
         // ---- consume the stream --------------------------------------
@@ -815,6 +1055,11 @@ async fn run_turn(
         // ---- assemble the assistant message --------------------------
         let finalized = acc.finish();
         let mut complete_calls: Vec<ToolCall> = Vec::new();
+        // Calls whose arguments never parsed: not executed, but kept on
+        // the wire so the synthetic error tool-result has a matching
+        // assistant `tool_calls` entry (strict OpenAI-compatible APIs
+        // reject unpaired tool results with 400 — poisoning the session).
+        let mut wire_only_calls: Vec<ToolCall> = Vec::new();
         let mut synthetic_errors: Vec<(String, String)> = Vec::new();
 
         for call in finalized {
@@ -829,11 +1074,18 @@ async fn run_turn(
                     tracing::warn!(tool = ?name, %reason, "malformed tool arguments");
                     let raw_short: String = raw_arguments.chars().take(200).collect();
                     synthetic_errors.push((
-                        id,
+                        id.clone(),
                         format!(
                             "ERROR: arguments were not valid JSON ({reason}). You sent: {raw_short}"
                         ),
                     ));
+                    wire_only_calls.push(ToolCall {
+                        id,
+                        function: crate::provider::FunctionCall {
+                            name: name.unwrap_or_default(),
+                            arguments: raw_arguments,
+                        },
+                    });
                 }
                 AccumulatedToolCall::MissingId { index } => {
                     tracing::warn!(index, "tool-call delta without id; skipped");
@@ -844,10 +1096,12 @@ async fn run_turn(
             }
         }
 
+        let mut all_wire_calls = complete_calls.clone();
+        all_wire_calls.extend(wire_only_calls);
         if let Some(w) = recorder.as_mut() {
             let _ = w.record(&SessionEvent::AssistantMsg {
                 content: (!text.is_empty()).then(|| text.clone()),
-                tool_calls: complete_calls
+                tool_calls: all_wire_calls
                     .iter()
                     .map(|c| crate::session::PersistedToolCall {
                         id: c.id.clone(),
@@ -859,7 +1113,7 @@ async fn run_turn(
         }
         state.working.push(ChatMessage::Assistant {
             content: (!text.is_empty()).then_some(text),
-            tool_calls: complete_calls.clone(),
+            tool_calls: all_wire_calls,
         });
         for (id, content) in synthetic_errors {
             if let Some(w) = recorder.as_mut() {
@@ -961,9 +1215,12 @@ async fn consume_stream(
                             acc.absorb(index, id.as_deref(), name.as_deref(), &args_delta);
                         }
                         StreamEvent::Usage(u) => {
-                            // Latest prompt size + running completion total â
+                            // Latest prompt size + running completion total —
                             // the budget-pressure signal for v0.3's compactor.
-                            usage_out.prompt_tokens = usage_out.prompt_tokens.max(u.prompt_tokens);
+                            // Replace (not max): after compaction the true
+                            // prompt shrinks, and keeping the stale larger
+                            // value would spuriously re-trigger compaction.
+                            usage_out.prompt_tokens = u.prompt_tokens;
                             usage_out.completion_tokens =
                                 usage_out.completion_tokens.saturating_add(u.completion_tokens);
                             let _ = ev_tx.send(Event::UsageUpdated {
@@ -1045,13 +1302,29 @@ async fn execute_calls(
         verdicts.push(match decision {
             Decision::Allow => Verdict::Run,
             Decision::Gate => {
-                // Auto-accept edits mode: file edits skip the prompt.
+                // Auto-accept edits mode: file edits — and the common
+                // filesystem bash set (mkdir/touch/mv/cp/rm/sed, Claude
+                // Code acceptEdits parity) — skip the prompt.
                 if *mode == crate::agent::events::PermissionMode::AutoAcceptEdits
                     && matches!(call.function.name.as_str(), "write_file" | "edit_file")
                 {
                     let _ = ev_tx.send(Event::StatusNote(format!(
                         "auto-accepted edit to {}",
                         input.get("path").and_then(|v| v.as_str()).unwrap_or("?")
+                    )));
+                    verdicts.push(Verdict::Run);
+                    continue;
+                }
+                if *mode == crate::agent::events::PermissionMode::AutoAcceptEdits
+                    && call.function.name == "bash"
+                    && input
+                        .get("command")
+                        .and_then(|v| v.as_str())
+                        .is_some_and(PolicyEngine::is_common_fs_command)
+                {
+                    let _ = ev_tx.send(Event::StatusNote(format!(
+                        "auto-accepted fs command: {}",
+                        input.get("command").and_then(|v| v.as_str()).unwrap_or("?")
                     )));
                     verdicts.push(Verdict::Run);
                     continue;

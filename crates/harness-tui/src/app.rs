@@ -386,6 +386,13 @@ impl App {
                 }
                 self.thinking_chars += r.chars().count() as u64;
             }
+            Event::ToolOutputDelta { tool_name: _, text } => {
+                // Live tool output appended to the running tool card
+                if let Some(Block::ToolCall { preview, .. }) = self.blocks.last_mut() {
+                    preview.push('\n');
+                    preview.push_str(&text);
+                }
+            }
             Event::TokenDelta(t) => {
                 self.close_thinking();
                 self.assistant_streaming_block().push_str(&t);
@@ -584,9 +591,13 @@ mod tests {
             model: "test-model-x".into(),
             base_url: "http://127.0.0.1:1/v1".into(),
             max_context_tokens: 120_000,
+            max_output_tokens: 16_384,
+            hooks: Default::default(),
+            compact_at_percent: 92,
             permissions: Default::default(),
             review_enabled: true,
             mcp_servers: vec![],
+            cost_overrides: Default::default(),
         };
         App::new(
             handle,

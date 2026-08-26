@@ -9,6 +9,7 @@
 //!   full text lands in a temp file whose path is embedded in the result.
 
 pub mod bash;
+pub mod checkpoint;
 pub mod context_notes;
 pub mod edit_file;
 pub mod file_state;
@@ -94,6 +95,17 @@ pub struct ToolCtx {
     /// Rendered results of this round's editing tools, drained by the
     /// reviewer pass (spec section 9 v0.9).
     pub edit_journal: Arc<Mutex<Vec<String>>>,
+    /// Per-turn pre-edit file snapshots backing rewind (`RevertLastTurn`).
+    pub checkpoints: Arc<checkpoint::CheckpointStore>,
+    /// Live tool output streaming (bash stdout tails etc).
+    pub output_tx: Arc<tokio::sync::mpsc::UnboundedSender<ToolOutputChunk>>,
+}
+
+/// A chunk of live tool output emitted while a tool is running.
+#[derive(Debug, Clone)]
+pub struct ToolOutputChunk {
+    pub tool_name: String,
+    pub text: String,
 }
 
 /// Future-yielding executor for isolated sub-loops. Built by the agent
@@ -118,7 +130,21 @@ impl ToolCtx {
             task_runner: None,
             lsp: None,
             edit_journal: Arc::new(Mutex::new(Vec::new())),
+            checkpoints: Arc::new(checkpoint::CheckpointStore::default()),
+            output_tx: Arc::new(tokio::sync::mpsc::unbounded_channel().0),
         }
+    }
+
+    /// Open a checkpoint for the turn about to run.
+    pub fn begin_checkpoint_turn(&self) {
+        self.checkpoints.begin_turn();
+    }
+
+    /// Stash `resolved`'s current content so a later rewind can restore it.
+    /// Called by mutating tools right before their first write to a path
+    /// within a turn; repeated calls for the same path are no-ops.
+    pub fn checkpoint_before_mutation(&self, resolved: &Path) {
+        self.checkpoints.snapshot_file(resolved);
     }
 
     /// Drain recorded edit results (for the reviewer pass).
@@ -326,6 +352,42 @@ impl std::fmt::Debug for ToolRegistry {
         f.debug_struct("ToolRegistry")
             .field("tools", &self.order)
             .finish()
+    }
+}
+
+/// Crash-safe file replacement: write to a temp sibling, flush it to
+/// disk, then atomically rename over the target. A crash mid-write can
+/// never leave the target truncated or half-written (POSIX rename is
+/// atomic; on Windows same-volume renames are best-effort but still far
+/// safer than in-place truncation).
+pub(crate) async fn atomic_write(target: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let dir = target
+        .parent()
+        .ok_or_else(|| std::io::Error::other("target has no parent directory"))?;
+    let tmp = dir.join(format!(
+        ".{}.tmp-{}",
+        target
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "file".into()),
+        ulid::Ulid::new()
+    ));
+    let write = async {
+        let mut f = tokio::fs::File::create(&tmp).await?;
+        tokio::io::AsyncWriteExt::write_all(&mut f, bytes).await?;
+        f.sync_all().await?;
+        std::io::Result::Ok(())
+    };
+    if let Err(e) = write.await {
+        let _ = tokio::fs::remove_file(&tmp).await;
+        return Err(e);
+    }
+    match tokio::fs::rename(&tmp, target).await {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let _ = tokio::fs::remove_file(&tmp).await;
+            Err(e)
+        }
     }
 }
 

@@ -14,24 +14,36 @@ pub enum Pressure {
     Ok,
     /// ≥ 80%: status-bar warning.
     Warn,
-    /// ≥ 92%: auto-compaction triggers.
+    /// ≥ compact_at_percent (default 92): auto-compaction triggers.
     Compact,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct BudgetMeter {
     pub max_tokens: u32,
+    /// Auto-compaction trigger point, as a percent of the budget
+    /// (default 92). Configurable via `compact_at_percent`.
+    pub compact_at_percent: u8,
 }
 
 impl BudgetMeter {
     pub fn new(max_tokens: u32) -> Self {
-        Self { max_tokens }
+        Self {
+            max_tokens,
+            compact_at_percent: 92,
+        }
+    }
+
+    /// Clamp to a sane band: below Warn (80) would compact constantly.
+    pub fn with_compact_percent(mut self, percent: u8) -> Self {
+        self.compact_at_percent = percent.clamp(80, 99);
+        self
     }
 
     pub fn level(&self, tokens_used: u64) -> Pressure {
         let max = self.max_tokens.max(1) as f64;
         let ratio = tokens_used as f64 / max;
-        if ratio >= 0.92 {
+        if ratio >= f64::from(self.compact_at_percent) / 100.0 {
             Pressure::Compact
         } else if ratio >= 0.80 {
             Pressure::Warn
@@ -73,5 +85,15 @@ mod tests {
     fn zero_budget_never_panics() {
         let m = BudgetMeter::new(0);
         assert_eq!(m.level(1), Pressure::Compact);
+    }
+
+    #[test]
+    fn compact_percent_is_configurable_and_clamped() {
+        let m = BudgetMeter::new(1000).with_compact_percent(85);
+        assert_eq!(m.level(849), Pressure::Warn);
+        assert_eq!(m.level(850), Pressure::Compact);
+        // Below the Warn band would thrash; clamped to 80.
+        let low = BudgetMeter::new(1000).with_compact_percent(10);
+        assert_eq!(low.compact_at_percent, 80);
     }
 }

@@ -5,16 +5,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>harness</title>
     <script>
+      // Fatal-error surface: replaces the app only when React never
+      // mounted (blank screen debugging). Runtime rejections after mount
+      // get a small non-destructive banner instead.
+      function __showFatal(label, detail) {
+        document.title = label + ": " + detail;
+        const root = document.getElementById("root");
+        if (!root) return;
+        const mounted = root.querySelector("#root > *:not(.boot-note)") !== null;
+        if (!mounted) {
+          root.innerHTML =
+            '<pre style="color:#f66;padding:20px;font-family:monospace;white-space:pre-wrap">' +
+            label + "\n" + String(detail).replace(/[<>&]/g, "") + "</pre>";
+          return;
+        }
+        let banner = document.getElementById("__rej_banner");
+        if (!banner) {
+          banner = document.createElement("div");
+          banner.id = "__rej_banner";
+          banner.style.cssText =
+            "position:fixed;bottom:12px;left:50%;transform:translateX(-50%);" +
+            "max-width:70vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" +
+            "background:#3a1d1d;color:#f66;border:1px solid #f66;border-radius:8px;" +
+            "padding:6px 12px;font:11px monospace;z-index:9999";
+          document.body.appendChild(banner);
+        }
+        banner.textContent = label + ": " + detail;
+      }
       window.addEventListener("error", (e) => {
-        document.title = "ERR: " + e.message;
+        __showFatal("ERR", e.message + "\n" + (e.filename || "") + ":" + (e.lineno || ""));
       });
       window.addEventListener("unhandledrejection", (e) => {
-        document.title = "REJ: " + ((e.reason && e.reason.message) || e.reason);
+        __showFatal("REJ", (e.reason && e.reason.message) || e.reason);
       });
     </script>
   </head>
   <body>
-    <div id="root"><p style="color:#888;padding:20px;font-family:sans-serif">Loading harness…</p></div>
+    <div id="root"><p class="boot-note" style="color:#888;padding:20px;font-family:sans-serif">Loading harness…</p></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

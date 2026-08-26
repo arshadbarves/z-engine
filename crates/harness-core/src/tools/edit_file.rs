@@ -119,18 +119,26 @@ impl Tool for EditFileTool {
             ));
         }
         ctx.require_read_for_mutation("edit_file", &resolved, true)?;
+        // Rewind support: stash the pre-edit image before touching disk.
+        ctx.checkpoint_before_mutation(&resolved);
 
         let bytes = tokio::fs::read(&resolved)
             .await
             .map_err(|e| ToolError::Failed(format!("read {}: {e}", resolved.display())))?;
-        let current = String::from_utf8_lossy(&bytes).into_owned();
+        // Strict UTF-8: lossy conversion would silently corrupt binary
+        // files by replacing invalid bytes with U+FFFD on write-back.
+        let current = String::from_utf8(bytes).map_err(|_| {
+            ToolError::Failed(format!(
+                "{disp} is not valid UTF-8 text; refusing to edit it"
+            ))
+        })?;
 
         let rep = apply_ladder(&current, old_s, new_s, line_hint).map_err(|msg| {
             // Model-visible guidance so it can adjust (never crash).
             ToolError::Failed(msg)
         })?;
 
-        tokio::fs::write(&resolved, &rep.new_content)
+        super::atomic_write(&resolved, rep.new_content.as_bytes())
             .await
             .map_err(|e| ToolError::Failed(format!("write {disp}: {e}")))?;
         ctx.note_read(&resolved);
@@ -208,13 +216,6 @@ fn fuzzy_replace(
     line_hint: Option<usize>,
 ) -> Result<Replacement, String> {
     let k = old.lines().count().max(1);
-    let lines: Vec<&str> = content.lines().collect();
-    if lines.len() < k {
-        return Err(format!(
-            "no match: file has fewer lines ({}) than old_string ({k}) and no exact match",
-            lines.len()
-        ));
-    }
     let old_norm = old.trim_end_matches('\n');
     let lines: Vec<&str> = content.lines().collect();
     if lines.len() < k {

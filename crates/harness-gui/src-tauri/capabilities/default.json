@@ -2,5 +2,9 @@
   "identifier": "default",
   "description": "Main window: core IPC from the local HTTP origin",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "core:window:allow-toggle-maximize"
+  ]
 }

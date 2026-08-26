@@ -38,8 +38,9 @@ pub enum ApprovalDecision {
 /// UI → core directives.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Command {
-    /// User submitted a new task message.
-    SubmitMessage(String),
+    /// User submitted a new task message, optionally with attached
+    /// images (data URLs) for vision-capable models.
+    SubmitMessage { text: String, images: Vec<String> },
     /// Approval modal answered "yes" with a scope (see ApprovalDecision).
     Approve { id: u64, decision: ApprovalDecision },
     /// Approval modal answered "no".
@@ -50,12 +51,21 @@ pub enum Command {
     SetMode(PermissionMode),
     /// `/model <id>`: hot-switch the provider model.
     SetModel(String),
+    /// Per-session reasoning effort (`low|medium|high|xhigh`); `None` clears
+    /// it so non-reasoning models never receive the parameter.
+    SetReasoningEffort(Option<String>),
     /// `!<cmd>` shell passthrough executed locally (no model involvement).
     Shell(String),
     /// Slash-command `/compact`: force context compaction now.
     Compact,
     /// Slash-command `/notes`: dump the L1 notes block as a status note.
     RequestNotes,
+    /// Rewind: restore files touched by the last checkpointed turn.
+    RevertLastTurn,
+    /// Per-message revert: restore every turn from the end back to and
+    /// including index `keep`, leaving turns `[0..keep)` intact. `keep` is
+    /// the 0-based run-turn index of the user message to revert.
+    RevertToTurn(u64),
     /// Graceful shutdown of the agent task.
     Shutdown,
 }
@@ -66,6 +76,10 @@ pub enum Event {
     TurnStarted,
     TokenDelta(String),
     ReasoningDelta(String),
+    ToolOutputDelta {
+        tool_name: String,
+        text: String,
+    },
     ToolCallStarted {
         name: String,
         preview: String,
@@ -111,6 +125,9 @@ impl serde::Serialize for Event {
             Event::TurnStarted => json!({"type": "turnStarted"}),
             Event::TokenDelta(t) => json!({"type": "tokenDelta", "text": t}),
             Event::ReasoningDelta(r) => json!({"type": "reasoningDelta", "text": r}),
+            Event::ToolOutputDelta { tool_name, text } => json!({
+                "type": "toolOutputDelta", "toolName": tool_name, "text": text
+            }),
             Event::ToolCallStarted { name, preview } => json!({
                 "type": "toolCallStarted", "name": name, "preview": preview
             }),

@@ -78,6 +78,8 @@ impl Tool for WriteFileTool {
         if existed {
             ctx.require_read_for_mutation("write_file", &resolved, true)?;
         }
+        // Rewind support: stash the pre-write image before touching disk.
+        ctx.checkpoint_before_mutation(&resolved);
         let old = if existed {
             String::from_utf8_lossy(
                 &std::fs::read(&resolved)
@@ -93,7 +95,7 @@ impl Tool for WriteFileTool {
                 .await
                 .map_err(|e| ToolError::Failed(format!("mkdir {}: {e}", parent.display())))?;
         }
-        tokio::fs::write(&resolved, content)
+        super::atomic_write(&resolved, content.as_bytes())
             .await
             .map_err(|e| ToolError::Failed(format!("write {}: {e}", resolved.display())))?;
         ctx.note_read(&resolved);

@@ -9,8 +9,8 @@ pub mod types;
 pub use accumulate::{AccumulatedToolCall, ToolCallAccumulator};
 pub use client::{Client, ProviderError};
 pub use types::{
-    ChatMessage, ChatRequest, FinishReason, FunctionCall, StreamEvent, ToolCall, ToolDef,
-    ToolFunctionDef, Usage,
+    ChatMessage, ChatRequest, ContentPart, FinishReason, FunctionCall, StreamEvent, ToolCall,
+    ToolDef, ToolFunctionDef, Usage,
 };
 
 #[cfg(test)]

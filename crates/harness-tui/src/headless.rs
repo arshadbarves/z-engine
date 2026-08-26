@@ -19,8 +19,15 @@ pub async fn run_one_shot(
             }
             Some(Event::TokenDelta(t)) => {
                 use std::io::Write;
-                print!("{t}");
+                // `print!` panics on EPIPE (closed stdout, e.g. CI piping
+                // into `head`); write + explicit error instead.
+                if std::io::stdout().write_all(t.as_bytes()).is_err() {
+                    anyhow::bail!("stdout closed");
+                }
                 std::io::stdout().flush().ok();
+            }
+            Some(Event::ToolOutputDelta { text, .. }) => {
+                eprintln!("[out] {text}");
             }
             Some(Event::ToolCallStarted { name, preview }) => {
                 eprintln!("\n[tool] {name} {preview}");

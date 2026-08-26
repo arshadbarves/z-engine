@@ -13,8 +13,14 @@ use ratatui::widgets::Paragraph;
 
 pub fn render(f: &mut ratatui::Frame, app: &App, area: Rect) {
     let total_tokens = app.prompt_tokens + app.completion_tokens;
+    // Guard a hand-edited zero budget: division would yield NaN and
+    // every threshold below silently compares false.
     let budget = u64::from(app.max_context_tokens);
-    let ratio = total_tokens as f32 / budget as f32;
+    let ratio = if budget == 0 {
+        0.0
+    } else {
+        total_tokens as f32 / budget as f32
+    };
 
     let token_style = if ratio >= 0.92 {
         Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)

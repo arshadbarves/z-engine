@@ -12,7 +12,10 @@
 //! The API key is **never** part of config — it comes exclusively from the
 //! `HARNESS_API_KEY` environment variable when a provider client is built.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
+
+use crate::context::cost::Pricing;
 
 /// Fully resolved configuration after layering.
 #[derive(Debug, Clone, PartialEq)]
@@ -22,12 +25,23 @@ pub struct Config {
     /// Approximate context budget in tokens used by the status meter and,
     /// from v0.3 on, the compactor.
     pub max_context_tokens: u32,
+    /// Explicit per-request output ceiling sent as max_tokens.
+    pub max_output_tokens: u32,
+    /// Auto-compaction trigger point as a percent of `max_context_tokens`
+    /// (default 92, clamped to 80..=99).
+    pub compact_at_percent: u8,
+    /// Lifecycle hooks: event name → shell command. Honored events:
+    /// `session_start`, `turn_completed`. stdout becomes a status note.
+    pub hooks: BTreeMap<String, String>,
     pub permissions: PermissionsConfig,
     /// Post-edit reviewer pass (spec section 9 v0.9).
     pub review_enabled: bool,
     /// Post-edit reviewer pass (spec section 9 v0.9).
     /// MCP stdio servers (spec section 9 v0.9).
     pub mcp_servers: Vec<crate::mcp::McpServerConfig>,
+    /// Per-model pricing overrides (exact model id → pricing). Takes
+    /// precedence over the built-in table in [`Self::pricing_for`].
+    pub cost_overrides: BTreeMap<String, Pricing>,
 }
 
 /// Allowlist rules. v0.1 semantics: entries are `bash` command-prefix rules
@@ -41,12 +55,16 @@ pub struct PermissionsConfig {
 /// Sparse overlay produced by any single layer.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct PartialConfig {
+    pub hooks: Option<BTreeMap<String, String>>,
     pub model: Option<String>,
     pub base_url: Option<String>,
     pub max_context_tokens: Option<u32>,
+    pub max_output_tokens: Option<u32>,
+    pub compact_at_percent: Option<u8>,
     pub review_enabled: Option<bool>,
     pub mcp_servers: Option<Vec<crate::mcp::McpServerConfig>>,
     pub permissions_allow: Option<Vec<String>>,
+    pub cost_overrides: Option<BTreeMap<String, Pricing>>,
 }
 
 /// CLI-provided overrides (`--model`, `--base-url`).
@@ -97,9 +115,13 @@ impl Default for Config {
             model: "openrouter/auto".to_string(),
             base_url: "https://openrouter.ai/api/v1".to_string(),
             max_context_tokens: 120_000,
+            max_output_tokens: 16_384,
+            compact_at_percent: 92,
+            hooks: BTreeMap::new(),
             permissions: PermissionsConfig::default(),
             review_enabled: true,
             mcp_servers: Vec::new(),
+            cost_overrides: BTreeMap::new(),
         }
     }
 }
@@ -238,6 +260,15 @@ impl Config {
         }
         Ok(cfg)
     }
+
+    /// Resolved pricing for a model: exact-match override first, then the
+    /// built-in substring table; `None` when truly unknown.
+    pub fn pricing_for(&self, model: &str) -> Option<Pricing> {
+        if let Some(p) = self.cost_overrides.get(model) {
+            return Some(*p);
+        }
+        crate::context::cost::for_model(model)
+    }
 }
 
 /// Path of the project-level config: `<project>/.harness/config.toml`.
@@ -274,12 +305,7 @@ pub fn persist_bash_rule(project_root: &std::path::Path, rule: &str) -> std::io:
     perms.allow = Some(allow);
     fmt.permissions = Some(perms);
 
-    let serialized = toml::to_string_pretty(&fmt)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    // Round-tripping drops comments/formatting; we re-add our standard
-    // header so the file is always self-describing.
-    let body = format!("{PROJECT_CONFIG_HEADER}{serialized}");
-    std::fs::write(&path, body)?;
+    write_project_config(&path, &fmt)?;
     Ok(path)
 }
 
@@ -320,12 +346,111 @@ pub fn remove_bash_rule(project_root: &std::path::Path, rule: &str) -> std::io::
             list.retain(|r| r != rule);
         }
     }
-    let body = format!(
-        "{PROJECT_CONFIG_HEADER}{}",
-        toml::to_string_pretty(&fmt)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e),)?
-    );
-    std::fs::write(&path, body)
+    write_project_config(&path, &fmt)
+}
+
+/// Scalar settings editable from the Settings → General tab.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct GeneralOverrides {
+    pub model: Option<String>,
+    pub base_url: Option<String>,
+    pub max_context_tokens: Option<u32>,
+    pub review_enabled: Option<bool>,
+}
+
+/// Persist general settings into `<project>/.harness/config.toml`,
+/// preserving every other section. `None` fields are left untouched.
+pub fn persist_general(
+    project_root: &std::path::Path,
+    over: &GeneralOverrides,
+) -> std::io::Result<PathBuf> {
+    if over.model.is_none()
+        && over.base_url.is_none()
+        && over.max_context_tokens.is_none()
+        && over.review_enabled.is_none()
+    {
+        return Ok(project_config_path(project_root));
+    }
+    let path = project_config_path(project_root);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut fmt: FileFormat = toml::from_str(&text).map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("cannot parse {}: {e}", path.display()),
+        )
+    })?;
+    if let Some(m) = &over.model {
+        fmt.model = Some(m.clone());
+    }
+    if let Some(b) = &over.base_url {
+        fmt.base_url = Some(b.clone());
+    }
+    if let Some(t) = over.max_context_tokens {
+        fmt.max_context_tokens = Some(t);
+    }
+    if let Some(r) = over.review_enabled {
+        fmt.review = Some(r);
+    }
+    write_project_config(&path, &fmt)?;
+    Ok(path)
+}
+
+/// Persist a per-model pricing override into
+/// `<project>/.harness/config.toml` under `[cost.overrides]`.
+pub fn set_cost_override(
+    project_root: &std::path::Path,
+    model: &str,
+    pricing: Pricing,
+) -> std::io::Result<PathBuf> {
+    let path = project_config_path(project_root);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut fmt: FileFormat = toml::from_str(&text).map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("cannot parse {}: {e}", path.display()),
+        )
+    })?;
+    let mut section = fmt.cost.take().unwrap_or_default();
+    section.overrides.insert(model.to_string(), pricing);
+    fmt.cost = Some(section);
+    write_project_config(&path, &fmt)?;
+    Ok(path)
+}
+
+/// Remove a per-model pricing override (idempotent).
+pub fn remove_cost_override(project_root: &std::path::Path, model: &str) -> std::io::Result<()> {
+    let path = project_config_path(project_root);
+    let text = match std::fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e),
+    };
+    let mut fmt: FileFormat = toml::from_str(&text).map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("cannot parse {}: {e}", path.display()),
+        )
+    })?;
+    if let Some(mut cost) = fmt.cost.take() {
+        cost.overrides.remove(model);
+        fmt.cost = Some(cost);
+    }
+    write_project_config(&path, &fmt)
+}
+
+fn write_project_config(path: &std::path::Path, fmt: &FileFormat) -> std::io::Result<()> {
+    let serialized = toml::to_string_pretty(fmt)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    // Round-tripping drops comments/formatting; we re-add our standard
+    // header so the file is always self-describing.
+    let body = format!("{PROJECT_CONFIG_HEADER}{serialized}");
+    std::fs::write(path, body)
 }
 
 /// Path of the global config file, honoring `HARNESS_CONFIG`.
@@ -341,12 +466,16 @@ pub fn global_config_path(env: &EnvVars) -> Option<PathBuf> {
 /// TOML shape accepted inside a config file.
 #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
 struct FileFormat {
+    hooks: Option<BTreeMap<String, String>>,
     model: Option<String>,
     base_url: Option<String>,
     max_context_tokens: Option<u32>,
+    max_output_tokens: Option<u32>,
+    compact_at_percent: Option<u8>,
     review: Option<bool>,
     permissions: Option<FilePermissions>,
     mcp: Option<McpFileSection>,
+    cost: Option<CostFileSection>,
 }
 
 #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
@@ -367,14 +496,24 @@ struct FilePermissions {
     allow: Option<Vec<String>>,
 }
 
+#[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
+struct CostFileSection {
+    #[serde(default)]
+    overrides: BTreeMap<String, Pricing>,
+}
+
 fn parse_partial(text: &str) -> Result<PartialConfig, toml::de::Error> {
     let f: FileFormat = toml::from_str(text)?;
     Ok(PartialConfig {
+        hooks: f.hooks,
         model: f.model,
         base_url: f.base_url,
         max_context_tokens: f.max_context_tokens,
+        max_output_tokens: f.max_output_tokens,
+        compact_at_percent: f.compact_at_percent,
         review_enabled: f.review,
         permissions_allow: f.permissions.and_then(|p| p.allow),
+        cost_overrides: f.cost.map(|c| c.overrides),
         mcp_servers: f.mcp.map(|m| {
             m.servers
                 .into_iter()
@@ -389,6 +528,9 @@ fn parse_partial(text: &str) -> Result<PartialConfig, toml::de::Error> {
 }
 
 fn apply(cfg: &mut Config, partial: &PartialConfig) {
+    if let Some(v) = &partial.hooks {
+        cfg.hooks = v.clone();
+    }
     if let Some(v) = &partial.model {
         cfg.model = v.clone();
     }
@@ -397,6 +539,13 @@ fn apply(cfg: &mut Config, partial: &PartialConfig) {
     }
     if let Some(v) = partial.max_context_tokens {
         cfg.max_context_tokens = v;
+    }
+    if let Some(v) = partial.max_output_tokens {
+        // Guard against absurd values that defeat the purpose.
+        cfg.max_output_tokens = v.clamp(256, 200_000);
+    }
+    if let Some(v) = partial.compact_at_percent {
+        cfg.compact_at_percent = v.clamp(80, 99);
     }
     if let Some(v) = partial.review_enabled {
         cfg.review_enabled = v;
@@ -418,6 +567,12 @@ fn apply(cfg: &mut Config, partial: &PartialConfig) {
     }
     if let Some(v) = &partial.permissions_allow {
         cfg.permissions.allow = v.clone();
+    }
+    if let Some(v) = &partial.cost_overrides {
+        // per-model overrides; later layers win per model id
+        for (model, pricing) in v {
+            cfg.cost_overrides.insert(model.clone(), *pricing);
+        }
     }
 }
 
@@ -577,5 +732,132 @@ base_url = "http://from-file/v1/"
         )
         .unwrap();
         assert_eq!(cfg.base_url, "https://openrouter.ai/api/v1");
+    }
+
+    #[test]
+    fn cost_overrides_merge_later_layers_win_and_pricing_prefers_them() {
+        let global = r#"
+[cost.overrides]
+"my/model" = { usd_per_mtok_input = 1.0, usd_per_mtok_output = 2.0 }
+"#;
+        let project = r#"
+[cost.overrides]
+"my/model" = { usd_per_mtok_input = 9.0, usd_per_mtok_output = 9.5 }
+"other/m" = { usd_per_mtok_input = 0.5, usd_per_mtok_output = 1.5 }
+"#;
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = Config::layer_all(
+            Some(std::path::Path::new("/tmp/g.toml")),
+            Some(global),
+            Some(&tmp.path().join(".harness/config.toml")),
+            Some(project),
+            &env(None, None),
+            &CliOverrides::default(),
+        )
+        .unwrap();
+        let p = cfg.pricing_for("my/model").unwrap();
+        assert_eq!((p.usd_per_mtok_input, p.usd_per_mtok_output), (9.0, 9.5));
+        // exact override beats the built-in substring table
+        let built_in = crate::context::cost::for_model("claude-sonnet-4").unwrap();
+        std::fs::create_dir_all(tmp.path().join(".harness")).unwrap();
+        set_cost_override(
+            tmp.path(),
+            "anthropic/claude-sonnet-4",
+            Pricing {
+                usd_per_mtok_input: 42.0,
+                usd_per_mtok_output: 43.0,
+            },
+        )
+        .unwrap();
+        let reloaded = Config::load(&CliOverrides::default(), Some(tmp.path())).unwrap();
+        let over = reloaded.pricing_for("anthropic/claude-sonnet-4").unwrap();
+        assert_eq!(over.usd_per_mtok_input, 42.0);
+        assert_ne!(over, built_in);
+        // unknown model without override stays unknown
+        assert!(reloaded.pricing_for("nope/model").is_none());
+    }
+
+    #[test]
+    fn cost_override_remove_is_idempotent() {
+        let tmp = tempfile::tempdir().unwrap();
+        remove_cost_override(tmp.path(), "x/y").unwrap(); // missing file ok
+        set_cost_override(
+            tmp.path(),
+            "x/y",
+            Pricing {
+                usd_per_mtok_input: 1.0,
+                usd_per_mtok_output: 2.0,
+            },
+        )
+        .unwrap();
+        remove_cost_override(tmp.path(), "x/y").unwrap();
+        remove_cost_override(tmp.path(), "x/y").unwrap(); // absent rule ok
+        let cfg = Config::load(&CliOverrides::default(), Some(tmp.path())).unwrap();
+        assert!(cfg.cost_overrides.is_empty());
+    }
+
+    #[test]
+    fn persist_general_writes_scalars_and_preserves_other_sections() {
+        let tmp = tempfile::tempdir().unwrap();
+        persist_bash_rule(tmp.path(), "cargo test*").unwrap();
+        set_cost_override(
+            tmp.path(),
+            "m/x",
+            Pricing {
+                usd_per_mtok_input: 1.0,
+                usd_per_mtok_output: 2.0,
+            },
+        )
+        .unwrap();
+
+        persist_general(
+            tmp.path(),
+            &GeneralOverrides {
+                model: Some("z/a".into()),
+                base_url: None,
+                max_context_tokens: Some(64_000),
+                review_enabled: Some(false),
+            },
+        )
+        .unwrap();
+
+        let cfg = Config::load(&CliOverrides::default(), Some(tmp.path())).unwrap();
+        assert_eq!(cfg.model, "z/a");
+        assert_eq!(cfg.max_context_tokens, 64_000);
+        assert!(!cfg.review_enabled);
+        // untouched sections survived the rewrite
+        assert_eq!(cfg.base_url, "https://openrouter.ai/api/v1");
+        assert_eq!(cfg.permissions.allow, vec!["cargo test*"]);
+        assert!(cfg.cost_overrides.contains_key("m/x"));
+        // empty overrides is a no-op
+        persist_general(tmp.path(), &GeneralOverrides::default()).unwrap();
+    }
+
+    #[test]
+    fn malformed_project_config_blocks_general_and_cost_writes() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".harness")).unwrap();
+        std::fs::write(tmp.path().join(".harness/config.toml"), "model = ").unwrap();
+        assert!(
+            persist_general(
+                tmp.path(),
+                &GeneralOverrides {
+                    model: Some("m".into()),
+                    ..Default::default()
+                }
+            )
+            .is_err()
+        );
+        assert!(
+            set_cost_override(
+                tmp.path(),
+                "m",
+                Pricing {
+                    usd_per_mtok_input: 1.0,
+                    usd_per_mtok_output: 1.0
+                }
+            )
+            .is_err()
+        );
     }
 }
