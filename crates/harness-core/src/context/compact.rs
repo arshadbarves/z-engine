@@ -19,7 +19,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use crate::provider::{ChatMessage, ContentPart};
+use harness_provider::{ChatMessage, ContentPart};
 
 /// How many trailing messages stay verbatim (L2 window).
 pub const DEFAULT_KEEP_RECENT: usize = 12;
@@ -206,7 +206,7 @@ pub fn compact(messages: &[ChatMessage], keep_recent: usize, tmp_dir: &Path) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::provider::{FunctionCall, ToolCall};
+    use harness_provider::{FunctionCall, ToolCall};
 
     fn tool_msg(id: &str, content: &str) -> ChatMessage {
         ChatMessage::Tool {

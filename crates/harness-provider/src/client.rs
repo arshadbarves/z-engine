@@ -280,7 +280,7 @@ mod tests {
     /// not fail fast. Regression guard for the retry classifier.
     #[tokio::test]
     async fn connect_refused_backs_off_then_errors() {
-        use crate::provider::{ChatMessage, ChatRequest};
+        use crate::{ChatMessage, ChatRequest};
         let c = Client::new("http://127.0.0.1:9", Some("k".into())).unwrap();
         let req = ChatRequest::new("m", vec![ChatMessage::user("hi")]);
         let abort = Arc::new(std::sync::atomic::AtomicBool::new(false));

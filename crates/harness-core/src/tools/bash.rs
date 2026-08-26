@@ -1,15 +1,15 @@
 //! `bash` — persistent-shell command execution with approval gating,
 //! timeouts, an environment allowlist, and head+tail output truncation.
 
-use std::path::Path;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use serde_json::{Value, json};
-use tokio::io::{AsyncBufReadExt, AsyncReadExt};
 
+use super::bash_script::{build_script, extract_marker};
+use super::proc_helpers::{drain, drain_with_callback, kill_tree};
 use super::{Tool, ToolCtx, ToolError, ToolOutput, truncate_with_tempfile};
 
 /// Only these variables pass through to spawned shells (spec §7).
@@ -18,9 +18,6 @@ const ENV_ALLOWLIST: &[&str] = &[
 ];
 const DEFAULT_TIMEOUT_SECS: u64 = 60;
 const MAX_TIMEOUT_SECS: u64 = 600;
-/// Marker byte (SOH) delimiting the embedded cwd probe on stderr.
-const MARKER: char = '\u{01}';
-const MARKER_TAG: &str = "HARNESS_CWD:";
 const ABORT_POLL: Duration = Duration::from_millis(150);
 
 #[derive(Debug)]
@@ -214,101 +211,11 @@ impl Tool for BashTool {
     }
 }
 
-/// Kill the child and everything it spawned: the child leads its own
-/// process group (set at spawn), so a group SIGKILL reaches grandchildren.
-fn kill_tree(child: &mut tokio::process::Child) {
-    #[cfg(unix)]
-    if let Some(pid) = child.id() {
-        // `kill -9 -PGID` — safe-Rust path via the system kill binary,
-        // keeping the workspace-wide `unsafe_code = "forbid"` intact.
-        let _ = std::process::Command::new("kill")
-            .arg("-9")
-            .arg(format!("-{pid}"))
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-    }
-    let _ = child.start_kill();
-}
-
-fn drain<R>(pipe: Option<R>) -> tokio::task::JoinHandle<String>
-where
-    R: tokio::io::AsyncRead + Unpin + Send + 'static,
-{
-    tokio::spawn(async move {
-        let mut buf = Vec::new();
-        if let Some(mut p) = pipe {
-            let _ = p.read_to_end(&mut buf).await;
-        }
-        String::from_utf8_lossy(&buf).into_owned()
-    })
-}
-
-/// Read a pipe line-by-line, call `on_line` for each complete line, and
-/// return the full accumulated text.
-fn drain_with_callback<R>(
-    pipe: Option<R>,
-    mut on_line: impl FnMut(String) + Send + 'static,
-) -> tokio::task::JoinHandle<String>
-where
-    R: tokio::io::AsyncRead + Unpin + Send + 'static,
-{
-    tokio::spawn(async move {
-        let mut all = Vec::new();
-        if let Some(p) = pipe {
-            let mut reader = tokio::io::BufReader::new(p);
-            let mut line = String::new();
-            loop {
-                line.clear();
-                match reader.read_line(&mut line).await {
-                    Ok(0) => break,
-                    Ok(_) => {
-                        all.extend_from_slice(line.as_bytes());
-                        on_line(line.trim_end_matches('\n').to_string());
-                    }
-                    Err(_) => break,
-                }
-            }
-        }
-        String::from_utf8_lossy(&all).into_owned()
-    })
-}
-
-fn build_script(start_cwd: &Path, command: &str) -> String {
-    format!(
-        "cd {} || true\n{}\nstatus=$?\nprintf '\\{}{}%s\\{}' \"$PWD\" >&2\nexit $status\n",
-        shell_quote(&start_cwd.to_string_lossy()),
-        command,
-        MARKER as u32,
-        MARKER_TAG,
-        MARKER as u32
-    )
-}
-
-fn shell_quote(s: &str) -> String {
-    format!("'{}'", s.replace('\'', r"'\''"))
-}
-
-/// Remove the trailing cwd marker from `stderr`, returning the recorded dir.
-fn extract_marker(stderr: &mut String) -> Option<std::path::PathBuf> {
-    let needle = format!("{MARKER}{MARKER_TAG}");
-    let start = stderr.find(&needle)?;
-    let rest = &stderr[start + needle.len()..];
-    let end = rest.find(MARKER)?;
-    let dir_text = rest[..end].to_string();
-    // Cut everything from the marker onward, trimming the newline before it.
-    *stderr = stderr[..start].trim_end_matches('\n').to_string();
-    if dir_text.is_empty() {
-        None
-    } else {
-        Some(std::path::PathBuf::from(dir_text))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::perms::PolicyEngine;
+    use std::path::Path;
     use std::sync::atomic::Ordering;
     use std::sync::{Arc, Mutex};
 
@@ -434,23 +341,5 @@ mod tests {
         assert_eq!(got.len(), 2);
         assert_eq!(got[0], "line-one\n");
         assert_eq!(got[1], "line-two\n");
-    }
-
-    #[test]
-    fn marker_extraction_roundtrip() {
-        let mut stderr = format!("some noise\n{MARKER}{MARKER_TAG}/tmp/x/y{MARKER}\n");
-        let dir = extract_marker(&mut stderr);
-        assert_eq!(dir, Some(std::path::PathBuf::from("/tmp/x/y")));
-        assert_eq!(stderr, "some noise");
-
-        let mut plain = "just errors".to_string();
-        assert_eq!(extract_marker(&mut plain), None);
-        assert_eq!(plain, "just errors");
-    }
-
-    #[test]
-    fn shell_quote_escapes_single_quotes() {
-        assert_eq!(shell_quote("/tmp/a b"), "'/tmp/a b'");
-        assert_eq!(shell_quote("it's"), r"'it'\''s'");
     }
 }

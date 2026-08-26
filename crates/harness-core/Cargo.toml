@@ -1,6 +1,6 @@
 [package]
 name = "harness-core"
-description = "Agent brain: provider client, loop, tools, permissions, context — no UI deps"
+description = "Agent brain: loop, tools, permissions, context, sessions — no UI deps"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,6 +8,7 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+harness-provider = { path = "../harness-provider" }
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true

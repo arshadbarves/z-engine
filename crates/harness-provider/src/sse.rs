@@ -116,12 +116,11 @@ impl SseDecoder {
 mod tests {
     use super::*;
 
-    const TEXT_SSE: &str = include_str!("../../tests/fixtures/sse/text.sse");
-    const TOOL_SINGLE_SSE: &str = include_str!("../../tests/fixtures/sse/tool_single.sse");
-    const TOOL_MULTI_SSE: &str =
-        include_str!("../../tests/fixtures/sse/tool_multi_interleaved.sse");
-    const USAGE_FINAL_SSE: &str = include_str!("../../tests/fixtures/sse/usage_final.sse");
-    const KEEPALIVE_SSE: &str = include_str!("../../tests/fixtures/sse/keepalive_comments.sse");
+    const TEXT_SSE: &str = include_str!("../tests/fixtures/sse/text.sse");
+    const TOOL_SINGLE_SSE: &str = include_str!("../tests/fixtures/sse/tool_single.sse");
+    const TOOL_MULTI_SSE: &str = include_str!("../tests/fixtures/sse/tool_multi_interleaved.sse");
+    const USAGE_FINAL_SSE: &str = include_str!("../tests/fixtures/sse/usage_final.sse");
+    const KEEPALIVE_SSE: &str = include_str!("../tests/fixtures/sse/keepalive_comments.sse");
 
     fn decode_all(input: &str) -> Vec<StreamEvent> {
         let mut dec = SseDecoder::new();

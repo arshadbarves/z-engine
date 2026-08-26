@@ -172,14 +172,14 @@ pub fn list_sessions(sessions_dir: &Path) -> Vec<SessionSummary> {
 /// Working state rebuilt from persisted events.
 #[derive(Debug)]
 pub struct Replayed {
-    pub working: Vec<crate::provider::ChatMessage>,
+    pub working: Vec<harness_provider::ChatMessage>,
     /// Note texts + recorded `update_context_notes` arguments (for L1).
     pub notes_replayed: Vec<String>,
 }
 
 /// Rebuild working-set messages + durable note texts from events.
 pub fn replay(events: &[SessionEvent]) -> Replayed {
-    use crate::provider::{ChatMessage, FunctionCall, ToolCall};
+    use harness_provider::{ChatMessage, FunctionCall, ToolCall};
 
     let mut working: Vec<ChatMessage> = Vec::new();
     let mut notes_replayed = Vec::new();
@@ -313,7 +313,7 @@ mod tests {
         assert_eq!(r.working.len(), 3);
         assert!(matches!(
             &r.working[1],
-            crate::provider::ChatMessage::Assistant { tool_calls, .. } if tool_calls.len() == 1
+            harness_provider::ChatMessage::Assistant { tool_calls, .. } if tool_calls.len() == 1
         ));
         assert!(r.notes_replayed.contains(&"FACTS: something".to_string()));
     }
@@ -339,7 +339,7 @@ mod tests {
         assert_eq!(r.working.len(), 1);
         assert!(matches!(
             &r.working[0],
-            crate::provider::ChatMessage::User { .. }
+            harness_provider::ChatMessage::User { .. }
         ));
     }
 

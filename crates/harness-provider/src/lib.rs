@@ -17,7 +17,7 @@ pub use types::{
 mod tests {
     use super::*;
 
-    const TEXT_SSE: &str = include_str!("../../tests/fixtures/sse/text.sse");
+    const TEXT_SSE: &str = include_str!("../tests/fixtures/sse/text.sse");
 
     /// End-to-end through decoder: request → events for the canonical
     /// text fixture (integration-level sanity at unit cost).

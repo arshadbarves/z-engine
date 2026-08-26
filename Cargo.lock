@@ -1456,6 +1456,7 @@ dependencies = [
  "dirs",
  "futures",
  "globset",
+ "harness-provider",
  "ignore",
  "regex",
  "reqwest 0.12.28",
@@ -1488,6 +1489,20 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "harness-provider"
+version = "1.1.0"
+dependencies = [
+ "futures",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

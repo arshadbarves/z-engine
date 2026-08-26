@@ -101,8 +101,8 @@ impl ToolCallAccumulator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::provider::sse::SseDecoder;
-    use crate::provider::types::StreamEvent;
+    use crate::sse::SseDecoder;
+    use crate::types::StreamEvent;
 
     fn accumulate_stream(sse: &str) -> Vec<AccumulatedToolCall> {
         let mut dec = SseDecoder::new();
@@ -126,10 +126,9 @@ mod tests {
         acc.finish()
     }
 
-    const TOOL_SINGLE_SSE: &str = include_str!("../../tests/fixtures/sse/tool_single.sse");
-    const TOOL_MULTI_SSE: &str =
-        include_str!("../../tests/fixtures/sse/tool_multi_interleaved.sse");
-    const MALFORMED_SSE: &str = include_str!("../../tests/fixtures/sse/malformed_tool_json.sse");
+    const TOOL_SINGLE_SSE: &str = include_str!("../tests/fixtures/sse/tool_single.sse");
+    const TOOL_MULTI_SSE: &str = include_str!("../tests/fixtures/sse/tool_multi_interleaved.sse");
+    const MALFORMED_SSE: &str = include_str!("../tests/fixtures/sse/malformed_tool_json.sse");
 
     #[test]
     fn single_call_assembles_from_fragments() {

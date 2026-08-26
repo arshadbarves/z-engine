@@ -4,9 +4,16 @@
 //! the on-disk pre-image is stashed here. Rewinding pops the most recent
 //! non-empty turn and restores those files (created files are removed).
 //! Files mutated through `bash` are not tracked — documented limitation.
+//!
+//! The write-back half lives in [`checkpoint_restore`]; `RevertOutcome` is
+//! re-exported here to keep the public path stable.
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+
+use super::checkpoint_restore::restore_files;
+
+pub use super::checkpoint_restore::RevertOutcome;
 
 /// Largest pre-image kept per file; bigger files are skipped entirely
 /// (they stay untracked rather than being half-revertible).
@@ -15,10 +22,10 @@ const MAX_SNAPSHOT_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_TURNS: usize = 50;
 
 #[derive(Debug)]
-struct TouchedFile {
-    path: PathBuf,
+pub(super) struct TouchedFile {
+    pub(super) path: PathBuf,
     /// None = the file did not exist before the turn (agent created it).
-    original: Option<Vec<u8>>,
+    pub(super) original: Option<Vec<u8>>,
 }
 
 /// One turn's snapshot batch. `id` is globally monotonic across the
@@ -33,15 +40,6 @@ struct Turn {
 #[derive(Debug, Default)]
 pub struct CheckpointStore {
     turns: Mutex<Vec<Turn>>,
-}
-
-#[derive(Debug, Default)]
-pub struct RevertOutcome {
-    pub restored: Vec<PathBuf>,
-    pub errors: Vec<String>,
-    /// Some turns in `[keep..]` had been evicted before this revert, so
-    /// their pre-images could not be restored (best-effort rewind).
-    pub evicted_gaps: bool,
 }
 
 impl CheckpointStore {
@@ -156,56 +154,12 @@ impl CheckpointStore {
     }
 }
 
-/// Write back one turn's pre-images. `None` originals mean the agent
-/// created the file, so removal restores "never existed".
-fn restore_files(files: &[TouchedFile], out: &mut RevertOutcome) {
-    for f in files {
-        match &f.original {
-            Some(bytes) => {
-                if let Some(parent) = f.path.parent() {
-                    let _ = std::fs::create_dir_all(parent);
-                }
-                if let Err(e) = std::fs::write(&f.path, bytes) {
-                    out.errors.push(format!("{}: {e}", f.path.display()));
-                } else {
-                    out.restored.push(f.path.clone());
-                }
-            }
-            None => match std::fs::remove_file(&f.path) {
-                Ok(()) => out.restored.push(f.path.clone()),
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                    out.restored.push(f.path.clone());
-                }
-                Err(e) => out.errors.push(format!("{}: {e}", f.path.display())),
-            },
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn store() -> CheckpointStore {
         CheckpointStore::default()
-    }
-
-    #[test]
-    fn snapshot_then_revert_restores_content() {
-        let tmp = tempfile::tempdir().unwrap();
-        let p = tmp.path().join("f.txt");
-        std::fs::write(&p, "v1").unwrap();
-
-        let store = store();
-        store.begin_turn();
-        store.snapshot_file(&p);
-        std::fs::write(&p, "v2 by agent").unwrap();
-
-        let out = store.revert_last_turn();
-        assert_eq!(out.restored, vec![p.clone()]);
-        assert!(out.errors.is_empty());
-        assert_eq!(std::fs::read_to_string(&p).unwrap(), "v1");
-        assert_eq!(store.pending_turns(), 0);
     }
 
     #[test]
@@ -223,21 +177,6 @@ mod tests {
 
         store.revert_last_turn();
         assert_eq!(std::fs::read_to_string(&p).unwrap(), "original");
-    }
-
-    #[test]
-    fn created_files_are_removed_on_revert() {
-        let tmp = tempfile::tempdir().unwrap();
-        let p = tmp.path().join("new.txt");
-
-        let store = store();
-        store.begin_turn();
-        store.snapshot_file(&p); // did not exist
-        std::fs::write(&p, "agent-made").unwrap();
-
-        let out = store.revert_last_turn();
-        assert_eq!(out.restored, vec![p.clone()]);
-        assert!(!p.exists());
     }
 
     #[test]

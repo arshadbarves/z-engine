@@ -2,6 +2,7 @@
 exclude = ["tmp"]
 resolver = "3"
 members = [
+    "crates/harness-provider",
     "crates/harness-core",
     "crates/harness-gui/src-tauri",
     "crates/harness-tui",
