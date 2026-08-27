@@ -108,7 +108,7 @@ fn main() {
             let (handle, ev_rx) = spawn_with_recorder(lc, None, None);
             {
                 let st = app.state::<GuiState>();
-                *st.handle.lock().unwrap() = Some(handle);
+                let _ = st.insert_loop("boot".into(), handle);
                 *st.ctx.lock().unwrap() = Some(AppCtx {
                     project_root: project_root.clone(),
                 });
@@ -131,7 +131,7 @@ fn main() {
             .build()
             .map_err(|e| e.to_string())?;
 
-            forward_events(ev_rx, window);
+            forward_events(ev_rx, window, "boot".into());
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -141,11 +141,7 @@ fn main() {
         // outlive the closed window as orphans.
         if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
             if let Some(st) = _app_handle.try_state::<GuiState>() {
-                if let Ok(mut guard) = st.handle.lock() {
-                    if let Some(h) = guard.take() {
-                        h.shutdown();
-                    }
-                }
+                st.shutdown_all();
             }
         }
     });

@@ -1,39 +1,43 @@
-import { Command, GitCompare, Layers } from "lucide-react";
+import { ArrowDown, GitCompare, PanelLeft, Search } from "lucide-react";
+import { ContextMeter } from "./ContextMeter";
 
 export function ChatHeader({
   title,
   titleHint,
-  busy,
   diffOpen,
+  sidebarOpen,
+  onToggleSidebar,
   onPalette,
-  onCompact,
   onToggleDiff,
 }: {
   title: string;
   titleHint?: string;
-  busy: boolean;
   diffOpen: boolean;
+  sidebarOpen: boolean;
+  onToggleSidebar: () => void;
   onPalette: () => void;
-  onCompact: () => void;
   onToggleDiff: () => void;
 }) {
   return (
     <header className="chat-head">
-      <div className="chat-title" title={titleHint}>
-        {title}
+      <div className="head-left">
+        <button
+          type="button"
+          className="icon-btn"
+          title={sidebarOpen ? "Hide sidebar (⌘B)" : "Show sidebar (⌘B)"}
+          onClick={onToggleSidebar}
+        >
+          <PanelLeft size={13} />
+        </button>
+        <button type="button" className="icon-btn" title="Search (⌘K)" onClick={onPalette}>
+          <Search size={13} />
+        </button>
+        <div className="chat-title" title={titleHint}>
+          {title}
+        </div>
       </div>
       <div className="head-controls">
-        <button className="icon-btn" title="Command palette (⌘K)" onClick={onPalette}>
-          <Command size={12} />
-        </button>
-        <button
-          className="icon-btn"
-          title="/compact — force context compaction"
-          disabled={busy}
-          onClick={onCompact}
-        >
-          <Layers size={12} />
-        </button>
+        <ContextMeter />
         <button
           className={`icon-btn${diffOpen ? " active" : ""}`}
           title="Review uncommitted git changes vs HEAD"
@@ -43,5 +47,13 @@ export function ChatHeader({
         </button>
       </div>
     </header>
+  );
+}
+
+export function JumpLatest({ onJump }: { onJump: () => void }) {
+  return (
+    <button type="button" className="jump-latest" title="Jump to latest" onClick={onJump}>
+      <ArrowDown size={16} />
+    </button>
   );
 }

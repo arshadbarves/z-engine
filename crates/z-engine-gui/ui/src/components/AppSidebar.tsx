@@ -1,6 +1,7 @@
 import { Plus, Settings } from "lucide-react";
 import { LogoMark } from "./LogoMark";
 import { Sidebar } from "./Sidebar";
+import type { SessionActivity } from "../lib/events";
 import type { SessionEntry } from "../lib/util";
 
 export function AppSidebar({
@@ -8,6 +9,7 @@ export function AppSidebar({
   workspaces,
   activeWorkspace,
   activeUlid,
+  activity,
   version,
   onNewChat,
   onOpen,
@@ -21,9 +23,10 @@ export function AppSidebar({
   workspaces: string[];
   activeWorkspace: string | null;
   activeUlid: string;
+  activity: Record<string, SessionActivity>;
   version?: string;
   onNewChat: () => void;
-  onOpen: (path: string) => void;
+  onOpen: (path: string, projectRoot?: string | null) => void;
   onDelete: (path: string) => void;
   onAddWorkspace: () => void;
   onRemoveWorkspace: (root: string) => void;
@@ -45,6 +48,7 @@ export function AppSidebar({
         workspaces={workspaces}
         activeWorkspace={activeWorkspace}
         activeUlid={activeUlid}
+        activity={activity}
         onOpen={onOpen}
         onDelete={onDelete}
         onAddWorkspace={onAddWorkspace}

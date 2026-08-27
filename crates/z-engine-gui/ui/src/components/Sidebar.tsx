@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight, Folder, MessageSquare, Plus, Search, Trash2 } from "lucide-react";
+import type { SessionActivity } from "../lib/events";
 import { filterSessions, type SessionEntry } from "../lib/util";
 import { wsBasename } from "../lib/workspaces";
 
@@ -8,6 +9,7 @@ function WorkspaceRow({
   active,
   sessions,
   activeUlid,
+  activity,
   onOpen,
   onDelete,
   onActivate,
@@ -17,7 +19,8 @@ function WorkspaceRow({
   active: boolean;
   sessions: SessionEntry[];
   activeUlid: string;
-  onOpen: (path: string) => void;
+  activity: Record<string, SessionActivity>;
+  onOpen: (path: string, projectRoot?: string | null) => void;
   onDelete: (path: string) => void;
   onActivate: (root: string) => void;
   onRemove: (root: string) => void;
@@ -30,6 +33,16 @@ function WorkspaceRow({
   }, [active]);
 
   const items = useMemo(() => sessions.slice(0, 40), [sessions]);
+  // Approval outranks working: a blocked session needs the user's eye first.
+  const projectActivity = useMemo<SessionActivity | null>(() => {
+    let working = false;
+    for (const s of items) {
+      const a = activity[s.ulid];
+      if (a === "approval") return "approval";
+      if (a === "working") working = true;
+    }
+    return working ? "working" : null;
+  }, [items, activity]);
   return (
     <div className={`ws-row${active ? " active" : ""}`}>
       <div
@@ -48,6 +61,17 @@ function WorkspaceRow({
         </span>
         <Folder size={13} />
         <span className="ws-name">{wsBasename(root)}</span>
+        {projectActivity && (
+          <span
+            className={`sess-dot ${projectActivity}`}
+            role="status"
+            aria-label={
+              projectActivity === "approval"
+                ? "Approval needed in this project"
+                : "Generating in this project"
+            }
+          />
+        )}
         <span className="ws-count">{items.length || ""}</span>
         <button
           className="del"
@@ -70,6 +94,7 @@ function WorkspaceRow({
                 key={s.path}
                 s={s}
                 active={s.ulid === activeUlid}
+                state={activity[s.ulid] ?? null}
                 onOpen={onOpen}
                 onDelete={onDelete}
               />
@@ -84,22 +109,31 @@ function WorkspaceRow({
 function SessionRow({
   s,
   active,
+  state,
   onOpen,
   onDelete,
 }: {
   s: SessionEntry;
   active: boolean;
-  onOpen: (path: string) => void;
+  state: SessionActivity | null;
+  onOpen: (path: string, projectRoot?: string | null) => void;
   onDelete: (path: string) => void;
 }) {
   return (
     <div
-      className={`session${active ? " active" : ""}`}
+      className={`session${active ? " active" : ""}${state ? ` ${state}` : ""}`}
       role="button"
       tabIndex={0}
-      title={s.firstUserMsg ?? "(empty)"}
-      onClick={() => onOpen(s.path)}
-      onKeyDown={(e) => e.key === "Enter" && onOpen(s.path)}
+      title={
+        state === "approval"
+          ? `Approval needed — ${s.firstUserMsg ?? "(empty)"}`
+          : (s.firstUserMsg ?? "(empty)")
+      }
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen(s.path, s.projectRoot);
+      }}
+      onKeyDown={(e) => e.key === "Enter" && onOpen(s.path, s.projectRoot)}
     >
       <MessageSquare size={13} className="sess-icon" />
       <div className="sess-preview">{s.firstUserMsg ?? "(empty)"}</div>
@@ -124,6 +158,7 @@ export function Sidebar({
   workspaces,
   activeWorkspace,
   activeUlid,
+  activity,
   onOpen,
   onDelete,
   onAddWorkspace,
@@ -134,7 +169,8 @@ export function Sidebar({
   workspaces: string[];
   activeWorkspace: string | null;
   activeUlid: string;
-  onOpen: (path: string) => void;
+  activity: Record<string, SessionActivity>;
+  onOpen: (path: string, projectRoot?: string | null) => void;
   onDelete: (path: string) => void;
   onAddWorkspace: () => void;
   onRemoveWorkspace: (root: string) => void;
@@ -183,6 +219,7 @@ export function Sidebar({
             active={activeWorkspace === root}
             sessions={byWs.m.get(root) ?? []}
             activeUlid={activeUlid}
+            activity={activity}
             onOpen={onOpen}
             onDelete={onDelete}
             onActivate={onActivateWorkspace}
@@ -206,6 +243,7 @@ export function Sidebar({
                   key={s.path}
                   s={s}
                   active={s.ulid === activeUlid}
+                  state={activity[s.ulid] ?? null}
                   onOpen={onOpen}
                   onDelete={onDelete}
                 />

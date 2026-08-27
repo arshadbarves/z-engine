@@ -1,18 +1,24 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import {
   attachmentStore,
+  beginHydrate,
+  endHydrate,
   handleEvent,
+  hydrateStore,
   replaySession,
   resetForTests,
   resetTranscript,
   resolveApproval,
   sessionStore,
+  setBusy,
   submitLocal,
   tailLines,
+  toastStore,
   transcriptStore,
   usageStore,
   type Msg,
 } from "./events";
+import { shellStore } from "./shellStore";
 
 function msgs(): Msg[] {
   return transcriptStore.getSnapshot();
@@ -165,7 +171,7 @@ describe("tool cards", () => {
     expect(msgs()).toHaveLength(0);
   });
 
-  it("finish without start falls back to a notice card", () => {
+  it("finish without start toasts instead of a transcript row", () => {
     handleEvent({
       type: "toolCallFinished",
       name: "grep",
@@ -173,9 +179,8 @@ describe("tool cards", () => {
       durationMs: 5,
       summary: "no match",
     });
-    const m = msgs()[0];
-    expect(m.kind).toBe("error");
-    expect(m.text).toContain("grep");
+    expect(msgs()).toHaveLength(0);
+    expect(toastStore.getSnapshot().some((t) => t.text.includes("grep"))).toBe(true);
   });
 });
 
@@ -196,6 +201,22 @@ describe("approval", () => {
     expect(m.approvalId).toBe(7);
     expect(m.canPersist).toBe(true);
     expect(m.detailPreview).toContain("@@ -1");
+  });
+
+  it("does not duplicate an approval card with the same id", () => {
+    const ev = {
+      type: "approvalRequired",
+      id: 7,
+      tool: "bash",
+      inputPreview: "ls",
+      suggestedRule: null,
+      detailPreview: null,
+      canPersist: false,
+      bashCommand: "ls",
+    };
+    handleEvent(ev);
+    handleEvent(ev);
+    expect(msgs().filter((m) => m.kind === "approval")).toHaveLength(1);
   });
 });
 
@@ -274,29 +295,45 @@ describe("approval resolution (A3)", () => {
   });
 });
 
-describe("turn markers (A6)", () => {
-  it("turnCompleted pushes ✓ done", () => {
+describe("turn markers", () => {
+  it("turnCompleted leaves a done row in the chat", () => {
+    setBusy(true);
     handleEvent({ type: "turnCompleted", promptTokens: 1, completionTokens: 1 });
-    expect(msgs().some((m) => m.kind === "notice" && m.text.includes("✓ done"))).toBe(true);
+    const row = msgs().find((m) => m.kind === "status");
+    expect(row?.text).toMatch(/^✓ done/);
+    expect(row?.ok).toBe(true);
   });
-  it("turnAborted pushes ■ aborted", () => {
+  it("turnAborted leaves an aborted row, not a toast", () => {
     handleEvent({ type: "turnAborted" });
-    expect(msgs().some((m) => m.kind === "notice" && m.text.includes("■ aborted"))).toBe(true);
+    expect(msgs().some((m) => m.kind === "status" && m.text.includes("aborted"))).toBe(true);
+    expect(toastStore.getSnapshot().some((t) => t.text.toLowerCase().includes("abort"))).toBe(
+      false,
+    );
+  });
+});
+
+describe("hydrate store", () => {
+  it("is true between beginHydrate and endHydrate", () => {
+    expect(hydrateStore.getSnapshot()).toBe(false);
+    const gen = beginHydrate();
+    expect(hydrateStore.getSnapshot()).toBe(true);
+    endHydrate(gen);
+    expect(hydrateStore.getSnapshot()).toBe(false);
   });
 });
 
 describe("status note routing (A5)", () => {
-  it("unknown notes become inline notices, not toasts", () => {
+  it("unknown notes become toasts, not transcript rows", () => {
     handleEvent({ type: "statusNote", text: "reviewer: looks good" });
-    const m = msgs()[0];
-    expect(m.kind).toBe("notice");
-    expect(m.text).toBe("reviewer: looks good");
+    expect(msgs()).toHaveLength(0);
+    expect(toastStore.getSnapshot().some((t) => t.text === "reviewer: looks good")).toBe(true);
   });
-  it("shell echoes and context-pressure events stay inline", () => {
+  it("shell echoes go to the terminal overlay, context pressure toasts", () => {
     handleEvent({ type: "statusNote", text: "$ ls" });
     handleEvent({ type: "statusNote", text: "context at 95% of budget" });
-    expect(msgs().map((m) => m.text)).toEqual(["$ ls", "context at 95% of budget"]);
-    expect(msgs()).toHaveLength(2); // durable transcript notices, no toast
+    expect(msgs()).toHaveLength(0);
+    expect(shellStore.getSnapshot().entries.at(-1)?.lines).toContain("ls");
+    expect(toastStore.getSnapshot().some((t) => t.text.startsWith("context at "))).toBe(true);
   });
 });
 
@@ -316,14 +353,13 @@ describe("session replay", () => {
       { type: "tool_result", tool_call_id: "t1", content: "--- stdout ---\nline" },
       { type: "note", text: "compacted" },
     ]);
-    expect(msgs().map((m) => m.kind)).toEqual(["user", "assistant", "tool", "notice"]);
+    expect(msgs().map((m) => m.kind)).toEqual(["user", "assistant", "tool"]);
     const tool = msgs()[2];
     expect(tool.toolName).toBe("read_file");
     expect(tool.preview).toBe("Cargo.toml");
     expect(tool.streaming).toBe(false);
     expect(tool.summary).toContain("line");
     expect(tool.output).toContain("line");
-    expect(msgs()[3].text).toBe("compacted");
   });
 
   it("regression: camelCase tags match nothing (serde emits snake_case)", () => {
@@ -374,5 +410,31 @@ describe("attachments (B)", () => {
   it("sessionChanged records the active session ulid", () => {
     handleEvent({ type: "sessionChanged", ulid: "01ABC" });
     expect(sessionStore.getSnapshot()).toBe("01ABC");
+  });
+});
+
+describe("session hydrate lock", () => {
+  it("swallows turnAborted so a swap cannot toast over the restored chat", () => {
+    replaySession([{ type: "user_msg", text: "kept" }]);
+    beginHydrate();
+    handleEvent({ type: "turnAborted" });
+    handleEvent({ type: "tokenDelta", text: "stale" });
+    expect(msgs().map((m) => m.text)).toEqual(["kept"]);
+    expect(toastStore.getSnapshot().some((t) => t.text.toLowerCase().includes("abort"))).toBe(
+      false,
+    );
+    endHydrate();
+  });
+
+  it("still records sessionChanged while locked", () => {
+    beginHydrate();
+    handleEvent({ type: "sessionChanged", ulid: "01NEW" });
+    expect(sessionStore.getSnapshot()).toBe("01NEW");
+    endHydrate();
+  });
+
+  it("replays attached images on user_msg", () => {
+    replaySession([{ type: "user_msg", text: "see this", images: ["data:image/png;base64,xx"] }]);
+    expect(msgs()[0].images).toEqual(["data:image/png;base64,xx"]);
   });
 });

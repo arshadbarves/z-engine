@@ -109,7 +109,7 @@ pub enum ConfigError {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            model: "openrouter/auto".to_string(),
+            model: "openrouter/free".to_string(),
             base_url: "https://openrouter.ai/api/v1".to_string(),
             max_context_tokens: 120_000,
             max_output_tokens: 16_384,

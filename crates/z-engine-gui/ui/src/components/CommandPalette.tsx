@@ -49,7 +49,7 @@ export function CommandPalette({
   workspaces: string[];
   activeWorkspace: string | null;
   actions: PaletteItem[];
-  onOpenSession: (path: string) => void;
+  onOpenSession: (path: string, projectRoot?: string | null) => void;
   onActivateWorkspace: (root: string) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -63,7 +63,7 @@ export function CommandPalette({
       group: "Sessions",
       // Route through openSession (not bare startSession) so the
       // transcript replays into the chat area.
-      run: () => onOpenSession(s.path),
+      run: () => onOpenSession(s.path, s.projectRoot),
     }));
     const wsItems: PaletteItem[] = workspaces.map((root) => ({
       label: `Workspace · ${wsBasename(root)}`,

@@ -2,10 +2,10 @@ import { invoke } from "@tauri-apps/api/core";
 
 export { invoke };
 
-export const submit = (text: string, images: string[] = []) =>
-  invoke("submit", { text, images });
+export const submit = (text: string, images: string[] = [], sessionId?: string) =>
+  invoke("submit", { text, images, sessionId: sessionId ?? null });
 
-export const abort = () => invoke("abort");
+export const abort = (sessionId?: string) => invoke("abort", { sessionId: sessionId ?? null });
 export const compact = () => invoke("compact");
 export const notes = () => invoke("notes");
 export const setMode = (mode: string) => invoke("set_mode", { mode });
@@ -18,8 +18,14 @@ export const approveWithRule = (
   decision: "once" | "session" | "persist",
   rule: string,
 ) => invoke("approve_with_rule", { id, decision, rule });
+export interface StartSessionResult {
+  ulid: string;
+  events: unknown[];
+  alreadyLive?: boolean;
+}
+
 export const startSession = (resumePath: string | null, root?: string | null) =>
-  invoke("start_session", { resumePath, root });
+  invoke<StartSessionResult>("start_session", { resumePath, root });
 export const listSessions = () => invoke("list_sessions");
 export const deleteSession = (path: string) => invoke("delete_session", { path });
 

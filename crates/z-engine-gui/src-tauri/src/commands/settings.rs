@@ -5,11 +5,7 @@ use z_engine_core::config::Config;
 
 #[tauri::command]
 pub(crate) fn set_model(model: String, state: tauri::State<'_, GuiState>) -> Result<(), String> {
-    let guard = state.handle.lock().map_err(|_| "state poisoned")?;
-    guard
-        .as_ref()
-        .ok_or("agent not started")?
-        .set_model(model.clone());
+    state.handle_for(None)?.set_model(model.clone());
     *state.model.lock().map_err(|_| "state poisoned")? = model;
     Ok(())
 }
@@ -90,7 +86,7 @@ pub(crate) fn save_general(
     z_engine_core::config::persist_general(&ctx.project_root, &over).map_err(|e| e.to_string())?;
 
     if let Some(m) = model {
-        if let Some(h) = state.handle.lock().map_err(|_| "state poisoned")?.as_ref() {
+        if let Ok(h) = state.handle_for(None) {
             h.set_model(m.clone());
         }
         *state.model.lock().map_err(|_| "state poisoned")? = m;

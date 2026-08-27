@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { diffForFile, listChangedFiles, type ChangedFile } from "../lib/commands";
+import { looksLikeDiff } from "../lib/diffParse";
+import { DiffView } from "./DiffView";
 
 /** Codex-style review panel: working-tree changes vs HEAD, with a
  * unified diff per file (full content for untracked files). */
@@ -53,9 +55,14 @@ export function DiffPanel({ onClose }: { onClose: () => void }) {
               <span className={`badge ${f.status}`}>{f.status}</span>
               <span className="diff-path">{f.path}</span>
             </button>
-            {openPath === f.path && (
-              <pre className="diff-text">{diff || "…"}</pre>
-            )}
+            {openPath === f.path &&
+              (diff === "" ? (
+                <pre className="diff-text">…</pre>
+              ) : looksLikeDiff(diff) ? (
+                <DiffView text={diff} />
+              ) : (
+                <pre className="diff-text">{diff}</pre>
+              ))}
           </div>
         ))}
       </div>

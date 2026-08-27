@@ -1,5 +1,22 @@
 use crate::git_util::contain;
+use crate::state::GuiState;
 use std::path::PathBuf;
+use z_engine_core::session::SessionEvent;
+
+#[derive(serde::Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct StartSessionResult {
+    pub ulid: String,
+    pub events: Vec<serde_json::Value>,
+    pub already_live: bool,
+}
+
+pub(crate) fn session_events_json(events: &[SessionEvent]) -> Vec<serde_json::Value> {
+    events
+        .iter()
+        .map(|e| serde_json::to_value(e).unwrap_or(serde_json::Value::Null))
+        .collect()
+}
 
 pub(crate) fn sessions_dir() -> PathBuf {
     z_engine_core::config::sessions_dir()
@@ -52,8 +69,17 @@ pub(crate) fn list_sessions() -> Result<Vec<SessionEntry>, String> {
 }
 
 #[tauri::command]
-pub(crate) fn delete_session(path: String) -> Result<(), String> {
+pub(crate) fn delete_session(
+    path: String,
+    state: tauri::State<'_, GuiState>,
+) -> Result<(), String> {
     let contained = contain_session(&path)?;
+    if let Some(ulid) = contained
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+    {
+        let _ = state.shutdown_one(&ulid);
+    }
     z_engine_core::session::delete_session(&contained).map_err(|e| e.to_string())
 }
 
@@ -61,10 +87,7 @@ pub(crate) fn delete_session(path: String) -> Result<(), String> {
 /// its event list so the frontend can rebuild the chat history.
 #[tauri::command]
 pub(crate) fn read_session(path: String) -> Result<Vec<serde_json::Value>, String> {
-    let events = z_engine_core::session::read_events(std::path::Path::new(&path))
-        .map_err(|e| e.to_string())?;
-    Ok(events
-        .into_iter()
-        .map(|e| serde_json::to_value(&e).unwrap_or(serde_json::Value::Null))
-        .collect())
+    let contained = contain_session(&path)?;
+    let events = z_engine_core::session::read_events(&contained).map_err(|e| e.to_string())?;
+    Ok(session_events_json(&events))
 }

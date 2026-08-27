@@ -7,37 +7,33 @@ import {
   sessionStore,
   modelStore,
   setMaxTokens,
-  setBusy,
   initEvents,
-  submitLocal,
-  pushNotice,
   pushToast,
   resolveApproval,
-  resetTranscript,
-  replaySession,
-  resetUsage,
   queueStore,
+  drainReadyQueues,
+  submitOnSession,
+  sessionActivityStore,
   sessionsTickStore,
+  hydrateStore,
   type Msg,
 } from "./lib/events";
 import { configStore } from "./lib/configStore";
 import {
   submit,
-  compact,
   getConfig,
   approveWithRule,
   deny,
-  startSession,
   listSessions,
   deleteSession,
-  readSession,
   createWorktree,
 } from "./lib/commands";
+import { hydrateNewSession, hydrateOpenSession } from "./lib/sessionOpen";
 import { Composer } from "./components/Composer";
 import { CommandPalette } from "./components/CommandPalette";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { SplashScreen } from "./components/SplashScreen";
-import { ChatHeader } from "./components/ChatHeader";
+import { ChatHeader, JumpLatest } from "./components/ChatHeader";
 import { MsgList } from "./components/MsgList";
 import { AppSidebar } from "./components/AppSidebar";
 import { paletteActions } from "./lib/paletteActions";
@@ -79,27 +75,31 @@ export default function App() {
     approvalGateStore.subscribe,
     () => approvalGateStore.getSnapshot(),
   );
+  const sessionActivity = useSyncExternalStore(
+    sessionActivityStore.subscribe,
+    () => sessionActivityStore.getSnapshot(),
+  );
   const transcriptRef = useRef<HTMLDivElement>(null);
+  const stickToBottom = useRef(true);
+  const [showJump, setShowJump] = useState(false);
+  const hydrating = useSyncExternalStore(
+    hydrateStore.subscribe,
+    () => hydrateStore.getSnapshot(),
+  );
 
-  // Queue flush: when a turn finishes and follow-ups are pending, send the
-  // next one (Codex-style continuous queue). An approval-pending gate is
-  // separate from `busy` (which only drives the spinner) but also blocks
-  // the flush — nothing fires under the approval modal.
+  // Queue flush: idle sessions (foreground or background) send the next
+  // follow-up. Approval-pending still blocks that session only.
   useEffect(() => {
-    if (busy || awaitingApproval > 0) return;
-    const next = queueStore.shift();
-    if (!next) return;
-    submitLocal(next.text, next.images);
-    setBusy(true);
-    void submit(next.text, next.images).catch((e) => {
-      // Without this the turn never completes and busy stays true —
-      // soft-locking the composer until restart.
-      console.error(e);
-      setBusy(false);
-      pushToast(String(e).replace("Error: ", ""), "warn");
-    });
+    const jobs = drainReadyQueues();
+    for (const job of jobs) {
+      submitOnSession(job.sessionId, job.text, job.images);
+      void submit(job.text, job.images, job.sessionId).catch((e) => {
+        console.error(e);
+        pushToast(String(e).replace("Error: ", ""), "warn");
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busy, awaitingApproval]);
+  }, [busy, awaitingApproval, sessionActivity]);
 
   async function createWorktreeAndStart(name: string) {
     try {
@@ -126,24 +126,16 @@ export default function App() {
     }
   }
 
-  async function openSession(path: string) {
-    await startSession(path);
-    // Rebuild the transcript from the session JSONL — swapping the agent
-    // loop alone leaves the chat area stale.
-    try {
-      const events = await readSession(path);
-      replaySession(events as Parameters<typeof replaySession>[0]);
-    } catch (e) {
-      console.error("session replay failed:", e);
-    }
-    resetUsage();
+  async function openSession(path: string, projectRoot?: string | null) {
+    stickToBottom.current = true;
+    setShowJump(false);
+    if (projectRoot) workspaceStore.setActive(projectRoot);
+    await hydrateOpenSession(path, projectRoot);
     await refreshSessions();
   }
 
   async function newTask() {
-    await startSession(null, workspaces.active);
-    resetTranscript();
-    resetUsage();
+    await hydrateNewSession(workspaces.active);
     void refreshCustomCommands();
     await refreshSessions();
   }
@@ -220,11 +212,6 @@ export default function App() {
         configStore.set(cfg);
         if (cfg.model) modelStore.set(cfg.model);
         if (cfg.maxContextTokens) setMaxTokens(Number(cfg.maxContextTokens));
-        // TUI-parity startup banner
-        pushNotice(
-          `Z Engine v${cfg.version ?? "?"} · model ${cfg.model}` +
-            (cfg.projectName ? `\nproject ${cfg.projectName}` : ""),
-        );
       } catch (e) {
         console.error(e);
       }
@@ -239,12 +226,31 @@ export default function App() {
   }, [sessionsTick]);
 
   useEffect(() => {
+    const last = messages[messages.length - 1];
+    if (last?.kind === "user") {
+      stickToBottom.current = true;
+      setShowJump(false);
+    }
+    if (!stickToBottom.current) return;
     transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight });
   }, [messages]);
 
-  // macOS double-click-to-zoom parity: with the native title bar hidden,
-  // the drag regions (sidebar header zone, chat header) handle dblclick
-  // themselves and forward to the window-server zoom action.
+  function onTranscriptScroll() {
+    const el = transcriptRef.current;
+    if (!el) return;
+    const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const atBottom = gap < 72;
+    stickToBottom.current = atBottom;
+    setShowJump(!atBottom);
+  }
+
+  function jumpToLatest() {
+    stickToBottom.current = true;
+    setShowJump(false);
+    transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight, behavior: "smooth" });
+  }
+
+  // Overlay title bar: dblclick sidebar/header zooms like a native window.
   useEffect(() => {
     function onDblClick(e: MouseEvent) {
       const target = e.target as HTMLElement;
@@ -290,9 +296,10 @@ export default function App() {
         workspaces={workspaces.roots}
         activeWorkspace={workspaces.active}
         activeUlid={sessionId}
+        activity={sessionActivity}
         version={config?.version}
         onNewChat={() => void newTask()}
-        onOpen={(p) => void openSession(p)}
+        onOpen={(p, root) => void openSession(p, root)}
         onDelete={(p) => void delSession(p)}
         onAddWorkspace={() => void addWorkspace()}
         onRemoveWorkspace={(root) => void removeWorkspace(root)}
@@ -310,21 +317,25 @@ export default function App() {
                 ? `session ${sessionId}`
                 : undefined
           }
-          busy={busy}
           diffOpen={diffOpen}
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={() => setSidebarOpen((o) => !o)}
           onPalette={() => setPaletteOpen(true)}
-          onCompact={() => void compact()}
           onToggleDiff={() => setDiffOpen((o) => !o)}
         />
 
-        <div className="transcript" ref={transcriptRef}>
-          <MsgList
-            messages={messages}
-            busy={busy}
-            projectName={workspaces.active ? wsBasename(workspaces.active) : null}
-            onApprove={(m, d) => void handleApprove(m, d)}
-            onDeny={(m) => handleDeny(m)}
-          />
+        <div className="transcript-wrap">
+          {hydrating && <div className="hydrate-shimmer" aria-label="Restoring chat" />}
+          <div className="transcript" ref={transcriptRef} onScroll={onTranscriptScroll}>
+            <MsgList
+              messages={messages}
+              busy={busy}
+              projectName={workspaces.active ? wsBasename(workspaces.active) : null}
+              onApprove={(m, d) => void handleApprove(m, d)}
+              onDeny={(m) => handleDeny(m)}
+            />
+          </div>
+          {showJump && <JumpLatest onJump={jumpToLatest} />}
         </div>
 
         {diffOpen && <DiffPanel onClose={() => setDiffOpen(false)} />}
@@ -359,7 +370,7 @@ export default function App() {
             openSettings: () => setSettingsOpen(true),
             toggleSidebar: () => setSidebarOpen((o) => !o),
           })}
-          onOpenSession={(p) => void openSession(p)}
+          onOpenSession={(p, root) => void openSession(p, root)}
           onActivateWorkspace={(root) => workspaceStore.setActive(root)}
         />
       )}

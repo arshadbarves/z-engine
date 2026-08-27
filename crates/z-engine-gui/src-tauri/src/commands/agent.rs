@@ -1,5 +1,7 @@
 use crate::event_bridge::forward_events;
-use crate::session_store::{contain_session, sessions_dir};
+use crate::session_store::{
+    StartSessionResult, contain_session, session_events_json, sessions_dir,
+};
 use crate::state::{GuiState, build_loop_config};
 use serde_json::json;
 use std::path::PathBuf;
@@ -17,34 +19,33 @@ pub(crate) fn frontend_ready() {
 pub(crate) fn submit(
     text: String,
     images: Option<Vec<String>>,
+    session_id: Option<String>,
     state: tauri::State<'_, GuiState>,
 ) -> Result<(), String> {
-    let guard = state.handle.lock().map_err(|_| "state poisoned")?;
-    guard
-        .as_ref()
-        .ok_or("agent not started")?
+    state
+        .handle_for(session_id.as_deref())?
         .submit_with_images(text, images.unwrap_or_default());
     Ok(())
 }
 
 #[tauri::command]
-pub(crate) fn abort(state: tauri::State<'_, GuiState>) -> Result<(), String> {
-    let guard = state.handle.lock().map_err(|_| "state poisoned")?;
-    guard.as_ref().ok_or("agent not started")?.abort();
+pub(crate) fn abort(
+    session_id: Option<String>,
+    state: tauri::State<'_, GuiState>,
+) -> Result<(), String> {
+    state.handle_for(session_id.as_deref())?.abort();
     Ok(())
 }
 
 #[tauri::command]
 pub(crate) fn compact(state: tauri::State<'_, GuiState>) -> Result<(), String> {
-    let guard = state.handle.lock().map_err(|_| "state poisoned")?;
-    guard.as_ref().ok_or("agent not started")?.compact();
+    state.handle_for(None)?.compact();
     Ok(())
 }
 
 #[tauri::command]
 pub(crate) fn notes(state: tauri::State<'_, GuiState>) -> Result<(), String> {
-    let guard = state.handle.lock().map_err(|_| "state poisoned")?;
-    guard.as_ref().ok_or("agent not started")?.request_notes();
+    state.handle_for(None)?.request_notes();
     Ok(())
 }
 
@@ -56,27 +57,21 @@ pub(crate) fn set_mode(mode: String, state: tauri::State<'_, GuiState>) -> Resul
         "plan" => PermissionMode::Plan,
         _ => PermissionMode::Normal,
     };
-    let guard = state.handle.lock().map_err(|_| "state poisoned")?;
-    guard.as_ref().ok_or("agent not started")?.set_mode(m);
+    state.handle_for(None)?.set_mode(m);
     Ok(())
 }
 
 /// `! <cmd>` shell passthrough — executed locally, never touches the model.
 #[tauri::command]
 pub(crate) fn shell(cmd: String, state: tauri::State<'_, GuiState>) -> Result<(), String> {
-    let guard = state.handle.lock().map_err(|_| "state poisoned")?;
-    guard.as_ref().ok_or("agent not started")?.shell(cmd);
+    state.handle_for(None)?.shell(cmd);
     Ok(())
 }
 
 /// Rewind: restore files touched by the last checkpointed turn.
 #[tauri::command]
 pub(crate) fn revert_last_turn(state: tauri::State<'_, GuiState>) -> Result<(), String> {
-    let guard = state.handle.lock().map_err(|_| "state poisoned")?;
-    guard
-        .as_ref()
-        .ok_or("agent not started")?
-        .revert_last_turn();
+    state.handle_for(None)?.revert_last_turn();
     Ok(())
 }
 
@@ -84,11 +79,7 @@ pub(crate) fn revert_last_turn(state: tauri::State<'_, GuiState>) -> Result<(), 
 /// (the user message being reverted) and everything after it.
 #[tauri::command]
 pub(crate) fn revert_to_turn(keep: u64, state: tauri::State<'_, GuiState>) -> Result<(), String> {
-    let guard = state.handle.lock().map_err(|_| "state poisoned")?;
-    guard
-        .as_ref()
-        .ok_or("agent not started")?
-        .revert_to_turn(keep);
+    state.handle_for(None)?.revert_to_turn(keep);
     Ok(())
 }
 
@@ -98,11 +89,7 @@ pub(crate) fn set_reasoning_effort(
     effort: Option<String>,
     state: tauri::State<'_, GuiState>,
 ) -> Result<(), String> {
-    let guard = state.handle.lock().map_err(|_| "state poisoned")?;
-    guard
-        .as_ref()
-        .ok_or("agent not started")?
-        .set_reasoning_effort(effort);
+    state.handle_for(None)?.set_reasoning_effort(effort);
     Ok(())
 }
 
@@ -119,15 +106,13 @@ pub(crate) fn approve_with_rule(
         "persist" => ApprovalDecision::AlwaysPersist { rule },
         _ => ApprovalDecision::Once,
     };
-    let guard = state.handle.lock().map_err(|_| "state poisoned")?;
-    guard.as_ref().ok_or("agent not started")?.approve(id, d);
+    state.handle_for(None)?.approve(id, d);
     Ok(())
 }
 
 #[tauri::command]
 pub(crate) fn deny(id: u64, state: tauri::State<'_, GuiState>) -> Result<(), String> {
-    let guard = state.handle.lock().map_err(|_| "state poisoned")?;
-    guard.as_ref().ok_or("agent not started")?.deny(id);
+    state.handle_for(None)?.deny(id);
     Ok(())
 }
 
@@ -137,7 +122,7 @@ pub(crate) fn start_session(
     root: Option<String>,
     state: tauri::State<'_, GuiState>,
     app: tauri::AppHandle,
-) -> Result<(), String> {
+) -> Result<StartSessionResult, String> {
     // Snapshot the current workspace root, then release the ctx lock so
     // the whole swap below runs under a single handle-lock section —
     // concurrent "New task" clicks must not interleave shutdown/spawn.
@@ -168,12 +153,33 @@ pub(crate) fn start_session(
     let recorder: Option<z_engine_core::session::SessionWriter>;
     let recorder_path: Option<PathBuf>;
     let resume_state;
+    let mut ui_events: Vec<serde_json::Value> = Vec::new();
     match &resume_path {
         Some(p) => {
-            // Only transcripts from our own session store may be resumed.
             let contained = contain_session(p)?;
+            let ulid = contained
+                .file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default();
             let events =
                 z_engine_core::session::read_events(&contained).map_err(|e| e.to_string())?;
+            ui_events = session_events_json(&events);
+            if !ulid.is_empty() && state.has_loop(&ulid)? {
+                state.set_active(ulid.clone())?;
+                if root.is_some() {
+                    let mut ctx_guard = state.ctx.lock().map_err(|_| "state poisoned")?;
+                    if let Some(c) = ctx_guard.as_mut() {
+                        c.project_root = project_root;
+                    }
+                }
+                app.emit("sessionChanged", json!({ "ulid": ulid }))
+                    .map_err(|e| e.to_string())?;
+                return Ok(StartSessionResult {
+                    ulid,
+                    events: ui_events,
+                    already_live: true,
+                });
+            }
             let replayed = z_engine_core::session::replay(&events);
             resume_state = Some(z_engine_core::agent::ResumeState {
                 working: replayed.working,
@@ -199,17 +205,14 @@ pub(crate) fn start_session(
         }
     }
 
-    // Critical section: shutdown of the previous agent and publication of
-    // the new one happen atomically from other commands' point of view.
-    let (_handle, ev_rx) = {
-        let mut handle_guard = state.handle.lock().map_err(|_| "state poisoned")?;
-        if let Some(h) = handle_guard.as_ref() {
-            h.shutdown();
-        }
-        let spawned = spawn_with_recorder(lc, resume_state, recorder);
-        *handle_guard = Some(spawned.0.clone());
-        spawned
-    };
+    let ulid = recorder_path
+        .as_ref()
+        .and_then(|p| p.file_stem().map(|s| s.to_string_lossy().into_owned()))
+        .unwrap_or_default();
+
+    let (_handle, ev_rx) = spawn_with_recorder(lc, resume_state, recorder);
+    state.insert_loop(ulid.clone(), _handle)?;
+    let _ = state.shutdown_one("boot");
 
     // Follow the chosen workspace for @-files, config and rule persistence.
     if root.is_some() {
@@ -223,13 +226,13 @@ pub(crate) fn start_session(
     let window = app
         .get_webview_window("main")
         .ok_or("main window missing")?;
-    forward_events(ev_rx, window);
+    forward_events(ev_rx, window, ulid.clone());
 
-    let ulid = recorder_path
-        .as_ref()
-        .and_then(|p| p.file_stem().map(|s| s.to_string_lossy().into_owned()))
-        .unwrap_or_default();
     app.emit("sessionChanged", json!({ "ulid": ulid }))
         .map_err(|e| e.to_string())?;
-    Ok(())
+    Ok(StartSessionResult {
+        ulid,
+        events: ui_events,
+        already_live: false,
+    })
 }

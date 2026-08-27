@@ -24,45 +24,16 @@ import {
 } from "../lib/commands";
 import { activeAtToken, stripAtToken } from "../lib/atFile";
 import { queueStore } from "../lib/events";
-import { X } from "lucide-react";
+import { Terminal, X } from "lucide-react";
 import { filterSlash, getCustomCommands } from "../lib/slash";
 import { readSlashCommand } from "../lib/commands";
-import { estimateCost, fmtCost, fmtTokens } from "../lib/util";
+import { estimateCost, fmtCost } from "../lib/util";
 import { ModelPicker } from "./ModelPicker";
 import { ModePicker } from "./ModePicker";
 import { EffortSelector } from "./EffortSelector";
+import { ShellOverlay } from "./ShellOverlay";
 import { catalogStore } from "../lib/catalog";
-
-/** Context usage as a status-dot pill: `● 42% · 50.2k · $0.31`, with a
- * hover popover breaking prompt / completion / budget down. Amber ≥80%,
- * red ≥92% (the auto-compaction trigger). */
-function Meter() {
-  const usage = useSyncExternalStore(usageStore.subscribe, () => usageStore.getSnapshot());
-  const cfg = useSyncExternalStore(configStore.subscribe, () => configStore.getSnapshot());
-  const pct = Math.min(
-    100,
-    Math.round((usage.promptTokens / Math.max(1, usage.maxTokens)) * 100),
-  );
-  const level = pct >= 92 ? "danger" : pct >= 80 ? "warn" : "ok";
-  const cost = estimateCost(
-    cfg?.pricing ?? null,
-    usage.promptTokens,
-    usage.completionTokens,
-  );
-  return (
-    <span className={`meter-pill ${level}`}>
-      <span className="pill-dot" />
-      <span className="pill-pct">{pct}%</span>
-      <span className="pill-tok">{fmtTokens(usage.promptTokens)}</span>
-      {cost != null && <span className="pill-cost">{fmtCost(cost)}</span>}
-      <span className="pill-detail">
-        {`prompt ${usage.promptTokens.toLocaleString()} · completion ${usage.completionTokens.toLocaleString()} of ${usage.maxTokens.toLocaleString()} — auto-compacts at ${
-          cfg?.compactAtPercent ?? 92
-        }%`}
-      </span>
-    </span>
-  );
-}
+import { hideShell, shellStore, showShell } from "../lib/shellStore";
 
 function fileName(p: string): string {
   const i = p.lastIndexOf("/");
@@ -111,6 +82,8 @@ export function Composer() {
   const histPosRef = useRef<number | null>(null);
 
   const busyNow = useSyncExternalStore(busyStore.subscribe, () => busyStore.getSnapshot());
+  const shell = useSyncExternalStore(shellStore.subscribe, () => shellStore.getSnapshot());
+  const shellMode = input.startsWith("!");
 
   const slashMatches = !dismissed ? filterSlash(input) : null;
   const atQuery =
@@ -386,11 +359,14 @@ export function Composer() {
       else historyNext();
       return;
     }
-    // TUI parity: Esc aborts a running turn, else clears the draft
+    // TUI parity: Esc aborts a running turn, else hides the terminal, else clears the draft
     if (e.key === "Escape") {
       if (busyNow) {
         e.preventDefault();
         void abort();
+      } else if (shell.visible) {
+        e.preventDefault();
+        hideShell();
       } else if (input) {
         e.preventDefault();
         draftStore.set("");
@@ -406,7 +382,8 @@ export function Composer() {
 
   return (
     <div className="composer-wrap">
-      <div className="composer">
+      <ShellOverlay />
+      <div className={`composer${shellMode ? " shell" : ""}`}>
         {showSlash && (
           <div className="composer-pop" role="listbox">
             {slashMatches!.map((c, i) => (
@@ -491,7 +468,9 @@ export function Composer() {
           placeholder={
             busyNow
               ? "Working… press Stop or Esc to abort."
-              : "Describe a task…  (! for shell · / commands · @ files)"
+              : shellMode
+                ? "shell command…  (not sent to the model)"
+                : "Describe a task…  (! for shell · / commands · @ files)"
           }
           value={input}
           onChange={(e) =>
@@ -504,13 +483,29 @@ export function Composer() {
           onPaste={(e) => void onPaste(e)}
         ></textarea>
         <div className="composer-bar">
+          {shellMode && (
+            <span className="shell-prompt" title="Shell command — not sent to the model">
+              $
+            </span>
+          )}
           <ModePicker />
           <ModelPicker />
           <EffortSelector catalog={catalogStore.getSnapshot()} />
-          <Meter />
-          <span className="composer-hint">
-            <kbd>!</kbd> shell · <kbd>/</kbd> cmds · <kbd>@</kbd> files
-          </span>
+          {!shell.visible && shell.entries.length > 0 && (
+            <button
+              type="button"
+              className="icon-btn"
+              title="Show terminal"
+              onClick={showShell}
+            >
+              <Terminal size={13} />
+            </button>
+          )}
+          {!shellMode && (
+            <span className="composer-hint">
+              <kbd>!</kbd> shell · <kbd>/</kbd> cmds · <kbd>@</kbd> files
+            </span>
+          )}
           {busyNow ? (
             <button className="stop" title="Stop" onClick={() => void abort()}>
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>

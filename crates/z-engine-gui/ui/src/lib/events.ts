@@ -1,4 +1,15 @@
 import { listen } from "@tauri-apps/api/event";
+import { appendShellLine, resetShell, startShell } from "./shellStore";
+import {
+  clearSnaps,
+  emptySnap,
+  getSnap,
+  hasSnap,
+  parkSnap,
+  parkedEntries,
+  takeSnap,
+  type SessionSnap,
+} from "./sessionSnaps";
 
 export type MsgKind =
   | "user"
@@ -8,7 +19,8 @@ export type MsgKind =
   | "approval"
   | "notice"
   | "command"
-  | "error";
+  | "error"
+  | "status";
 
 export interface Msg {
   id: number;
@@ -72,8 +84,50 @@ let toasts: Toast[] = [];
 let nextId = 1;
 let nextToastId = 1;
 
+let emitPaused = false;
+const workingSubs = new Set<Listener>();
+
+/** What a session's sidebar indicator should say: `working` while the
+ * turn runs, `approval` while it sits blocked on a permission decision.
+ * Approval wins — a gated turn is still occupied, just waiting. */
+export type SessionActivity = "working" | "approval";
+
+let activityCache: Record<string, SessionActivity> = {};
+
+function collectActivity(): Record<string, SessionActivity> {
+  const map: Record<string, SessionActivity> = {};
+  if (sessionId) {
+    if (pendingApprovals > 0) map[sessionId] = "approval";
+    else if (busy) map[sessionId] = "working";
+  }
+  for (const [id, s] of parkedEntries()) {
+    if (s.pendingApprovals > 0) map[id] = "approval";
+    else if (s.busy) map[id] = "working";
+  }
+  return map;
+}
+
+function sameActivity(
+  a: Record<string, SessionActivity>,
+  b: Record<string, SessionActivity>,
+): boolean {
+  const aKeys = Object.keys(a);
+  return (
+    aKeys.length === Object.keys(b).length && aKeys.every((k) => b[k] === a[k])
+  );
+}
+
+function syncWorking() {
+  const next = collectActivity();
+  if (sameActivity(activityCache, next)) return;
+  activityCache = next;
+  for (const l of workingSubs) l();
+}
+
 function emitChange() {
+  if (emitPaused) return;
   for (const l of listeners) l();
+  syncWorking();
 }
 
 function emitToasts() {
@@ -81,6 +135,7 @@ function emitToasts() {
 }
 
 export function pushToast(text: string, tone: Toast["tone"] = "info") {
+  if (emitPaused) return;
   const t: Toast = { id: nextToastId++, text, tone };
   toasts = [...toasts.slice(-3), t];
   emitToasts();
@@ -122,7 +177,9 @@ export const busyStore = {
 let pendingApprovals = 0;
 const approvalGateSubs = new Set<Listener>();
 function emitApprovalGate() {
+  if (emitPaused) return;
   for (const l of approvalGateSubs) l();
+  syncWorking();
 }
 export const approvalGateStore = {
   subscribe(l: Listener) {
@@ -145,6 +202,7 @@ let queue: QueuedMessage[] = [];
 const queueListeners = new Set<Listener>();
 
 function emitQueue() {
+  if (emitPaused) return;
   for (const l of queueListeners) l();
 }
 
@@ -249,6 +307,11 @@ export function resetUsage() {
   emitChange();
 }
 
+export function setUsageTokens(prompt: number, completion: number) {
+  usage = { ...usage, promptTokens: prompt, completionTokens: completion };
+  emitChange();
+}
+
 /** Permission-mode singleton shared between the composer select,
  * the palette, and status notes. */
 let mode = "normal";
@@ -337,10 +400,124 @@ export const sessionStore = {
   },
 };
 
-/** Push a quiet inline row into the transcript (TUI `Block::Notice`
- * parity). Used by slash commands and startup banner. */
+function snapshot(): SessionSnap {
+  return {
+    messages,
+    nextId,
+    assistantBuf,
+    assistantMsgId,
+    thinkingOpen,
+    thinkingMsgId,
+    runTurnCounter,
+    busy,
+    turnStartedAt,
+    pendingApprovals,
+    queue,
+    usage,
+  };
+}
+
+function loadSnap(s: SessionSnap) {
+  messages = s.messages;
+  nextId = s.nextId;
+  assistantBuf = s.assistantBuf;
+  assistantMsgId = s.assistantMsgId;
+  thinkingOpen = s.thinkingOpen;
+  thinkingMsgId = s.thinkingMsgId;
+  runTurnCounter = s.runTurnCounter;
+  busy = s.busy;
+  turnStartedAt = s.turnStartedAt;
+  pendingApprovals = s.pendingApprovals;
+  queue = s.queue;
+  usage = s.usage;
+}
+
+export function hasSessionRuntime(id: string): boolean {
+  return Boolean(id) && (id === sessionId || hasSnap(id));
+}
+
+/** Switch the visible chat. The previous session stays in memory (and its
+ * agent loop keeps running); coming back restores the live transcript. */
+export function activateSession(ulid: string) {
+  if (!ulid || ulid === sessionId) return;
+  if (sessionId) parkSnap(sessionId, snapshot());
+  const parked = takeSnap(ulid);
+  sessionId = ulid;
+  loadSnap(parked ?? emptySnap(usage.maxTokens));
+  for (const l of sessionSubs) l();
+  emitChange();
+  emitQueue();
+  emitApprovalGate();
+}
+
+export const sessionActivityStore = {
+  subscribe(l: Listener) {
+    workingSubs.add(l);
+    return () => {
+      workingSubs.delete(l);
+    };
+  },
+  getSnapshot(): Record<string, SessionActivity> {
+    return activityCache;
+  },
+};
+
+function applyToParked(sid: string, ev: EventPayload) {
+  emitPaused = true;
+  const saved = snapshot();
+  const savedId = sessionId;
+  loadSnap(getSnap(sid) ?? emptySnap(usage.maxTokens));
+  sessionId = sid;
+  dispatchEvent(ev);
+  parkSnap(sid, snapshot());
+  sessionId = savedId;
+  loadSnap(saved);
+  emitPaused = false;
+  syncWorking();
+}
+
+/** Submit a follow-up onto a session that may not be on screen. */
+export function submitOnSession(id: string, text: string, images: string[] = []) {
+  if (!id || id === sessionId) {
+    submitLocal(text, images);
+    setBusy(true);
+    return;
+  }
+  emitPaused = true;
+  const saved = snapshot();
+  const savedId = sessionId;
+  loadSnap(getSnap(id) ?? emptySnap(usage.maxTokens));
+  sessionId = id;
+  submitLocal(text, images);
+  setBusy(true);
+  parkSnap(id, snapshot());
+  sessionId = savedId;
+  loadSnap(saved);
+  emitPaused = false;
+  syncWorking();
+}
+
+/** Queued prompts whose session is idle (active or background). */
+export function drainReadyQueues(): { sessionId: string; text: string; images: string[] }[] {
+  const out: { sessionId: string; text: string; images: string[] }[] = [];
+  if (!busy && pendingApprovals === 0 && queue.length > 0) {
+    const next = queueStore.shift();
+    if (next && sessionId) out.push({ sessionId, text: next.text, images: next.images });
+  }
+  for (const [id, snap] of parkedEntries()) {
+    if (snap.busy || snap.pendingApprovals > 0 || snap.queue.length === 0) continue;
+    const next = snap.queue[0];
+    snap.queue = snap.queue.slice(1);
+    out.push({ sessionId: id, text: next.text, images: next.images });
+  }
+  if (out.length) emitQueue();
+  return out;
+}
+
+/** Transient status (slash commands, model switch, startup). Chat stays
+ * a conversation — these never become transcript rows. */
 export function pushNotice(text: string) {
-  push("notice", text);
+  pushToast(text, "info");
 }
 
 /** Collapse a decided approval card in place to a one-line notice so the
@@ -353,6 +530,11 @@ export function resolveApproval(
     (x) => x.kind === "approval" && x.approvalId === approvalId,
   );
   if (!m) return;
+  if (pendingApprovals > 0) pendingApprovals--;
+  // The loop resumes the moment its last gate is decided (a granted tool
+  // runs, a denial goes back to the model). Mark the turn busy again or
+  // the indicator stays dark while the approved command is still running.
+  if (pendingApprovals === 0) busy = true;
   const rule = m.suggestedRule ?? m.bashCommand ?? "";
   const text =
     decision === "deny"
@@ -361,10 +543,7 @@ export function resolveApproval(
         ? `✓ approved (once) · ${m.bashCommand ?? m.toolName ?? ""}`.trimEnd()
         : `${decision === "persist" ? "✓ persisted rule" : "✓ approved · session rule"} '${rule}'`;
   update(m.id, { kind: "notice", text, streaming: false });
-  if (pendingApprovals > 0) {
-    pendingApprovals--;
-    emitApprovalGate();
-  }
+  emitApprovalGate();
 }
 
 let assistantBuf = "";
@@ -374,6 +553,7 @@ let thinkingMsgId = -1;
 /** Counts user submissions since the current agent loop started — the
  * checkpoint-stack index the backend will assign to each new turn. */
 let runTurnCounter = 0;
+let turnStartedAt = 0;
 
 /** Most recent open (running) tool card with the given name, or null.
  * Core finish events carry only the tool name — matching the newest
@@ -423,17 +603,11 @@ function closeThinking() {
   }
 }
 
-/** Route a core status note: shell echoes stay in the transcript,
- * everything else becomes a transient toast so chat stays clean. */
+/** Route a core status note: `!` shell echoes go to the terminal overlay,
+ * everything else is a toast so the chat stays a conversation. */
 function routeStatusNote(text: string) {
   if (text.startsWith("$ ")) {
-    // collapse consecutive shell output into one message
-    const last = messages[messages.length - 1];
-    if (last && last.kind === "notice" && last.text.startsWith("$ ")) {
-      update(last.id, { text: `${last.text}\n${text}` });
-    } else {
-      push("notice", text);
-    }
+    appendShellLine(text);
     return;
   }
   if (text.startsWith("mode: ")) {
@@ -450,27 +624,68 @@ function routeStatusNote(text: string) {
     pushToast(`Model · ${id}`, "ok");
     return;
   }
-  if (text.startsWith("rewind")) {
-    pushToast(text, text.includes("nothing") ? "info" : "ok");
+  if (text === "shell unavailable") {
+    appendShellLine("shell unavailable");
+    pushToast("Shell unavailable", "warn");
     return;
   }
-  // Context-pressure events stay in the transcript as durable notices:
-  // a toast covers the header and vanishes, hiding the compaction audit.
-  if (
-    text.startsWith("context at ") ||
-    text.startsWith("context compacted")
-  ) {
-    push("notice", text);
-    return;
-  }
-  // TUI parity: everything else narrates inline instead of vanishing
-  // into a toast (reviewer findings, compaction notes, auto-accepts…).
-  push("notice", text);
+  const tone: Toast["tone"] =
+    text.includes("failed") || text.includes("error") ? "warn" : "info";
+  pushToast(text, tone);
 }
 
 type EventPayload = { type: string } & Record<string, unknown>;
 
+/** While a session is being swapped, drop live loop events (shutdown
+ * `turnAborted` would otherwise toast and race the restored transcript). */
+let hydrateLock = false;
+let hydrateGen = 0;
+let hydrating = false;
+const hydrateSubs = new Set<Listener>();
+function emitHydrate() {
+  for (const l of hydrateSubs) l();
+}
+
+export function beginHydrate(): number {
+  hydrateLock = true;
+  hydrating = true;
+  hydrateGen += 1;
+  emitHydrate();
+  return hydrateGen;
+}
+
+export function endHydrate(gen?: number) {
+  if (gen != null && gen !== hydrateGen) return;
+  hydrateLock = false;
+  hydrating = false;
+  emitHydrate();
+}
+
+export const hydrateStore = {
+  subscribe(l: Listener) {
+    hydrateSubs.add(l);
+    return () => {
+      hydrateSubs.delete(l);
+    };
+  },
+  getSnapshot(): boolean {
+    return hydrating;
+  },
+};
+
 export function handleEvent(ev: EventPayload) {
+  const sid = String(ev.sessionId ?? "");
+  if (sid && sessionId && sid !== sessionId) {
+    if (sid === "boot") return;
+    applyToParked(sid, ev);
+    return;
+  }
+  if (hydrateLock && ev.type !== "sessionChanged") return;
+  dispatchEvent(ev);
+}
+
+function dispatchEvent(ev: EventPayload) {
+  if (hydrateLock && ev.type !== "sessionChanged") return;
   switch (ev.type) {
     case "tokenDelta": {
       closeThinking();
@@ -552,13 +767,17 @@ export function handleEvent(ev: EventPayload) {
           durationMs: Number(ev.durationMs ?? 0),
         });
       } else {
-        push(ok ? "notice" : "error", `${ok ? "✓" : "✗"} ${ev.name} ─ ${ev.summary}`);
+        pushToast(`${ok ? "✓" : "✗"} ${ev.name} ─ ${ev.summary}`, ok ? "ok" : "warn");
       }
       break;
     }
     case "approvalRequired": {
       closeThinking();
       endAssistant();
+      const approvalId = Number(ev.id);
+      if (messages.some((m) => m.kind === "approval" && m.approvalId === approvalId)) {
+        break;
+      }
       busy = false;
       pendingApprovals++;
       emitApprovalGate();
@@ -566,7 +785,7 @@ export function handleEvent(ev: EventPayload) {
         "approval",
         `⚠ approval required — ${ev.tool}\ninput: ${ev.inputPreview}`,
         {
-          approvalId: Number(ev.id),
+          approvalId,
           toolName: String(ev.tool),
           canPersist: Boolean(ev.canPersist),
           suggestedRule: (ev.suggestedRule as string | null) ?? null,
@@ -594,11 +813,23 @@ export function handleEvent(ev: EventPayload) {
       closeThinking();
       endAssistant();
       busy = false;
-      // A finished turn leaves no decision pending; stale gates would
-      // block the queue forever.
       if (pendingApprovals !== 0) {
         pendingApprovals = 0;
         emitApprovalGate();
+      }
+      // An aborted turn can leave its approval card behind; expire it so a
+      // late click can't resume a loop that no longer exists.
+      if (messages.some((m) => m.kind === "approval")) {
+        messages = messages.map((m) =>
+          m.kind === "approval"
+            ? {
+                ...m,
+                kind: "notice",
+                text: `■ approval expired · ${m.toolName ?? "call"}`,
+                streaming: false,
+              }
+            : m,
+        );
       }
       if (ev.type === "turnCompleted") {
         usage = {
@@ -608,15 +839,18 @@ export function handleEvent(ev: EventPayload) {
             ev.completionTokens ?? usage.completionTokens,
           ),
         };
-        push("notice", "✓ done");
+        const ms = turnStartedAt ? Date.now() - turnStartedAt : 0;
+        push("status", ms > 0 ? `✓ done · ${(ms / 1000).toFixed(1)}s` : "✓ done", {
+          ok: true,
+        });
       } else {
-        push("notice", "■ aborted");
+        push("status", "■ aborted", { ok: false });
       }
+      turnStartedAt = 0;
       emitChange();
       break;
     case "sessionChanged":
-      sessionId = String(ev.ulid ?? "");
-      for (const l of sessionSubs) l();
+      activateSession(String(ev.ulid ?? ""));
       break;
     case "transcriptTrimmed":
       trimTranscript(Number(ev.keepTurn ?? 0));
@@ -660,31 +894,36 @@ export function trimTranscript(keepTurn: number) {
 }
 
 export function commandLocal(cmd: string) {
-  push("command", `! ${cmd}`);
+  startShell(cmd);
 }
 
 export function setBusy(v: boolean) {
+  if (v && !busy) turnStartedAt = Date.now();
   busy = v;
   emitChange();
 }
 
 let eventsInitialized = false;
 export async function initEvents() {
-  // Idempotent: React StrictMode double-invokes effects in dev, and a
-  // second registration would handle every event twice (duplicated
-  // messages/toasts).
+  // Set the flag before awaiting — StrictMode remounts would otherwise
+  // register two Tauri listeners and duplicate every approval/tool row.
   if (eventsInitialized) return;
-  await listen<EventPayload>("appEvent", (e) => handleEvent(e.payload));
-  // The backend announces new/resumed session ids on its own channel.
-  await listen<{ ulid: string }>("sessionChanged", (e) => {
-    sessionId = String(e.payload.ulid ?? "");
-    for (const l of sessionSubs) l();
-  });
   eventsInitialized = true;
+  await listen<EventPayload>("appEvent", (e) => handleEvent(e.payload));
+  await listen<{ ulid: string }>("sessionChanged", (e) => {
+    activateSession(String(e.payload.ulid ?? ""));
+  });
 }
 
 /** Test hook: reset all module state. */
 export function resetForTests() {
+  hydrateLock = false;
+  hydrateGen = 0;
+  hydrating = false;
+  turnStartedAt = 0;
+  emitPaused = false;
+  clearSnaps();
+  activityCache = {};
   resetTranscript();
   busy = false;
   usage = { promptTokens: 0, completionTokens: 0, maxTokens: 120_000 };
@@ -695,6 +934,17 @@ export function resetForTests() {
   sessionId = "";
   toasts = [];
   nextToastId = 1;
+  resetShell();
+}
+
+export function parkCurrentAndReset() {
+  if (sessionId) parkSnap(sessionId, snapshot());
+  sessionId = "";
+  loadSnap(emptySnap(usage.maxTokens));
+  for (const l of sessionSubs) l();
+  emitChange();
+  emitQueue();
+  emitApprovalGate();
 }
 
 /** Clear the transcript (session switch / new task). */
@@ -707,6 +957,19 @@ export function resetTranscript() {
   thinkingMsgId = -1;
   // A fresh loop starts with an empty checkpoint stack.
   runTurnCounter = 0;
+  busy = false;
+  turnStartedAt = 0;
+  if (pendingApprovals !== 0) {
+    pendingApprovals = 0;
+    emitApprovalGate();
+  }
+  if (queue.length > 0) {
+    queue = [];
+    emitQueue();
+  }
+  if (draft) draftStore.set("");
+  attachmentStore.clear();
+  resetShell();
   emitChange();
 }
 
@@ -724,6 +987,7 @@ export interface ReplayEvent {
   tool_call_id?: string;
   model?: string;
   project_root?: string;
+  images?: string[];
 }
 
 function shortArgs(name: string, raw: string): string {
@@ -767,7 +1031,9 @@ export function replaySession(events: ReplayEvent[]) {
   for (const ev of events) {
     switch (ev.type) {
       case "user_msg":
-        push("user", ev.text ?? "");
+        push("user", ev.text ?? "", {
+          images: ev.images && ev.images.length > 0 ? ev.images : undefined,
+        });
         break;
       case "assistant_msg": {
         if (ev.content) push("assistant", ev.content);
@@ -786,7 +1052,7 @@ export function replaySession(events: ReplayEvent[]) {
         break;
       }
       case "note":
-        push("notice", ev.text ?? "");
+        // Historical status notes stay out of the chat; live ones toast.
         break;
       case "meta":
       case "tool_result":

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use z_engine_core::agent::AgentHandle;
@@ -6,10 +7,68 @@ use z_engine_core::config::Config;
 /// Shared application state managed by Tauri.
 #[derive(Default)]
 pub(crate) struct GuiState {
-    pub(crate) handle: Mutex<Option<AgentHandle>>,
+    /// One agent loop per session ULID so chats can run in the background.
+    pub(crate) loops: Mutex<HashMap<String, AgentHandle>>,
+    pub(crate) active: Mutex<String>,
     pub(crate) ctx: Mutex<Option<AppCtx>>,
     /// Model id the running agent was started with / hot-switched to.
     pub(crate) model: Mutex<String>,
+}
+
+impl GuiState {
+    pub(crate) fn handle_for(&self, session_id: Option<&str>) -> Result<AgentHandle, String> {
+        let id = match session_id {
+            Some(s) if !s.is_empty() => s.to_string(),
+            _ => self.active.lock().map_err(|_| "state poisoned")?.clone(),
+        };
+        self.loops
+            .lock()
+            .map_err(|_| "state poisoned")?
+            .get(&id)
+            .cloned()
+            .ok_or_else(|| "agent not started".into())
+    }
+
+    pub(crate) fn set_active(&self, id: String) -> Result<(), String> {
+        *self.active.lock().map_err(|_| "state poisoned")? = id;
+        Ok(())
+    }
+
+    pub(crate) fn has_loop(&self, id: &str) -> Result<bool, String> {
+        Ok(self
+            .loops
+            .lock()
+            .map_err(|_| "state poisoned")?
+            .contains_key(id))
+    }
+
+    pub(crate) fn insert_loop(&self, id: String, handle: AgentHandle) -> Result<(), String> {
+        self.loops
+            .lock()
+            .map_err(|_| "state poisoned")?
+            .insert(id.clone(), handle);
+        self.set_active(id)
+    }
+
+    pub(crate) fn shutdown_one(&self, id: &str) -> Result<(), String> {
+        if let Some(h) = self.loops.lock().map_err(|_| "state poisoned")?.remove(id) {
+            h.shutdown();
+        }
+        let active = self.active.lock().map_err(|_| "state poisoned")?;
+        if active.as_str() == id {
+            drop(active);
+            self.set_active(String::new())?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn shutdown_all(&self) {
+        if let Ok(mut loops) = self.loops.lock() {
+            for (_, h) in loops.drain() {
+                h.shutdown();
+            }
+        }
+    }
 }
 
 #[derive(Clone)]

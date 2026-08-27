@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { AssistantMarkdown } from "./Markdown";
-import { ToolCard } from "./ToolCard";
 import { ApprovalCard } from "./ApprovalCard";
-import { ThinkingBlock } from "./ThinkingBlock";
 import { UserCard } from "./UserCard";
+import { ActivityStrip } from "./ActivityStrip";
 import { LogoMark } from "./LogoMark";
-import { draftStore, type Msg } from "../lib/events";
+import { draftStore, hydrateStore, type Msg } from "../lib/events";
+import { groupTranscript } from "../lib/activity";
 
 export const HERO_EXAMPLES = [
   "Fix the failing tests",
@@ -29,10 +29,12 @@ function WorkingRow() {
 
 function MsgCard({
   m,
+  sticky,
   onApprove,
   onDeny,
 }: {
   m: Msg;
+  sticky?: boolean;
   onApprove: (m: Msg, decision: "once" | "session" | "persist") => void;
   onDeny: (m: Msg) => void;
 }) {
@@ -41,7 +43,7 @@ function MsgCard({
       <ApprovalCard m={m} onApprove={(d) => onApprove(m, d)} onDeny={() => onDeny(m)} />
     );
   }
-  if (m.kind === "user") return <UserCard m={m} />;
+  if (m.kind === "user") return <UserCard m={m} sticky={sticky} />;
   if (m.kind === "assistant") {
     return (
       <div className={`msg assistant${m.streaming ? " streaming" : ""}`}>
@@ -49,20 +51,15 @@ function MsgCard({
       </div>
     );
   }
-  if (m.kind === "command") {
+  if (m.kind === "error") return <div className="msg error">{m.text}</div>;
+  if (m.kind === "status") {
     return (
-      <div className="msg command">
-        <span className="cmd-glyph">!</span>
-        <span>{m.text.replace(/^!\s*/, "")}</span>
+      <div className={`msg working${m.ok === false ? " aborted" : " done"}`}>
+        {m.text}
       </div>
     );
   }
-  if (m.kind === "tool") return <ToolCard m={m} />;
-  if (m.kind === "thinking") return <ThinkingBlock m={m} />;
-  if (m.kind === "notice" && m.text.startsWith("$ ")) {
-    return <div className="msg notice shell">{m.text}</div>;
-  }
-  return <div className={`msg ${m.kind}`}>{m.text}</div>;
+  return null;
 }
 
 export function MsgList({
@@ -78,9 +75,20 @@ export function MsgList({
   onApprove: (m: Msg, decision: "once" | "session" | "persist") => void;
   onDeny: (m: Msg) => void;
 }) {
+  const hydrating = useSyncExternalStore(
+    hydrateStore.subscribe,
+    () => hydrateStore.getSnapshot(),
+  );
+  const blocks = groupTranscript(messages);
+  const lastUserId = [...messages].reverse().find((m) => m.kind === "user")?.id;
+  const streaming = messages.some(
+    (m) => m.streaming && (m.kind === "assistant" || m.kind === "thinking" || m.kind === "tool"),
+  );
+  const showWorking = busy && !streaming && !hydrating;
+
   return (
     <div className="transcript-inner">
-      {messages.length === 0 && (
+      {messages.length === 0 && !hydrating && (
         <div className="hero">
           <LogoMark size={28} />
           <h1>What should we build{projectName ? ` in ${projectName}` : ""}?</h1>
@@ -97,15 +105,20 @@ export function MsgList({
           </div>
         </div>
       )}
-      {messages.map((m) => (
-        <MsgCard
-          key={m.id}
-          m={m}
-          onApprove={onApprove}
-          onDeny={onDeny}
-        />
-      ))}
-      {busy && <WorkingRow key={`working-${messages.length}`} />}
+      {blocks.map((b) =>
+        b.type === "work" ? (
+          <ActivityStrip key={b.items[0].id} items={b.items} />
+        ) : (
+          <MsgCard
+            key={b.msg.id}
+            m={b.msg}
+            sticky={b.msg.id === lastUserId}
+            onApprove={onApprove}
+            onDeny={onDeny}
+          />
+        ),
+      )}
+      {showWorking && <WorkingRow key={`working-${messages.length}`} />}
     </div>
   );
 }

@@ -1,47 +1,80 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Z Engine</title>
-    <script>
-      // Fatal-error surface: replaces the app only when React never
-      // mounted (blank screen debugging). Runtime rejections after mount
-      // get a small non-destructive banner instead.
-      function __showFatal(label, detail) {
-        document.title = label + ": " + detail;
-        const root = document.getElementById("root");
-        if (!root) return;
-        const mounted = root.querySelector("#root > *:not(.boot-note)") !== null;
-        if (!mounted) {
-          root.innerHTML =
-            '<pre style="color:#f66;padding:20px;font-family:monospace;white-space:pre-wrap">' +
-            label + "\n" + String(detail).replace(/[<>&]/g, "") + "</pre>";
-          return;
-        }
-        let banner = document.getElementById("__rej_banner");
-        if (!banner) {
-          banner = document.createElement("div");
-          banner.id = "__rej_banner";
-          banner.style.cssText =
-            "position:fixed;bottom:12px;left:50%;transform:translateX(-50%);" +
-            "max-width:70vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" +
-            "background:#3a1d1d;color:#f66;border:1px solid #f66;border-radius:8px;" +
-            "padding:6px 12px;font:11px monospace;z-index:9999";
-          document.body.appendChild(banner);
-        }
-        banner.textContent = label + ": " + detail;
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <title>Z Engine</title>
+  <style>
+    /* First paint: this IS the splash. Replaces the old "Loading Z Engine…"
+       placeholder so the window never shows a bare loading string. */
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      background: #0b0b0d;
+      color: #ededf0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
+        "Segoe UI", Roboto, sans-serif;
+    }
+  </style>
+  <link rel="stylesheet" href="/src/splash.css" />
+  <script>
+    // Fatal-error surface: replaces the app only when React never
+    // mounted (blank screen debugging). Runtime rejections after mount
+    // get a small non-destructive banner instead.
+    function __showFatal(label, detail) {
+      document.title = label + ": " + detail;
+      const root = document.getElementById("root");
+      if (!root) return;
+      const mounted = root.childElementCount > 0;
+      if (!mounted) {
+        const splash = document.getElementById("boot-splash");
+        if (splash) splash.remove();
+        root.innerHTML =
+          '<pre style="color:#f66;padding:20px;font-family:monospace;white-space:pre-wrap">' +
+          label + "\n" + String(detail).replace(/[<>&]/g, "") + "</pre>";
+        return;
       }
-      window.addEventListener("error", (e) => {
-        __showFatal("ERR", e.message + "\n" + (e.filename || "") + ":" + (e.lineno || ""));
-      });
-      window.addEventListener("unhandledrejection", (e) => {
-        __showFatal("REJ", (e.reason && e.reason.message) || e.reason);
-      });
-    </script>
-  </head>
-  <body>
-    <div id="root"><p class="boot-note" style="color:#888;padding:20px;font-family:sans-serif">Loading Z Engine…</p></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+      let banner = document.getElementById("__rej_banner");
+      if (!banner) {
+        banner = document.createElement("div");
+        banner.id = "__rej_banner";
+        banner.style.cssText =
+          "position:fixed;bottom:12px;left:50%;transform:translateX(-50%);" +
+          "max-width:70vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" +
+          "background:#3a1d1d;color:#f66;border:1px solid #f66;border-radius:8px;" +
+          "padding:6px 12px;font:11px monospace;z-index:9999";
+        document.body.appendChild(banner);
+      }
+      banner.textContent = label + ": " + detail;
+    }
+    window.addEventListener("error", (e) => {
+      __showFatal("ERR", e.message + "\n" + (e.filename || "") + ":" + (e.lineno || ""));
+    });
+    window.addEventListener("unhandledrejection", (e) => {
+      __showFatal("REJ", (e.reason && e.reason.message) || e.reason);
+    });
+  </script>
+</head>
+
+<body>
+  <div id="boot-splash" class="splash" role="status" aria-label="Z Engine">
+    <div class="splash-inner">
+      <svg class="splash-mark" width="52" height="52" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="1.5" y="1.5" width="21" height="21" rx="6" stroke="currentColor" stroke-width="1.4" />
+        <g fill="currentColor">
+          <rect class="logo-bar logo-bar-top" x="5.53" y="5.53" width="12.94" height="3" rx="0.47" />
+          <path class="logo-bar logo-bar-fold" d="M15.384 9.281h3.085L8.625 14.719H5.531z" />
+          <rect class="logo-bar logo-bar-bot" x="5.53" y="15.47" width="12.94" height="3" rx="0.47" />
+        </g>
+      </svg>
+      <p class="splash-word">Z Engine</p>
+    </div>
+  </div>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
 </html>

@@ -13,6 +13,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 cp "$BIN" "$APP/Contents/MacOS/zengine-gui"
+cp crates/z-engine-gui/src-tauri/icons/icon.icns "$APP/Contents/Resources/icon.icns"
 cp crates/z-engine-gui/src-tauri/icons/icon.png "$APP/Contents/Resources/icon.png"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
