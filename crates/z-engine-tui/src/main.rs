@@ -1,5 +1,5 @@
 //! Terminal face: owns an [`AgentHandle`], consumes crossterm input +
-//! core events, redraws. **All logic lives in harness-core** — this crate
+//! core events, redraws. **All logic lives in z-engine-core** — this crate
 //! only renders and translates keystrokes into commands.
 
 mod app;
@@ -8,37 +8,28 @@ mod views;
 
 use std::path::PathBuf;
 
-use harness_core::agent::{LoopConfig, ResumeState, spawn_with_recorder};
-use harness_core::config::{CliOverrides, Config};
-use harness_core::session::{self, SessionWriter};
+use z_engine_core::agent::{LoopConfig, ResumeState, spawn_with_recorder};
+use z_engine_core::config::{
+    CliOverrides, Config, resolve_api_key, session_search_dirs, sessions_dir,
+};
+use z_engine_core::session::{self, SessionWriter};
 
-/// API-key resolution order:
-/// 1. `HARNESS_API_KEY` environment variable (spec section 8),
-/// 2. `~/.config/harness/api-key` file (convenience; single line, trimmed).
-///
-/// Returns None only when neither is present/usable.
-fn resolve_api_key() -> Option<String> {
-    if let Ok(k) = std::env::var("HARNESS_API_KEY") {
-        let k = k.trim().to_string();
-        if !k.is_empty() {
-            return Some(k);
+fn resolve_session_file(id: &str) -> Option<PathBuf> {
+    let direct = PathBuf::from(id);
+    if direct.exists() {
+        return Some(direct);
+    }
+    for dir in session_search_dirs() {
+        let in_dir = dir.join(id);
+        if in_dir.exists() {
+            return Some(in_dir);
+        }
+        let with_ext = dir.join(format!("{id}.jsonl"));
+        if with_ext.exists() {
+            return Some(with_ext);
         }
     }
-    let path = dirs::home_dir()?
-        .join(".config")
-        .join("harness")
-        .join("api-key");
-    std::fs::read_to_string(path)
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-}
-
-fn sessions_dir() -> PathBuf {
-    dirs::data_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("harness")
-        .join("sessions")
+    None
 }
 
 /// CLI surface for v0.1 (formalized in v1.0).
@@ -96,7 +87,7 @@ fn parse_args() -> Result<Args, String> {
             "--session" => args.session = Some(need_value(&mut i, "--session")?),
             "--help" | "-h" => {
                 println!(
-                    "harness v{} - personal TUI coding agent\n\nUSAGE:\n  harness [--model M] [--base-url URL] [--project DIR]\n          [--resume | --session ULID]\n          [--headless \"task\" | --headless < task.txt] [--auto-approve]",
+                    "zengine v{} - personal TUI coding agent\n\nUSAGE:\n  zengine [--model M] [--base-url URL] [--project DIR]\n          [--resume | --session ULID]\n          [--headless \"task\" | --headless < task.txt] [--auto-approve]",
                     env!("CARGO_PKG_VERSION")
                 );
                 std::process::exit(0);
@@ -109,14 +100,12 @@ fn parse_args() -> Result<Args, String> {
 }
 
 fn init_logging() {
-    let path = dirs::data_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("harness");
+    let path = z_engine_core::config::app_data_write_dir();
     let _ = std::fs::create_dir_all(&path);
     let file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(path.join("harness.log"));
+        .open(path.join("zengine.log"));
     if let Ok(file) = file {
         let filter = tracing_subscriber::EnvFilter::try_from_default_env()
             .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
@@ -147,7 +136,7 @@ fn main() -> anyhow::Result<()> {
     let args = match parse_args() {
         Ok(a) => a,
         Err(e) => {
-            eprintln!("harness: {e}");
+            eprintln!("zengine: {e}");
             std::process::exit(2);
         }
     };
@@ -173,14 +162,8 @@ async fn run(args: Args) -> anyhow::Result<()> {
     let mut session_tag: Option<String> = None;
     if args.resume || args.session.is_some() {
         let chosen = match &args.session {
-            Some(id) => {
-                // Accept a full path, a bare ULID, or a bare filename.
-                let direct = PathBuf::from(id);
-                let in_dir = sessions_dir().join(id);
-                let with_ext = sessions_dir().join(format!("{id}.jsonl"));
-                [direct, in_dir, with_ext].into_iter().find(|p| p.exists())
-            }
-            None => views::picker::pick_interactive(&sessions_dir())?,
+            Some(id) => resolve_session_file(id),
+            None => views::picker::pick_interactive()?,
         };
         if let Some(path) = chosen {
             let events = session::read_events(&path)?;
@@ -249,8 +232,8 @@ async fn run(args: Args) -> anyhow::Result<()> {
         None => {
             if !config.base_url.contains("localhost") && !config.base_url.contains("127.0.0.1") {
                 eprintln!(
-                    "warning: no API key found (set HARNESS_API_KEY or create \\
-                     ~/.config/harness/api-key); provider calls will fail"
+                    "warning: no API key found (set ZENGINE_API_KEY or create \\
+                     ~/.config/z-engine/api-key); provider calls will fail"
                 );
             }
         }
@@ -290,10 +273,10 @@ async fn run(args: Args) -> anyhow::Result<()> {
     .await
 }
 
-fn parse_mode(s: Option<&str>) -> harness_core::agent::PermissionMode {
+fn parse_mode(s: Option<&str>) -> z_engine_core::agent::PermissionMode {
     match s {
-        Some("accept-edits") => harness_core::agent::PermissionMode::AutoAcceptEdits,
-        Some("plan") => harness_core::agent::PermissionMode::Plan,
-        _ => harness_core::agent::PermissionMode::Normal,
+        Some("accept-edits") => z_engine_core::agent::PermissionMode::AutoAcceptEdits,
+        Some("plan") => z_engine_core::agent::PermissionMode::Plan,
+        _ => z_engine_core::agent::PermissionMode::Normal,
     }
 }

@@ -1,4 +1,4 @@
-/* ── harness · premium dark theme (codex-desktop inspired) ─────────────── */
+/* ── Z Engine · premium dark theme (codex-desktop inspired) ────────────── */
 
 :root {
   color-scheme: dark;
@@ -140,7 +140,7 @@ kbd {
 .newtask {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 7px;
   width: 100%;
   padding: 9px 12px;
@@ -671,7 +671,10 @@ kbd {
 
 .session {
   position: relative;
-  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
   border-radius: var(--radius-s);
   cursor: pointer;
   transition: background 0.13s ease;
@@ -682,28 +685,44 @@ kbd {
   background: rgba(255, 255, 255, 0.05);
 }
 
+.session.active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.session.active .sess-preview {
+  color: var(--text);
+}
+
+.sess-icon {
+  flex-shrink: 0;
+  color: var(--text-3);
+}
+
+.session.active .sess-icon {
+  color: var(--text-2);
+}
+
 .sess-preview {
+  flex: 1;
+  min-width: 0;
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.35;
   color: var(--text-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding-right: 18px;
+  padding-right: 14px;
 }
 
 .session:hover .sess-preview {
   color: var(--text);
 }
 
-.sess-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 3px;
-  font-family: var(--mono);
-  font-size: 10.5px;
+.ws-count {
+  margin-left: auto;
+  font-size: 10px;
   color: var(--text-3);
+  padding-right: 4px;
 }
 
 .session .del {
@@ -1048,9 +1067,16 @@ kbd {
 }
 
 .msg-actions button {
-  padding: 2px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
   font-size: 10.5px;
-  font-family: var(--mono);
   color: var(--text-2);
   background: var(--bg-elev, #1b1b1f);
   border: 1px solid var(--border);

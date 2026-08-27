@@ -2,9 +2,9 @@ use std::path::Path;
 
 use crossterm::event::{Event as CtEvent, EventStream, KeyEventKind};
 use futures::StreamExt;
-use harness_core::agent::{AgentHandle, EventRx, PermissionMode};
-use harness_core::config::Config;
 use ratatui::Terminal;
+use z_engine_core::agent::{AgentHandle, EventRx, PermissionMode};
+use z_engine_core::config::Config;
 
 use super::{App, Block};
 use crate::views;
@@ -37,7 +37,7 @@ pub async fn run(
     let mut reader = EventStream::new();
 
     app.blocks.push(Block::Notice(format!(
-        "harness v{} · model {}\nproject {}\ntype a task + Enter · Esc aborts · PgUp/PgDn scrolls · Ctrl-C twice quits",
+        "zengine v{} · model {}\nproject {}\ntype a task + Enter · Esc aborts · PgUp/PgDn scrolls · Ctrl-C twice quits",
         env!("CARGO_PKG_VERSION"),
         config.model,
         project_root.display()

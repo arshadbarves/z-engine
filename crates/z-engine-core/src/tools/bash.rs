@@ -245,7 +245,7 @@ mod tests {
         assert!(out.result.contains("exit code: 3"));
         assert!(out.result.contains("hello"));
         assert!(out.result.contains("oops"));
-        assert!(!out.result.contains("HARNESS_CWD")); // marker never leaks
+        assert!(!out.result.contains("ZENGINE_CWD")); // marker never leaks
     }
 
     #[tokio::test]

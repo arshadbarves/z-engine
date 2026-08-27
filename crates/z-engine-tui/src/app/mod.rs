@@ -11,8 +11,8 @@ pub use state::{Block, PendingApproval};
 use std::collections::VecDeque;
 use std::path::Path;
 
-use harness_core::agent::{AgentHandle, EventRx, PermissionMode};
-use harness_core::config::Config;
+use z_engine_core::agent::{AgentHandle, EventRx, PermissionMode};
+use z_engine_core::config::Config;
 
 pub struct App {
     pub handle: AgentHandle,
@@ -31,7 +31,7 @@ pub struct App {
     pub prompt_tokens: u64,
     pub completion_tokens: u64,
     /// Resolved pricing for the active model, if known.
-    pub pricing: Option<harness_core::context::cost::Pricing>,
+    pub pricing: Option<z_engine_core::context::cost::Pricing>,
     pub(crate) quit_hint_until: Option<std::time::Instant>,
     pub should_quit: bool,
     /// Interaction permission mode (Shift+Tab cycles).
@@ -71,7 +71,7 @@ impl App {
             session_tag,
             prompt_tokens: 0,
             completion_tokens: 0,
-            pricing: harness_core::context::cost::for_model(&config.model),
+            pricing: z_engine_core::context::cost::for_model(&config.model),
             quit_hint_until: None,
             should_quit: false,
             turn_started_at: None,
@@ -89,8 +89,8 @@ impl App {
 mod tests {
     use super::*;
     use crate::views;
-    use harness_core::agent::{Event, LoopConfig, spawn};
     use ratatui::{Terminal, backend::TestBackend};
+    use z_engine_core::agent::{Event, LoopConfig, spawn};
 
     fn test_app() -> App {
         // Bogus provider URL: handles are valid, no network is touched.

@@ -30,19 +30,14 @@ struct CatalogProvider {
 type Catalog = BTreeMap<String, CatalogProvider>;
 
 fn catalog_cache_path() -> PathBuf {
-    dirs::data_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("harness")
-        .join("models-cache.json")
+    z_engine_core::config::app_data_write_dir().join("models-cache.json")
 }
 
 /// Local override file in the same shape as the command output:
 /// `{"providers": {"<id>": {"name": ..., "models": {"<id>": {...}}}}}`.
 /// Entries are merged over the fetched catalog (fields win individually).
 fn local_models_override() -> Catalog {
-    let path = dirs::home_dir()
-        .map(|h| h.join(".config/harness/models.json"))
-        .unwrap_or_else(|| PathBuf::from("/tmp/harness-models.json"));
+    let path = z_engine_core::config::models_override_path();
     std::fs::read_to_string(path)
         .ok()
         .and_then(|t| serde_json::from_str::<Catalog>(&t).ok())

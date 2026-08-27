@@ -6,7 +6,7 @@ import {
 
 /** Registered workspace roots (Codex-desktop style projects) plus the
  * active one new tasks run against. Persisted backend-side in
- * `harness/workspaces.json`; this store mirrors it for the UI. */
+ * `z-engine/workspaces.json`; this store mirrors it for the UI. */
 let roots: string[] = [];
 let active: string | null = null;
 

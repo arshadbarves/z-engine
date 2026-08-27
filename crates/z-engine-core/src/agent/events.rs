@@ -115,6 +115,16 @@ pub enum Event {
     },
     TurnAborted,
     Error(String),
+    /// Per-message revert: drop the user turn at `keep_turn` and everything
+    /// after it from the in-memory transcript. `keep_turn` is the 0-based
+    /// run-turn index of the user message being reverted.
+    TranscriptTrimmed {
+        keep_turn: u64,
+    },
+    /// Sidebar label for the current session (generated after the first prompt).
+    SessionTitle {
+        text: String,
+    },
 }
 
 /// JSON contract shared with the GUI frontend (camelCase, tagged by `type`).
@@ -171,6 +181,10 @@ impl serde::Serialize for Event {
             }),
             Event::TurnAborted => json!({"type": "turnAborted"}),
             Event::Error(m) => json!({"type": "error", "message": m}),
+            Event::TranscriptTrimmed { keep_turn } => {
+                json!({"type": "transcriptTrimmed", "keepTurn": keep_turn})
+            }
+            Event::SessionTitle { text } => json!({"type": "sessionTitle", "text": text}),
         };
         v.serialize(serializer)
     }

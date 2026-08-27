@@ -5,11 +5,11 @@
 //! with v0.3).
 
 use crate::app::App;
-use harness_core::context::cost;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
+use z_engine_core::context::cost;
 
 pub fn render(f: &mut ratatui::Frame, app: &App, area: Rect) {
     let total_tokens = app.prompt_tokens + app.completion_tokens;

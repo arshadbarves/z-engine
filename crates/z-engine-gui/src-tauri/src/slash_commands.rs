@@ -11,14 +11,7 @@ pub(crate) struct SlashCommandInfo {
 }
 
 fn slash_dirs(project_root: &Path) -> Vec<(String, PathBuf)> {
-    let mut dirs = vec![(
-        "project".to_string(),
-        project_root.join(".harness").join("commands"),
-    )];
-    if let Some(home) = dirs::home_dir() {
-        dirs.push(("global".to_string(), home.join(".config/harness/commands")));
-    }
-    dirs
+    z_engine_core::config::slash_command_dirs(project_root)
 }
 
 /// User-defined slash commands: markdown files whose stem is the command

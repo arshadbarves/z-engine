@@ -10,7 +10,7 @@ use std::time::Instant;
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use harness_provider::ToolCall;
+use z_engine_provider::ToolCall;
 
 use crate::perms::{Decision, PolicyEngine};
 use crate::tools::{ToolCtx, ToolError, ToolOutput, ToolRegistry};
@@ -149,7 +149,7 @@ pub(super) async fn execute_calls(
                                 }
                                 Ok(_) => {
                                     let _ = ev_tx.send(Event::StatusNote(format!(
-                                        "rule \"{rule}\" persisted to .harness/config.toml"
+                                        "rule \"{rule}\" persisted to .z-engine/config.toml"
                                     )));
                                 }
                             }

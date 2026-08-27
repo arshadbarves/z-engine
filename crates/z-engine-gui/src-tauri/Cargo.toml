@@ -1,17 +1,17 @@
 [package]
-name = "harness-gui"
-description = "Desktop shell wrapping the harness-core brain"
+name = "z-engine-gui"
+description = "Desktop shell wrapping the z-engine-core brain"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "harness-gui"
+name = "zengine-gui"
 path = "src/main.rs"
 
 [dependencies]
-harness-core = { path = "../../harness-core" }
+z-engine-core = { path = "../../z-engine-core" }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 serde.workspace = true

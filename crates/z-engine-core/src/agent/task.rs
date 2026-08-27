@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use harness_provider::{ChatMessage, Client, Usage};
+use z_engine_provider::{ChatMessage, Client, Usage};
 
 use crate::context::{
     budget::BudgetMeter,
@@ -21,7 +21,8 @@ use crate::tools::{ToolCtx, ToolRegistry};
 use super::LoopConfig;
 use super::events::{Command, Event};
 use super::handle::ResumeState;
-use super::revert::{revert_last_turn, revert_to_turn};
+use super::revert::{revert_last_turn, revert_to_turn, trim_working_before_user_turn};
+use super::side_requests::generate_session_title;
 use super::state::LoopState;
 use super::turn::{TurnOutcome, run_turn};
 
@@ -120,6 +121,7 @@ pub(super) async fn agent_task(
         reasoning_effort: None,
     };
     // Seed from a previous session's transcript (resume).
+    let mut titled = resume.is_some();
     if let Some(rs) = resume {
         state.working = rs.working;
         if let Ok(mut n) = notes.lock() {
@@ -147,6 +149,27 @@ pub(super) async fn agent_task(
                     let _ = w.record(&SessionEvent::UserMsg {
                         text: user_text.clone(),
                         images: images.clone(),
+                    });
+                }
+                if !titled {
+                    titled = true;
+                    let client = client.clone();
+                    let model = cfg.model.clone();
+                    let prompt = user_text.clone();
+                    let ev_tx2 = ev_tx.clone();
+                    let path = recorder.as_ref().map(|w| w.path.clone());
+                    tokio::spawn(async move {
+                        let title = generate_session_title(&client, &model, &prompt)
+                            .await
+                            .unwrap_or_else(|| crate::session::fallback_title(&prompt));
+                        if let Some(path) = path {
+                            if let Ok(mut w) = SessionWriter::append_to(&path) {
+                                let _ = w.record(&SessionEvent::Title {
+                                    text: title.clone(),
+                                });
+                            }
+                        }
+                        let _ = ev_tx2.send(Event::SessionTitle { text: title });
                     });
                 }
                 state
@@ -223,6 +246,15 @@ pub(super) async fn agent_task(
             }
             Command::RevertToTurn(keep) => {
                 revert_to_turn(&ctx, &cfg.project_root, keep, &ev_tx);
+                trim_working_before_user_turn(&mut state.working, keep);
+                if let Some(w) = recorder.as_mut() {
+                    if let Err(e) = crate::session::trim_file_before_user_turn(&w.path, keep) {
+                        tracing::warn!(error = %e, "session trim failed");
+                    } else if let Err(e) = w.reopen() {
+                        tracing::warn!(error = %e, "session writer reopen failed");
+                    }
+                }
+                let _ = ev_tx.send(Event::TranscriptTrimmed { keep_turn: keep });
             }
             _ => { /* stale Approve/Deny/Abort while idle are ignored */ }
         }
@@ -247,7 +279,9 @@ async fn run_hook(
             .arg("-c")
             .arg(cmd)
             .current_dir(root)
+            .env("ZENGINE_EVENT", event)
             .env("HARNESS_EVENT", event)
+            .env("ZENGINE_PROJECT_ROOT", root)
             .env("HARNESS_PROJECT_ROOT", root)
             .output(),
     )

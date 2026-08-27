@@ -1,22 +1,27 @@
 #!/usr/bin/env bash
 # v0.1 live acceptance: fix a failing test in the scratch repo, end-to-end.
-# Key comes from ~/.config/harness/api-key (never echoed, never logged).
+# Key comes from ~/.config/z-engine/api-key or ~/.config/harness/api-key
+# (never echoed, never logged).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-KEY_FILE="$HOME/.config/harness/api-key"
-[ -f "$KEY_FILE" ] || { echo "missing $KEY_FILE"; exit 2; }
-export HARNESS_API_KEY="$(cat "$KEY_FILE")"
+KEY_FILE=""
+for f in "$HOME/.config/z-engine/api-key" "$HOME/.config/harness/api-key"; do
+  if [ -f "$f" ]; then KEY_FILE="$f"; break; fi
+done
+[ -n "$KEY_FILE" ] || { echo "missing ~/.config/z-engine/api-key"; exit 2; }
+export ZENGINE_API_KEY="$(cat "$KEY_FILE")"
+export HARNESS_API_KEY="$ZENGINE_API_KEY"
 
-MODEL="${HARNESS_MODEL:-openrouter/auto}"
-BASE="${HARNESS_BASE_URL:-https://openrouter.ai/api/v1}"
+MODEL="${ZENGINE_MODEL:-${HARNESS_MODEL:-openrouter/auto}}"
+BASE="${ZENGINE_BASE_URL:-${HARNESS_BASE_URL:-https://openrouter.ai/api/v1}}"
 
 cd tmp/acceptance-v01
 echo "== before =="
 cargo test 2>&1 | tail -3 || true
 
-echo "== harness --headless =="
-../../target/debug/harness \
+echo "== zengine --headless =="
+../../target/debug/zengine \
   --project . \
   --base-url "$BASE" \
   --model "$MODEL" \

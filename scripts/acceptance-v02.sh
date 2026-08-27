@@ -1,22 +1,26 @@
 #!/usr/bin/env bash
-# v0.2 live acceptance: implement a multi-file feature without leaving harness.
+# v0.2 live acceptance: implement a multi-file feature without leaving zengine.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-KEY_FILE="$HOME/.config/harness/api-key"
-[ -f "$KEY_FILE" ] || { echo "missing $KEY_FILE"; exit 2; }
-export HARNESS_API_KEY="$(cat "$KEY_FILE")"
+KEY_FILE=""
+for f in "$HOME/.config/z-engine/api-key" "$HOME/.config/harness/api-key"; do
+  if [ -f "$f" ]; then KEY_FILE="$f"; break; fi
+done
+[ -n "$KEY_FILE" ] || { echo "missing ~/.config/z-engine/api-key"; exit 2; }
+export ZENGINE_API_KEY="$(cat "$KEY_FILE")"
+export HARNESS_API_KEY="$ZENGINE_API_KEY"
 
-MODEL="${HARNESS_MODEL:-openrouter/auto}"
-BASE="${HARNESS_BASE_URL:-https://openrouter.ai/api/v1}"
+MODEL="${ZENGINE_MODEL:-${HARNESS_MODEL:-openrouter/auto}}"
+BASE="${ZENGINE_BASE_URL:-${HARNESS_BASE_URL:-https://openrouter.ai/api/v1}}"
 
 cd tmp/acceptance-v02
 echo "== baseline =="
 cargo test 2>&1 | grep "test result"
 
-BIN="${BIN:-../../target/release/harness}"; [ -x "$BIN" ] || BIN=../../target/debug/harness
+BIN="${BIN:-../../target/release/zengine}"; [ -x "$BIN" ] || BIN=../../target/debug/zengine
 
-echo "== harness --headless =="
+echo "== zengine --headless =="
 "$BIN" \
   --project . \
   --base-url "$BASE" \

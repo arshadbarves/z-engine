@@ -72,9 +72,14 @@ threading.Thread(target=srv.serve_forever, daemon=True).start()
 workdir = os.path.join(ROOT, "tmp/acceptance-v01")
 import platform
 if platform.system() == "Darwin":
-    sessions_dir = os.path.expanduser("~/Library/Application Support/harness/sessions")
+    sessions_dir = os.path.expanduser("~/Library/Application Support/z-engine/sessions")
+    legacy = os.path.expanduser("~/Library/Application Support/harness/sessions")
 else:
-    sessions_dir = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")) + "/harness/sessions"
+    share = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
+    sessions_dir = share + "/z-engine/sessions"
+    legacy = share + "/harness/sessions"
+if not os.path.isdir(sessions_dir) and os.path.isdir(legacy):
+    sessions_dir = legacy
 
 def newest_session():
     files = [os.path.join(sessions_dir, f) for f in os.listdir(sessions_dir)]
@@ -89,9 +94,9 @@ def wait_for(predicate, timeout=30, what=""):
         time.sleep(0.15)
     raise SystemExit(f"timeout waiting for {what}")
 
-env = dict(os.environ, HARNESS_API_KEY="mock")
+env = dict(os.environ, ZENGINE_API_KEY="mock", HARNESS_API_KEY="mock")
 base = f"http://127.0.0.1:{port}/v1"
-binpath = os.path.join(ROOT, "target/debug/harness")
+binpath = os.path.join(ROOT, "target/debug/zengine")
 
 # ---- phase HANG: start, let round 1 record, then kill -9 -------------------
 p1 = subprocess.Popen(

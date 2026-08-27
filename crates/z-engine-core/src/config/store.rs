@@ -1,16 +1,21 @@
 use std::path::PathBuf;
 
-use super::types::{EnvVars, FileFormat};
+use super::paths::{project_config_path, project_config_read_path};
+use super::types::FileFormat;
 use crate::context::cost::Pricing;
 
-/// Path of the project-level config: `<project>/.harness/config.toml`.
-pub fn project_config_path(project_root: &std::path::Path) -> PathBuf {
-    project_root.join(".harness").join("config.toml")
+const PROJECT_CONFIG_HEADER: &str = "# z-engine project configuration\n# bash prefix rules under [permissions.allow] skip approval for this project.\n";
+
+fn read_project_text(project_root: &std::path::Path) -> std::io::Result<String> {
+    let path = project_config_read_path(project_root);
+    match std::fs::read_to_string(&path) {
+        Ok(t) => Ok(t),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        Err(e) => Err(e),
+    }
 }
 
-const PROJECT_CONFIG_HEADER: &str = "# harness project configuration\n# bash prefix rules under [permissions.allow] skip approval for this project.\n";
-
-/// Persist a bash prefix rule into `<project>/.harness/config.toml`
+/// Persist a bash prefix rule into `<project>/.z-engine/config.toml`
 /// (spec section 5, fourth modal answer). Values survive; comments in an
 /// existing file are not preserved. Duplicate rules are ignored.
 pub fn persist_bash_rule(project_root: &std::path::Path, rule: &str) -> std::io::Result<PathBuf> {
@@ -18,7 +23,7 @@ pub fn persist_bash_rule(project_root: &std::path::Path, rule: &str) -> std::io:
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    let text = read_project_text(project_root)?;
     let mut fmt: FileFormat = toml::from_str(&text).map_err(|e| {
         std::io::Error::new(
             std::io::ErrorKind::InvalidData,
@@ -41,9 +46,9 @@ pub fn persist_bash_rule(project_root: &std::path::Path, rule: &str) -> std::io:
     Ok(path)
 }
 
-/// List bash prefix rules persisted in `<project>/.harness/config.toml`.
+/// List bash prefix rules persisted in `<project>/.z-engine/config.toml`.
 pub fn list_bash_rules(project_root: &std::path::Path) -> std::io::Result<Vec<String>> {
-    let path = project_config_path(project_root);
+    let path = project_config_read_path(project_root);
     let text = match std::fs::read_to_string(&path) {
         Ok(t) => t,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -58,15 +63,11 @@ pub fn list_bash_rules(project_root: &std::path::Path) -> std::io::Result<Vec<St
     Ok(fmt.permissions.and_then(|p| p.allow).unwrap_or_default())
 }
 
-/// Remove a bash prefix rule from `<project>/.harness/config.toml`.
+/// Remove a bash prefix rule from `<project>/.z-engine/config.toml`.
 /// Missing file or absent rule are treated as success (idempotent).
 pub fn remove_bash_rule(project_root: &std::path::Path, rule: &str) -> std::io::Result<()> {
     let path = project_config_path(project_root);
-    let text = match std::fs::read_to_string(&path) {
-        Ok(t) => t,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(e) => return Err(e),
-    };
+    let text = read_project_text(project_root)?;
     let mut fmt: FileFormat = toml::from_str(&text).map_err(|e| {
         std::io::Error::new(
             std::io::ErrorKind::InvalidData,
@@ -90,7 +91,7 @@ pub struct GeneralOverrides {
     pub review_enabled: Option<bool>,
 }
 
-/// Persist general settings into `<project>/.harness/config.toml`,
+/// Persist general settings into `<project>/.z-engine/config.toml`,
 /// preserving every other section. `None` fields are left untouched.
 pub fn persist_general(
     project_root: &std::path::Path,
@@ -107,7 +108,7 @@ pub fn persist_general(
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    let text = read_project_text(project_root)?;
     let mut fmt: FileFormat = toml::from_str(&text).map_err(|e| {
         std::io::Error::new(
             std::io::ErrorKind::InvalidData,
@@ -131,7 +132,7 @@ pub fn persist_general(
 }
 
 /// Persist a per-model pricing override into
-/// `<project>/.harness/config.toml` under `[cost.overrides]`.
+/// `<project>/.z-engine/config.toml` under `[cost.overrides]`.
 pub fn set_cost_override(
     project_root: &std::path::Path,
     model: &str,
@@ -141,7 +142,7 @@ pub fn set_cost_override(
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    let text = read_project_text(project_root)?;
     let mut fmt: FileFormat = toml::from_str(&text).map_err(|e| {
         std::io::Error::new(
             std::io::ErrorKind::InvalidData,
@@ -158,11 +159,10 @@ pub fn set_cost_override(
 /// Remove a per-model pricing override (idempotent).
 pub fn remove_cost_override(project_root: &std::path::Path, model: &str) -> std::io::Result<()> {
     let path = project_config_path(project_root);
-    let text = match std::fs::read_to_string(&path) {
-        Ok(t) => t,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(e) => return Err(e),
-    };
+    let text = read_project_text(project_root)?;
+    if text.is_empty() {
+        return Ok(());
+    }
     let mut fmt: FileFormat = toml::from_str(&text).map_err(|e| {
         std::io::Error::new(
             std::io::ErrorKind::InvalidData,
@@ -185,16 +185,6 @@ fn write_project_config(path: &std::path::Path, fmt: &FileFormat) -> std::io::Re
     std::fs::write(path, body)
 }
 
-/// Path of the global config file, honoring `HARNESS_CONFIG`.
-/// Spec §8 pins it to `~/.config/harness/config.toml` (deliberately *not*
-/// the platform config dir, so behavior is identical across machines).
-pub fn global_config_path(env: &EnvVars) -> Option<PathBuf> {
-    if let Some(p) = &env.harness_config {
-        return Some(PathBuf::from(p));
-    }
-    dirs::home_dir().map(|h| h.join(".config").join("harness").join("config.toml"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,7 +200,7 @@ mod tests {
         persist_bash_rule(root, "git status").unwrap();
 
         let text = std::fs::read_to_string(project_config_path(root)).unwrap();
-        assert!(text.starts_with("# harness"));
+        assert!(text.starts_with("# z-engine"));
         // Layering must now load exactly these rules.
         let cfg = Config::load(&CliOverrides::default(), Some(root)).unwrap();
         assert_eq!(cfg.permissions.allow, vec!["cargo test*", "git status"]);
@@ -245,7 +235,7 @@ mod tests {
         let cfg = Config::layer_all(
             Some(std::path::Path::new("/tmp/g.toml")),
             Some(global),
-            Some(&tmp.path().join(".harness/config.toml")),
+            Some(&tmp.path().join(".z-engine/config.toml")),
             Some(project),
             &EnvVars::default(),
             &CliOverrides::default(),
@@ -255,7 +245,7 @@ mod tests {
         assert_eq!((p.usd_per_mtok_input, p.usd_per_mtok_output), (9.0, 9.5));
         // exact override beats the built-in substring table
         let built_in = crate::context::cost::for_model("claude-sonnet-4").unwrap();
-        std::fs::create_dir_all(tmp.path().join(".harness")).unwrap();
+        std::fs::create_dir_all(tmp.path().join(".z-engine")).unwrap();
         set_cost_override(
             tmp.path(),
             "anthropic/claude-sonnet-4",

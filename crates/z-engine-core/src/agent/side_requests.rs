@@ -4,7 +4,7 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use harness_provider::{ChatMessage, ChatRequest, Client, StreamEvent};
+use z_engine_provider::{ChatMessage, ChatRequest, Client, StreamEvent};
 
 use super::LoopConfig;
 
@@ -80,4 +80,70 @@ pub(super) async fn summarize_segment(client: &Client, cfg: &LoopConfig, input: 
         }
     }
     out.trim().to_string()
+}
+
+/// Non-blocking title for the sessions sidebar. Failures return `None`
+/// so the caller can fall back to a clipped first line of the prompt.
+pub(super) async fn generate_session_title(
+    client: &Client,
+    model: &str,
+    prompt: &str,
+) -> Option<String> {
+    let clipped: String = prompt.chars().take(800).collect();
+    let req = ChatRequest::new(
+        model.to_string(),
+        vec![
+            ChatMessage::system(crate::prompts::SESSION_TITLE),
+            ChatMessage::user(clipped),
+        ],
+    );
+    let abort = Arc::new(AtomicBool::new(false));
+    let mut rx = client.stream_chat(&req, abort);
+    let mut out = String::new();
+    while let Some(item) = rx.recv().await {
+        match item {
+            Ok(StreamEvent::TextDelta(t)) => out.push_str(&t),
+            Ok(StreamEvent::Done) | Ok(StreamEvent::Finish(_)) => {}
+            Ok(_) => {}
+            Err(e) => {
+                tracing::warn!(error = %e, "session-title stream failed");
+                return None;
+            }
+        }
+    }
+    sanitize_session_title(&out)
+}
+
+/// First line, strip wrapping quotes, at most 8 words. Empty → None.
+pub(super) fn sanitize_session_title(raw: &str) -> Option<String> {
+    let line = raw
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .unwrap_or("");
+    let stripped = line.trim_matches(|c| c == '"' || c == '\'' || c == '`');
+    let words: Vec<&str> = stripped.split_whitespace().take(8).collect();
+    if words.is_empty() {
+        None
+    } else {
+        Some(words.join(" "))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_session_title;
+
+    #[test]
+    fn strips_quotes_and_caps_words() {
+        assert_eq!(
+            sanitize_session_title("\"Fix the flaky auth test in login.rs extra words here\""),
+            Some("Fix the flaky auth test in login.rs extra".into())
+        );
+    }
+
+    #[test]
+    fn empty_raw_is_none() {
+        assert_eq!(sanitize_session_title("  \n  "), None);
+    }
 }

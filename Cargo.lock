@@ -1448,81 +1448,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "harness-core"
-version = "1.1.0"
-dependencies = [
- "async-trait",
- "axum",
- "dirs",
- "futures",
- "globset",
- "harness-provider",
- "ignore",
- "regex",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "similar",
- "strsim",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "toml 0.9.12+spec-1.1.0",
- "tracing",
- "tree-sitter",
- "tree-sitter-rust",
- "ulid",
-]
-
-[[package]]
-name = "harness-gui"
-version = "1.1.0"
-dependencies = [
- "dirs",
- "harness-core",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "harness-provider"
-version = "1.1.0"
-dependencies = [
- "futures",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "harness-tui"
-version = "1.1.0"
-dependencies = [
- "anyhow",
- "crossterm",
- "dirs",
- "futures",
- "harness-core",
- "ratatui",
- "syntect",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "ulid",
-]
-
-[[package]]
 name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5578,6 +5503,80 @@ dependencies = [
  "quote",
  "syn 2.0.119",
  "synstructure",
+]
+
+[[package]]
+name = "z-engine-core"
+version = "1.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "dirs",
+ "futures",
+ "globset",
+ "ignore",
+ "regex",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "similar",
+ "strsim",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "toml 0.9.12+spec-1.1.0",
+ "tracing",
+ "tree-sitter",
+ "tree-sitter-rust",
+ "ulid",
+ "z-engine-provider",
+]
+
+[[package]]
+name = "z-engine-gui"
+version = "1.1.0"
+dependencies = [
+ "dirs",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "z-engine-core",
+]
+
+[[package]]
+name = "z-engine-provider"
+version = "1.1.0"
+dependencies = [
+ "futures",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "z-engine-tui"
+version = "1.1.0"
+dependencies = [
+ "anyhow",
+ "crossterm",
+ "futures",
+ "ratatui",
+ "syntect",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "ulid",
+ "z-engine-core",
 ]
 
 [[package]]

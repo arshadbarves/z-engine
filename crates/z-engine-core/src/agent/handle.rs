@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
-use harness_provider::{ChatMessage, Client};
+use z_engine_provider::{ChatMessage, Client};
 
 use super::LoopConfig;
 use super::events::{Command, Event};

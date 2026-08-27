@@ -10,6 +10,7 @@ const WALK_SKIP_DIRS: &[&str] = &[
     "dist",
     "build",
     ".harness",
+    ".z-engine",
     ".venv",
     "__pycache__",
 ];

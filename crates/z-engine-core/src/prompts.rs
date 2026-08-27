@@ -16,3 +16,6 @@ pub const SUMMARIZER: &str = include_str!("../prompts/summarizer.md");
 
 /// Research sub-agent persona (spec section 9 v0.7).
 pub const SUBAGENT: &str = include_str!("../prompts/subagent.md");
+
+/// Short session-title generator (sidebar labels).
+pub const SESSION_TITLE: &str = include_str!("../prompts/session-title.md");

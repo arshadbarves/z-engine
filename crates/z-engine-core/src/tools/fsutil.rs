@@ -82,7 +82,7 @@ pub fn truncate_with_tempfile(output: &str, ctx: &ToolCtx) -> String {
 /// Write the full output to its own file even when under budget? No — only
 /// truncation spills to disk. This helper just names spill files.
 fn next_tempfile_path(ctx: &ToolCtx) -> PathBuf {
-    let dir = ctx.tmp_dir.join("harness");
+    let dir = ctx.tmp_dir.join("z-engine");
     let _ = std::fs::create_dir_all(&dir);
     dir.join(format!("out-{}.log", ulid::Ulid::new()))
 }

@@ -14,16 +14,16 @@ navigate. Violations are review-blocking.
 3. **`mod.rs` / `lib.rs` are composition roots only**: module
    declarations + re-exports. No logic beyond ~30 lines of glue.
 4. **Prompts are data, not code.** All LLM prompt prose lives in
-   `crates/harness-core/prompts/*.md`, loaded via `include_str!` in
+   `crates/z-engine-core/prompts/*.md`, loaded via `include_str!` in
    `src/prompts.rs`. Never inline prompt text inside logic files.
 5. **Dependency direction (DIP):**
    ```
-   harness-provider   ←  transport only (HTTP/SSE/types), no agent logic
+   z-engine-provider   ←  transport only (HTTP/SSE/types), no agent logic
         ↑
-   harness-core       ←  brain: agent loop, tools, perms, context,
+   z-engine-core       ←  brain: agent loop, tools, perms, context,
         ↑                session, config, prompts. NO UI dependencies.
         ↑
-   harness-tui  /  harness-gui   ←  frontends; may import core, never
+   z-engine-tui  /  z-engine-gui   ←  frontends; may import core, never
                                     the reverse
    ```
    Core must not depend on TUI/GUI; provider must not depend on core.
@@ -38,16 +38,17 @@ navigate. Violations are review-blocking.
 
 ```
 crates/
-├── harness-provider/          # LLM transport (swap-friendly seam)
+├── z-engine-provider/         # LLM transport (swap-friendly seam)
 │   ├── src/lib.rs             #   re-exports only
 │   ├── src/{types,client,sse,accumulate}.rs
 │   └── tests/fixtures/sse/    #   recorded SSE streams as fixtures
-├── harness-core/
+├── z-engine-core/
 │   ├── prompts/               # ✏️ EDIT PROMPTS HERE (plain markdown)
 │   │   ├── system-main.md     #   L0 operating instructions
 │   │   ├── reviewer.md        #   post-edit reviewer persona
 │   │   ├── summarizer.md      #   compaction summarizer
-│   │   └── subagent.md        #   research sub-agent persona
+│   │   ├── subagent.md        #   research sub-agent persona
+│   │   └── session-title.md   #   sidebar session title
 │   └── src/
 │       ├── lib.rs             # re-exports only
 │       ├── prompts.rs         # include_str! registry (one const per prompt)
@@ -69,7 +70,8 @@ crates/
 │       │   ├── mod.rs         # composition root
 │       │   ├── types.rs       # Config/FileFormat/errors
 │       │   ├── loader.rs      # load + layering
-│       │   └── store.rs       # persistence CRUD (atomic writes!)
+│       │   ├── store.rs       # persistence CRUD (atomic writes!)
+│       │   └── paths.rs       # z-engine dirs with harness fallbacks
 │       ├── perms/
 │       │   ├── mod.rs         # composition root
 │       │   ├── engine.rs      # PolicyEngine decisions
@@ -84,12 +86,12 @@ crates/
 │       │   └── <tool_name>.rs # ONE FILE PER TOOL (bash, edit_file, …)
 │       ├── lsp/  mcp/         # external-process integrations
 │       └── session/           # JSONL transcript store
-├── harness-tui/src/
+├── z-engine-tui/src/
 │   ├── main.rs                # terminal setup/teardown only
 │   ├── app/
 │   │   ├── mod.rs state.rs input.rs reducer.rs run.rs
 │   └── views/                 # PURE render fns over &App (no mutation)
-└── harness-gui/src-tauri/src/
+└── z-engine-gui/src-tauri/src/
     ├── main.rs                # builder wiring only (<160 lines)
     ├── state.rs event_bridge.rs git_util.rs catalog.rs
     ├── slash_commands.rs session_store.rs
@@ -97,7 +99,7 @@ crates/
         ├── mod.rs agent.rs settings.rs misc.rs
 ```
 
-The React frontend lives in `harness-gui/ui/src`: `components/` (one
+The React frontend lives in `z-engine-gui/ui/src`: `components/` (one
 file per component), `lib/` (stores + typed `commands.ts` boundary).
 Backend access goes ONLY through `lib/commands.ts`; event handling only
 through `lib/events.ts`.

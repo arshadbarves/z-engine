@@ -1,7 +1,7 @@
-use harness_core::agent::AgentHandle;
-use harness_core::config::Config;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use z_engine_core::agent::AgentHandle;
+use z_engine_core::config::Config;
 
 /// Shared application state managed by Tauri.
 #[derive(Default)]
@@ -18,27 +18,14 @@ pub(crate) struct AppCtx {
 }
 
 pub(crate) fn resolve_api_key() -> Option<String> {
-    if let Ok(k) = std::env::var("HARNESS_API_KEY") {
-        let k = k.trim().to_string();
-        if !k.is_empty() {
-            return Some(k);
-        }
-    }
-    let path = dirs::home_dir()?
-        .join(".config")
-        .join("harness")
-        .join("api-key");
-    std::fs::read_to_string(path)
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
+    z_engine_core::config::resolve_api_key()
 }
 
 pub(crate) fn build_loop_config(
     cfg: &Config,
     project_root: &Path,
-) -> harness_core::agent::LoopConfig {
-    harness_core::agent::LoopConfig {
+) -> z_engine_core::agent::LoopConfig {
+    z_engine_core::agent::LoopConfig {
         model: cfg.model.clone(),
         base_url: cfg.base_url.clone(),
         api_key: resolve_api_key(),
@@ -53,17 +40,29 @@ pub(crate) fn build_loop_config(
         review_enabled: cfg.review_enabled,
         mcp_servers: cfg.mcp_servers.clone(),
         auto_allow_tools: vec![],
-        initial_mode: harness_core::agent::PermissionMode::Normal,
+        initial_mode: z_engine_core::agent::PermissionMode::Normal,
     }
 }
 
 // ---- workspaces (Codex-desktop style project roots) ------------------------
 
-fn workspaces_file() -> PathBuf {
-    dirs::data_dir()
+fn workspaces_file_write() -> PathBuf {
+    z_engine_core::config::app_data_write_dir().join("workspaces.json")
+}
+
+fn workspaces_file_read() -> PathBuf {
+    let neu = workspaces_file_write();
+    let old = dirs::data_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
         .join("harness")
-        .join("workspaces.json")
+        .join("workspaces.json");
+    if neu.exists() {
+        neu
+    } else if old.exists() {
+        old
+    } else {
+        neu
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
@@ -72,7 +71,7 @@ struct WorkspacesFile {
 }
 
 pub(crate) fn load_workspaces() -> Vec<PathBuf> {
-    std::fs::read_to_string(workspaces_file())
+    std::fs::read_to_string(workspaces_file_read())
         .ok()
         .and_then(|t| serde_json::from_str::<WorkspacesFile>(&t).ok())
         .map(|w| w.roots)
@@ -80,7 +79,7 @@ pub(crate) fn load_workspaces() -> Vec<PathBuf> {
 }
 
 pub(crate) fn save_workspaces(roots: &[PathBuf]) -> Result<(), String> {
-    let path = workspaces_file();
+    let path = workspaces_file_write();
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }

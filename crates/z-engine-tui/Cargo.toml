@@ -1,6 +1,6 @@
 [package]
-name = "harness-tui"
-description = "Terminal face: rendering + input only; all logic lives in harness-core"
+name = "z-engine-tui"
+description = "Terminal face: rendering + input only; all logic lives in z-engine-core"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,11 +8,11 @@ license.workspace = true
 authors.workspace = true
 
 [[bin]]
-name = "harness"
+name = "zengine"
 path = "src/main.rs"
 
 [dependencies]
-harness-core = { path = "../harness-core" }
+z-engine-core = { path = "../z-engine-core" }
 tokio.workspace = true
 ratatui.workspace = true
 syntect.workspace = true
@@ -22,7 +22,6 @@ anyhow.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 ulid.workspace = true
-dirs.workspace = true
 
 [lints]
 workspace = true

@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use harness_provider::{ProviderError, StreamEvent, ToolCallAccumulator, Usage};
+use z_engine_provider::{ProviderError, StreamEvent, ToolCallAccumulator, Usage};
 
 use super::events::{Command, Event};
 

@@ -1,7 +1,7 @@
 use crossterm::event::{
     Event as CtEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEventKind,
 };
-use harness_core::agent::{ApprovalDecision, PermissionMode};
+use z_engine_core::agent::{ApprovalDecision, PermissionMode};
 
 use super::{App, Block, PendingApproval};
 
@@ -33,7 +33,7 @@ impl App {
             let rule_for = |p: &PendingApproval| {
                 p.bash_command
                     .as_deref()
-                    .map(harness_core::perms::PolicyEngine::suggested_rule)
+                    .map(z_engine_core::perms::PolicyEngine::suggested_rule)
                     .or_else(|| p.suggested_rule.clone())
                     .unwrap_or_else(|| "bash*".into())
             };
@@ -68,7 +68,7 @@ impl App {
                         ApprovalDecision::AlwaysPersist { rule: rule.clone() },
                     );
                     self.blocks.push(Block::Notice(format!(
-                        "\u{2713} persisted [{}] to .harness/config.toml",
+                        "\u{2713} persisted [{}] to .z-engine/config.toml",
                         rule
                     )));
                 }

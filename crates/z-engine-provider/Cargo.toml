@@ -1,5 +1,5 @@
 [package]
-name = "harness-provider"
+name = "z-engine-provider"
 description = "OpenAI-compatible LLM transport: wire types, SSE decoding, tool-call accumulation, HTTP client"
 version.workspace = true
 edition.workspace = true

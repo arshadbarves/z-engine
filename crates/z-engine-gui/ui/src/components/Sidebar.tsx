@@ -1,18 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, Folder, Plus, Search, Trash2 } from "lucide-react";
-import {
-  filterSessions,
-  relTime,
-  type SessionEntry,
-} from "../lib/util";
+import { ChevronRight, Folder, MessageSquare, Plus, Search, Trash2 } from "lucide-react";
+import { filterSessions, type SessionEntry } from "../lib/util";
 import { wsBasename } from "../lib/workspaces";
 
-/** One workspace row: folder glyph + name; expands to its sessions. */
 function WorkspaceRow({
   root,
   active,
   sessions,
-  query,
+  activeUlid,
   onOpen,
   onDelete,
   onActivate,
@@ -21,7 +16,7 @@ function WorkspaceRow({
   root: string;
   active: boolean;
   sessions: SessionEntry[];
-  query: string;
+  activeUlid: string;
   onOpen: (path: string) => void;
   onDelete: (path: string) => void;
   onActivate: (root: string) => void;
@@ -29,16 +24,12 @@ function WorkspaceRow({
 }) {
   const [open, setOpen] = useState(active);
   const wasActive = useRef(active);
-  // Auto-expand when this workspace becomes active.
   useEffect(() => {
     if (active && !wasActive.current) setOpen(true);
     wasActive.current = active;
   }, [active]);
 
-  const items = useMemo(
-    () => filterSessions(sessions, query).slice(0, 12),
-    [sessions, query],
-  );
+  const items = useMemo(() => sessions.slice(0, 40), [sessions]);
   return (
     <div className={`ws-row${active ? " active" : ""}`}>
       <div
@@ -57,6 +48,7 @@ function WorkspaceRow({
         </span>
         <Folder size={13} />
         <span className="ws-name">{wsBasename(root)}</span>
+        <span className="ws-count">{items.length || ""}</span>
         <button
           className="del"
           title="Remove workspace from list (sessions are kept)"
@@ -71,9 +63,17 @@ function WorkspaceRow({
       {open && (
         <div className="ws-sessions">
           {items.length === 0 ? (
-            <div className="sess-empty">No sessions.</div>
+            <div className="sess-empty">No chats yet.</div>
           ) : (
-            items.map((s) => <SessionRow key={s.path} s={s} onOpen={onOpen} onDelete={onDelete} />)
+            items.map((s) => (
+              <SessionRow
+                key={s.path}
+                s={s}
+                active={s.ulid === activeUlid}
+                onOpen={onOpen}
+                onDelete={onDelete}
+              />
+            ))
           )}
         </div>
       )}
@@ -83,29 +83,29 @@ function WorkspaceRow({
 
 function SessionRow({
   s,
+  active,
   onOpen,
   onDelete,
 }: {
   s: SessionEntry;
+  active: boolean;
   onOpen: (path: string) => void;
   onDelete: (path: string) => void;
 }) {
   return (
     <div
-      className="session"
+      className={`session${active ? " active" : ""}`}
       role="button"
       tabIndex={0}
+      title={s.firstUserMsg ?? "(empty)"}
       onClick={() => onOpen(s.path)}
       onKeyDown={(e) => e.key === "Enter" && onOpen(s.path)}
     >
+      <MessageSquare size={13} className="sess-icon" />
       <div className="sess-preview">{s.firstUserMsg ?? "(empty)"}</div>
-      <div className="sess-meta">
-        <span>{s.ulid.slice(0, 6)}</span>
-        <span>{relTime(Number(s.modifiedMs))}</span>
-      </div>
       <button
         className="del"
-        title="Delete session"
+        title="Delete chat"
         onClick={(e) => {
           e.stopPropagation();
           onDelete(s.path);
@@ -117,13 +117,13 @@ function SessionRow({
   );
 }
 
-/** Sessions sidebar: pinned search, per-workspace projects, then an
- * "Other" bucket so transcripts from unregistered folders stay visible
- * (Codex hides those — deliberately not copied). */
+/** Codex-shaped sessions sidebar: search, projects with nested chats,
+ * then Recents for transcripts from unregistered folders. */
 export function Sidebar({
   sessions,
   workspaces,
   activeWorkspace,
+  activeUlid,
   onOpen,
   onDelete,
   onAddWorkspace,
@@ -133,6 +133,7 @@ export function Sidebar({
   sessions: SessionEntry[];
   workspaces: string[];
   activeWorkspace: string | null;
+  activeUlid: string;
   onOpen: (path: string) => void;
   onDelete: (path: string) => void;
   onAddWorkspace: () => void;
@@ -140,10 +141,8 @@ export function Sidebar({
   onActivateWorkspace: (root: string | null) => void;
 }) {
   const [query, setQuery] = useState("");
-  const filtered = useMemo(
-    () => filterSessions(sessions, query),
-    [sessions, query],
-  );
+  const [recentsOpen, setRecentsOpen] = useState(true);
+  const filtered = useMemo(() => filterSessions(sessions, query), [sessions, query]);
   const byWs = useMemo(() => {
     const m = new Map<string, SessionEntry[]>();
     for (const root of workspaces) m.set(root, []);
@@ -158,14 +157,12 @@ export function Sidebar({
 
   return (
     <div className="sessions">
-      {/* Pinned above the scroll area: a search box inside the scroller
-          scrolls away and visually collides with the list. */}
       <div className="sess-search">
         <Search size={12} />
         <input
           value={query}
           onChange={(e) => setQuery(e.currentTarget.value)}
-          placeholder="Search sessions…"
+          placeholder="Search chats…"
           spellCheck={false}
         />
       </div>
@@ -177,7 +174,7 @@ export function Sidebar({
           </button>
         </div>
         {workspaces.length === 0 && (
-          <div className="sess-empty">No workspaces — add a folder.</div>
+          <div className="sess-empty">No projects — add a folder.</div>
         )}
         {workspaces.map((root) => (
           <WorkspaceRow
@@ -185,7 +182,7 @@ export function Sidebar({
             root={root}
             active={activeWorkspace === root}
             sessions={byWs.m.get(root) ?? []}
-            query=""
+            activeUlid={activeUlid}
             onOpen={onOpen}
             onDelete={onDelete}
             onActivate={onActivateWorkspace}
@@ -194,12 +191,25 @@ export function Sidebar({
         ))}
         {byWs.other.length > 0 && (
           <>
-            <div className="ws-section-head other">
-              <span>Other sessions</span>
+            <div
+              className="ws-section-head other"
+              role="button"
+              tabIndex={0}
+              onClick={() => setRecentsOpen((o) => !o)}
+              onKeyDown={(e) => e.key === "Enter" && setRecentsOpen((o) => !o)}
+            >
+              <span>Recents</span>
             </div>
-            {byWs.other.slice(0, 20).map((s) => (
-              <SessionRow key={s.path} s={s} onOpen={onOpen} onDelete={onDelete} />
-            ))}
+            {recentsOpen &&
+              byWs.other.slice(0, 24).map((s) => (
+                <SessionRow
+                  key={s.path}
+                  s={s}
+                  active={s.ulid === activeUlid}
+                  onOpen={onOpen}
+                  onDelete={onDelete}
+                />
+              ))}
           </>
         )}
       </div>

@@ -302,7 +302,7 @@ describe("status note routing (A5)", () => {
 
 describe("session replay", () => {
   // Shapes below mirror exactly what serde produces for
-  // harness_core::session::SessionEvent (snake_case variant tags).
+  // z_engine_core::session::SessionEvent (snake_case variant tags).
   it("rebuilds transcript cards from serde-tagged session JSONL events", () => {
     resetTranscript();
     replaySession([
@@ -338,6 +338,24 @@ describe("session replay", () => {
     submitLocal("hi");
     resetTranscript();
     expect(msgs()).toHaveLength(0);
+  });
+});
+
+describe("transcriptTrimmed", () => {
+  it("drops the kept user message and everything after it", () => {
+    submitLocal("first");
+    handleEvent({ type: "tokenDelta", text: "ok" });
+    handleEvent({ type: "turnCompleted", promptTokens: 1, completionTokens: 1 });
+    submitLocal("second");
+    handleEvent({ type: "transcriptTrimmed", keepTurn: 1 });
+    expect(msgs().filter((m) => m.kind === "user").map((m) => m.text)).toEqual(["first"]);
+    expect(msgs().some((m) => m.text === "second")).toBe(false);
+  });
+
+  it("is a no-op when the keep turn is not in the transcript", () => {
+    submitLocal("only");
+    handleEvent({ type: "transcriptTrimmed", keepTurn: 9 });
+    expect(msgs()).toHaveLength(1);
   });
 });
 

@@ -134,12 +134,12 @@ impl ToolRegistry {
     }
 
     /// Definitions advertised in chat-completion requests.
-    pub fn defs(&self) -> Vec<harness_provider::ToolDef> {
+    pub fn defs(&self) -> Vec<z_engine_provider::ToolDef> {
         self.order
             .iter()
             .filter_map(|n| self.tools.get(n))
             .map(|t| {
-                harness_provider::ToolDef::function(
+                z_engine_provider::ToolDef::function(
                     t.name(),
                     t.description(),
                     t.parameters_schema(),

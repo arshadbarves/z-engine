@@ -1,4 +1,4 @@
-use harness_core::agent::Event;
+use z_engine_core::agent::Event;
 
 use super::{App, Block, PendingApproval};
 
@@ -118,6 +118,28 @@ impl App {
                 self.blocks.push(Block::Error(msg));
                 self.turn_active = false;
             }
+            Event::TranscriptTrimmed { keep_turn } => {
+                self.close_thinking();
+                self.finish_streaming();
+                let mut seen = 0u64;
+                let mut cut = self.blocks.len();
+                for (i, b) in self.blocks.iter().enumerate() {
+                    if matches!(b, Block::User(_)) {
+                        if seen == keep_turn {
+                            cut = i;
+                            break;
+                        }
+                        seen += 1;
+                    }
+                }
+                if let Some(Block::User(t)) = self.blocks.get(cut) {
+                    self.input = t.clone();
+                }
+                self.blocks.truncate(cut);
+                self.turn_active = false;
+                self.pending = None;
+            }
+            Event::SessionTitle { .. } => {}
         }
     }
 

@@ -3,7 +3,7 @@
 //! Static prose lives in `crate::context` (`BASE_INSTRUCTIONS`); this
 //! module only combines it with the project root and AGENTS.md.
 
-use harness_provider::ChatMessage;
+use z_engine_provider::ChatMessage;
 
 use crate::context;
 

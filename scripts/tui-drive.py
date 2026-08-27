@@ -13,9 +13,9 @@ time.sleep(0.15)
 master, slave = pty.openpty()
 # ratatui needs a non-zero window size
 fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 100, 0, 0))
-env = dict(os.environ, HARNESS_API_KEY="mock", TERM="xterm-256color")
+env = dict(os.environ, ZENGINE_API_KEY="mock", HARNESS_API_KEY="mock", TERM="xterm-256color")
 proc = subprocess.Popen(
-    ["target/debug/harness", "--base-url", f"http://127.0.0.1:{open('/tmp/mock_port').read().strip()}/v1"],
+    ["target/debug/zengine", "--base-url", f"http://127.0.0.1:{open('/tmp/mock_port').read().strip()}/v1"],
     stdin=slave, stdout=slave, stderr=slave, env=env, close_fds=True,
 )
 os.close(slave)
@@ -36,11 +36,11 @@ def read_for(seconds):
     return strip_ansi(bytes(buf))
 
 screen = read_for(2.5)
-assert b"type a task" in screen or b"harness v" in screen, f"no startup UI:\n{screen[-800:]!r}"
+assert b"type a task" in screen or b"zengine v" in screen, f"no startup UI:\n{screen[-800:]!r}"
 print("[drive] startup UI ok")
 
 if proc.poll() is not None:
-    print(f"harness exited early rc={proc.returncode}")
+    print(f"zengine exited early rc={proc.returncode}")
     raise SystemExit(3)
 os.write(master, b"create the proof file\r")
 screen = read_for(4.0)

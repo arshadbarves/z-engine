@@ -1,7 +1,7 @@
 //! One-shot headless runner: submit a task, stream plain-text events,
 //! exit non-zero on failure. Acceptance/CI companion to the TUI.
 
-use harness_core::agent::{AgentHandle, ApprovalDecision, Event, EventRx};
+use z_engine_core::agent::{AgentHandle, ApprovalDecision, Event, EventRx};
 
 pub async fn run_one_shot(
     handle: AgentHandle,
@@ -9,7 +9,7 @@ pub async fn run_one_shot(
     task: &str,
     auto_approve: bool,
 ) -> anyhow::Result<()> {
-    eprintln!("harness --headless · task: {task}");
+    eprintln!("zengine --headless · task: {task}");
     handle.submit(task.to_string());
 
     loop {
@@ -74,6 +74,8 @@ pub async fn run_one_shot(
             Some(Event::Error(msg)) => {
                 anyhow::bail!(msg);
             }
+            Some(Event::TranscriptTrimmed { .. }) => {}
+            Some(Event::SessionTitle { .. }) => {}
             None => return Ok(()),
         }
     }

@@ -3,7 +3,7 @@ import { listSlashCommands, type SlashCommandInfo } from "./commands";
 export interface SlashCommand {
   name: string;
   desc: string;
-  /** Set for user-defined commands (`.harness/commands/*.md`). */
+  /** Set for user-defined commands (`.z-engine/commands/*.md`). */
   custom?: boolean;
 }
 

@@ -1,5 +1,5 @@
 [package]
-name = "harness-core"
+name = "z-engine-core"
 description = "Agent brain: loop, tools, permissions, context, sessions — no UI deps"
 version.workspace = true
 edition.workspace = true
@@ -8,7 +8,7 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-harness-provider = { path = "../harness-provider" }
+z-engine-provider = { path = "../z-engine-provider" }
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true

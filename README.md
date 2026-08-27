@@ -1,27 +1,27 @@
-# harness
+# Z Engine
 
 A terminal-based AI coding agent, in the spirit of Claude Code / opencode —
 built as a personal daily driver. You type a task ("fix this failing test");
-harness reads files, runs commands, edits code and verifies the result,
+Z Engine reads files, runs commands, edits code and verifies the result,
 asking for approval before anything destructive.
 
 ```
 you ❯ fix the failing test
-harness ⚙ read_file src/lib.rs ─ lines 1–25
-harness ✓ bash (0): cargo test 2>&1 | tail -15
-harness ✗ edit_file src/lib.rs (fuzzy)   ← approval modal shows the diff
+zengine ⚙ read_file src/lib.rs ─ lines 1–25
+zengine ✓ bash (0): cargo test 2>&1 | tail -15
+zengine ✗ edit_file src/lib.rs (fuzzy)   ← approval modal shows the diff
 ✓ done
 ```
 
 ## Install
 
 ```bash
-cargo install --path crates/harness-tui
-# binary: harness
+cargo install --path crates/z-engine-tui
+# binary: zengine
 ```
 
 Requirements: Rust stable (≥1.85), a Rust toolchain for projects it works
-on, `HARNESS_API_KEY` (OpenRouter by default) or a local OpenAI-compatible
+on, `ZENGINE_API_KEY` (OpenRouter by default) or a local OpenAI-compatible
 server. Optional: `ripgrep` (grep falls back to pure Rust), `rust-analyzer`
 (LSP tools fall back to tree-sitter/`cargo check`).
 
@@ -29,10 +29,10 @@ server. Optional: `ripgrep` (grep falls back to pure Rust), `rust-analyzer`
 
 ```bash
 cd your-project
-export HARNESS_API_KEY=sk-or-...
-harness                 # TUI
-harness --headless "fix the failing test" [--auto-approve]   # one-shot
-harness --resume        # pick up a previous session
+export ZENGINE_API_KEY=sk-or-...
+zengine                 # TUI
+zengine --headless "fix the failing test" [--auto-approve]   # one-shot
+zengine --resume        # pick up a previous session
 ```
 
 Keys: **Enter** send · **Esc** abort turn · **PgUp/PgDn** scroll ·
@@ -42,9 +42,13 @@ Slash commands: `/compact`, `/notes`.
 
 ## Configuration
 
-Ladder (lowest→highest): defaults < `~/.config/harness/config.toml` <
-`<project>/.harness/config.toml` < env (`HARNESS_MODEL`, `HARNESS_BASE_URL`)
+Ladder (lowest→highest): defaults < `~/.config/z-engine/config.toml` <
+`<project>/.z-engine/config.toml` < env (`ZENGINE_MODEL`, `ZENGINE_BASE_URL`)
 < CLI flags.
+
+Legacy `HARNESS_*` env vars, `~/.config/harness`, and `<project>/.harness`
+are still **read** when the new names/paths are missing. New writes go to
+the `z-engine` locations.
 
 ```toml
 model = "anthropic/claude-sonnet-4"
@@ -64,8 +68,8 @@ command = "python3"
 args = ["scripts/mcp_echo_server.py"]
 ```
 
-API key: `HARNESS_API_KEY` env var, or a single-line file at
-`~/.config/harness/api-key` (checked as a fallback; trimmed of whitespace).
+API key: `ZENGINE_API_KEY` env var (or `HARNESS_API_KEY`), or a single-line
+file at `~/.config/z-engine/api-key` (then `~/.config/harness/api-key`).
 It never lives in config.toml.
 
 ## Tools the model gets
@@ -87,15 +91,17 @@ context notes via a side-request, and `/compact` forces it on demand.
 ## Sessions
 
 Every turn appends newline-delimited JSON events under
-`~/Library/Application Support/harness/sessions/<ulid>.jsonl`
-(`~/.local/share/harness/sessions` on Linux). Crashes tear at most the last
-line; `--session <ulid>` replays and continues.
+`~/Library/Application Support/z-engine/sessions/<ulid>.jsonl`
+(`~/.local/share/z-engine/sessions` on Linux). Crashes tear at most the last
+line; `--session <ulid>` replays and continues. Existing `harness/sessions`
+files are still listed.
 
 ## Architecture
 
-Two crates: `harness-core` (agent loop, provider, tools, permissions,
+Two crates: `z-engine-core` (agent loop, provider, tools, permissions,
 context engine, sessions, LSP/MCP — no UI deps, fully unit-tested against
-recorded fixtures and a mocked SSE provider) and `harness-tui` (ratatui
-rendering + input only). The full build spec and its evolution live in
-`docs/superpowers/specs/`; deviations are logged in `docs/deviations.md`;
+recorded fixtures and a mocked SSE provider) and `z-engine-tui` (ratatui
+rendering + input only). The desktop shell is `z-engine-gui`. The full
+build spec and its evolution live in `docs/superpowers/specs/` (historical
+`harness` names); deviations are logged in `docs/deviations.md`;
 per-version acceptance evidence in `docs/ROADMAP.md`.

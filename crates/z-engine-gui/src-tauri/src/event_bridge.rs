@@ -1,5 +1,5 @@
-use harness_core::agent::EventRx;
 use tauri::Emitter;
+use z_engine_core::agent::EventRx;
 
 pub(crate) fn forward_events(mut rx: EventRx, window: tauri::WebviewWindow) {
     tokio::spawn(async move {

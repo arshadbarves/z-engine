@@ -1,10 +1,10 @@
+use super::paths::{global_config_path, project_config_read_path};
 use super::types::{CliOverrides, Config, ConfigError, EnvVars, PartialConfig};
-use super::{global_config_path, project_config_path};
 
 impl Config {
     /// Load configuration from the process environment + config files +
     /// CLI overrides. `project_root` enables the project-level
-    /// `.harness/config.toml` layer (spec section 8).
+    /// `.z-engine/config.toml` layer (spec section 8).
     pub fn load(
         cli: &CliOverrides,
         project_root: Option<&std::path::Path>,
@@ -24,7 +24,7 @@ impl Config {
             },
             None => None,
         };
-        let project = project_root.map(project_config_path);
+        let project = project_root.map(project_config_read_path);
         let project_text = match &project {
             Some(p) => match std::fs::read_to_string(p) {
                 Ok(t) => Some(t),

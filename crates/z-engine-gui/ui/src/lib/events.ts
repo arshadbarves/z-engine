@@ -217,6 +217,26 @@ export const toastStore = {
   },
 };
 
+/** Bumped when the sidebar should reload (first send, generated title). */
+let sessionsTick = 0;
+const sessionsTickSubs = new Set<Listener>();
+export const sessionsTickStore = {
+  subscribe(l: Listener) {
+    sessionsTickSubs.add(l);
+    return () => {
+      sessionsTickSubs.delete(l);
+    };
+  },
+  getSnapshot(): number {
+    return sessionsTick;
+  },
+};
+
+function bumpSessionsTick() {
+  sessionsTick += 1;
+  for (const l of sessionsTickSubs) l();
+}
+
 export function setMaxTokens(max: number) {
   if (max > 0) usage = { ...usage, maxTokens: max };
   emitChange();
@@ -489,6 +509,7 @@ export function handleEvent(ev: EventPayload) {
       break;
     }
     case "turnStarted":
+      bumpSessionsTick();
       break;
     case "toolCallStarted": {
       closeThinking();
@@ -597,6 +618,12 @@ export function handleEvent(ev: EventPayload) {
       sessionId = String(ev.ulid ?? "");
       for (const l of sessionSubs) l();
       break;
+    case "transcriptTrimmed":
+      trimTranscript(Number(ev.keepTurn ?? 0));
+      break;
+    case "sessionTitle":
+      bumpSessionsTick();
+      break;
     case "error":
       closeThinking();
       endAssistant();
@@ -611,6 +638,25 @@ export function submitLocal(text: string, images: string[] = []) {
   closeThinking();
   endAssistant();
   push("user", text, { runTurn: runTurnCounter++, images });
+}
+
+/** Drop the user message at `keepTurn` and every later card. Restores the
+ * run-turn counter so a follow-up send reuses that checkpoint index. */
+export function trimTranscript(keepTurn: number) {
+  closeThinking();
+  endAssistant();
+  let cut = -1;
+  for (let i = 0; i < messages.length; i++) {
+    const m = messages[i];
+    if (m.kind === "user" && m.runTurn === keepTurn) {
+      cut = i;
+      break;
+    }
+  }
+  if (cut < 0) return;
+  messages = messages.slice(0, cut);
+  runTurnCounter = keepTurn;
+  emitChange();
 }
 
 export function commandLocal(cmd: string) {
@@ -708,7 +754,7 @@ function resultSummary(content: string): string {
 
 /** Rebuild transcript cards from a session JSONL event list
  * (`read_session`). Event `type` tags are serde snake_case variants of
- * harness_core::session::SessionEvent (`user_msg`, `assistant_msg`,
+ * z_engine_core::session::SessionEvent (`user_msg`, `assistant_msg`,
  * `tool_result`, `note`, `meta`) — live-looking but inert. */
 export function replaySession(events: ReplayEvent[]) {
   resetTranscript();
@@ -744,6 +790,7 @@ export function replaySession(events: ReplayEvent[]) {
         break;
       case "meta":
       case "tool_result":
+      case "title":
         break;
     }
   }

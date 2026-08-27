@@ -72,11 +72,22 @@ pub struct EnvVars {
 impl EnvVars {
     pub(super) fn from_process_env() -> Self {
         Self {
-            harness_model: std::env::var("HARNESS_MODEL").ok(),
-            harness_base_url: std::env::var("HARNESS_BASE_URL").ok(),
-            harness_config: std::env::var("HARNESS_CONFIG").ok(),
+            harness_model: first_env(&["ZENGINE_MODEL", "HARNESS_MODEL"]),
+            harness_base_url: first_env(&["ZENGINE_BASE_URL", "HARNESS_BASE_URL"]),
+            harness_config: first_env(&["ZENGINE_CONFIG", "HARNESS_CONFIG"]),
         }
     }
+}
+
+fn first_env(names: &[&str]) -> Option<String> {
+    for n in names {
+        if let Ok(v) = std::env::var(n) {
+            if !v.is_empty() {
+                return Some(v);
+            }
+        }
+    }
+    None
 }
 
 #[derive(Debug, thiserror::Error)]

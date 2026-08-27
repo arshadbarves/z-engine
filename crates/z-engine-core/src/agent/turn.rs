@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use harness_provider::{
+use z_engine_provider::{
     AccumulatedToolCall, ChatMessage, ChatRequest, Client, ToolCall, ToolCallAccumulator,
 };
 
@@ -171,7 +171,7 @@ pub(super) async fn run_turn(
                     ));
                     wire_only_calls.push(ToolCall {
                         id,
-                        function: harness_provider::FunctionCall {
+                        function: z_engine_provider::FunctionCall {
                             name: name.unwrap_or_default(),
                             arguments: raw_arguments,
                         },

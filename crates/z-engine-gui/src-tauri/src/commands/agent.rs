@@ -1,12 +1,11 @@
 use crate::event_bridge::forward_events;
-use crate::git_util::contain;
-use crate::session_store::sessions_dir;
+use crate::session_store::{contain_session, sessions_dir};
 use crate::state::{GuiState, build_loop_config};
-use harness_core::agent::spawn_with_recorder;
-use harness_core::config::Config;
 use serde_json::json;
 use std::path::PathBuf;
 use tauri::{Emitter, Manager};
+use z_engine_core::agent::spawn_with_recorder;
+use z_engine_core::config::Config;
 
 #[tauri::command]
 pub(crate) fn frontend_ready() {
@@ -51,7 +50,7 @@ pub(crate) fn notes(state: tauri::State<'_, GuiState>) -> Result<(), String> {
 
 #[tauri::command]
 pub(crate) fn set_mode(mode: String, state: tauri::State<'_, GuiState>) -> Result<(), String> {
-    use harness_core::agent::PermissionMode;
+    use z_engine_core::agent::PermissionMode;
     let m = match mode.as_str() {
         "accept-edits" | "auto-accept edits" => PermissionMode::AutoAcceptEdits,
         "plan" => PermissionMode::Plan,
@@ -114,7 +113,7 @@ pub(crate) fn approve_with_rule(
     rule: String,
     state: tauri::State<'_, GuiState>,
 ) -> Result<(), String> {
-    use harness_core::agent::ApprovalDecision;
+    use z_engine_core::agent::ApprovalDecision;
     let d = match decision.as_str() {
         "session" => ApprovalDecision::AlwaysSession { rule },
         "persist" => ApprovalDecision::AlwaysPersist { rule },
@@ -166,32 +165,32 @@ pub(crate) fn start_session(
     let cfg = Config::load(&Default::default(), Some(&project_root)).map_err(|e| e.to_string())?;
     let lc = build_loop_config(&cfg, &project_root);
 
-    let recorder: Option<harness_core::session::SessionWriter>;
+    let recorder: Option<z_engine_core::session::SessionWriter>;
     let recorder_path: Option<PathBuf>;
     let resume_state;
     match &resume_path {
         Some(p) => {
             // Only transcripts from our own session store may be resumed.
-            let contained = contain(&sessions_dir(), p)?;
+            let contained = contain_session(p)?;
             let events =
-                harness_core::session::read_events(&contained).map_err(|e| e.to_string())?;
-            let replayed = harness_core::session::replay(&events);
-            resume_state = Some(harness_core::agent::ResumeState {
+                z_engine_core::session::read_events(&contained).map_err(|e| e.to_string())?;
+            let replayed = z_engine_core::session::replay(&events);
+            resume_state = Some(z_engine_core::agent::ResumeState {
                 working: replayed.working,
                 note_payloads: replayed.notes_replayed,
             });
-            let w = harness_core::session::SessionWriter::append_to(&contained)
+            let w = z_engine_core::session::SessionWriter::append_to(&contained)
                 .map_err(|e| e.to_string())?;
             recorder_path = Some(w.path.clone());
             recorder = Some(w);
         }
         None => {
             resume_state = None;
-            let mut w = harness_core::session::SessionWriter::create(&sessions_dir())
+            let mut w = z_engine_core::session::SessionWriter::create(&sessions_dir())
                 .map_err(|e| e.to_string())?;
             // Record the environment up front — the sidebar groups sessions
             // under their workspace via this Meta event's project_root.
-            let _ = w.record(&harness_core::session::SessionEvent::Meta {
+            let _ = w.record(&z_engine_core::session::SessionEvent::Meta {
                 model: lc.model.clone(),
                 project_root: project_root.to_string_lossy().into_owned(),
             });

@@ -1,7 +1,7 @@
 use crate::state::GuiState;
-use harness_core::config::Config;
 use serde_json::json;
 use std::path::PathBuf;
+use z_engine_core::config::Config;
 
 #[tauri::command]
 pub(crate) fn set_model(model: String, state: tauri::State<'_, GuiState>) -> Result<(), String> {
@@ -68,7 +68,7 @@ pub(crate) fn get_config(state: tauri::State<'_, GuiState>) -> Result<serde_json
     }))
 }
 
-/// Settings → General: persist scalars into `.harness/config.toml` and
+/// Settings → General: persist scalars into `.z-engine/config.toml` and
 /// hot-apply the model to the running agent when one exists.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
@@ -79,7 +79,7 @@ pub(crate) fn save_general(
     review: Option<bool>,
     state: tauri::State<'_, GuiState>,
 ) -> Result<(), String> {
-    let over = harness_core::config::GeneralOverrides {
+    let over = z_engine_core::config::GeneralOverrides {
         model: model.clone(),
         base_url,
         max_context_tokens,
@@ -87,7 +87,7 @@ pub(crate) fn save_general(
     };
     let ctx_guard = state.ctx.lock().map_err(|_| "state poisoned")?;
     let ctx = ctx_guard.as_ref().ok_or("not initialized")?;
-    harness_core::config::persist_general(&ctx.project_root, &over).map_err(|e| e.to_string())?;
+    z_engine_core::config::persist_general(&ctx.project_root, &over).map_err(|e| e.to_string())?;
 
     if let Some(m) = model {
         if let Some(h) = state.handle.lock().map_err(|_| "state poisoned")?.as_ref() {
@@ -99,7 +99,7 @@ pub(crate) fn save_general(
 }
 
 /// Settings → Cost: per-model USD/MTok override persisted to
-/// `.harness/config.toml` under `[cost.overrides]`.
+/// `.z-engine/config.toml` under `[cost.overrides]`.
 #[tauri::command]
 pub(crate) fn set_cost_override(
     model: String,
@@ -109,10 +109,10 @@ pub(crate) fn set_cost_override(
 ) -> Result<(), String> {
     let ctx_guard = state.ctx.lock().map_err(|_| "state poisoned")?;
     let ctx = ctx_guard.as_ref().ok_or("not initialized")?;
-    harness_core::config::set_cost_override(
+    z_engine_core::config::set_cost_override(
         &ctx.project_root,
         &model,
-        harness_core::context::cost::Pricing {
+        z_engine_core::context::cost::Pricing {
             usd_per_mtok_input,
             usd_per_mtok_output,
         },
@@ -128,7 +128,8 @@ pub(crate) fn remove_cost_override(
 ) -> Result<(), String> {
     let ctx_guard = state.ctx.lock().map_err(|_| "state poisoned")?;
     let ctx = ctx_guard.as_ref().ok_or("not initialized")?;
-    harness_core::config::remove_cost_override(&ctx.project_root, &model).map_err(|e| e.to_string())
+    z_engine_core::config::remove_cost_override(&ctx.project_root, &model)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -139,7 +140,7 @@ pub(crate) fn list_permission_rules(
     let Some(ctx) = guard.as_ref() else {
         return Err("not initialized".into());
     };
-    harness_core::config::list_bash_rules(&ctx.project_root).map_err(|e| e.to_string())
+    z_engine_core::config::list_bash_rules(&ctx.project_root).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -151,7 +152,7 @@ pub(crate) fn save_permission_rule(
     let Some(ctx) = guard.as_ref() else {
         return Err("not initialized".into());
     };
-    harness_core::config::persist_bash_rule(&ctx.project_root, &rule)
+    z_engine_core::config::persist_bash_rule(&ctx.project_root, &rule)
         .map(|_| ())
         .map_err(|e| e.to_string())
 }
@@ -165,7 +166,7 @@ pub(crate) fn remove_permission_rule(
     let Some(ctx) = guard.as_ref() else {
         return Err("not initialized".into());
     };
-    harness_core::config::remove_bash_rule(&ctx.project_root, &rule).map_err(|e| e.to_string())
+    z_engine_core::config::remove_bash_rule(&ctx.project_root, &rule).map_err(|e| e.to_string())
 }
 
 /// Resolved MCP server table for the Settings tab.
@@ -188,7 +189,7 @@ pub(crate) fn list_mcp_servers(
 /// Returns tool names; the connection is dropped afterwards.
 #[tauri::command]
 pub(crate) async fn test_mcp_server(name: String) -> Result<Vec<String>, String> {
-    use harness_core::mcp::McpConnection;
+    use z_engine_core::mcp::McpConnection;
     // Resolve the server definition from layered config.
     let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let cfg = Config::load(&Default::default(), Some(&project_root)).map_err(|e| e.to_string())?;

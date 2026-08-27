@@ -1,8 +1,8 @@
 # rust
 /target
 
-# local harness state (allowlists etc.)
-.harness/
+# local agent state (allowlists etc.)
+.z-engine/
 
 # scratch/demo repos used for acceptance runs
 /tmp/
@@ -11,6 +11,6 @@
 *.log
 
 # gui
-crates/harness-gui/ui/node_modules/
-crates/harness-gui/ui/dist/
-crates/harness-gui/src-tauri/gen/
+crates/z-engine-gui/ui/node_modules/
+crates/z-engine-gui/ui/dist/
+crates/z-engine-gui/src-tauri/gen/

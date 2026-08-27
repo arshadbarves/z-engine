@@ -65,8 +65,9 @@ impl std::fmt::Debug for Client {
 }
 
 impl Client {
-    /// Build a client. `api_key` comes exclusively from `HARNESS_API_KEY`
-    /// upstream; local servers (Ollama/LM Studio) may run without one.
+    /// Build a client. `api_key` comes from `ZENGINE_API_KEY`
+    /// (or `HARNESS_API_KEY`) upstream; local servers (Ollama/LM Studio)
+    /// may run without one.
     pub fn new(base_url: &str, api_key: Option<String>) -> Result<Self, ProviderError> {
         let http = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(10))

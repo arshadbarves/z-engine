@@ -1,5 +1,5 @@
 //! Session persistence (spec §8): append-only JSONL transcripts at
-//! `$XDG_DATA_HOME|~/Library/Application Support/harness/sessions/<ulid>.jsonl`.
+//! `$XDG_DATA_HOME|~/Library/Application Support/z-engine/sessions/<ulid>.jsonl`.
 //!
 //! Crash-safe by construction: the writer only ever appends whole lines and
 //! flushes per event; a `kill -9` can at worst truncate the final line,
@@ -10,6 +10,11 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+
+mod title;
+mod trim;
+pub use title::{display_title, fallback_title};
+pub use trim::{events_before_user_turn, trim_file_before_user_turn};
 
 /// One persisted transcript event.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -36,6 +41,8 @@ pub enum SessionEvent {
     },
     /// Compaction summaries and similar durable annotations (L1).
     Note { text: String },
+    /// Short display title for the session (Codex/Claude-style).
+    Title { text: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -78,6 +85,15 @@ impl SessionWriter {
         self.file.write_all(b"\n")?;
         self.file.flush()
     }
+
+    /// Re-open the append handle after the file was replaced (e.g. trim).
+    pub fn reopen(&mut self) -> std::io::Result<()> {
+        self.file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)?;
+        Ok(())
+    }
 }
 
 /// Parse one JSONL line; malformed lines are logged and skipped so a torn
@@ -117,7 +133,7 @@ pub fn read_events(path: &Path) -> std::io::Result<Vec<SessionEvent>> {
 pub struct SessionSummary {
     pub path: PathBuf,
     pub ulid: String,
-    /// First user message, for picker previews.
+    /// Sidebar label: persisted `Title` event, else a short first-line fallback.
     pub first_user_msg: Option<String>,
     pub modified: std::time::SystemTime,
     /// Project root recorded in the session's `Meta` event — lets the GUI
@@ -145,12 +161,7 @@ pub fn list_sessions(sessions_dir: &Path) -> Vec<SessionSummary> {
             .and_then(|m| m.modified())
             .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
         let events = read_events(&path).ok();
-        let first_user_msg = events.as_deref().and_then(|events| {
-            events.iter().find_map(|ev| match ev {
-                SessionEvent::UserMsg { text, .. } => Some(text.clone()),
-                _ => None,
-            })
-        });
+        let first_user_msg = events.as_deref().and_then(display_title);
         let project_root = events.as_deref().and_then(|events| {
             events.iter().find_map(|ev| match ev {
                 SessionEvent::Meta { project_root, .. } => Some(project_root.clone()),
@@ -172,14 +183,14 @@ pub fn list_sessions(sessions_dir: &Path) -> Vec<SessionSummary> {
 /// Working state rebuilt from persisted events.
 #[derive(Debug)]
 pub struct Replayed {
-    pub working: Vec<harness_provider::ChatMessage>,
+    pub working: Vec<z_engine_provider::ChatMessage>,
     /// Note texts + recorded `update_context_notes` arguments (for L1).
     pub notes_replayed: Vec<String>,
 }
 
 /// Rebuild working-set messages + durable note texts from events.
 pub fn replay(events: &[SessionEvent]) -> Replayed {
-    use harness_provider::{ChatMessage, FunctionCall, ToolCall};
+    use z_engine_provider::{ChatMessage, FunctionCall, ToolCall};
 
     let mut working: Vec<ChatMessage> = Vec::new();
     let mut notes_replayed = Vec::new();
@@ -232,6 +243,7 @@ pub fn replay(events: &[SessionEvent]) -> Replayed {
                 ));
             }
             SessionEvent::Note { text } => notes_replayed.push(text.clone()),
+            SessionEvent::Title { .. } => {}
         }
     }
 
@@ -313,7 +325,7 @@ mod tests {
         assert_eq!(r.working.len(), 3);
         assert!(matches!(
             &r.working[1],
-            harness_provider::ChatMessage::Assistant { tool_calls, .. } if tool_calls.len() == 1
+            z_engine_provider::ChatMessage::Assistant { tool_calls, .. } if tool_calls.len() == 1
         ));
         assert!(r.notes_replayed.contains(&"FACTS: something".to_string()));
     }
@@ -339,7 +351,7 @@ mod tests {
         assert_eq!(r.working.len(), 1);
         assert!(matches!(
             &r.working[0],
-            harness_provider::ChatMessage::User { .. }
+            z_engine_provider::ChatMessage::User { .. }
         ));
     }
 

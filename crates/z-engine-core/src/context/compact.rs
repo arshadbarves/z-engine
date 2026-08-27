@@ -19,7 +19,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use harness_provider::{ChatMessage, ContentPart};
+use z_engine_provider::{ChatMessage, ContentPart};
 
 /// How many trailing messages stay verbatim (L2 window).
 pub const DEFAULT_KEEP_RECENT: usize = 12;
@@ -38,7 +38,7 @@ pub struct CompactionOutcome {
 }
 
 fn spill(content: &str, tmp_dir: &Path) -> PathBuf {
-    let dir = tmp_dir.join("harness");
+    let dir = tmp_dir.join("z-engine");
     let _ = std::fs::create_dir_all(&dir);
     let path = dir.join(format!("ctx-{}.log", ulid::Ulid::new()));
     if std::fs::write(&path, content).is_err() {
@@ -206,7 +206,7 @@ pub fn compact(messages: &[ChatMessage], keep_recent: usize, tmp_dir: &Path) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use harness_provider::{FunctionCall, ToolCall};
+    use z_engine_provider::{FunctionCall, ToolCall};
 
     fn tool_msg(id: &str, content: &str) -> ChatMessage {
         ChatMessage::Tool {

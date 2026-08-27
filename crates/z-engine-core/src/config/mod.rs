@@ -3,22 +3,28 @@
 //! Precedence (lowest → highest), per spec §8:
 //!
 //! ```text
-//! defaults  <  ~/.config/harness/config.toml  <  environment vars  <  CLI flags
+//! defaults  <  ~/.config/z-engine/config.toml  <  environment vars  <  CLI flags
 //! ```
 //!
-//! The project-level `.harness/config.toml` joins the ladder in v0.5; the
-//! types below are already shaped for it.
+//! Legacy `~/.config/harness` and `<project>/.harness` are still read when
+//! the new paths are missing.
 //!
-//! The API key is **never** part of config — it comes exclusively from the
-//! `HARNESS_API_KEY` environment variable when a provider client is built.
+//! The API key is **never** part of config — it comes from `ZENGINE_API_KEY`
+//! (falling back to `HARNESS_API_KEY`) when a provider client is built.
 
 mod loader;
+mod paths;
 mod store;
 mod types;
 
+pub use paths::{
+    app_data_dir, app_data_write_dir, global_config_path, models_override_path,
+    project_config_path, project_config_read_path, resolve_api_key, session_search_dirs,
+    sessions_dir, slash_command_dirs,
+};
 pub use store::{
-    GeneralOverrides, global_config_path, list_bash_rules, persist_bash_rule, persist_general,
-    project_config_path, remove_bash_rule, remove_cost_override, set_cost_override,
+    GeneralOverrides, list_bash_rules, persist_bash_rule, persist_general, remove_bash_rule,
+    remove_cost_override, set_cost_override,
 };
 pub use types::{CliOverrides, Config, ConfigError, EnvVars, PartialConfig, PermissionsConfig};
 

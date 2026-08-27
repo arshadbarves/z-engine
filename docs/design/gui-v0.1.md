@@ -1,11 +1,16 @@
-# harness-gui — Desktop App Design (v0.1)
+# Z Engine GUI — Desktop App Design (v0.1)
 
 Status: **design for review** · Owner decisions locked: Tauri 2 · macOS-only first · MVP includes sessions + settings.
 Frontend note: v0.1 shipped on **React 19 + Vite** (rebuild from the original Svelte 5 scaffold); store/rune semantics map 1:1.
 
+**Rename (2026-08):** the crate is `z-engine-gui`, the window title is **Z Engine**,
+config/session dirs are `.z-engine` / `z-engine` (legacy `harness` paths still
+read). Historical prose below still says “harness” where it describes the v0.1
+intent.
+
 ## 1. Goals
 
-Give non-terminal users the full harness experience in a native-feeling macOS app,
+Give non-terminal users the full Z Engine experience in a native-feeling macOS app,
 while the TUI remains frozen as the keyboard-only power-user client.
 
 Non-goals (v0.1): Windows/Linux packaging, image pasting, multi-project windows,
@@ -14,7 +19,7 @@ remote/server mode, plugin marketplace.
 ## 2. Architecture
 
 ```
-┌─────────────────────────── harness-gui ───────────────────────────┐
+┌─────────────────────────── z-engine-gui ───────────────────────────┐
 │  Svelte 5 frontend (ui/)                                          │
 │    stores: transcript, approvals, sessions, settings, usage       │
 │         ▲ events (appEvent)          │ commands (invoke)           │
@@ -24,7 +29,7 @@ remote/server mode, plugin marketplace.
 │    forwarder task: EventRx → window.emit("appEvent", …)            │
 │    #[tauri::command] handlers → AgentHandle methods                │
 ├────────────────────────────────────────────────────────────────────┤
-│  harness-core (unchanged brain)                                    │
+│  z-engine-core (unchanged brain)                                   │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -124,7 +129,7 @@ of transcript.
 - **Settings window** (tabbed):
   - General: model id, base URL, max context tokens, review toggle.
   - Permissions: rule list CRUD (scoped syntax `tool pattern`), writes via
-    `persist_bash_rule`-style helpers into `.harness/config.toml`.
+    `persist_bash_rule`-style helpers into `.z-engine/config.toml`.
   - MCP servers: table of name/command/args with Test button (calls tools/list).
   - Cost: per-model USD/MTok overrides (falls back to built-in table).
 

@@ -2,9 +2,9 @@
 //! the binary is absent). These prove spec §9 v0.8's core mechanics:
 //! publishDiagnostics capture and definition resolution.
 
-use harness_core::lsp::LspClient;
 use std::sync::Arc;
 use std::time::Duration;
+use z_engine_core::lsp::LspClient;
 
 fn ra_available() -> bool {
     std::process::Command::new("rust-analyzer")
@@ -113,7 +113,7 @@ async fn batch_backend_finds_the_type_error() {
         return;
     }
     let (tmp, _lib_rs) = make_project(true).await;
-    let diags = harness_core::lsp::batch::run(tmp.path(), 90).unwrap();
+    let diags = z_engine_core::lsp::batch::run(tmp.path(), 90).unwrap();
     assert!(
         diags
             .iter()
@@ -124,18 +124,18 @@ async fn batch_backend_finds_the_type_error() {
 
 #[tokio::test]
 async fn diagnostics_tool_reports_broken_file_via_batch() {
-    use harness_core::tools::Tool;
     use serde_json::json;
+    use z_engine_core::tools::Tool;
 
     let (tmp, lib_rs) = make_project(true).await;
     // Build ctx the same way the loop does.
     let perms = std::sync::Arc::new(std::sync::Mutex::new(
-        harness_core::perms::PolicyEngine::new(vec![]),
+        z_engine_core::perms::PolicyEngine::new(vec![]),
     ));
     let ctx =
-        harness_core::tools::ToolCtx::new(tmp.path().to_path_buf(), perms, tmp.path().join("t"));
+        z_engine_core::tools::ToolCtx::new(tmp.path().to_path_buf(), perms, tmp.path().join("t"));
 
-    let out = harness_core::tools::lsp_tools::DiagnosticsTool
+    let out = z_engine_core::tools::lsp_tools::DiagnosticsTool
         .run(json!({"path": lib_rs.to_string_lossy()}), &ctx)
         .await
         .unwrap();
@@ -145,8 +145,8 @@ async fn diagnostics_tool_reports_broken_file_via_batch() {
 
 #[tokio::test]
 async fn cargo_check_backend_surfaces_trait_errors() {
-    use harness_core::tools::{Tool, ToolCtx};
     use serde_json::json;
+    use z_engine_core::tools::{Tool, ToolCtx};
 
     let tmp = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(tmp.path().join("src")).unwrap();
@@ -161,11 +161,11 @@ async fn cargo_check_backend_surfaces_trait_errors() {
     std::fs::write(&lib_rs, lib).unwrap();
 
     let perms = Arc::new(std::sync::Mutex::new(
-        harness_core::perms::PolicyEngine::new(vec![]),
+        z_engine_core::perms::PolicyEngine::new(vec![]),
     ));
     let ctx = ToolCtx::new(tmp.path().to_path_buf(), perms, tmp.path().join("t"));
 
-    let out = harness_core::tools::lsp_tools::DiagnosticsTool
+    let out = z_engine_core::tools::lsp_tools::DiagnosticsTool
         .run(json!({"path": "src/lib.rs"}), &ctx)
         .await
         .unwrap();

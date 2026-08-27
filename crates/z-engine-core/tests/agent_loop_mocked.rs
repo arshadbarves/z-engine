@@ -13,7 +13,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
 use axum::routing::post;
-use harness_core::agent::{ApprovalDecision, Event, LoopConfig, spawn};
+use z_engine_core::agent::{ApprovalDecision, Event, LoopConfig, spawn};
 
 // ---------------------------------------------------------------------------
 // Mock provider infrastructure
@@ -48,14 +48,26 @@ async fn chat_handler(State(script): State<Script>, req: axum::extract::Request)
         .await
         .unwrap_or_default();
     let body_text = String::from_utf8_lossy(&bytes).into_owned();
+    let is_title_request = body_text.contains("Reply with a session title only");
     let is_sub_request = body_text.contains("research sub-agent");
     eprintln!(
-        "[DBG-MOCK] classified sub={} summarizer={} len={} head={}",
+        "[DBG-MOCK] classified sub={} summarizer={} title={} len={} head={}",
         body_text.contains("research sub-agent"),
         body_text.contains("compress an earlier portion"),
+        is_title_request,
         body_text.len(),
         &body_text[..body_text.len().min(120)]
     );
+    if is_title_request {
+        let body = serde_json::json!({
+            "choices": [{
+                "index": 0,
+                "delta": {"content": "Mock Session Title"},
+                "finish_reason": "stop"
+            }]
+        });
+        return build_stream_response(format!("data: {body}\n\ndata: [DONE]\n\n"));
+    }
     script.requests.lock().unwrap().push(body_text.clone());
 
     let sub_count = if is_sub_request {
@@ -172,7 +184,7 @@ fn cfg_for(base_url: String, project_root: &std::path::Path) -> LoopConfig {
         review_enabled: false,
         mcp_servers: vec![],
         auto_allow_tools: vec![],
-        initial_mode: harness_core::agent::PermissionMode::Normal,
+        initial_mode: z_engine_core::agent::PermissionMode::Normal,
     }
 }
 
@@ -213,7 +225,7 @@ fn done() -> String {
 }
 
 /// Drain events until `pred` matches or a deadline passes.
-async fn wait_for(ev: &mut harness_core::agent::EventRx, pred: impl Fn(&Event) -> bool) -> Event {
+async fn wait_for(ev: &mut z_engine_core::agent::EventRx, pred: impl Fn(&Event) -> bool) -> Event {
     let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
     loop {
         assert!(
@@ -775,7 +787,7 @@ async fn long_session_compaction_preserves_coherence() {
         review_enabled: false,
         mcp_servers: vec![],
         auto_allow_tools: vec![],
-        initial_mode: harness_core::agent::PermissionMode::Normal,
+        initial_mode: z_engine_core::agent::PermissionMode::Normal,
     };
     let (handle, mut ev) = spawn(cfg);
     handle.submit("ingest big file");
@@ -812,7 +824,7 @@ async fn long_session_compaction_preserves_coherence() {
         "no elided tool outputs observed"
     );
     // Spill files preserve the full earlier outputs.
-    let spills: Vec<_> = std::fs::read_dir(tmp.path().join("tmp-out/harness"))
+    let spills: Vec<_> = std::fs::read_dir(tmp.path().join("tmp-out/z-engine"))
         .unwrap()
         .flatten()
         .map(|e| e.path())
@@ -828,7 +840,7 @@ async fn long_session_compaction_preserves_coherence() {
 
 #[tokio::test]
 async fn always_persist_writes_config_and_never_reprompts() {
-    use harness_core::config::{CliOverrides, Config, project_config_path};
+    use z_engine_core::config::{CliOverrides, Config, project_config_path};
     let tmp = tempfile::tempdir().unwrap();
     let script = Script::default();
     // Two identical gated commands in separate rounds, then a close-out.
@@ -985,7 +997,7 @@ async fn repo_map_answers_where_defined_without_grep() {
         review_enabled: false,
         mcp_servers: vec![],
         auto_allow_tools: vec![],
-        initial_mode: harness_core::agent::PermissionMode::Normal,
+        initial_mode: z_engine_core::agent::PermissionMode::Normal,
     };
     let (handle, mut ev) = spawn(cfg);
     handle.submit("where is zebra_fn defined?");
@@ -1047,7 +1059,7 @@ async fn repo_map_refreshes_after_edit() {
         review_enabled: false,
         mcp_servers: vec![],
         auto_allow_tools: vec![],
-        initial_mode: harness_core::agent::PermissionMode::Normal,
+        initial_mode: z_engine_core::agent::PermissionMode::Normal,
     };
     cfg.initial_allow_rules.clear();
     let (handle, mut ev) = spawn(cfg);
@@ -1120,7 +1132,7 @@ async fn subagent_exploration_stays_out_of_parent_context() {
         review_enabled: false,
         mcp_servers: vec![],
         auto_allow_tools: vec![],
-        initial_mode: harness_core::agent::PermissionMode::Normal,
+        initial_mode: z_engine_core::agent::PermissionMode::Normal,
     };
     let (handle, mut ev) = spawn(cfg);
     handle.submit("explore broadly");
@@ -1299,7 +1311,7 @@ async fn reviewer_no_findings_stays_silent() {
 
 #[tokio::test]
 async fn mcp_echo_tool_roundtrips() {
-    use harness_core::config::Config;
+    use z_engine_core::config::Config;
 
     let tmp = tempfile::tempdir().unwrap();
     // Project config registers the echo server (tests project layering too).
@@ -1383,7 +1395,7 @@ async fn plan_mode_blocks_mutations_without_prompting() {
 
     let base = serve(script.clone()).await;
     let mut cfg = cfg_for(base, tmp.path());
-    cfg.initial_mode = harness_core::agent::PermissionMode::Plan;
+    cfg.initial_mode = z_engine_core::agent::PermissionMode::Plan;
     let (handle, mut ev) = spawn(cfg);
     handle.submit("try to edit");
 

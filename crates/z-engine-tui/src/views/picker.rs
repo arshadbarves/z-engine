@@ -8,15 +8,19 @@ use crossterm::event::{self, Event as CtEvent, KeyCode, KeyEventKind, KeyModifie
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use harness_core::session::{self, SessionSummary};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState};
+use z_engine_core::session::{self, SessionSummary};
 
-pub fn pick_interactive(sessions_dir: &std::path::Path) -> io::Result<Option<std::path::PathBuf>> {
-    let sessions = session::list_sessions(sessions_dir);
+pub fn pick_interactive() -> io::Result<Option<std::path::PathBuf>> {
+    let mut sessions: Vec<SessionSummary> = Vec::new();
+    for dir in z_engine_core::config::session_search_dirs() {
+        sessions.extend(session::list_sessions(&dir));
+    }
+    sessions.sort_by_key(|s| std::cmp::Reverse(s.modified));
     if sessions.is_empty() {
         return Ok(None);
     }

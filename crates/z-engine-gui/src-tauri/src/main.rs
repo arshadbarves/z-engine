@@ -1,4 +1,4 @@
-//! Desktop shell (Tauri 2) wrapping the harness-core brain.
+//! Desktop shell (Tauri 2) wrapping the z-engine-core brain.
 //!
 //! Serving model (rebuilt from scratch): a minimal HTTP server bound to
 //! 127.0.0.1:<random port> serves the built frontend from disk, and the
@@ -16,11 +16,11 @@ mod slash_commands;
 mod state;
 
 use event_bridge::forward_events;
-use harness_core::agent::spawn_with_recorder;
-use harness_core::config::{CliOverrides, Config};
 use state::{AppCtx, GuiState, build_loop_config};
 use std::path::PathBuf;
 use tauri::Manager;
+use z_engine_core::agent::spawn_with_recorder;
+use z_engine_core::config::{CliOverrides, Config};
 
 fn main() {
     // App-lifetime tokio runtime entered on the main thread so agent
@@ -31,11 +31,9 @@ fn main() {
         .expect("tokio runtime");
     let _enter = rt.enter(); // intentionally lives for the process
 
-    // Log file lives under <data_dir>/harness/; the directory may not
+    // Log file lives under <data_dir>/z-engine/; the directory may not
     // exist on first run, and a logging failure must never block launch.
-    let log_path = dirs::data_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("harness/harness-gui.log");
+    let log_path = z_engine_core::config::app_data_write_dir().join("z-engine-gui.log");
     if let Some(parent) = log_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -56,7 +54,7 @@ fn main() {
                 .ok();
         }
         Err(e) => {
-            eprintln!("harness-gui: cannot open log {}: {e}", log_path.display());
+            eprintln!("z-engine-gui: cannot open log {}: {e}", log_path.display());
         }
     }
 
@@ -122,13 +120,14 @@ fn main() {
                 "main",
                 tauri::WebviewUrl::App("index.html".into()),
             )
-            .title("harness")
+            .title("Z Engine")
             .inner_size(1100.0, 760.0)
             .min_inner_size(720.0, 520.0)
             // Codex-desktop chrome: no separate title bar — traffic lights
             // float over the sidebar (which pads for them).
             .title_bar_style(tauri::TitleBarStyle::Overlay)
             .hidden_title(true)
+            .maximized(true)
             .build()
             .map_err(|e| e.to_string())?;
 
@@ -136,7 +135,7 @@ fn main() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("error while building harness GUI");
+        .expect("error while building Z Engine GUI");
     app.run(|_app_handle, event| {
         // Tear the agent down on quit so bash/MCP child processes don't
         // outlive the closed window as orphans.

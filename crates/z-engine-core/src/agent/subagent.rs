@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use harness_provider::{
+use z_engine_provider::{
     AccumulatedToolCall, ChatMessage, ChatRequest, Client, StreamEvent, ToolCall,
     ToolCallAccumulator,
 };
@@ -95,7 +95,7 @@ pub(super) async fn run_isolated(
                     // Keep the call on the wire so the error pairs up.
                     complete_calls.push(ToolCall {
                         id,
-                        function: harness_provider::FunctionCall {
+                        function: z_engine_provider::FunctionCall {
                             name: name.unwrap_or_default(),
                             arguments: raw_arguments,
                         },

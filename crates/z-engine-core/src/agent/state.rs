@@ -1,6 +1,6 @@
 //! Per-conversation mutable state threaded through the turn pipeline.
 
-use harness_provider::{ChatMessage, ContentPart, Usage};
+use z_engine_provider::{ChatMessage, ContentPart, Usage};
 
 pub(super) struct LoopState {
     /// Everything between the L0/L1 prefix and the current turn.

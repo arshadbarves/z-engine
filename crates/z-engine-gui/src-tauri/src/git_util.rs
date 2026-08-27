@@ -107,7 +107,7 @@ pub(crate) fn diff_for_file(
 
 // ---- git worktrees ------------------------------------------------------------
 
-/// Create a linked worktree under `.harness/worktrees/<name>` on its own
+/// Create a linked worktree under `.z-engine/worktrees/<name>` on its own
 /// branch, keep it out of `git status`, and register it as a workspace.
 #[tauri::command]
 pub(crate) fn create_worktree(
@@ -130,10 +130,10 @@ pub(crate) fn create_worktree(
         .ok_or("not initialized")?
         .project_root
         .clone();
-    let rel = format!(".harness/worktrees/{slug}");
+    let rel = format!(".z-engine/worktrees/{slug}");
     git(
         &root,
-        &["worktree", "add", &rel, "-b", &format!("harness/{slug}")],
+        &["worktree", "add", &rel, "-b", &format!("zengine/{slug}")],
     )
     .map_err(|e| format!("git worktree add failed: {e}"))?;
 

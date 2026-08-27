@@ -1,0 +1,84 @@
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0b0b0d;
+}
+
+.splash-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.splash-mark {
+  color: #ededf0;
+  animation: splash-draw 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.splash-mark path {
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: splash-stroke 0.85s 0.12s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+
+.splash-word {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 550;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #ededf0;
+  animation: splash-fade 0.6s 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.splash.leaving {
+  animation: splash-out 0.35s ease forwards;
+}
+
+@keyframes splash-draw {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes splash-stroke {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes splash-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes splash-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-mark,
+  .splash-mark path,
+  .splash-word,
+  .splash.leaving {
+    animation: none;
+  }
+}

@@ -2,10 +2,18 @@ use crate::git_util::contain;
 use std::path::PathBuf;
 
 pub(crate) fn sessions_dir() -> PathBuf {
-    dirs::data_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("harness")
-        .join("sessions")
+    z_engine_core::config::sessions_dir()
+}
+
+pub(crate) fn contain_session(path: &str) -> Result<PathBuf, String> {
+    let mut last = "path escapes the session store".to_string();
+    for dir in z_engine_core::config::session_search_dirs() {
+        match contain(&dir, path) {
+            Ok(p) => return Ok(p),
+            Err(e) => last = e,
+        }
+    }
+    Err(last)
 }
 
 #[derive(serde::Serialize, Debug)]
@@ -21,33 +29,39 @@ pub(crate) struct SessionEntry {
 #[tauri::command]
 pub(crate) fn list_sessions() -> Result<Vec<SessionEntry>, String> {
     use std::time::UNIX_EPOCH;
-    Ok(harness_core::session::list_sessions(&sessions_dir())
-        .into_iter()
-        .map(|s| SessionEntry {
-            modified_ms: s
-                .modified
-                .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_millis() as u64)
-                .unwrap_or(0),
-            path: s.path.to_string_lossy().into_owned(),
-            ulid: s.ulid,
-            first_user_msg: s.first_user_msg,
-            project_root: s.project_root,
-        })
-        .collect())
+    let mut out: Vec<SessionEntry> = Vec::new();
+    for dir in z_engine_core::config::session_search_dirs() {
+        out.extend(
+            z_engine_core::session::list_sessions(&dir)
+                .into_iter()
+                .map(|s| SessionEntry {
+                    modified_ms: s
+                        .modified
+                        .duration_since(UNIX_EPOCH)
+                        .map(|d| d.as_millis() as u64)
+                        .unwrap_or(0),
+                    path: s.path.to_string_lossy().into_owned(),
+                    ulid: s.ulid,
+                    first_user_msg: s.first_user_msg,
+                    project_root: s.project_root,
+                }),
+        );
+    }
+    out.sort_by_key(|b| std::cmp::Reverse(b.modified_ms));
+    Ok(out)
 }
 
 #[tauri::command]
 pub(crate) fn delete_session(path: String) -> Result<(), String> {
-    let contained = contain(&sessions_dir(), &path)?;
-    harness_core::session::delete_session(&contained).map_err(|e| e.to_string())
+    let contained = contain_session(&path)?;
+    z_engine_core::session::delete_session(&contained).map_err(|e| e.to_string())
 }
 
 /// Transcript replay for the sessions sidebar: parse a session JSONL into
 /// its event list so the frontend can rebuild the chat history.
 #[tauri::command]
 pub(crate) fn read_session(path: String) -> Result<Vec<serde_json::Value>, String> {
-    let events = harness_core::session::read_events(std::path::Path::new(&path))
+    let events = z_engine_core::session::read_events(std::path::Path::new(&path))
         .map_err(|e| e.to_string())?;
     Ok(events
         .into_iter()

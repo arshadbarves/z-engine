@@ -2,7 +2,7 @@ import { useState } from "react";
 import { GitBranch, X } from "lucide-react";
 
 /** Name prompt for a new git worktree: creates
- * `.harness/worktrees/<name>` on branch `harness/<name>`, registers it as
+ * `.z-engine/worktrees/<name>` on branch `zengine/<name>`, registers it as
  * a workspace and starts a task there (handled by the caller). */
 export function WorktreeModal({
   onClose,
@@ -25,8 +25,8 @@ export function WorktreeModal({
         </div>
         <p className="modal-sub">
           Creates an isolated checkout at{" "}
-          <code>.harness/worktrees/{slug || "<name>"}</code> on branch{" "}
-          <code>harness/{slug || "<name>"}</code>, then starts a session there.
+          <code>.z-engine/worktrees/{slug || "<name>"}</code> on branch{" "}
+          <code>zengine/{slug || "<name>"}</code>, then starts a session there.
           The main working tree stays untouched.
         </p>
         <form

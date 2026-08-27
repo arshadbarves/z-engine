@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 /// Marker byte (SOH) delimiting the embedded cwd probe on stderr.
 const MARKER: char = '\u{01}';
-const MARKER_TAG: &str = "HARNESS_CWD:";
+const MARKER_TAG: &str = "ZENGINE_CWD:";
 
 pub(super) fn build_script(start_cwd: &Path, command: &str) -> String {
     format!(

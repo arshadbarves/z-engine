@@ -8,6 +8,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use super::events::Event;
 use crate::tools::ToolCtx;
+use z_engine_provider::ChatMessage;
 
 pub(super) fn revert_last_turn(ctx: &ToolCtx, root: &Path, ev_tx: &UnboundedSender<Event>) {
     let out = ctx.checkpoints.revert_last_turn();
@@ -93,4 +94,52 @@ pub(super) fn revert_to_turn(
         tracing::warn!(error = %e, "revert-to-turn restore failed");
     }
     let _ = ev_tx.send(Event::StatusNote(note));
+}
+
+/// Drop the `keep`-th user message (0-based) and everything after it
+/// from the in-memory working set.
+pub(super) fn trim_working_before_user_turn(working: &mut Vec<ChatMessage>, keep: u64) {
+    let mut seen = 0u64;
+    let mut cut = working.len();
+    for (i, m) in working.iter().enumerate() {
+        if matches!(m, ChatMessage::User { .. } | ChatMessage::UserMulti { .. }) {
+            if seen == keep {
+                cut = i;
+                break;
+            }
+            seen += 1;
+        }
+    }
+    working.truncate(cut);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn trim_working_drops_from_kept_user_onward() {
+        let mut working = vec![
+            ChatMessage::user("one"),
+            ChatMessage::Assistant {
+                content: Some("a".into()),
+                tool_calls: vec![],
+            },
+            ChatMessage::user("two"),
+            ChatMessage::Assistant {
+                content: Some("b".into()),
+                tool_calls: vec![],
+            },
+        ];
+        trim_working_before_user_turn(&mut working, 1);
+        assert_eq!(working.len(), 2);
+        assert!(matches!(&working[0], ChatMessage::User { content } if content == "one"));
+    }
+
+    #[test]
+    fn trim_working_keep_zero_clears_all() {
+        let mut working = vec![ChatMessage::user("one")];
+        trim_working_before_user_turn(&mut working, 0);
+        assert!(working.is_empty());
+    }
 }
