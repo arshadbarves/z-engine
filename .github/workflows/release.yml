@@ -83,6 +83,10 @@ jobs:
         run: npm ci
         working-directory: crates/z-engine-gui/ui
 
+      - name: Build frontend
+        run: npm run build
+        working-directory: crates/z-engine-gui/ui
+
 
       - name: Build GUI
         uses: tauri-apps/tauri-action@v1
