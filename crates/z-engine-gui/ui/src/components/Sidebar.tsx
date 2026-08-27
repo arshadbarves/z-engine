@@ -47,7 +47,7 @@ function WorkspaceRow({
   return (
     <div className={`ws-row${active ? " active" : ""}`}>
       <div
-        className="ws-head"
+        className={`ws-head${projectActivity ? ` ${projectActivity}` : ""}`}
         role="button"
         tabIndex={0}
         title={`${root}${active ? " · active" : " · click to make active"}`}
@@ -60,20 +60,9 @@ function WorkspaceRow({
         <span className={`ws-chevron${open ? " open" : ""}`}>
           <ChevronRight size={10} />
         </span>
-        <Folder size={13} />
+        <Folder size={13} className="ws-icon" />
         <span className="ws-name">{wsBasename(root)}</span>
         <span className="ws-tail">
-          {projectActivity && (
-            <span
-              className={`sess-dot ${projectActivity}`}
-              role="status"
-              aria-label={
-                projectActivity === "approval"
-                  ? "Approval needed in this project"
-                  : "Generating in this project"
-              }
-            />
-          )}
           <span className="ws-count">{items.length || ""}</span>
           <button
             className="del"
@@ -125,7 +114,6 @@ function SessionRow({
   const unread = !active && !state && (s.unreadOutcome === "completed" || s.unreadOutcome === "aborted")
     ? s.unreadOutcome
     : null;
-  const live = state === "working" || state === "approval";
   const title = sessionLabel(s.firstUserMsg);
   return (
     <div
@@ -145,18 +133,6 @@ function SessionRow({
       }}
       onKeyDown={(e) => e.key === "Enter" && onOpen(s.path, s.projectRoot)}
     >
-      {live && (
-        <svg
-          className="sess-orbit"
-          viewBox="0 0 100 100"
-          width="100%"
-          height="100%"
-          preserveAspectRatio="none"
-          aria-hidden
-        >
-          <rect x="1.2" y="4" width="97.6" height="92" rx="8" ry="22" pathLength="100" />
-        </svg>
-      )}
       <MessageSquare size={13} className="sess-icon" />
       <div className="sess-preview">{title}</div>
       <span className="sess-tail">

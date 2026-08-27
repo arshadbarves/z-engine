@@ -843,9 +843,6 @@ html.plat-mac .app.no-sidebar .chat-head {
   cursor: pointer;
   transition: background 0.13s ease;
   -webkit-app-region: no-drag;
-  /* Keep the live orbit inside this row. Do not use overflow:hidden —
-   * it would clip the unread glow on ::after. */
-  isolation: isolate;
 }
 
 .session:hover,
@@ -861,7 +858,8 @@ html.plat-mac .app.no-sidebar .chat-head {
   color: var(--text);
 }
 
-.sess-icon {
+.sess-icon,
+.ws-icon {
   flex-shrink: 0;
   color: var(--text-3);
 }
@@ -870,60 +868,49 @@ html.plat-mac .app.no-sidebar .chat-head {
   color: var(--text-2);
 }
 
-/* Live state: SVG dash travels clockwise (WKWebView cannot animate @property). */
 .session.working,
-.session.approval {
-  --sess-neon: rgba(61, 220, 151, 0.9);
+.session.approval,
+.ws-head.working,
+.ws-head.approval {
+  --sess-neon: var(--ok);
 }
 
-.session.approval {
-  --sess-neon: rgba(232, 180, 90, 0.95);
+.session.approval,
+.ws-head.approval {
+  --sess-neon: var(--warn);
 }
 
-.sess-orbit {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-  pointer-events: none;
-  overflow: hidden;
-  z-index: 0;
+.session.working .sess-icon,
+.session.approval .sess-icon,
+.ws-head.working .ws-icon,
+.ws-head.approval .ws-icon {
+  color: var(--sess-neon);
+  animation: sess-breathe 3.2s ease-in-out infinite;
 }
 
-.sess-orbit rect {
-  fill: none;
-  stroke: var(--sess-neon);
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  vector-effect: non-scaling-stroke;
-  stroke-dasharray: 16 84;
-  animation: sess-dash 2.2s linear infinite;
-  filter: drop-shadow(0 0 3px var(--sess-neon));
-}
-
-@keyframes sess-dash {
-  to {
-    stroke-dashoffset: -100;
-  }
+.session.working .sess-preview {
+  color: var(--text);
 }
 
 .session.unread {
-  --sess-neon: rgba(61, 220, 151, 0.85);
+  --sess-neon: var(--ok);
 }
 
 .session.unread-aborted {
-  --sess-neon: rgba(244, 113, 116, 0.85);
+  --sess-neon: var(--err);
 }
 
+/* One-shot flash: 1px ring + outer glow fade out together. */
 .session.unread::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  box-shadow: 0 0 14px 1px var(--sess-neon);
-  animation: sess-glow-out 1.6s ease forwards;
   pointer-events: none;
+  box-shadow:
+    inset 0 0 0 1px var(--sess-neon),
+    0 0 14px 1px var(--sess-neon);
+  animation: sess-glow-out 1.6s ease forwards;
 }
 
 @keyframes sess-glow-out {
@@ -941,35 +928,22 @@ html.plat-mac .app.no-sidebar .chat-head {
   height: 6px;
   border-radius: 50%;
   background: var(--ok);
-  box-shadow: 0 0 6px var(--ok);
 }
 
 .session.unread-aborted .sess-unread-dot {
   background: var(--err);
-  box-shadow: 0 0 6px var(--err);
 }
 
-.session.working .sess-icon,
-.session.working .sess-preview {
-  color: var(--text);
-}
-
-.session.approval .sess-icon {
-  color: var(--warn);
-}
-
-/* Workspace rollup dot (a header row has no left edge to light up). */
-.sess-dot {
-  flex-shrink: 0;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--ok);
-  opacity: 0.8;
-}
-
-.sess-dot.approval {
-  background: var(--warn);
+@keyframes sess-breathe {
+  0%,
+  100% {
+    opacity: 0.22;
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 5px var(--sess-neon));
+  }
 }
 
 .sess-preview {
