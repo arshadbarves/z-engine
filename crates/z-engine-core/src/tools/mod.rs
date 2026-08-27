@@ -27,6 +27,7 @@ mod edit_ladder;
 mod fsutil;
 mod grep_backend;
 mod proc_helpers;
+mod shell;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -36,6 +37,13 @@ use async_trait::async_trait;
 pub use context::{SubAgentFuture, SubAgentRunner, ToolCtx, ToolOutputChunk};
 pub(crate) use fsutil::atomic_write;
 pub use fsutil::{MAX_TOOL_OUTPUT_CHARS, truncate_with_tempfile, unified_diff};
+
+/// Spawn `sh -c` (or Windows `bash`/`cmd`) for a one-shot command line.
+pub(crate) fn shell_line(command: &str) -> tokio::process::Command {
+    let mut c = tokio::process::Command::new(shell::program());
+    c.arg(shell::flag()).arg(command);
+    c
+}
 
 /// Errors from tool execution. Display strings go to the model verbatim.
 #[derive(Debug, thiserror::Error)]

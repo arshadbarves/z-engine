@@ -1,5 +1,6 @@
 import { ArrowDown, GitCompare, PanelLeft, Search } from "lucide-react";
 import { ContextMeter } from "./ContextMeter";
+import { modLabel } from "../lib/platform";
 
 export function ChatHeader({
   title,
@@ -24,12 +25,14 @@ export function ChatHeader({
         <button
           type="button"
           className="icon-btn"
-          title={sidebarOpen ? "Hide sidebar (⌘B)" : "Show sidebar (⌘B)"}
+          title={
+            sidebarOpen ? `Hide sidebar (${modLabel()}B)` : `Show sidebar (${modLabel()}B)`
+          }
           onClick={onToggleSidebar}
         >
           <PanelLeft size={13} />
         </button>
-        <button type="button" className="icon-btn" title="Search (⌘K)" onClick={onPalette}>
+        <button type="button" className="icon-btn" title={`Search (${modLabel()}K)`} onClick={onPalette}>
           <Search size={13} />
         </button>
         <div className="chat-title" title={titleHint}>

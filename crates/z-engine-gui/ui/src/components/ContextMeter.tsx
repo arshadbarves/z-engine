@@ -85,10 +85,13 @@ export function ContextMeter() {
               {fmtTokens(br.used)} / {fmtTokens(br.max)}
             </span>
           </div>
-          <div className="ctx-bar" aria-hidden>
-            {br.slices.map((s) => (
-              <i key={s.id} style={{ width: `${(s.tokens / br.max) * 100}%`, background: s.color }} />
-            ))}
+          <div className="ctx-bar-wrap">
+            <div className="ctx-bar" aria-hidden>
+              {br.slices.map((s) => (
+                <i key={s.id} style={{ width: `${(s.tokens / br.max) * 100}%`, background: s.color }} />
+              ))}
+            </div>
+            <b className="ctx-compact-mark" style={{ left: `${compactAt}%` }} title={`Compact at ${compactAt}%`} />
           </div>
           <div className="ctx-cols">
             <ul className="ctx-legend">
@@ -96,7 +99,10 @@ export function ContextMeter() {
                 <li key={s.id}>
                   <i className="swatch" style={{ background: s.color }} />
                   {s.label}
-                  <span>{fmtTokens(s.tokens)}</span>
+                  <span>
+                    {fmtTokens(s.tokens)}
+                    <em>{Math.round((s.tokens / br.max) * 100)}%</em>
+                  </span>
                 </li>
               ))}
             </ul>
@@ -105,7 +111,10 @@ export function ContextMeter() {
                 <li key={s.id}>
                   <i className="swatch" style={{ background: s.color }} />
                   {s.label}
-                  <span>{fmtTokens(s.tokens)}</span>
+                  <span>
+                    {fmtTokens(s.tokens)}
+                    <em>{Math.round((s.tokens / br.max) * 100)}%</em>
+                  </span>
                 </li>
               ))}
             </ul>
@@ -113,6 +122,8 @@ export function ContextMeter() {
           <p className="ctx-note">
             Auto-compacts at {compactAt}%
             {cost != null ? ` · est. ${fmtCost(cost)}` : ""}
+            {` · ${messages.filter((m) => m.kind === "user").length} user turns`}
+            {` · ${messages.filter((m) => m.kind === "tool").length} tool results`}
           </p>
           <button
             type="button"

@@ -169,8 +169,19 @@ pub(crate) fn contain(base: &Path, candidate: &str) -> Result<PathBuf, String> {
     let joined = base.join(candidate);
     let canon = std::fs::canonicalize(&joined).map_err(|e| format!("{}: {e}", joined.display()))?;
     let base_canon = std::fs::canonicalize(base).unwrap_or_else(|_| base.to_path_buf());
-    if !canon.starts_with(&base_canon) {
+    let canon_cmp = strip_verbatim(&canon);
+    let base_cmp = strip_verbatim(&base_canon);
+    if !canon_cmp.starts_with(&base_cmp) {
         return Err(format!("path escapes the session store: {candidate}"));
     }
     Ok(canon)
+}
+
+fn strip_verbatim(p: &Path) -> PathBuf {
+    let s = p.to_string_lossy();
+    if let Some(rest) = s.strip_prefix(r"\\?\") {
+        PathBuf::from(rest)
+    } else {
+        p.to_path_buf()
+    }
 }

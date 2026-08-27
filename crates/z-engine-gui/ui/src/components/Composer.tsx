@@ -28,6 +28,7 @@ import { Terminal, X } from "lucide-react";
 import { filterSlash, getCustomCommands } from "../lib/slash";
 import { readSlashCommand } from "../lib/commands";
 import { estimateCost, fmtCost } from "../lib/util";
+import { modLabel } from "../lib/platform";
 import { ModelPicker } from "./ModelPicker";
 import { ModePicker } from "./ModePicker";
 import { EffortSelector } from "./EffortSelector";
@@ -157,7 +158,7 @@ export function Composer() {
       case "help":
         pushNotice(
           "commands: /help /compact /notes /cost /status\n" +
-            "keys: Enter send · Esc abort · ⇧⏎ newline · ! shell · @ files · ⌘K palette",
+            `keys: Enter send · Esc abort · ⇧⏎ newline · ! shell · @ files · ${modLabel()}K palette`,
         );
         break;
       case "cost": {

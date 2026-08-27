@@ -2,6 +2,7 @@ import { compact, notes, setMode, setModel, submit } from "./commands";
 import { draftStore, modeStore, modelStore, submitLocal } from "./events";
 import { HERO_EXAMPLES } from "../components/MsgList";
 import type { PaletteItem } from "../components/CommandPalette";
+import { modLabel } from "./platform";
 
 const MODEL_PRESETS = [
   "anthropic/claude-sonnet-4",
@@ -69,7 +70,7 @@ export function paletteActions(opts: {
     })),
     {
       label: "Toggle sidebar",
-      hint: "⌘B",
+      hint: `${modLabel()}B`,
       keywords: "toggle sidebar view",
       run: opts.toggleSidebar,
     },

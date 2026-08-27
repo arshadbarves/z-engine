@@ -305,9 +305,7 @@ async fn run_hook(
     };
     let output = tokio::time::timeout(
         std::time::Duration::from_secs(15),
-        tokio::process::Command::new("sh")
-            .arg("-c")
-            .arg(cmd)
+        crate::tools::shell_line(cmd)
             .current_dir(root)
             .env("ZENGINE_EVENT", event)
             .env("HARNESS_EVENT", event)

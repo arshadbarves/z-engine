@@ -20,6 +20,11 @@ cargo install --path crates/z-engine-tui
 # binary: zengine
 ```
 
+Push or merge to the `release` branch (or run **Actions → release** by hand)
+to build the desktop app and CLI for macOS, Windows, and Linux. Installers
+are attached to the GitHub Release matching the version in
+`crates/z-engine-gui/src-tauri/tauri.conf.json`.
+
 Requirements: Rust stable (≥1.85), a Rust toolchain for projects it works
 on, `ZENGINE_API_KEY` (OpenRouter by default) or a local OpenAI-compatible
 server. Optional: `ripgrep` (grep falls back to pure Rust), `rust-analyzer`
@@ -92,9 +97,14 @@ context notes via a side-request, and `/compact` forces it on demand.
 
 Every turn appends newline-delimited JSON events under
 `~/Library/Application Support/z-engine/sessions/<ulid>.jsonl`
-(`~/.local/share/z-engine/sessions` on Linux). Crashes tear at most the last
+(macOS), `~/.local/share/z-engine/sessions` (Linux), or
+`%APPDATA%\z-engine\sessions` (Windows). Crashes tear at most the last
 line; `--session <ulid>` replays and continues. Existing `harness/sessions`
 files are still listed.
+
+On Windows the GUI uses a native title bar. The `bash` tool prefers Git
+Bash (`bash -lc`) when it is on `PATH`, otherwise `cmd.exe /C`. Install
+[Git for Windows](https://git-scm.com/download/win) for POSIX commands.
 
 ## Architecture
 

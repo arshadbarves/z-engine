@@ -4,7 +4,7 @@ import { inspectPrompt, type PromptInspect, type PromptPart, type PromptTool } f
 import { sessionStore } from "../lib/events";
 import { promptInsights } from "../lib/promptInsights";
 import { fmtTokens } from "../lib/util";
-import "./promptInspect.css";
+import { PromptInspectChart } from "./PromptInspectChart";
 
 type Row =
   | { key: string; kind: "msg"; part: PromptPart }
@@ -152,6 +152,7 @@ export function PromptInspector({ onClose }: { onClose: () => void }) {
               <strong>{ins.volatileTail}</strong>
             </div>
           </div>
+          <PromptInspectChart ins={ins} />
           {ins.hints.length > 0 && (
             <ul className="prompt-inspect-hints">
               {ins.hints.map((h) => (
@@ -189,7 +190,19 @@ export function PromptInspector({ onClose }: { onClose: () => void }) {
                 );
               })}
             </nav>
-            <pre className="prompt-inspect-content">{active ? bodyOf(active) : ""}</pre>
+            <div className="prompt-inspect-pane">
+              {ins.layers[sel] && (
+                <div className="prompt-part-stats">
+                  <span>~{fmtTokens(ins.layers[sel].tokens)}</span>
+                  <span>{ins.layers[sel].chars.toLocaleString()} chars</span>
+                  <span>{ins.layers[sel].lines} lines</span>
+                  <span>{pct(ins.layers[sel].share)} of request</span>
+                  <span>{ins.layers[sel].cacheable ? "cacheable" : "volatile"}</span>
+                  <span>wire #{ins.layers[sel].order}</span>
+                </div>
+              )}
+              <pre className="prompt-inspect-content">{active ? bodyOf(active) : ""}</pre>
+            </div>
           </div>
         </>
       )}

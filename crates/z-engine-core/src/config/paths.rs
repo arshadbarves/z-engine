@@ -31,12 +31,36 @@ pub fn project_config_read_path(project_root: &Path) -> PathBuf {
     first_existing(&[neu.clone(), old]).unwrap_or(neu)
 }
 
-/// `~/.config/z-engine`, falling back to `~/.config/harness`.
+/// `~/.config/z-engine` on Unix; `%APPDATA%\z-engine` on Windows, with
+/// `~/.config` still read if it already exists.
 pub fn global_config_dir() -> Option<PathBuf> {
-    let home = dirs::home_dir()?;
-    let neu = home.join(".config").join(APP_SLUG);
-    let old = home.join(".config").join(LEGACY_SLUG);
-    Some(first_existing(&[neu.clone(), old]).unwrap_or(neu))
+    let mut cands = Vec::new();
+    if let Some(home) = dirs::home_dir() {
+        cands.push(home.join(".config").join(APP_SLUG));
+        cands.push(home.join(".config").join(LEGACY_SLUG));
+    }
+    if let Some(cfg) = dirs::config_dir() {
+        cands.push(cfg.join(APP_SLUG));
+        cands.push(cfg.join(LEGACY_SLUG));
+    }
+    Some(first_existing(&cands).unwrap_or_else(default_global_config_dir))
+}
+
+fn default_global_config_dir() -> PathBuf {
+    #[cfg(windows)]
+    {
+        dirs::config_dir()
+            .or_else(dirs::home_dir)
+            .unwrap_or_else(std::env::temp_dir)
+            .join(APP_SLUG)
+    }
+    #[cfg(not(windows))]
+    {
+        dirs::home_dir()
+            .unwrap_or_else(std::env::temp_dir)
+            .join(".config")
+            .join(APP_SLUG)
+    }
 }
 
 /// Path of the global config file. `ZENGINE_CONFIG` / `HARNESS_CONFIG` win.
@@ -50,7 +74,7 @@ pub fn global_config_path(env: &EnvVars) -> Option<PathBuf> {
 /// Always the new data directory — writes (sessions, logs, caches) go here.
 pub fn app_data_write_dir() -> PathBuf {
     dirs::data_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .unwrap_or_else(std::env::temp_dir)
         .join(APP_SLUG)
 }
 
@@ -58,7 +82,7 @@ pub fn app_data_write_dir() -> PathBuf {
 pub fn app_data_dir() -> PathBuf {
     let neu = app_data_write_dir();
     let old = dirs::data_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .unwrap_or_else(std::env::temp_dir)
         .join(LEGACY_SLUG);
     first_existing(&[neu.clone(), old]).unwrap_or(neu)
 }
@@ -72,7 +96,7 @@ pub fn sessions_dir() -> PathBuf {
 pub fn session_search_dirs() -> Vec<PathBuf> {
     let neu = sessions_dir();
     let old = dirs::data_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .unwrap_or_else(std::env::temp_dir)
         .join(LEGACY_SLUG)
         .join("sessions");
     let mut dirs = vec![neu.clone()];
@@ -104,12 +128,20 @@ pub fn slash_command_dirs(project_root: &Path) -> Vec<(String, PathBuf)> {
             home.join(".config").join(LEGACY_SLUG).join("commands"),
         ));
     }
+    if let Some(cfg) = dirs::config_dir() {
+        for slug in [APP_SLUG, LEGACY_SLUG] {
+            let p = cfg.join(slug).join("commands");
+            if !dirs.iter().any(|(_, existing)| existing == &p) {
+                dirs.push(("global".to_string(), p));
+            }
+        }
+    }
     dirs
 }
 
 /// `~/.config/z-engine/models.json`, falling back to the harness path.
 pub fn models_override_path() -> PathBuf {
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
+    let home = dirs::home_dir().unwrap_or_else(std::env::temp_dir);
     let neu = home.join(".config").join(APP_SLUG).join("models.json");
     let old = home.join(".config").join(LEGACY_SLUG).join("models.json");
     first_existing(&[neu.clone(), old]).unwrap_or(neu)
@@ -132,6 +164,15 @@ pub fn resolve_api_key() -> Option<String> {
             let t = s.trim().to_string();
             if !t.is_empty() {
                 return Some(t);
+            }
+        }
+        if let Some(cfg) = dirs::config_dir() {
+            let path = cfg.join(slug).join("api-key");
+            if let Ok(s) = std::fs::read_to_string(path) {
+                let t = s.trim().to_string();
+                if !t.is_empty() {
+                    return Some(t);
+                }
             }
         }
     }

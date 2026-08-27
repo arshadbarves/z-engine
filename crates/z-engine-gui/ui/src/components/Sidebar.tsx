@@ -146,16 +146,15 @@ function SessionRow({
       onKeyDown={(e) => e.key === "Enter" && onOpen(s.path, s.projectRoot)}
     >
       {live && (
-        <svg className="sess-orbit" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-          <rect
-            x="0.8"
-            y="2.4"
-            width="98.4"
-            height="95.2"
-            rx="12"
-            ry="28"
-            pathLength="100"
-          />
+        <svg
+          className="sess-orbit"
+          viewBox="0 0 100 100"
+          width="100%"
+          height="100%"
+          preserveAspectRatio="none"
+          aria-hidden
+        >
+          <rect x="1.2" y="4" width="97.6" height="92" rx="8" ry="22" pathLength="100" />
         </svg>
       )}
       <MessageSquare size={13} className="sess-icon" />

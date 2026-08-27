@@ -18,6 +18,14 @@ pub(super) fn kill_tree(child: &mut tokio::process::Child) {
             .stderr(Stdio::null())
             .status();
     }
+    #[cfg(windows)]
+    if let Some(pid) = child.id() {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
     let _ = child.start_kill();
 }
 
@@ -54,7 +62,7 @@ where
                     Ok(0) => break,
                     Ok(_) => {
                         all.extend_from_slice(line.as_bytes());
-                        on_line(line.trim_end_matches('\n').to_string());
+                        on_line(line.trim_end_matches(['\n', '\r']).to_string());
                     }
                     Err(_) => break,
                 }

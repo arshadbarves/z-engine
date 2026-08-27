@@ -116,7 +116,7 @@ fn main() {
                 *st.model.lock().unwrap() = cfg.model.clone();
             }
 
-            let window = tauri::WebviewWindowBuilder::new(
+            let mut builder = tauri::WebviewWindowBuilder::new(
                 app,
                 "main",
                 tauri::WebviewUrl::App("index.html".into()),
@@ -124,13 +124,16 @@ fn main() {
             .title("Z Engine")
             .inner_size(1100.0, 760.0)
             .min_inner_size(720.0, 520.0)
-            // Codex-desktop chrome: no separate title bar — traffic lights
-            // float over the sidebar (which pads for them).
-            .title_bar_style(tauri::TitleBarStyle::Overlay)
-            .hidden_title(true)
-            .maximized(true)
-            .build()
-            .map_err(|e| e.to_string())?;
+            .maximized(true);
+            // macOS: traffic lights overlay the sidebar. Other OS keep a
+            // native title bar so the window is movable and the chrome compiles.
+            #[cfg(target_os = "macos")]
+            {
+                builder = builder
+                    .title_bar_style(tauri::TitleBarStyle::Overlay)
+                    .hidden_title(true);
+            }
+            let window = builder.build().map_err(|e| e.to_string())?;
 
             forward_events(ev_rx, window, "boot".into());
             Ok(())

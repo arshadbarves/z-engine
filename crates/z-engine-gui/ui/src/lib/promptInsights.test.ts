@@ -27,6 +27,8 @@ describe("promptInsights", () => {
     expect(ins.layers[0].label).toBe("System");
     expect(ins.layers.map((l) => l.order)).toEqual([1, 2, 3, 4, 5, 6]);
     expect(ins.largest.name).toBe("bash");
+    expect(ins.stack.some((s) => s.id === "tool def")).toBe(true);
+    expect(ins.cacheableTokens).toBeGreaterThan(0);
     expect(ins.hints.some((h) => /tools/i.test(h))).toBe(true);
     expect(ins.stablePrefix).toBe("System");
     expect(ins.volatileTail).toContain("User");
