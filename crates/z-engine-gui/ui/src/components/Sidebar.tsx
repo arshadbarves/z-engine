@@ -62,28 +62,30 @@ function WorkspaceRow({
         </span>
         <Folder size={13} />
         <span className="ws-name">{wsBasename(root)}</span>
-        {projectActivity && (
-          <span
-            className={`sess-dot ${projectActivity}`}
-            role="status"
-            aria-label={
-              projectActivity === "approval"
-                ? "Approval needed in this project"
-                : "Generating in this project"
-            }
-          />
-        )}
-        <span className="ws-count">{items.length || ""}</span>
-        <button
-          className="del"
-          title="Remove workspace from list (sessions are kept)"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemove(root);
-          }}
-        >
-          <Trash2 size={11} />
-        </button>
+        <span className="ws-tail">
+          {projectActivity && (
+            <span
+              className={`sess-dot ${projectActivity}`}
+              role="status"
+              aria-label={
+                projectActivity === "approval"
+                  ? "Approval needed in this project"
+                  : "Generating in this project"
+              }
+            />
+          )}
+          <span className="ws-count">{items.length || ""}</span>
+          <button
+            className="del"
+            title="Remove workspace from list (sessions are kept)"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove(root);
+            }}
+          >
+            <Trash2 size={11} />
+          </button>
+        </span>
       </div>
       {open && (
         <div className="ws-sessions">
@@ -158,17 +160,19 @@ function SessionRow({
       )}
       <MessageSquare size={13} className="sess-icon" />
       <div className="sess-preview">{title}</div>
-      {unread && <span className="sess-unread-dot" role="status" aria-label={`${unread} — unopened`} />}
-      <button
-        className="del"
-        title="Delete chat"
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete(s.path);
-        }}
-      >
-        <Trash2 size={11} />
-      </button>
+      <span className="sess-tail">
+        {unread && <span className="sess-unread-dot" role="status" aria-label={`${unread} — unopened`} />}
+        <button
+          className="del"
+          title="Delete chat"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(s.path);
+          }}
+        >
+          <Trash2 size={11} />
+        </button>
+      </span>
     </div>
   );
 }
