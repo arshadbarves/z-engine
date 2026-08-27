@@ -210,6 +210,7 @@ html.plat-mac .prompt-inspect-head {
 
 .prompt-inspect-nav {
   overflow: auto;
+  min-height: 0;
   padding: 8px;
   border-right: 1px solid var(--border);
   display: flex;
@@ -260,6 +261,8 @@ html.plat-mac .prompt-inspect-head {
 }
 
 .prompt-inspect-content {
+  flex: 1;
+  min-height: 0;
   margin: 0;
   padding: 16px 18px;
   overflow: auto;

@@ -5,6 +5,7 @@ import { sessionStore } from "../lib/events";
 import { promptInsights } from "../lib/promptInsights";
 import { fmtTokens } from "../lib/util";
 import { PromptInspectChart } from "./PromptInspectChart";
+import "./promptInspect.css";
 
 type Row =
   | { key: string; kind: "msg"; part: PromptPart }

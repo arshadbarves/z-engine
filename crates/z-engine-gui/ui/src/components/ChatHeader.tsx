@@ -1,5 +1,7 @@
 import { ArrowDown, GitCompare, PanelLeft, Search } from "lucide-react";
 import { ContextMeter } from "./ContextMeter";
+import { UpdateButton } from "./UpdateButton";
+import { WindowControlsMaybe } from "./WindowControls";
 import { modLabel } from "../lib/platform";
 
 export function ChatHeader({
@@ -40,6 +42,7 @@ export function ChatHeader({
         </div>
       </div>
       <div className="head-controls">
+        <UpdateButton />
         <ContextMeter />
         <button
           className={`icon-btn${diffOpen ? " active" : ""}`}
@@ -48,6 +51,7 @@ export function ChatHeader({
         >
           <GitCompare size={12} />
         </button>
+        <WindowControlsMaybe />
       </div>
     </header>
   );

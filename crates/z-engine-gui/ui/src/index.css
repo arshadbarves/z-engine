@@ -2313,6 +2313,20 @@ html.plat-mac .app.no-sidebar .chat-head {
   color: var(--text-3);
 }
 
+.update-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+
+.update-dot.inline {
+  display: inline-block;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
 /* ── composer usage pill (dot + % + tokens + cost, hover breakdown) ────── */
 
 .meter-pill {

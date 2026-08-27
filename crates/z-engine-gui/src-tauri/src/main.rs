@@ -60,6 +60,9 @@ fn main() {
 
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(GuiState::default())
         .invoke_handler(tauri::generate_handler![
             commands::frontend_ready,
@@ -98,7 +101,10 @@ fn main() {
             commands::revert_last_turn,
             commands::revert_to_turn,
             commands::start_session,
-            commands::inspect_prompt
+            commands::inspect_prompt,
+            commands::check_for_update,
+            commands::open_release_url,
+            commands::install_update
         ])
         .setup(|app| {
             let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -125,13 +131,17 @@ fn main() {
             .inner_size(1100.0, 760.0)
             .min_inner_size(720.0, 520.0)
             .maximized(true);
-            // macOS: traffic lights overlay the sidebar. Other OS keep a
-            // native title bar so the window is movable and the chrome compiles.
+            // macOS: traffic lights overlay the sidebar. Windows: frameless
+            // chrome with custom caption buttons in the chat header.
             #[cfg(target_os = "macos")]
             {
                 builder = builder
                     .title_bar_style(tauri::TitleBarStyle::Overlay)
                     .hidden_title(true);
+            }
+            #[cfg(target_os = "windows")]
+            {
+                builder = builder.decorations(false);
             }
             let window = builder.build().map_err(|e| e.to_string())?;
 

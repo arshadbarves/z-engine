@@ -226,6 +226,106 @@
   color: var(--text-3);
 }
 
+/* ── update pill (header) ─────────────────────────────────────────────── */
+
+.update-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--ok);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-ring);
+  border-radius: var(--radius-s);
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  -webkit-app-region: no-drag;
+}
+
+.update-pill:hover:not(:disabled) {
+  background: rgba(61, 220, 151, 0.22);
+  border-color: rgba(61, 220, 151, 0.55);
+  transform: translateY(-1px);
+}
+
+.update-pill:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.update-pill-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 2px rgba(16, 16, 18, 0.9);
+}
+
+.update-pill .spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Windows caption buttons (Chrome-style) ─────────────────────────── */
+
+html.plat-win .chat-head {
+  padding-right: 0;
+}
+
+.win-controls {
+  display: flex;
+  align-self: stretch;
+  flex-shrink: 0;
+  margin-left: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.win-ctrl {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 100%;
+  padding: 0;
+  color: #c8c8cc;
+  background: transparent;
+  border: none;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.win-ctrl svg {
+  width: 10px;
+  height: 10px;
+}
+
+.win-ctrl:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f0f0f2;
+}
+
+.win-ctrl.close:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+.win-ctrl:active {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.win-ctrl.close:active {
+  background: #bf0f1d;
+}
+
 /* ── ! shell composer + quiet terminal ─────────────────────────────────── */
 
 .composer.shell {

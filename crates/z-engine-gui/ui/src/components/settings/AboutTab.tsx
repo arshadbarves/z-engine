@@ -1,12 +1,51 @@
+import { useSyncExternalStore } from "react";
+import { Download, RefreshCw } from "lucide-react";
 import { LogoMark } from "../LogoMark";
 import type { HarnessConfig } from "../../lib/commands";
+import { updateStore } from "../../lib/updateStore";
 
 export function AboutTab({ cfg }: { cfg: HarnessConfig }) {
+  const { info, checking } = useSyncExternalStore(
+    updateStore.subscribe,
+    () => updateStore.getSnapshot(),
+  );
+
   return (
     <div className="tab-body about-tab">
       <LogoMark size={36} />
       <h3>Z Engine</h3>
       <p className="form-note">Local-first coding agent · v{cfg.version ?? "dev"}</p>
+
+      {info?.available && (
+        <div className="update-banner" role="status">
+          <div className="update-banner-copy">
+            <strong>Update available</strong>
+            <span>
+              v{info.current} → v{info.latest}
+            </span>
+          </div>
+          <button type="button" className="update-download" onClick={() => void updateStore.install()}>
+            <Download size={14} />
+            Install update
+          </button>
+        </div>
+      )}
+
+      <div className="update-actions">
+        <button
+          type="button"
+          className="update-check"
+          disabled={checking}
+          onClick={() => void updateStore.check(true)}
+        >
+          <RefreshCw size={13} className={checking ? "spin" : undefined} />
+          {checking ? "Checking…" : "Check for updates"}
+        </button>
+        {!info?.available && info?.latest && !checking && (
+          <span className="form-note">You&apos;re on the latest release (v{info.latest}).</span>
+        )}
+      </div>
+
       <dl className="about-dl">
         <dt>Config</dt>
         <dd>

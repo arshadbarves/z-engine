@@ -19,6 +19,7 @@ import {
   type Msg,
 } from "./lib/events";
 import { configStore } from "./lib/configStore";
+import { updateStore } from "./lib/updateStore";
 import {
   submit,
   getConfig,
@@ -220,6 +221,7 @@ export default function App() {
       }
       await refreshSessions();
       await workspaceStore.load();
+      void updateStore.check();
     })();
   }, []);
 

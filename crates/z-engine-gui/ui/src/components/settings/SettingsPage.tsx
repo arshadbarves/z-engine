@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { ChevronLeft, Coins, Info, Server, Settings, Shield } from "lucide-react";
 import { getConfig, type HarnessConfig } from "../../lib/commands";
+import { updateStore } from "../../lib/updateStore";
 import { LogoMark } from "../LogoMark";
 import { AboutTab } from "./AboutTab";
 import { CostTab } from "./CostTab";
@@ -22,6 +23,7 @@ const TABS: Array<{ id: Tab; label: string; hint: string; icon: typeof Settings 
 export function SettingsPage({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<Tab>("general");
   const [cfg, setCfg] = useState<HarnessConfig | null>(null);
+  const update = useSyncExternalStore(updateStore.subscribe, () => updateStore.getSnapshot());
   const current = TABS.find((t) => t.id === tab);
 
   useEffect(() => {
@@ -57,7 +59,12 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
             >
               <Icon size={15} />
               <span className="settings-nav-copy">
-                <strong>{t.label}</strong>
+                <strong>
+                  {t.label}
+                  {t.id === "about" && update.info?.available && (
+                    <span className="update-dot inline" role="status" aria-label="Update available" />
+                  )}
+                </strong>
                 <em>{t.hint}</em>
               </span>
             </button>

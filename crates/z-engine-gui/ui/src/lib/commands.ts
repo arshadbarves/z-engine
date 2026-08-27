@@ -149,3 +149,18 @@ export interface PromptInspect {
 
 export const inspectPrompt = (sessionId?: string) =>
   invoke<PromptInspect>("inspect_prompt", { sessionId: sessionId ?? null });
+
+export interface UpdateInfo {
+  available: boolean;
+  current: string;
+  latest?: string;
+  url?: string;
+  releaseNotes?: string;
+}
+
+export const checkForUpdate = (force = false) =>
+  invoke<UpdateInfo>("check_for_update", { force });
+
+export const openReleaseUrl = (url: string) => invoke("open_release_url", { url });
+
+export const installUpdate = () => invoke("install_update");
