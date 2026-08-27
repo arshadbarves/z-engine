@@ -5,6 +5,8 @@ import {
   mergeSessionLists,
   patchSessionTitle,
   sessionLabel,
+  titledSessions,
+  unreadFromEvents,
   upsertSession,
   applyFirstUserTitle,
 } from "./sessionList";
@@ -23,10 +25,27 @@ function sess(
 }
 
 describe("sessionLabel", () => {
-  it("shows New chat until a title exists", () => {
-    expect(sessionLabel(null)).toBe("New chat");
-    expect(sessionLabel("")).toBe("New chat");
+  it("uses the stored title", () => {
     expect(sessionLabel("Fix auth")).toBe("Fix auth");
+    expect(sessionLabel(null)).toBe("(empty)");
+  });
+});
+
+describe("titledSessions", () => {
+  it("hides chats that do not have a title yet", () => {
+    const list = [
+      sess("blank"),
+      sess("named", { firstUserMsg: "Fix auth" }),
+    ];
+    expect(titledSessions(list).map((s) => s.ulid)).toEqual(["named"]);
+  });
+});
+
+describe("unreadOutcome", () => {
+  it("stays until an ack, then clears", () => {
+    expect(unreadFromEvents(["completed"])).toBe("completed");
+    expect(unreadFromEvents(["completed", "ack"])).toBeNull();
+    expect(unreadFromEvents(["completed", "ack", "aborted"])).toBe("aborted");
   });
 });
 
@@ -102,12 +121,24 @@ describe("applyFirstUserTitle", () => {
     expect(next[0].firstUserMsg).toBe("Existing");
   });
 
-  it("fills New chat from the first user message", () => {
+  it("fills the title from the first user message", () => {
     const list = [sess("a")];
     const next = applyFirstUserTitle(list, "a", [
       { kind: "assistant", text: "hi" },
       { kind: "user", text: "Fix the flaky auth test" },
     ]);
     expect(next[0].firstUserMsg).toBe("Fix the flaky auth test");
+  });
+
+  it("inserts the chat only after the first message, using pending path", () => {
+    const next = applyFirstUserTitle(
+      [sess("old", { firstUserMsg: "older" })],
+      "a",
+      [{ kind: "user", text: "Fix the flaky auth test" }],
+      { ulid: "a", path: "/s/a.jsonl", projectRoot: "/proj" },
+    );
+    expect(next.map((s) => s.ulid)).toEqual(["a", "old"]);
+    expect(next[0].firstUserMsg).toBe("Fix the flaky auth test");
+    expect(next[0].path).toBe("/s/a.jsonl");
   });
 });

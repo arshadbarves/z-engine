@@ -1,15 +1,16 @@
 import { useState, useSyncExternalStore } from "react";
 import { Check, Copy, Undo2 } from "lucide-react";
+import { abort, revertToTurn } from "../lib/commands";
 import { busyStore, draftStore, pushToast, trimTranscript, type Msg } from "../lib/events";
-import { revertToTurn } from "../lib/commands";
 
 const COLLAPSE_CHARS = 280;
 const COLLAPSE_LINES = 4;
 
-/** User bubble with copy/revert sitting under the bar, not inside it. */
-export function UserCard({ m, sticky }: { m: Msg; sticky?: boolean }) {
+/** User bubble with copy / edit-revert sitting under the bar. */
+export function UserCard({ m }: { m: Msg }) {
   const busy = useSyncExternalStore(busyStore.subscribe, () => busyStore.getSnapshot());
   const [copied, setCopied] = useState(false);
+  const [pending, setPending] = useState(false);
   const lines = m.text.split("\n").length;
   const long = m.text.length > COLLAPSE_CHARS || lines > COLLAPSE_LINES;
   const [expanded, setExpanded] = useState(!long);
@@ -26,15 +27,25 @@ export function UserCard({ m, sticky }: { m: Msg; sticky?: boolean }) {
 
   const canRevert = typeof m.runTurn === "number";
 
-  function revert() {
-    if (!canRevert) return;
-    draftStore.set(m.text);
-    trimTranscript(m.runTurn as number);
-    void revertToTurn(m.runTurn as number);
+  async function revert() {
+    if (!canRevert || pending) return;
+    setPending(true);
+    try {
+      // Abort first so RevertToTurn is not dropped mid-stream.
+      if (busy) await abort();
+      draftStore.set(m.text);
+      trimTranscript(m.runTurn as number);
+      await revertToTurn(m.runTurn as number);
+    } catch (e) {
+      console.error(e);
+      pushToast("Could not restore that prompt", "warn");
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
-    <div className={`user-wrap${sticky ? " sticky" : ""}`}>
+    <div className="user-wrap" id={`msg-${m.id}`} data-msg-id={m.id}>
       <div className="msg user">
         <div className={`user-bubble${long && !expanded ? " collapsed" : ""}`}>
           {m.text}
@@ -59,16 +70,18 @@ export function UserCard({ m, sticky }: { m: Msg; sticky?: boolean }) {
         </button>
         <button
           type="button"
-          disabled={!canRevert || busy}
+          disabled={!canRevert || pending}
           title={
             canRevert
-              ? "Restore files and move this prompt back to the composer"
-              : "Checkpoint unavailable (message predates this app launch)"
+              ? busy
+                ? "Stop this turn and move the prompt back to the composer"
+                : "Move this prompt back to the composer"
+              : "This prompt cannot be restored"
           }
-          onClick={() => revert()}
+          onClick={() => void revert()}
         >
           <Undo2 size={12} />
-          <span>Revert</span>
+          <span>{busy ? "Edit" : "Revert"}</span>
         </button>
       </div>
     </div>

@@ -120,15 +120,22 @@ function SessionRow({
   onOpen: (path: string, projectRoot?: string | null) => void;
   onDelete: (path: string) => void;
 }) {
+  const unread = !active && !state && (s.unreadOutcome === "completed" || s.unreadOutcome === "aborted")
+    ? s.unreadOutcome
+    : null;
+  const live = state === "working" || state === "approval";
+  const title = sessionLabel(s.firstUserMsg);
   return (
     <div
-      className={`session${active ? " active" : ""}${state ? ` ${state}` : ""}`}
+      className={`session${active ? " active" : ""}${state ? ` ${state}` : ""}${unread ? ` unread unread-${unread}` : ""}`}
       role="button"
       tabIndex={0}
       title={
         state === "approval"
-          ? `Approval needed — ${sessionLabel(s.firstUserMsg)}`
-          : sessionLabel(s.firstUserMsg)
+          ? `Approval needed — ${title}`
+          : unread
+            ? `${unread === "aborted" ? "Aborted" : "Done"} — ${title}`
+            : title
       }
       onClick={(e) => {
         e.stopPropagation();
@@ -136,8 +143,22 @@ function SessionRow({
       }}
       onKeyDown={(e) => e.key === "Enter" && onOpen(s.path, s.projectRoot)}
     >
+      {live && (
+        <svg className="sess-orbit" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+          <rect
+            x="0.8"
+            y="2.4"
+            width="98.4"
+            height="95.2"
+            rx="12"
+            ry="28"
+            pathLength="100"
+          />
+        </svg>
+      )}
       <MessageSquare size={13} className="sess-icon" />
-      <div className="sess-preview">{sessionLabel(s.firstUserMsg)}</div>
+      <div className="sess-preview">{title}</div>
+      {unread && <span className="sess-unread-dot" role="status" aria-label={`${unread} — unopened`} />}
       <button
         className="del"
         title="Delete chat"

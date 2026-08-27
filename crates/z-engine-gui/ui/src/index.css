@@ -834,13 +834,86 @@ kbd {
   color: var(--text-2);
 }
 
-/* Live state: a quiet static left mark. No glow, no pulse. */
-.session.working {
-  box-shadow: inset 2px 0 0 rgba(61, 220, 151, 0.45);
+/* Live state: SVG dash travels clockwise (WKWebView cannot animate @property). */
+.session.working,
+.session.approval {
+  --sess-neon: rgba(61, 220, 151, 0.9);
 }
 
 .session.approval {
-  box-shadow: inset 2px 0 0 rgba(232, 180, 90, 0.55);
+  --sess-neon: rgba(232, 180, 90, 0.95);
+}
+
+.sess-orbit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 2;
+}
+
+.sess-orbit rect {
+  fill: none;
+  stroke: var(--sess-neon);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 16 84;
+  animation: sess-dash 2.2s linear infinite;
+  filter: drop-shadow(0 0 3px var(--sess-neon));
+}
+
+@keyframes sess-dash {
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+
+.session.unread {
+  --sess-neon: rgba(61, 220, 151, 0.85);
+}
+
+.session.unread-aborted {
+  --sess-neon: rgba(244, 113, 116, 0.85);
+}
+
+.session.unread::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 14px 1px var(--sess-neon);
+  animation: sess-glow-out 1.6s ease forwards;
+  pointer-events: none;
+}
+
+@keyframes sess-glow-out {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.sess-unread-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 6px var(--ok);
+}
+
+.session.unread-aborted .sess-unread-dot {
+  background: var(--err);
+  box-shadow: 0 0 6px var(--err);
+}
+
+.session:hover .sess-unread-dot {
+  opacity: 0;
 }
 
 .session.working .sess-icon,
@@ -893,6 +966,7 @@ kbd {
   position: absolute;
   top: 8px;
   right: 8px;
+  z-index: 3;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1100,13 +1174,63 @@ kbd {
   overflow-y: auto;
 }
 
+.transcript-stage {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 2px;
+}
+
 .transcript-inner {
+  flex: 1;
   max-width: 720px;
   margin: 0 auto;
   padding: 28px 24px 20px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.chat-timeline {
+  position: sticky;
+  top: 20px;
+  flex: 0 0 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 32px 0 20px;
+  z-index: 4;
+}
+
+.chat-timeline-tick {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.chat-timeline-tick:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.chat-timeline-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.7;
+}
+
+.chat-timeline-n {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
 }
 
 .hero {
@@ -1224,12 +1348,7 @@ kbd {
   flex-direction: column;
   align-items: flex-end;
   max-width: 82%;
-}
-
-.user-wrap.sticky {
-  position: sticky;
-  top: 0;
-  z-index: 8;
+  scroll-margin-top: 12px;
 }
 
 .msg.user {
@@ -1408,48 +1527,16 @@ kbd {
   }
 }
 
-/* approval card */
+/* approval card — warn, not success */
 .msg.approval {
   position: relative;
   overflow: hidden;
   padding: 16px 18px 14px;
-  background: linear-gradient(180deg, var(--accent-dim), transparent 42%),
+  background: linear-gradient(180deg, rgba(232, 180, 90, 0.1), transparent 46%),
     var(--surface);
-  border: 1px solid var(--accent-ring);
+  border: 1px solid rgba(232, 180, 90, 0.35);
   border-radius: var(--radius-m);
-  box-shadow: var(--shadow-pop), 0 0 0 1px rgba(61, 220, 151, 0.06);
-}
-
-.msg.approval::after {
-  content: "";
-  pointer-events: none;
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 0;
-  width: 45%;
-  background: linear-gradient(
-    105deg,
-    transparent,
-    rgba(61, 220, 151, 0.09) 50%,
-    transparent
-  );
-  transform: translateX(-110%);
-  animation: approval-sheen 2.6s cubic-bezier(0.35, 0, 0.25, 1) infinite;
-}
-
-/* bar is fully off-screen at 0% and 100%, so the loop wrap is invisible */
-@keyframes approval-sheen {
-  0% {
-    transform: translateX(-110%);
-  }
-  55% {
-    transform: translateX(240%);
-  }
-  100% {
-    transform: translateX(240%);
-  }
+  box-shadow: var(--shadow-pop);
 }
 
 .msg.approval > * {
@@ -1462,7 +1549,7 @@ kbd {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ok);
+  color: var(--warn);
 }
 
 .approval-title {
@@ -1480,8 +1567,8 @@ kbd {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--ok);
-  box-shadow: 0 0 8px var(--accent-ring);
+  background: var(--warn);
+  box-shadow: 0 0 8px rgba(232, 180, 90, 0.45);
   flex-shrink: 0;
 }
 

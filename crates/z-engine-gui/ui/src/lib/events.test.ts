@@ -360,6 +360,18 @@ describe("session replay", () => {
     expect(tool.streaming).toBe(false);
     expect(tool.summary).toContain("line");
     expect(tool.output).toContain("line");
+    expect(msgs()[0].runTurn).toBe(0);
+  });
+
+  it("assigns sequential runTurn so restored prompts can be edited", () => {
+    resetTranscript();
+    replaySession([
+      { type: "user_msg", text: "one" },
+      { type: "assistant_msg", content: "ok" },
+      { type: "user_msg", text: "two" },
+    ]);
+    const users = msgs().filter((m) => m.kind === "user");
+    expect(users.map((m) => m.runTurn)).toEqual([0, 1]);
   });
 
   it("regression: camelCase tags match nothing (serde emits snake_case)", () => {

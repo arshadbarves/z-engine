@@ -1,6 +1,6 @@
 use crate::event_bridge::forward_events;
 use crate::session_store::{
-    StartSessionResult, contain_session, session_events_json, sessions_dir,
+    StartSessionResult, ack_session_file, contain_session, session_events_json, sessions_dir,
 };
 use crate::state::{GuiState, build_loop_config};
 use serde_json::json;
@@ -166,6 +166,7 @@ pub(crate) fn start_session(
             ui_events = session_events_json(&events);
             if !ulid.is_empty() && state.has_loop(&ulid)? {
                 state.set_active(ulid.clone())?;
+                ack_session_file(&contained);
                 if root.is_some() {
                     let mut ctx_guard = state.ctx.lock().map_err(|_| "state poisoned")?;
                     if let Some(c) = ctx_guard.as_mut() {
@@ -186,6 +187,7 @@ pub(crate) fn start_session(
                 working: replayed.working,
                 note_payloads: replayed.notes_replayed,
             });
+            ack_session_file(&contained);
             let w = z_engine_core::session::SessionWriter::append_to(&contained)
                 .map_err(|e| e.to_string())?;
             recorder_path = Some(w.path.clone());

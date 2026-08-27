@@ -4,6 +4,7 @@ export interface SessionEntry {
   firstUserMsg: string | null;
   modifiedMs: number;
   projectRoot?: string | null;
+  unreadOutcome?: string | null;
 }
 
 export interface SessionGroup {

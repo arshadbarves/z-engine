@@ -29,7 +29,7 @@ import {
   createWorktree,
 } from "./lib/commands";
 import { hydrateNewSession, hydrateOpenSession } from "./lib/sessionOpen";
-import { applyFirstUserTitle, mergeSessionLists, newSessionEntry, upsertSession } from "./lib/sessionList";
+import { applyFirstUserTitle, mergeSessionLists, titledSessions } from "./lib/sessionList";
 import { Composer } from "./components/Composer";
 import { CommandPalette } from "./components/CommandPalette";
 import { SettingsPage } from "./components/settings/SettingsPage";
@@ -82,6 +82,7 @@ export default function App() {
   );
   const transcriptRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
+  const pendingNew = useRef<{ ulid: string; path: string; projectRoot: string | null } | null>(null);
   const [showJump, setShowJump] = useState(false);
   const hydrating = useSyncExternalStore(
     hydrateStore.subscribe,
@@ -119,7 +120,7 @@ export default function App() {
   async function refreshSessions() {
     try {
       const list = (await listSessions()) as unknown as SessionEntry[];
-      setSessionsList((prev) => mergeSessionLists(list, prev));
+      setSessionsList((prev) => titledSessions(mergeSessionLists(list, prev)));
     } catch (e) {
       console.error(e);
     }
@@ -135,11 +136,9 @@ export default function App() {
 
   async function newTask() {
     const created = await hydrateNewSession(workspaces.active);
-    if (created?.path) {
-      setSessionsList((prev) =>
-        upsertSession(prev, newSessionEntry(created.ulid, created.path, workspaces.active)),
-      );
-    }
+    pendingNew.current = created?.path
+      ? { ulid: created.ulid, path: created.path, projectRoot: workspaces.active }
+      : null;
     void refreshCustomCommands();
     void refreshSessions();
   }
@@ -234,7 +233,9 @@ export default function App() {
     if (last?.kind === "user") {
       stickToBottom.current = true;
       setShowJump(false);
-      setSessionsList((prev) => applyFirstUserTitle(prev, sessionId, messages));
+      setSessionsList((prev) =>
+        applyFirstUserTitle(prev, sessionId, messages, pendingNew.current?.ulid === sessionId ? pendingNew.current : null),
+      );
     }
     if (!stickToBottom.current) return;
     transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight });

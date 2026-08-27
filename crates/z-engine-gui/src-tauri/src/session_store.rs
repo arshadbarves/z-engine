@@ -34,6 +34,17 @@ pub(crate) fn contain_session(path: &str) -> Result<PathBuf, String> {
     Err(last)
 }
 
+/// Mark the chat as opened so a done/abort unread dot does not return.
+pub(crate) fn ack_session_file(path: &std::path::Path) {
+    let events = z_engine_core::session::read_events(path).unwrap_or_default();
+    if z_engine_core::session::unread_outcome(&events).is_none() {
+        return;
+    }
+    if let Ok(mut w) = z_engine_core::session::SessionWriter::append_to(path) {
+        let _ = w.record(&z_engine_core::session::SessionEvent::Ack);
+    }
+}
+
 #[derive(serde::Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SessionEntry {
@@ -42,6 +53,7 @@ pub(crate) struct SessionEntry {
     pub first_user_msg: Option<String>,
     pub modified_ms: u64,
     pub project_root: Option<String>,
+    pub unread_outcome: Option<String>,
 }
 
 #[tauri::command]
@@ -62,6 +74,7 @@ pub(crate) fn list_sessions() -> Result<Vec<SessionEntry>, String> {
                     ulid: s.ulid,
                     first_user_msg: s.first_user_msg,
                     project_root: s.project_root,
+                    unread_outcome: s.unread_outcome,
                 }),
         );
     }

@@ -847,6 +847,7 @@ function dispatchEvent(ev: EventPayload) {
         push("status", "■ aborted", { ok: false });
       }
       turnStartedAt = 0;
+      bumpSessionsTick();
       emitChange();
       break;
     case "sessionChanged":
@@ -1033,6 +1034,7 @@ export function replaySession(events: ReplayEvent[]) {
       case "user_msg":
         push("user", ev.text ?? "", {
           images: ev.images && ev.images.length > 0 ? ev.images : undefined,
+          runTurn: runTurnCounter++,
         });
         break;
       case "assistant_msg": {

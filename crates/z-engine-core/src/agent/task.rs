@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use z_engine_provider::{ChatMessage, Client, Usage};
+use z_engine_provider::{ChatMessage, ChatRequest, Client, Usage};
 
 use crate::context::{
     budget::BudgetMeter,
@@ -25,6 +25,7 @@ use super::prompt_inspect::PromptInspect;
 use super::revert::{revert_last_turn, revert_to_turn, trim_working_before_user_turn};
 use super::side_requests::generate_session_title;
 use super::state::LoopState;
+use super::system_prompt::l0_message;
 use super::turn::{TurnOutcome, run_turn};
 
 #[allow(clippy::too_many_arguments)]
@@ -141,6 +142,19 @@ pub(super) async fn agent_task(
                 }
             }
         }
+        if !state.working.is_empty() {
+            let mut msgs = vec![l0_message(&cfg)];
+            if let Some(block) = notes.lock().ok().and_then(|n| n.render_block()) {
+                msgs.push(ChatMessage::system(block));
+            }
+            msgs.extend(state.working.iter().cloned());
+            if let Ok(mut slot) = state.last_prompt.lock() {
+                *slot = Some(PromptInspect::from_request(
+                    &ChatRequest::new(cfg.model.clone(), msgs).with_tools(registry.defs()),
+                    true,
+                ));
+            }
+        }
     }
 
     while let Some(command) = next_action(&mut cmd_rx).await {
@@ -200,6 +214,11 @@ pub(super) async fn agent_task(
 
                 match outcome {
                     TurnOutcome::Completed => {
+                        if let Some(w) = recorder.as_mut() {
+                            let _ = w.record(&SessionEvent::TurnEnd {
+                                outcome: "completed".into(),
+                            });
+                        }
                         let _ = ev_tx.send(Event::TurnCompleted {
                             prompt_tokens: state.last_usage.prompt_tokens,
                             completion_tokens: state.last_usage.completion_tokens,
@@ -208,6 +227,11 @@ pub(super) async fn agent_task(
                     }
                     TurnOutcome::Aborted => {
                         abort_flag.store(false, Ordering::Relaxed);
+                        if let Some(w) = recorder.as_mut() {
+                            let _ = w.record(&SessionEvent::TurnEnd {
+                                outcome: "aborted".into(),
+                            });
+                        }
                         let _ = ev_tx.send(Event::TurnAborted);
                     }
                     TurnOutcome::Failed(msg) => {

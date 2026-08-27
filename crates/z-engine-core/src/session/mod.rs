@@ -13,8 +13,10 @@ use serde::{Deserialize, Serialize};
 
 mod title;
 mod trim;
+mod unread;
 pub use title::{display_title, fallback_title};
 pub use trim::{events_before_user_turn, trim_file_before_user_turn};
+pub use unread::unread_outcome;
 
 /// One persisted transcript event.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -43,6 +45,10 @@ pub enum SessionEvent {
     Note { text: String },
     /// Short display title for the session (Codex/Claude-style).
     Title { text: String },
+    /// Turn finished (`completed` / `aborted`). Drives the sidebar unread dot.
+    TurnEnd { outcome: String },
+    /// User opened this chat; clears unread until the next `TurnEnd`.
+    Ack,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -139,6 +145,8 @@ pub struct SessionSummary {
     /// Project root recorded in the session's `Meta` event — lets the GUI
     /// group transcripts under their workspace.
     pub project_root: Option<String>,
+    /// Last turn-end the user has not opened (`completed` / `aborted`).
+    pub unread_outcome: Option<String>,
 }
 
 /// List sessions under `sessions_dir`, newest first.
@@ -162,6 +170,7 @@ pub fn list_sessions(sessions_dir: &Path) -> Vec<SessionSummary> {
             .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
         let events = read_events(&path).ok();
         let first_user_msg = events.as_deref().and_then(display_title);
+        let unread_outcome = events.as_deref().and_then(unread_outcome);
         let project_root = events.as_deref().and_then(|events| {
             events.iter().find_map(|ev| match ev {
                 SessionEvent::Meta { project_root, .. } => Some(project_root.clone()),
@@ -174,6 +183,7 @@ pub fn list_sessions(sessions_dir: &Path) -> Vec<SessionSummary> {
             first_user_msg: first_user_msg.map(|t| t.chars().take(80).collect()),
             modified,
             project_root,
+            unread_outcome,
         });
     }
     out.sort_by_key(|s| std::cmp::Reverse(s.modified));
@@ -244,6 +254,7 @@ pub fn replay(events: &[SessionEvent]) -> Replayed {
             }
             SessionEvent::Note { text } => notes_replayed.push(text.clone()),
             SessionEvent::Title { .. } => {}
+            SessionEvent::TurnEnd { .. } | SessionEvent::Ack => {}
         }
     }
 

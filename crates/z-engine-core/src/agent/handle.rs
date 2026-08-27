@@ -182,10 +182,12 @@ pub fn spawn_with_recorder(
 
     let (cmd_tx, cmd_rx) = mpsc::unbounded_channel::<Command>();
     let (ev_tx, ev_rx) = mpsc::unbounded_channel::<Event>();
-    let last_prompt = Arc::new(Mutex::new(Some(PromptInspect::preview(
-        &cfg,
-        ToolRegistry::builtins().defs(),
-    ))));
+    let tools = ToolRegistry::builtins().defs();
+    let inspect = match &resume {
+        Some(rs) if !rs.working.is_empty() => PromptInspect::resumed(&cfg, &rs.working, tools),
+        _ => PromptInspect::preview(&cfg, tools),
+    };
+    let last_prompt = Arc::new(Mutex::new(Some(inspect)));
 
     match Client::new(&cfg.base_url, cfg.api_key.clone()) {
         Ok(client) => {

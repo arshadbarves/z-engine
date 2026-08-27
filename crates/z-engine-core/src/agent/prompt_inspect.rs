@@ -51,6 +51,19 @@ impl PromptInspect {
         )
     }
 
+    /// Resume snapshot: L0 + persisted working set (notes/MCP filled in later).
+    pub fn resumed(cfg: &LoopConfig, working: &[ChatMessage], tools: Vec<ToolDef>) -> Self {
+        let mut messages = vec![ChatMessage::system(context::build_system_prompt(
+            &cfg.project_root,
+            context::load_agents_md(&cfg.project_root).as_deref(),
+        ))];
+        messages.extend(working.iter().cloned());
+        Self::from_request(
+            &ChatRequest::new(cfg.model.clone(), messages).with_tools(tools),
+            true,
+        )
+    }
+
     pub fn from_request(req: &ChatRequest, sent: bool) -> Self {
         let messages: Vec<PromptPart> = req
             .messages

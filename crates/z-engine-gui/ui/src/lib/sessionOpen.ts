@@ -38,25 +38,20 @@ export async function hydrateOpenSession(
   activateSession(id);
   const live =
     transcriptStore.getSnapshot().length > 0 || busyStore.getSnapshot();
-  if (live) {
-    try {
-      await startSession(path, root ?? null);
-    } catch (e) {
-      console.error("session switch failed:", e);
-      pushToast("Could not switch to this chat", "warn");
-    }
-    return;
-  }
-  const gen = beginHydrate();
+  const gen = live ? null : beginHydrate();
   try {
     const result = await startSession(path, root ?? null);
-    replaySession(((result?.events ?? []) as ReplayEvent[]));
-    applyUsageFromTranscript();
+    // After restart (and any sessionChanged race) the parked snap is
+    // empty — rebuild from JSONL whenever the transcript is still blank.
+    if (transcriptStore.getSnapshot().length === 0 && !busyStore.getSnapshot()) {
+      replaySession((result?.events ?? []) as ReplayEvent[]);
+      applyUsageFromTranscript();
+    }
   } catch (e) {
     console.error("session replay failed:", e);
-    pushToast("Could not restore this chat", "warn");
+    pushToast(live ? "Could not switch to this chat" : "Could not restore this chat", "warn");
   } finally {
-    window.setTimeout(() => endHydrate(gen), 32);
+    if (gen != null) window.setTimeout(() => endHydrate(gen), 32);
   }
 }
 

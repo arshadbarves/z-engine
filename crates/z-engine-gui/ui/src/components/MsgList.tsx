@@ -6,6 +6,7 @@ import { ActivityStrip } from "./ActivityStrip";
 import { LogoMark } from "./LogoMark";
 import { draftStore, hydrateStore, type Msg } from "../lib/events";
 import { groupTranscript } from "../lib/activity";
+import { ChatTimeline } from "./ChatTimeline";
 
 export const HERO_EXAMPLES = [
   "Fix the failing tests",
@@ -29,12 +30,10 @@ function WorkingRow() {
 
 function MsgCard({
   m,
-  sticky,
   onApprove,
   onDeny,
 }: {
   m: Msg;
-  sticky?: boolean;
   onApprove: (m: Msg, decision: "once" | "session" | "persist") => void;
   onDeny: (m: Msg) => void;
 }) {
@@ -43,7 +42,7 @@ function MsgCard({
       <ApprovalCard m={m} onApprove={(d) => onApprove(m, d)} onDeny={() => onDeny(m)} />
     );
   }
-  if (m.kind === "user") return <UserCard m={m} sticky={sticky} />;
+  if (m.kind === "user") return <UserCard m={m} />;
   if (m.kind === "assistant") {
     return (
       <div className={`msg assistant${m.streaming ? " streaming" : ""}`}>
@@ -80,14 +79,15 @@ export function MsgList({
     () => hydrateStore.getSnapshot(),
   );
   const blocks = groupTranscript(messages);
-  const lastUserId = [...messages].reverse().find((m) => m.kind === "user")?.id;
   const streaming = messages.some(
     (m) => m.streaming && (m.kind === "assistant" || m.kind === "thinking" || m.kind === "tool"),
   );
   const showWorking = busy && !streaming && !hydrating;
 
   return (
-    <div className="transcript-inner">
+    <div className="transcript-stage">
+      <ChatTimeline messages={messages} />
+      <div className="transcript-inner">
       {messages.length === 0 && !hydrating && (
         <div className="hero">
           <LogoMark size={28} />
@@ -112,13 +112,13 @@ export function MsgList({
           <MsgCard
             key={b.msg.id}
             m={b.msg}
-            sticky={b.msg.id === lastUserId}
             onApprove={onApprove}
             onDeny={onDeny}
           />
         ),
       )}
       {showWorking && <WorkingRow key={`working-${messages.length}`} />}
+      </div>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, Copy } from "lucide-react";
 import { inspectPrompt, type PromptInspect, type PromptPart, type PromptTool } from "../lib/commands";
 import { sessionStore } from "../lib/events";
+import { promptInsights } from "../lib/promptInsights";
 import { fmtTokens } from "../lib/util";
 import "./promptInspect.css";
 
@@ -10,17 +11,10 @@ type Row =
   | { key: string; kind: "tool"; tool: PromptTool };
 
 function rowsOf(snap: PromptInspect): Row[] {
-  const msgs: Row[] = snap.messages.map((part, i) => ({
-    key: `m-${i}`,
-    kind: "msg",
-    part,
-  }));
-  const tools: Row[] = snap.tools.map((tool, i) => ({
-    key: `t-${i}`,
-    kind: "tool",
-    tool,
-  }));
-  return [...msgs, ...tools];
+  return [
+    ...snap.messages.map((part, i) => ({ key: `m-${i}`, kind: "msg" as const, part })),
+    ...snap.tools.map((tool, i) => ({ key: `t-${i}`, kind: "tool" as const, tool })),
+  ];
 }
 
 function bodyOf(row: Row): string {
@@ -29,10 +23,22 @@ function bodyOf(row: Row): string {
 }
 
 function copyText(snap: PromptInspect): string {
+  const ins = promptInsights(snap);
   const chunks = [
     `model: ${snap.model}`,
-    snap.sent ? "sent: yes" : "sent: preview",
+    snap.sent ? "sent: yes" : "sent: preview / reconstructed",
     `tokens ≈ ${snap.totalTokens}`,
+    `largest: ${ins.largest.name} (${Math.round(ins.largest.share * 100)}%)`,
+    `stable prefix: ${ins.stablePrefix}`,
+    `volatile tail: ${ins.volatileTail}`,
+    "",
+    "## Order (wire)",
+    ...ins.layers.map(
+      (l) => `${l.order}. ${l.label} [${l.role}] ~${l.tokens} tok (${Math.round(l.share * 100)}%)`,
+    ),
+    "",
+    "## Hints",
+    ...ins.hints.map((h) => `- ${h}`),
     "",
   ];
   for (const m of snap.messages) {
@@ -47,7 +53,11 @@ function copyText(snap: PromptInspect): string {
   return chunks.join("\n");
 }
 
-/** Debug overlay: the exact chat-completion payload last assembled for the LLM. */
+function pct(n: number): string {
+  return `${Math.round(n * 100)}%`;
+}
+
+/** Case-study view of the last (or restored) chat-completion request. */
 export function PromptInspector({ onClose }: { onClose: () => void }) {
   const [snap, setSnap] = useState<PromptInspect | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -75,6 +85,7 @@ export function PromptInspector({ onClose }: { onClose: () => void }) {
   }, [onClose]);
 
   const rows = useMemo(() => (snap ? rowsOf(snap) : []), [snap]);
+  const ins = useMemo(() => (snap ? promptInsights(snap) : null), [snap]);
   const active = rows[sel] ?? rows[0];
 
   async function onCopy() {
@@ -96,12 +107,12 @@ export function PromptInspector({ onClose }: { onClose: () => void }) {
           Back
         </button>
         <div className="prompt-inspect-title">
-          <strong>Prompt</strong>
+          <strong>Prompt assembly</strong>
           <span>
             {snap
               ? snap.sent
-                ? "Last request sent to the model"
-                : "Preview — not sent yet"
+                ? "Wire order, budget share, and optimization hints"
+                : "Preview — L0 + tools until a turn is sent"
               : "Loading…"}
           </span>
         </div>
@@ -112,11 +123,11 @@ export function PromptInspector({ onClose }: { onClose: () => void }) {
           disabled={!snap}
         >
           <Copy size={12} />
-          {copied ? "Copied" : "Copy all"}
+          {copied ? "Copied" : "Copy study"}
         </button>
       </header>
       {err && <p className="prompt-inspect-err">{err}</p>}
-      {snap && (
+      {snap && ins && (
         <>
           <div className="prompt-inspect-sum">
             <span>{snap.model}</span>
@@ -125,11 +136,35 @@ export function PromptInspector({ onClose }: { onClose: () => void }) {
               {fmtTokens(snap.totalTokens)}
             </span>
           </div>
+          <div className="prompt-inspect-meta">
+            <div>
+              <em>Largest sink</em>
+              <strong>
+                {ins.largest.name} · {pct(ins.largest.share)}
+              </strong>
+            </div>
+            <div>
+              <em>Stable prefix</em>
+              <strong>{ins.stablePrefix}</strong>
+            </div>
+            <div>
+              <em>Volatile tail</em>
+              <strong>{ins.volatileTail}</strong>
+            </div>
+          </div>
+          {ins.hints.length > 0 && (
+            <ul className="prompt-inspect-hints">
+              {ins.hints.map((h) => (
+                <li key={h}>{h}</li>
+              ))}
+            </ul>
+          )}
           <div className="prompt-inspect-body">
             <nav className="prompt-inspect-nav" aria-label="Prompt parts">
               {rows.map((row, i) => {
+                const layer = ins.layers[i];
                 const label = row.kind === "msg" ? row.part.label : row.tool.name;
-                const hint = row.kind === "msg" ? row.part.role : "tool";
+                const hint = row.kind === "msg" ? row.part.role : "tool def";
                 const tokens = row.kind === "msg" ? row.part.tokens : row.tool.tokens;
                 return (
                   <button
@@ -138,8 +173,17 @@ export function PromptInspector({ onClose }: { onClose: () => void }) {
                     className={i === sel ? "active" : ""}
                     onClick={() => setSel(i)}
                   >
-                    <em>{label}</em>
-                    <span>{hint}</span>
+                    <em>
+                      <span className="prompt-ord">{layer?.order ?? i + 1}</span>
+                      {label}
+                    </em>
+                    <span>
+                      {hint}
+                      <i
+                        className="prompt-share"
+                        style={{ width: pct(layer?.share ?? 0) }}
+                      />
+                    </span>
                     <strong>{fmtTokens(tokens)}</strong>
                   </button>
                 );

@@ -1,9 +1,35 @@
 import type { SessionEntry } from "./util";
 
-/** Sidebar label: untitled chats show as "New chat". */
+export interface PendingSession {
+  ulid: string;
+  path: string;
+  projectRoot: string | null;
+}
+
+/** Sidebar label for a session that already has a title. */
 export function sessionLabel(title: string | null | undefined): string {
   const t = title?.trim();
-  return t ? t : "New chat";
+  return t ? t : "(empty)";
+}
+
+/** Drop chats that have not been titled yet — they stay out of the list
+ * until the first user message. */
+export function titledSessions(list: SessionEntry[]): SessionEntry[] {
+  return list.filter((s) => Boolean(s.firstUserMsg?.trim()));
+}
+
+/** Last turn-end that has not been opened/acked. */
+export function unreadFromEvents(seq: Array<"completed" | "aborted" | "ack">): string | null {
+  let last: string | null = null;
+  let acked = true;
+  for (const ev of seq) {
+    if (ev === "ack") acked = true;
+    else {
+      last = ev;
+      acked = false;
+    }
+  }
+  return acked ? null : last;
 }
 
 /** First non-empty line, clipped to 48 characters — matches core fallback_title. */
@@ -54,30 +80,27 @@ export function mergeSessionLists(
   return [...byUlid.values()].sort((a, b) => Number(b.modifiedMs) - Number(a.modifiedMs));
 }
 
-/** First user message becomes the sidebar title until the generated one lands. */
+/** First user message becomes the sidebar title until the generated one lands.
+ * If the chat is not in the list yet, `pending` supplies path + workspace. */
 export function applyFirstUserTitle(
   list: SessionEntry[],
   ulid: string,
   messages: Array<{ kind: string; text: string }>,
+  pending?: PendingSession | null,
 ): SessionEntry[] {
   if (!ulid) return list;
-  const current = list.find((s) => s.ulid === ulid);
-  if (!current || current.firstUserMsg) return list;
   const user = messages.find((m) => m.kind === "user");
   if (!user?.text.trim()) return list;
-  return patchSessionTitle(list, ulid, fallbackTitle(user.text));
-}
-
-export function newSessionEntry(
-  ulid: string,
-  path: string,
-  projectRoot: string | null,
-): SessionEntry {
-  return {
-    path,
+  const title = fallbackTitle(user.text);
+  const current = list.find((s) => s.ulid === ulid);
+  if (current?.firstUserMsg) return list;
+  if (current) return patchSessionTitle(list, ulid, title);
+  if (!pending || pending.ulid !== ulid || !pending.path) return list;
+  return upsertSession(list, {
     ulid,
-    firstUserMsg: null,
+    path: pending.path,
+    projectRoot: pending.projectRoot,
+    firstUserMsg: title,
     modifiedMs: Date.now(),
-    projectRoot,
-  };
+  });
 }
