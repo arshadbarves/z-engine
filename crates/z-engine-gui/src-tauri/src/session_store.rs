@@ -9,6 +9,7 @@ pub(crate) struct StartSessionResult {
     pub ulid: String,
     pub events: Vec<serde_json::Value>,
     pub already_live: bool,
+    pub path: Option<String>,
 }
 
 pub(crate) fn session_events_json(events: &[SessionEvent]) -> Vec<serde_json::Value> {

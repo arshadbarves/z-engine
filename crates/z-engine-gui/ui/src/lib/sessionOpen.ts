@@ -60,7 +60,9 @@ export async function hydrateOpenSession(
   }
 }
 
-export async function hydrateNewSession(root: string | null): Promise<void> {
+export async function hydrateNewSession(
+  root: string | null,
+): Promise<{ ulid: string; path: string } | null> {
   const gen = beginHydrate();
   parkCurrentAndReset();
   resetUsage();
@@ -68,9 +70,13 @@ export async function hydrateNewSession(root: string | null): Promise<void> {
     const result = await startSession(null, root);
     const ulid = result?.ulid;
     if (ulid && ulid !== sessionStore.getSnapshot()) activateSession(ulid);
+    const path = result?.path ?? "";
+    if (ulid && path) return { ulid, path };
+    return ulid ? { ulid, path } : null;
   } catch (e) {
     console.error(e);
     pushToast("Could not start a new chat", "warn");
+    return null;
   } finally {
     window.setTimeout(() => endHydrate(gen), 32);
   }

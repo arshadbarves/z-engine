@@ -9,6 +9,7 @@ use z_engine_provider::{ChatMessage, Client};
 
 use super::LoopConfig;
 use super::events::{Command, Event};
+use super::prompt_inspect::PromptInspect;
 use super::subagent::run_isolated;
 use super::task::agent_task;
 use crate::perms::PolicyEngine;
@@ -19,7 +20,10 @@ use crate::tools::ToolRegistry;
 #[derive(Debug, Clone)]
 pub struct AgentHandle {
     cmd_tx: UnboundedSender<Command>,
+    last_prompt: Arc<Mutex<Option<PromptInspect>>>,
 }
+
+type PromptSlot = Arc<Mutex<Option<PromptInspect>>>;
 
 impl AgentHandle {
     pub fn submit(&self, text: impl Into<String>) {
@@ -92,6 +96,11 @@ impl AgentHandle {
     pub fn shutdown(&self) {
         let _ = self.cmd_tx.send(Command::Shutdown);
     }
+
+    /// Last assembled chat-completion request (preview until a turn runs).
+    pub fn last_prompt(&self) -> Option<PromptInspect> {
+        self.last_prompt.lock().ok().and_then(|g| g.clone())
+    }
 }
 
 /// Receiver end of the core→UI event feed.
@@ -143,7 +152,13 @@ pub fn spawn_with_recorder(
             tokio::spawn(async move {
                 let _ = ev_tx.send(Event::Error(format!("provider init failed: {e}")));
             });
-            return (AgentHandle { cmd_tx: _cmd_tx }, EventRx { rx: ev_rx });
+            return (
+                AgentHandle {
+                    cmd_tx: _cmd_tx,
+                    last_prompt: empty_prompt_slot(),
+                },
+                EventRx { rx: ev_rx },
+            );
         }
     };
     let model = cfg.model.clone();
@@ -167,6 +182,10 @@ pub fn spawn_with_recorder(
 
     let (cmd_tx, cmd_rx) = mpsc::unbounded_channel::<Command>();
     let (ev_tx, ev_rx) = mpsc::unbounded_channel::<Event>();
+    let last_prompt = Arc::new(Mutex::new(Some(PromptInspect::preview(
+        &cfg,
+        ToolRegistry::builtins().defs(),
+    ))));
 
     match Client::new(&cfg.base_url, cfg.api_key.clone()) {
         Ok(client) => {
@@ -175,7 +194,17 @@ pub fn spawn_with_recorder(
             )));
             let registry = ToolRegistry::builtins();
             tokio::spawn(agent_task(
-                cfg, client, perms, registry, cmd_rx, ev_tx, resume, recorder, runner, abort_flag,
+                cfg,
+                client,
+                perms,
+                registry,
+                cmd_rx,
+                ev_tx,
+                resume,
+                recorder,
+                runner,
+                abort_flag,
+                Arc::clone(&last_prompt),
             ));
         }
         Err(e) => {
@@ -186,5 +215,15 @@ pub fn spawn_with_recorder(
             });
         }
     }
-    (AgentHandle { cmd_tx }, EventRx { rx: ev_rx })
+    (
+        AgentHandle {
+            cmd_tx,
+            last_prompt,
+        },
+        EventRx { rx: ev_rx },
+    )
+}
+
+fn empty_prompt_slot() -> PromptSlot {
+    Arc::new(Mutex::new(None))
 }

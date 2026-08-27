@@ -22,6 +22,7 @@ export interface StartSessionResult {
   ulid: string;
   events: unknown[];
   alreadyLive?: boolean;
+  path?: string | null;
 }
 
 export const startSession = (resumePath: string | null, root?: string | null) =>
@@ -123,3 +124,28 @@ export const removeCostOverride = (model: string) =>
 
 export const listProjectFiles = (query: string) =>
   invoke<string[]>("list_project_files", { query });
+
+export interface PromptPart {
+  role: string;
+  label: string;
+  content: string;
+  tokens: number;
+}
+
+export interface PromptTool {
+  name: string;
+  description: string;
+  schema: string;
+  tokens: number;
+}
+
+export interface PromptInspect {
+  model: string;
+  sent: boolean;
+  messages: PromptPart[];
+  tools: PromptTool[];
+  totalTokens: number;
+}
+
+export const inspectPrompt = (sessionId?: string) =>
+  invoke<PromptInspect>("inspect_prompt", { sessionId: sessionId ?? null });

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight, Folder, MessageSquare, Plus, Search, Trash2 } from "lucide-react";
 import type { SessionActivity } from "../lib/events";
 import { filterSessions, type SessionEntry } from "../lib/util";
+import { sessionLabel } from "../lib/sessionList";
 import { wsBasename } from "../lib/workspaces";
 
 function WorkspaceRow({
@@ -126,8 +127,8 @@ function SessionRow({
       tabIndex={0}
       title={
         state === "approval"
-          ? `Approval needed — ${s.firstUserMsg ?? "(empty)"}`
-          : (s.firstUserMsg ?? "(empty)")
+          ? `Approval needed — ${sessionLabel(s.firstUserMsg)}`
+          : sessionLabel(s.firstUserMsg)
       }
       onClick={(e) => {
         e.stopPropagation();
@@ -136,7 +137,7 @@ function SessionRow({
       onKeyDown={(e) => e.key === "Enter" && onOpen(s.path, s.projectRoot)}
     >
       <MessageSquare size={13} className="sess-icon" />
-      <div className="sess-preview">{s.firstUserMsg ?? "(empty)"}</div>
+      <div className="sess-preview">{sessionLabel(s.firstUserMsg)}</div>
       <button
         className="del"
         title="Delete chat"

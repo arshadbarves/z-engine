@@ -29,6 +29,7 @@ import {
   createWorktree,
 } from "./lib/commands";
 import { hydrateNewSession, hydrateOpenSession } from "./lib/sessionOpen";
+import { applyFirstUserTitle, mergeSessionLists, newSessionEntry, upsertSession } from "./lib/sessionList";
 import { Composer } from "./components/Composer";
 import { CommandPalette } from "./components/CommandPalette";
 import { SettingsPage } from "./components/settings/SettingsPage";
@@ -118,9 +119,7 @@ export default function App() {
   async function refreshSessions() {
     try {
       const list = (await listSessions()) as unknown as SessionEntry[];
-      // Hide brand-new tasks until they carry a first message.
-      list.sort((a, b) => Number(b.modifiedMs) - Number(a.modifiedMs));
-      setSessionsList(list.filter((s) => s.firstUserMsg != null));
+      setSessionsList((prev) => mergeSessionLists(list, prev));
     } catch (e) {
       console.error(e);
     }
@@ -135,9 +134,14 @@ export default function App() {
   }
 
   async function newTask() {
-    await hydrateNewSession(workspaces.active);
+    const created = await hydrateNewSession(workspaces.active);
+    if (created?.path) {
+      setSessionsList((prev) =>
+        upsertSession(prev, newSessionEntry(created.ulid, created.path, workspaces.active)),
+      );
+    }
     void refreshCustomCommands();
-    await refreshSessions();
+    void refreshSessions();
   }
 
   async function addWorkspace() {
@@ -230,10 +234,11 @@ export default function App() {
     if (last?.kind === "user") {
       stickToBottom.current = true;
       setShowJump(false);
+      setSessionsList((prev) => applyFirstUserTitle(prev, sessionId, messages));
     }
     if (!stickToBottom.current) return;
     transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight });
-  }, [messages]);
+  }, [messages, sessionId]);
 
   function onTranscriptScroll() {
     const el = transcriptRef.current;

@@ -120,6 +120,11 @@ pub(super) async fn run_turn(
         if let Some(effort) = state.reasoning_effort.clone() {
             request = request.with_reasoning_effort(effort);
         }
+        if let Ok(mut slot) = state.last_prompt.lock() {
+            *slot = Some(super::prompt_inspect::PromptInspect::from_request(
+                &request, true,
+            ));
+        }
         let mut stream = client.stream_chat(&request, Arc::clone(abort_flag));
 
         // ---- consume the stream --------------------------------------

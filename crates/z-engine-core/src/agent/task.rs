@@ -21,6 +21,7 @@ use crate::tools::{ToolCtx, ToolRegistry};
 use super::LoopConfig;
 use super::events::{Command, Event};
 use super::handle::ResumeState;
+use super::prompt_inspect::PromptInspect;
 use super::revert::{revert_last_turn, revert_to_turn, trim_working_before_user_turn};
 use super::side_requests::generate_session_title;
 use super::state::LoopState;
@@ -38,6 +39,7 @@ pub(super) async fn agent_task(
     mut recorder: Option<SessionWriter>,
     runner: crate::tools::SubAgentRunner,
     abort_flag: Arc<AtomicBool>,
+    last_prompt: Arc<Mutex<Option<PromptInspect>>>,
 ) {
     // Register external MCP tools (spec section 9 v0.9). Failures are
     // logged and skipped: a broken server must not kill the session.
@@ -67,6 +69,9 @@ pub(super) async fn agent_task(
                 )));
             }
         }
+    }
+    if let Ok(mut slot) = last_prompt.lock() {
+        *slot = Some(PromptInspect::preview(&cfg, registry.defs()));
     }
     let notes = Arc::new(Mutex::new(NotesStore::default()));
     let (output_tx, mut output_rx) =
@@ -119,6 +124,7 @@ pub(super) async fn agent_task(
         repo_map_text: None,
         current_task: String::new(),
         reasoning_effort: None,
+        last_prompt,
     };
     // Seed from a previous session's transcript (resume).
     let mut titled = resume.is_some();

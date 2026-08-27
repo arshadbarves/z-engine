@@ -3,6 +3,7 @@ import { configStore } from "../lib/configStore";
 import { transcriptStore, usageStore } from "../lib/events";
 import { contextBreakdown } from "../lib/contextBreakdown";
 import { estimateCost, fmtCost, fmtTokens } from "../lib/util";
+import { PromptInspector } from "./PromptInspector";
 
 const RING_R = 7;
 const RING_C = 2 * Math.PI * RING_R;
@@ -13,6 +14,7 @@ export function ContextMeter() {
   const messages = useSyncExternalStore(transcriptStore.subscribe, () => transcriptStore.getSnapshot());
   const cfg = useSyncExternalStore(configStore.subscribe, () => configStore.getSnapshot());
   const [open, setOpen] = useState(false);
+  const [inspect, setInspect] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -112,8 +114,19 @@ export function ContextMeter() {
             Auto-compacts at {compactAt}%
             {cost != null ? ` · est. ${fmtCost(cost)}` : ""}
           </p>
+          <button
+            type="button"
+            className="ctx-pop-more"
+            onClick={() => {
+              setOpen(false);
+              setInspect(true);
+            }}
+          >
+            View prompt
+          </button>
         </div>
       )}
+      {inspect && <PromptInspector onClose={() => setInspect(false)} />}
     </div>
   );
 }

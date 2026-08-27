@@ -1,6 +1,10 @@
 //! Per-conversation mutable state threaded through the turn pipeline.
 
+use std::sync::{Arc, Mutex};
+
 use z_engine_provider::{ChatMessage, ContentPart, Usage};
+
+use super::prompt_inspect::PromptInspect;
 
 pub(super) struct LoopState {
     /// Everything between the L0/L1 prefix and the current turn.
@@ -16,6 +20,8 @@ pub(super) struct LoopState {
     pub(super) current_task: String,
     /// Reasoning effort for reasoning-capable models; `None` = omit param.
     pub(super) reasoning_effort: Option<String>,
+    /// Last assembled request, shared with [`AgentHandle::last_prompt`].
+    pub(super) last_prompt: Arc<Mutex<Option<PromptInspect>>>,
 }
 
 impl LoopState {

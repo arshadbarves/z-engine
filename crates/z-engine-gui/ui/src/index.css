@@ -834,29 +834,13 @@ kbd {
   color: var(--text-2);
 }
 
-/* Live state is a border line that glows and fades — no spinning wheel.
- * Green while the turn runs, amber while it waits on an approval. */
-.session.working,
-.session.approval {
-  animation: sess-line 2.2s ease-in-out infinite;
-}
-
+/* Live state: a quiet static left mark. No glow, no pulse. */
 .session.working {
-  --sess-glow: rgba(61, 220, 151, 0.55);
+  box-shadow: inset 2px 0 0 rgba(61, 220, 151, 0.45);
 }
 
 .session.approval {
-  --sess-glow: rgba(232, 180, 90, 0.6);
-}
-
-@keyframes sess-line {
-  0%,
-  100% {
-    box-shadow: inset 2px 0 0 transparent;
-  }
-  50% {
-    box-shadow: inset 2px 0 0 var(--sess-glow);
-  }
+  box-shadow: inset 2px 0 0 rgba(232, 180, 90, 0.55);
 }
 
 .session.working .sess-icon,
@@ -871,27 +855,15 @@ kbd {
 /* Workspace rollup dot (a header row has no left edge to light up). */
 .sess-dot {
   flex-shrink: 0;
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--ok);
-  box-shadow: 0 0 6px rgba(61, 220, 151, 0.45);
-  animation: sess-breathe 2.2s ease-in-out infinite;
+  opacity: 0.8;
 }
 
 .sess-dot.approval {
   background: var(--warn);
-  box-shadow: 0 0 6px rgba(232, 180, 90, 0.45);
-}
-
-@keyframes sess-breathe {
-  0%,
-  100% {
-    opacity: 0.35;
-  }
-  50% {
-    opacity: 1;
-  }
 }
 
 .sess-preview {

@@ -97,7 +97,8 @@ fn main() {
             commands::shell,
             commands::revert_last_turn,
             commands::revert_to_turn,
-            commands::start_session
+            commands::start_session,
+            commands::inspect_prompt
         ])
         .setup(|app| {
             let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));

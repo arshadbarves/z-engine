@@ -178,6 +178,7 @@ pub(crate) fn start_session(
                     ulid,
                     events: ui_events,
                     already_live: true,
+                    path: Some(contained.to_string_lossy().into_owned()),
                 });
             }
             let replayed = z_engine_core::session::replay(&events);
@@ -234,5 +235,18 @@ pub(crate) fn start_session(
         ulid,
         events: ui_events,
         already_live: false,
+        path: recorder_path.map(|p| p.to_string_lossy().into_owned()),
     })
+}
+
+/// Last assembled chat-completion request for the prompt inspector.
+#[tauri::command]
+pub(crate) fn inspect_prompt(
+    session_id: Option<String>,
+    state: tauri::State<'_, GuiState>,
+) -> Result<z_engine_core::agent::PromptInspect, String> {
+    state
+        .handle_for(session_id.as_deref())?
+        .last_prompt()
+        .ok_or_else(|| "no prompt captured yet".into())
 }

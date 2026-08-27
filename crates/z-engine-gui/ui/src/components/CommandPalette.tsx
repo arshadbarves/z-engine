@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { SessionEntry } from "../lib/util";
+import { sessionLabel } from "../lib/sessionList";
 import { wsBasename } from "../lib/workspaces";
 
 export interface PaletteItem {
@@ -57,7 +58,7 @@ export function CommandPalette({
 
   const items = useMemo(() => {
     const sessionItems: PaletteItem[] = sessions.slice(0, 6).map((s) => ({
-      label: s.firstUserMsg ?? "(empty)",
+      label: sessionLabel(s.firstUserMsg),
       hint: "open session",
       keywords: `session ${s.ulid}`,
       group: "Sessions",
