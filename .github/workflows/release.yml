@@ -92,7 +92,7 @@ jobs:
         with:
           projectPath: crates/z-engine-gui/src-tauri
           args: ${{ matrix.args }}
-          includeUpdaterJson: true
+          uploadUpdaterJson: false
           # PRs build installers as workflow artifacts; push/dispatch publishes.
           tagName: ${{ github.event_name != 'pull_request' && 'v__VERSION__' || '' }}
           releaseName: Z Engine v__VERSION__
