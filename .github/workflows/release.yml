@@ -2,6 +2,7 @@
 # Pull requests targeting `release` build artifacts only (no GitHub Release).
 name: release
 
+
 on:
   workflow_dispatch:
   push:
@@ -9,12 +10,15 @@ on:
   pull_request:
     branches: [release]
 
+
 concurrency:
   group: release-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+
 permissions:
   contents: write
+
 
 jobs:
   build:
@@ -39,10 +43,13 @@ jobs:
             os_name: windows-x64
             cli_path: target/release/zengine.exe
 
+
     runs-on: ${{ matrix.platform }}
+
 
     steps:
       - uses: actions/checkout@v4
+
 
       - name: Install Linux WebKitGTK
         if: matrix.platform == 'ubuntu-22.04'
@@ -51,6 +58,7 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
             librsvg2-dev patchelf xdg-utils
 
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -58,19 +66,23 @@ jobs:
           cache: npm
           cache-dependency-path: crates/z-engine-gui/ui/package-lock.json
 
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
 
       - name: Cache Rust
         uses: swatinem/rust-cache@v2
         with:
           workspaces: . -> target
 
+
       - name: Install frontend dependencies
         run: npm ci
         working-directory: crates/z-engine-gui/ui
+
 
       - name: Build GUI
         uses: tauri-apps/tauri-action@v1
@@ -87,8 +99,10 @@ jobs:
           releaseDraft: false
           prerelease: false
 
+
       - name: Build TUI CLI
         run: cargo build --release -p z-engine-tui --locked ${{ matrix.args }}
+
 
       - name: Upload CLI artifact
         uses: actions/upload-artifact@v4
