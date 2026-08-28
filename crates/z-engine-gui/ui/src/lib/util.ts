@@ -70,18 +70,6 @@ export function relTime(ms: number, now = Date.now()): string {
   return `${Math.floor(d / DAY)}d`;
 }
 
-/** Human-friendly relative timestamp (e.g. "Just now", "5m ago", "2h ago", "Yesterday", "Aug 24"). */
-export function fmtHumanRelTime(ms: number, now = Date.now()): string {
-  if (!ms) return "";
-  const d = Math.max(0, now - ms);
-  if (d < 60_000) return "Just now";
-  if (d < 3_600_000) return `${Math.floor(d / 60_000)}m ago`;
-  if (d < DAY) return `${Math.floor(d / 3_600_000)}h ago`;
-  if (d < 2 * DAY) return "Yesterday";
-  if (d < 7 * DAY) return `${Math.floor(d / DAY)}d ago`;
-  return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
 export function shortModel(id: string): string {
   const slash = id.lastIndexOf("/");
   return slash >= 0 ? id.slice(slash + 1) : id;

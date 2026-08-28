@@ -6,18 +6,7 @@
   z-index: 40;
   display: flex;
   background: var(--bg);
-  animation: settings-page-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-@keyframes settings-page-in {
-  from {
-    opacity: 0;
-    transform: scale(0.99) translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
+  animation: rise 0.18s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 .settings-nav {
@@ -167,18 +156,6 @@ html.plat-mac .settings-main {
   flex-direction: column;
   gap: 14px;
   padding-bottom: 40px;
-  animation: tab-body-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-@keyframes tab-body-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .settings-page .form-row {

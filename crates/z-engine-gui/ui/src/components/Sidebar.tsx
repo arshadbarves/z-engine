@@ -1,116 +1,159 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, Folder, Plus, Search, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  AlertCircle,
+  LoaderCircle,
+  MessageSquare,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 import type { SessionActivity } from "../lib/events";
-import { filterSessions, groupSessions, type SessionEntry } from "../lib/util";
+import { filterSessions, type SessionEntry } from "../lib/util";
+import { formatSessionTime, humanSessionTitle } from "../lib/sessionList";
 import { wsBasename } from "../lib/workspaces";
-import { SessionRow } from "./SessionRow";
+import { WorkspaceFilter } from "./WorkspaceFilter";
 
-function WorkspaceRow({
-  root,
+interface TimelineGroup {
+  label: string;
+  items: SessionEntry[];
+}
+
+function groupByTimeline(list: SessionEntry[], now = Date.now()): TimelineGroup[] {
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const todayMs = today.getTime();
+  const yesterdayMs = todayMs - 86_400_000;
+  const sevenDaysMs = todayMs - 7 * 86_400_000;
+  const thirtyDaysMs = todayMs - 30 * 86_400_000;
+
+  const todayItems: SessionEntry[] = [];
+  const yesterdayItems: SessionEntry[] = [];
+  const prev7Items: SessionEntry[] = [];
+  const prev30Items: SessionEntry[] = [];
+  const olderItems: SessionEntry[] = [];
+
+  for (const s of list) {
+    const t = Number(s.modifiedMs) || 0;
+    if (t >= todayMs) {
+      todayItems.push(s);
+    } else if (t >= yesterdayMs) {
+      yesterdayItems.push(s);
+    } else if (t >= sevenDaysMs) {
+      prev7Items.push(s);
+    } else if (t >= thirtyDaysMs) {
+      prev30Items.push(s);
+    } else {
+      olderItems.push(s);
+    }
+  }
+
+  const groups: TimelineGroup[] = [];
+  if (todayItems.length > 0) groups.push({ label: "Today", items: todayItems });
+  if (yesterdayItems.length > 0) groups.push({ label: "Yesterday", items: yesterdayItems });
+  if (prev7Items.length > 0) groups.push({ label: "Previous 7 Days", items: prev7Items });
+  if (prev30Items.length > 0) groups.push({ label: "Previous 30 Days", items: prev30Items });
+  if (olderItems.length > 0) groups.push({ label: "Earlier", items: olderItems });
+
+  return groups;
+}
+
+function SessionRow({
+  s,
   active,
-  sessions,
-  activeUlid,
-  activity,
+  state,
+  showProjectBadge,
   onOpen,
   onDelete,
-  onActivate,
-  onRemove,
 }: {
-  root: string;
+  s: SessionEntry;
   active: boolean;
-  sessions: SessionEntry[];
-  activeUlid: string;
-  activity: Record<string, SessionActivity>;
+  state: SessionActivity | null;
+  showProjectBadge: boolean;
   onOpen: (path: string, projectRoot?: string | null) => void;
   onDelete: (path: string) => void;
-  onActivate: (root: string) => void;
-  onRemove: (root: string) => void;
 }) {
-  const [open, setOpen] = useState(active);
-  const wasActive = useRef(active);
-  useEffect(() => {
-    if (active && !wasActive.current) setOpen(true);
-    wasActive.current = active;
-  }, [active]);
-
-  const items = useMemo(() => sessions.slice(0, 40), [sessions]);
-  const groups = useMemo(() => groupSessions(items), [items]);
-
-  // Approval outranks working: a blocked session needs the user's eye first.
-  const projectActivity = useMemo<SessionActivity | null>(() => {
-    let working = false;
-    for (const s of items) {
-      const a = activity[s.ulid];
-      if (a === "approval") return "approval";
-      if (a === "working") working = true;
-    }
-    return working ? "working" : null;
-  }, [items, activity]);
+  const unread =
+    !active && !state && (s.unreadOutcome === "completed" || s.unreadOutcome === "aborted")
+      ? s.unreadOutcome
+      : null;
+  const title = humanSessionTitle(s.firstUserMsg);
+  const timeStr = formatSessionTime(s.modifiedMs);
+  const projectName = s.projectRoot ? wsBasename(s.projectRoot) : null;
 
   return (
-    <div className={`ws-row${active ? " active" : ""}`}>
-      <div
-        className={`ws-head${projectActivity ? ` ${projectActivity}` : ""}`}
-        role="button"
-        tabIndex={0}
-        title={`${root}${active ? " · active" : " · click to select"}`}
-        onClick={() => {
-          onActivate(root);
-          setOpen((o) => !o);
-        }}
-        onKeyDown={(e) => e.key === "Enter" && onActivate(root)}
-      >
-        <span className={`ws-chevron${open ? " open" : ""}`}>
-          <ChevronRight size={11} />
-        </span>
-        <Folder size={13} className="ws-icon" />
-        <span className="ws-name">{wsBasename(root)}</span>
-        <span className="ws-tail">
-          <span className="ws-count">{items.length || ""}</span>
-          <button
-            className="del"
-            title="Remove workspace from list (sessions are kept)"
-            onClick={(e) => {
-              e.stopPropagation();
-              onRemove(root);
-            }}
-          >
-            <Trash2 size={11} />
-          </button>
-        </span>
+    <div
+      className={`sess-human-item${active ? " active" : ""}${state ? ` ${state}` : ""}${
+        unread ? ` unread unread-${unread}` : ""
+      }`}
+      role="button"
+      tabIndex={0}
+      title={
+        state === "approval"
+          ? `Approval required — ${title}`
+          : state === "working"
+            ? `Working — ${title}`
+            : unread
+              ? `${unread === "aborted" ? "Aborted" : "Completed"} — ${title}`
+              : title
+      }
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen(s.path, s.projectRoot);
+      }}
+      onKeyDown={(e) => e.key === "Enter" && onOpen(s.path, s.projectRoot)}
+    >
+      <div className="sess-item-icon-col">
+        {state === "working" ? (
+          <LoaderCircle size={13} className="spin sess-state-icon working" />
+        ) : state === "approval" ? (
+          <AlertCircle size={13} className="sess-state-icon approval" />
+        ) : (
+          <MessageSquare size={13} className="sess-state-icon" />
+        )}
       </div>
-      {open && (
-        <div className="ws-sessions">
-          {items.length === 0 ? (
-            <div className="sess-empty">No conversations yet</div>
-          ) : (
-            groups.map((g) => (
-              <div key={g.label} className="sess-group">
-                <div className="sess-group-label">{g.label}</div>
-                {g.items.map((s) => (
-                  <SessionRow
-                    key={s.path}
-                    s={s}
-                    active={s.ulid === activeUlid}
-                    state={activity[s.ulid] ?? null}
-                    onOpen={onOpen}
-                    onDelete={onDelete}
-                  />
-                ))}
-              </div>
-            ))
+
+      <div className="sess-item-main">
+        <div className="sess-item-title-row">
+          <span className="sess-item-title">{title}</span>
+        </div>
+        <div className="sess-item-meta-row">
+          <span className="sess-item-time">{timeStr}</span>
+          {showProjectBadge && projectName && (
+            <span className="sess-item-project" title={s.projectRoot ?? ""}>
+              {projectName}
+            </span>
           )}
         </div>
-      )}
+      </div>
+
+      <div className="sess-item-actions">
+        {unread && (
+          <span
+            className="sess-unread-dot"
+            role="status"
+            aria-label={`${unread} — unopened`}
+          />
+        )}
+        <button
+          type="button"
+          className="sess-item-del-btn"
+          title="Delete chat"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(s.path);
+          }}
+        >
+          <Trash2 size={12} />
+        </button>
+      </div>
     </div>
   );
 }
 
-/** Human-centric sessions sidebar: search, workspaces, chronological day groupings. */
 export function Sidebar({
   sessions,
   workspaces,
-  activeWorkspace,
+  activeWorkspace: _activeWorkspace,
   activeUlid,
   activity,
   onOpen,
@@ -131,101 +174,75 @@ export function Sidebar({
   onActivateWorkspace: (root: string | null) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [recentsOpen, setRecentsOpen] = useState(true);
-  const filtered = useMemo(() => filterSessions(sessions, query), [sessions, query]);
+  const [selectedWs, setSelectedWs] = useState<string | "all">("all");
 
-  const byWs = useMemo(() => {
-    const m = new Map<string, SessionEntry[]>();
-    for (const root of workspaces) m.set(root, []);
-    const other: SessionEntry[] = [];
-    for (const s of filtered) {
-      const hit = s.projectRoot ? m.get(s.projectRoot) : undefined;
-      if (hit) hit.push(s);
-      else other.push(s);
+  const filtered = useMemo(() => {
+    let list = filterSessions(sessions, query);
+    if (selectedWs !== "all") {
+      list = list.filter((s) => s.projectRoot === selectedWs);
     }
-    return { m, other };
-  }, [filtered, workspaces]);
+    return list;
+  }, [sessions, query, selectedWs]);
 
-  const otherGroups = useMemo(
-    () => groupSessions(byWs.other.slice(0, 30)),
-    [byWs.other],
-  );
+  const timelineGroups = useMemo(() => groupByTimeline(filtered), [filtered]);
 
   return (
-    <div className="sessions">
-      <div className="sess-search">
-        <Search size={13} className="sess-search-icon" />
+    <div className="sessions-human-container">
+      <div className="sess-search-bar">
+        <Search size={12} className="sess-search-icon" />
         <input
           value={query}
           onChange={(e) => setQuery(e.currentTarget.value)}
-          placeholder="Search conversations…"
+          placeholder="Search chats…"
           spellCheck={false}
         />
+        {query && (
+          <button
+            type="button"
+            className="sess-search-clear"
+            onClick={() => setQuery("")}
+            title="Clear search"
+          >
+            <X size={11} />
+          </button>
+        )}
       </div>
 
-      <div className="sess-list">
-        <div className="ws-section-head">
-          <span>Workspaces</span>
-          <button className="mini" title="Add workspace folder…" onClick={onAddWorkspace}>
-            <Plus size={12} />
-          </button>
-        </div>
+      <WorkspaceFilter
+        workspaces={workspaces}
+        selectedWs={selectedWs}
+        onSelectWs={setSelectedWs}
+        onAddWorkspace={onAddWorkspace}
+        onRemoveWorkspace={onRemoveWorkspace}
+        onActivateWorkspace={onActivateWorkspace}
+      />
 
-        {workspaces.length === 0 && (
-          <div className="sess-empty">No workspace added yet.</div>
-        )}
-
-        {workspaces.map((root) => (
-          <WorkspaceRow
-            key={root}
-            root={root}
-            active={activeWorkspace === root}
-            sessions={byWs.m.get(root) ?? []}
-            activeUlid={activeUlid}
-            activity={activity}
-            onOpen={onOpen}
-            onDelete={onDelete}
-            onActivate={onActivateWorkspace}
-            onRemove={onRemoveWorkspace}
-          />
-        ))}
-
-        {byWs.other.length > 0 && (
-          <>
-            <div
-              className="ws-section-head other"
-              role="button"
-              tabIndex={0}
-              onClick={() => setRecentsOpen((o) => !o)}
-              onKeyDown={(e) => e.key === "Enter" && setRecentsOpen((o) => !o)}
-            >
-              <div className="ws-head-left">
-                <ChevronRight
-                  size={11}
-                  className={`ws-chevron${recentsOpen ? " open" : ""}`}
-                />
-                <span>Recent Conversations</span>
+      <div className="sess-human-list">
+        {filtered.length === 0 ? (
+          <div className="sess-human-empty">
+            <MessageSquare size={20} className="sess-empty-icon" />
+            <p>No conversations found</p>
+            {query && <span>Try searching for something else</span>}
+          </div>
+        ) : (
+          timelineGroups.map((group) => (
+            <div key={group.label} className="sess-timeline-group">
+              <div className="sess-timeline-heading">{group.label}</div>
+              <div className="sess-timeline-items">
+                {group.items.map((s) => (
+                  <SessionRow
+                    key={s.path}
+                    s={s}
+                    active={s.ulid === activeUlid}
+                    state={activity[s.ulid] ?? null}
+                    showProjectBadge={selectedWs === "all" && workspaces.length > 1}
+                    onOpen={onOpen}
+                    onDelete={onDelete}
+                  />
+                ))}
               </div>
-              <span className="ws-count">{byWs.other.length}</span>
             </div>
-
-            {recentsOpen &&
-              otherGroups.map((g) => (
-                <div key={g.label} className="sess-group">
-                  <div className="sess-group-label">{g.label}</div>
-                  {g.items.map((s) => (
-                    <SessionRow
-                      key={s.path}
-                      s={s}
-                      active={s.ulid === activeUlid}
-                      state={activity[s.ulid] ?? null}
-                      onOpen={onOpen}
-                      onDelete={onDelete}
-                    />
-                  ))}
-                </div>
-              ))}
-          </>
+          ))
         )}
       </div>
     </div>
