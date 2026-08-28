@@ -60,6 +60,7 @@ export const updateStore = {
     emit();
   },
   triggerMock(enable = true) {
+    if (!import.meta.env.DEV) return;
     if (!enable || (isMockActive && info?.available)) {
       info = null;
       installing = false;
@@ -87,7 +88,7 @@ export const updateStore = {
     emit();
   },
   async check(force = false) {
-    if (checking || installing || isMockActive) return;
+    if (checking || installing || (import.meta.env.DEV && isMockActive)) return;
     ensureListener();
     checking = true;
     emit();
@@ -109,7 +110,7 @@ export const updateStore = {
     if (checking || installing || !info?.available) return;
     ensureListener();
 
-    if (isMockActive) {
+    if (import.meta.env.DEV && isMockActive) {
       installing = true;
       const total = 58.4 * 1024 * 1024;
       for (let p = 10; p <= 100; p += 15) {
@@ -156,7 +157,7 @@ export const updateStore = {
   },
 };
 
-if (typeof window !== "undefined") {
+if (import.meta.env.DEV && typeof window !== "undefined") {
   (window as unknown as { __previewUpdate?: (show?: boolean) => void }).__previewUpdate = (
     show = true,
   ) => updateStore.triggerMock(show);

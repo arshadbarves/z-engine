@@ -73,7 +73,9 @@ export function dispatchSlashCommand(name: string, input: string): void {
       break;
     }
     case "update-demo": {
-      updateStore.triggerMock();
+      if (import.meta.env.DEV) {
+        updateStore.triggerMock();
+      }
       break;
     }
   }
