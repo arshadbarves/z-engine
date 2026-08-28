@@ -168,6 +168,69 @@ html.plat-mac .settings-main {
   color: var(--err);
 }
 
+.form-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+}
+
+.provider-connect-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #4ebd8f;
+  background: rgba(78, 189, 143, 0.1);
+  border: 1px solid rgba(78, 189, 143, 0.28);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.provider-connect-btn:hover {
+  background: rgba(78, 189, 143, 0.2);
+  border-color: rgba(78, 189, 143, 0.45);
+  transform: translateY(-1px);
+}
+
+.provider-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+
+.provider-status-badge.ok {
+  color: #4ebd8f;
+  background: rgba(78, 189, 143, 0.1);
+  border: 1px solid rgba(78, 189, 143, 0.22);
+}
+
+.settings-group-header {
+  margin-bottom: 8px;
+}
+
+.settings-group-header h3 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.settings-group-sub {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+
 .form-label-title {
   font-size: 13px;
   font-weight: 600;
@@ -178,6 +241,59 @@ html.plat-mac .settings-main {
   font-size: 11.5px;
   color: var(--text-3);
   margin-bottom: 6px;
+}
+
+.settings-select {
+  width: 100%;
+  padding: 9px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.14s ease;
+}
+
+.settings-select:focus {
+  border-color: var(--border-strong);
+}
+
+.settings-select option {
+  background: var(--bg);
+  color: var(--text);
+  padding: 6px;
+}
+
+.form-input-with-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.form-input-with-action input {
+  flex: 1;
+}
+
+.clear-btn {
+  white-space: nowrap;
+  padding: 6px 10px !important;
+  font-size: 11.5px !important;
+  color: var(--text-3) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-s) !important;
+  background: var(--surface-2) !important;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.clear-btn:hover {
+  color: var(--err) !important;
+  border-color: rgba(235, 87, 87, 0.35) !important;
+  background: rgba(235, 87, 87, 0.08) !important;
 }
 
 .settings-page .form-row input[type="text"],
