@@ -53,14 +53,28 @@ export const workspaceStore = {
     workspaceStore.setActive(canonical);
   },
   async remove(path: string) {
-    if (active === path) active = null;
     await invokeRemove(path);
+    const wasActive = sameWorkspacePath(active, path);
     await workspaceStore.load();
-    if (active === null && roots.length > 0) workspaceStore.setActive(roots[0]);
+    const stale = active != null && !roots.some((r) => sameWorkspacePath(r, active));
+    if (wasActive || stale) workspaceStore.setActive(roots[0] ?? null);
   },
 };
 
 export function wsBasename(root: string): string {
-  const parts = root.replace(/\/+$/, "").split("/");
+  const parts = root.replace(/\/+$/, "").split(/[/\\]/);
   return parts[parts.length - 1] || root;
+}
+
+/** True when two workspace roots refer to the same folder. */
+export function sameWorkspacePath(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): boolean {
+  if (!a || !b) return false;
+  return normalizeWsPath(a) === normalizeWsPath(b);
+}
+
+function normalizeWsPath(p: string): string {
+  return p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 }

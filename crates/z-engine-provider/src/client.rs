@@ -52,22 +52,24 @@ pub enum ProviderError {
 pub struct Client {
     http: reqwest::Client,
     base_url: String,
-    api_key: Option<String>,
+    api_key: Arc<std::sync::Mutex<Option<String>>>,
 }
 
 impl std::fmt::Debug for Client {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Client")
             .field("base_url", &self.base_url)
-            .field("api_key", &self.api_key.as_ref().map(|_| "<redacted>"))
+            .field(
+                "api_key",
+                &self.current_api_key().as_ref().map(|_| "<redacted>"),
+            )
             .finish()
     }
 }
 
 impl Client {
-    /// Build a client. `api_key` comes from `ZENGINE_API_KEY`
-    /// (or `HARNESS_API_KEY`) upstream; local servers (Ollama/LM Studio)
-    /// may run without one.
+    /// Build a client. `api_key` comes from Settings / `ZENGINE_API_KEY`
+    /// upstream; local servers (Ollama/LM Studio) may run without one.
     pub fn new(base_url: &str, api_key: Option<String>) -> Result<Self, ProviderError> {
         let http = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(10))
@@ -83,8 +85,23 @@ impl Client {
         Ok(Self {
             http,
             base_url: base,
-            api_key,
+            api_key: Arc::new(std::sync::Mutex::new(api_key)),
         })
+    }
+
+    /// Replace the key used on subsequent requests. Shared across clones
+    /// so Settings can hot-apply without restarting the agent.
+    pub fn set_api_key(&self, key: Option<String>) {
+        if let Ok(mut g) = self.api_key.lock() {
+            *g = key.and_then(|k| {
+                let t = k.trim().to_string();
+                if t.is_empty() { None } else { Some(t) }
+            });
+        }
+    }
+
+    fn current_api_key(&self) -> Option<String> {
+        self.api_key.lock().ok().and_then(|g| g.clone())
     }
 
     /// Start a streaming chat completion.
@@ -100,7 +117,7 @@ impl Client {
         let (tx, rx) = mpsc::channel::<Result<StreamEvent, ProviderError>>(64);
         let http = self.http.clone();
         let url = format!("{}/chat/completions", self.base_url);
-        let api_key = self.api_key.clone();
+        let api_key = self.current_api_key();
 
         let body = match serde_json::to_vec(req) {
             Ok(b) => b,
@@ -260,6 +277,16 @@ mod tests {
         let rendered = format!("{c:?}");
         assert!(!rendered.contains("sk-super-secret"));
         assert!(rendered.contains("<redacted>"));
+    }
+
+    #[test]
+    fn set_api_key_is_shared_across_clones() {
+        let c = Client::new("https://example.invalid/v1", Some("old".into())).unwrap();
+        let c2 = c.clone();
+        c.set_api_key(Some("  new-key  ".into()));
+        assert_eq!(c2.current_api_key().as_deref(), Some("new-key"));
+        c.set_api_key(Some("".into()));
+        assert!(c2.current_api_key().is_none());
     }
 
     #[test]

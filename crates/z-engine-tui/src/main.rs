@@ -149,6 +149,7 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn run(args: Args) -> anyhow::Result<()> {
+    let _ = z_engine_core::config::ensure_user_config();
     let project_root = args
         .project
         .clone()
@@ -232,8 +233,8 @@ async fn run(args: Args) -> anyhow::Result<()> {
         None => {
             if !config.base_url.contains("localhost") && !config.base_url.contains("127.0.0.1") {
                 eprintln!(
-                    "warning: no API key found (set ZENGINE_API_KEY or create \\
-                     ~/.config/z-engine/api-key); provider calls will fail"
+                    "warning: no API key found (set it in the GUI Settings page, \
+                     or ZENGINE_API_KEY / ~/.config/z-engine/auth.json); provider calls will fail"
                 );
             }
         }

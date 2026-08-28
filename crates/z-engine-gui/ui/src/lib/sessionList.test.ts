@@ -99,6 +99,15 @@ describe("mergeSessionLists", () => {
     expect(merged.map((s) => s.ulid)).toEqual(["new", "old"]);
   });
 
+  it("does not resurrect a titled chat that disappeared from disk", () => {
+    const disk = [sess("kept", { firstUserMsg: "keep", modifiedMs: 10 })];
+    const current = [
+      sess("kept", { firstUserMsg: "keep", modifiedMs: 10 }),
+      sess("gone", { firstUserMsg: "deleted chat", modifiedMs: 20 }),
+    ];
+    expect(mergeSessionLists(disk, current).map((s) => s.ulid)).toEqual(["kept"]);
+  });
+
   it("keeps an in-memory title when disk has not recorded it yet", () => {
     const disk = [sess("new", { firstUserMsg: null, modifiedMs: 20 })];
     const current = [sess("new", { firstUserMsg: "Fix auth", modifiedMs: 21 })];

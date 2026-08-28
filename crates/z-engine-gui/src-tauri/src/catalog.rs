@@ -107,6 +107,7 @@ pub(crate) async fn fetch_model_catalog() -> Result<serde_json::Value, String> {
             entry.models.insert(mid, model);
         }
     }
+    merged.retain(|pid, _| pid == "openrouter");
     serde_json::to_value(&merged).map_err(|e| e.to_string())
 }
 

@@ -18,6 +18,17 @@ export interface CatalogData {
   [providerId: string]: CatalogProvider;
 }
 
+/** Provider id shown in the model picker (multi-provider lands later). */
+export const PICKER_PROVIDER_ID = "openrouter";
+
+/** Restrict the catalog to OpenRouter so the picker only lists that provider. */
+export function catalogForPicker(catalog: CatalogData | null): CatalogData {
+  if (!catalog) return {};
+  const prov = catalog[PICKER_PROVIDER_ID];
+  if (!prov) return {};
+  return { [PICKER_PROVIDER_ID]: prov };
+}
+
 let data: CatalogData | null = null;
 let loading: Promise<void> | null = null;
 /** Set when the last fetch failed; `ensure()` retries on next call. */

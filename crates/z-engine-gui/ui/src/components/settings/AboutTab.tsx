@@ -36,7 +36,7 @@ export function AboutTab({ cfg }: { cfg: HarnessConfig }) {
         <div className="about-hero-text">
           <h3>Z Engine</h3>
           <p className="form-note">
-            The Autonomous AI Coding Engine · v{cfg.version ?? "1.2.0"}
+            The Autonomous AI Coding Engine · v{cfg.version ?? "1.3.0"}
           </p>
         </div>
       </div>
@@ -127,7 +127,7 @@ export function AboutTab({ cfg }: { cfg: HarnessConfig }) {
             <CheckCircle2 size={16} className="uptodate-icon" />
             <div className="uptodate-text">
               <strong>Z Engine is up to date</strong>
-              <span>Version {cfg.version ?? "1.2.0"} is the latest version available.</span>
+              <span>Version {cfg.version ?? "1.3.0"} is the latest version available.</span>
             </div>
           </div>
           <button
@@ -149,7 +149,7 @@ export function AboutTab({ cfg }: { cfg: HarnessConfig }) {
         <dt>Global Config</dt>
         <dd>
           <code>~/.config/z-engine/config.toml</code>
-          <span className="form-note"> falls back to ~/.config/harness</span>
+          <span className="form-note"> created on first launch · API key in auth.json</span>
         </dd>
         <dt>Project Config</dt>
         <dd>

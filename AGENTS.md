@@ -71,7 +71,8 @@ crates/
 │       │   ├── types.rs       # Config/FileFormat/errors
 │       │   ├── loader.rs      # load + layering
 │       │   ├── store.rs       # persistence CRUD (atomic writes!)
-│       │   └── paths.rs       # z-engine dirs with harness fallbacks
+│       │   ├── auth.rs        # OpenRouter key in auth.json
+│       │   └── paths.rs       # z-engine dirs; create config if missing
 │       ├── perms/
 │       │   ├── mod.rs         # composition root
 │       │   ├── engine.rs      # PolicyEngine decisions

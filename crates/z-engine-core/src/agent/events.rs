@@ -51,6 +51,8 @@ pub enum Command {
     SetMode(PermissionMode),
     /// `/model <id>`: hot-switch the provider model.
     SetModel(String),
+    /// Settings: replace the OpenRouter API key on the live client.
+    SetApiKey(Option<String>),
     /// Per-session reasoning effort (`low|medium|high|xhigh`); `None` clears
     /// it so non-reasoning models never receive the parameter.
     SetReasoningEffort(Option<String>),

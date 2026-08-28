@@ -79,9 +79,10 @@ export interface HarnessConfig {
   compactAtPercent?: number;
   baseUrl?: string;
   reviewEnabled?: boolean;
+  hasApiKey?: boolean;
+  apiKeyHint?: string | null;
   pricing?: PricingInfo | null;
   mcpServers?: McpServerInfo[];
-  costOverrides?: Record<string, PricingInfo>;
   version?: string;
   projectName?: string;
 }
@@ -103,6 +104,9 @@ export const saveGeneral = (p: GeneralPatch) =>
     review: p.review ?? null,
   });
 
+export const saveApiKey = (key: string | null) =>
+  invoke("save_api_key", { key });
+
 export const listPermissionRules = () =>
   invoke<string[]>("list_permission_rules");
 export const savePermissionRule = (rule: string) =>
@@ -111,16 +115,12 @@ export const removePermissionRule = (rule: string) =>
   invoke("remove_permission_rule", { rule });
 
 export const listMcpServers = () => invoke<McpServerInfo[]>("list_mcp_servers");
+export const saveMcpServer = (name: string, command: string, args: string[]) =>
+  invoke("save_mcp_server", { name, command, args });
+export const removeMcpServer = (name: string) =>
+  invoke("remove_mcp_server", { name });
 export const testMcpServer = (name: string) =>
   invoke<string[]>("test_mcp_server", { name });
-
-export const setCostOverride = (
-  model: string,
-  usdPerMtokInput: number,
-  usdPerMtokOutput: number,
-) => invoke("set_cost_override", { model, usdPerMtokInput, usdPerMtokOutput });
-export const removeCostOverride = (model: string) =>
-  invoke("remove_cost_override", { model });
 
 export const listProjectFiles = (query: string) =>
   invoke<string[]>("list_project_files", { query });

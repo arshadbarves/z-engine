@@ -6,25 +6,28 @@
 //! defaults  <  ~/.config/z-engine/config.toml  <  environment vars  <  CLI flags
 //! ```
 //!
-//! Legacy `~/.config/harness` and `<project>/.harness` are still read when
-//! the new paths are missing.
-//!
-//! The API key is **never** part of config — it comes from `ZENGINE_API_KEY`
-//! (falling back to `HARNESS_API_KEY`) when a provider client is built.
+//! Missing global files are created on startup. The OpenRouter API key is
+//! stored in `auth.json` next to the global config (set from Settings),
+//! with `ZENGINE_API_KEY` as an override.
 
+mod auth;
 mod loader;
 mod paths;
 mod store;
 mod types;
 
+pub use auth::{
+    KeyStatus, current_openrouter_status, openrouter_status, set_current_openrouter_key,
+    set_openrouter_key,
+};
 pub use paths::{
-    app_data_dir, app_data_write_dir, global_config_path, models_override_path,
-    project_config_path, project_config_read_path, resolve_api_key, session_search_dirs,
-    sessions_dir, slash_command_dirs,
+    app_data_dir, app_data_write_dir, auth_path, ensure_global_config, ensure_user_config,
+    global_config_path, models_override_path, project_config_path, project_config_read_path,
+    resolve_api_key, resolve_api_key_from, session_search_dirs, sessions_dir, slash_command_dirs,
 };
 pub use store::{
-    GeneralOverrides, list_bash_rules, persist_bash_rule, persist_general, remove_bash_rule,
-    remove_cost_override, set_cost_override,
+    GeneralOverrides, list_bash_rules, persist_bash_rule, persist_general, persist_mcp_server,
+    remove_bash_rule, remove_cost_override, remove_mcp_server, set_cost_override,
 };
 pub use types::{CliOverrides, Config, ConfigError, EnvVars, PartialConfig, PermissionsConfig};
 
@@ -37,8 +40,8 @@ mod tests {
     fn malformed_project_config_blocks_persistence() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        std::fs::create_dir_all(root.join(".harness")).unwrap();
-        std::fs::write(root.join(".harness/config.toml"), "model = ").unwrap();
+        std::fs::create_dir_all(root.join(".z-engine")).unwrap();
+        std::fs::write(root.join(".z-engine/config.toml"), "model = ").unwrap();
         let err = persist_bash_rule(root, "ls*");
         assert!(err.is_err());
     }
@@ -99,8 +102,8 @@ mod tests {
     #[test]
     fn malformed_project_config_blocks_general_and_cost_writes() {
         let tmp = tempfile::tempdir().unwrap();
-        std::fs::create_dir_all(tmp.path().join(".harness")).unwrap();
-        std::fs::write(tmp.path().join(".harness/config.toml"), "model = ").unwrap();
+        std::fs::create_dir_all(tmp.path().join(".z-engine")).unwrap();
+        std::fs::write(tmp.path().join(".z-engine/config.toml"), "model = ").unwrap();
         assert!(
             persist_general(
                 tmp.path(),

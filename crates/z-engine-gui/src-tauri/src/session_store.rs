@@ -97,6 +97,51 @@ pub(crate) fn delete_session(
     z_engine_core::session::delete_session(&contained).map_err(|e| e.to_string())
 }
 
+fn roots_match(session_root: &str, workspace: &std::path::Path) -> bool {
+    let a = std::path::PathBuf::from(session_root);
+    if a == workspace {
+        return true;
+    }
+    match (std::fs::canonicalize(&a), std::fs::canonicalize(workspace)) {
+        (Ok(x), Ok(y)) => x == y,
+        _ => {
+            let sa = session_root
+                .replace('\\', "/")
+                .trim_end_matches('/')
+                .to_lowercase();
+            let sb = workspace
+                .to_string_lossy()
+                .replace('\\', "/")
+                .trim_end_matches('/')
+                .to_lowercase();
+            sa == sb
+        }
+    }
+}
+
+/// Delete every transcript whose Meta.project_root matches `root`.
+pub(crate) fn delete_sessions_for_workspace(
+    root: &std::path::Path,
+    state: &GuiState,
+) -> Result<usize, String> {
+    let mut n = 0usize;
+    for dir in z_engine_core::config::session_search_dirs() {
+        for s in z_engine_core::session::list_sessions(&dir) {
+            let Some(pr) = &s.project_root else {
+                continue;
+            };
+            if !roots_match(pr, root) {
+                continue;
+            }
+            let _ = state.shutdown_one(&s.ulid);
+            if z_engine_core::session::delete_session(&s.path).is_ok() {
+                n += 1;
+            }
+        }
+    }
+    Ok(n)
+}
+
 /// Transcript replay for the sessions sidebar: parse a session JSONL into
 /// its event list so the frontend can rebuild the chat history.
 #[tauri::command]
@@ -104,4 +149,17 @@ pub(crate) fn read_session(path: String) -> Result<Vec<serde_json::Value>, Strin
     let contained = contain_session(&path)?;
     let events = z_engine_core::session::read_events(&contained).map_err(|e| e.to_string())?;
     Ok(session_events_json(&events))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn roots_match_ignores_slash_and_case() {
+        assert!(roots_match("/tmp/proj", Path::new("/tmp/proj/")));
+        assert!(roots_match("/tmp/Proj", Path::new("/tmp/proj")));
+        assert!(!roots_match("/tmp/proj", Path::new("/tmp/other")));
+    }
 }

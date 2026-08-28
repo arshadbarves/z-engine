@@ -1315,9 +1315,9 @@ async fn mcp_echo_tool_roundtrips() {
 
     let tmp = tempfile::tempdir().unwrap();
     // Project config registers the echo server (tests project layering too).
-    std::fs::create_dir_all(tmp.path().join(".harness")).unwrap();
+    std::fs::create_dir_all(tmp.path().join(".z-engine")).unwrap();
     std::fs::write(
-        tmp.path().join(".harness/config.toml"),
+        tmp.path().join(".z-engine/config.toml"),
         "[mcp.servers.echo]\ncommand = \"python3\"\nargs = [\"scripts/mcp_echo_server.py\"]\n",
     )
     .unwrap();

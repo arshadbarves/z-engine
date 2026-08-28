@@ -106,15 +106,19 @@ pub(crate) fn add_workspace(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub(crate) fn remove_workspace(path: String) -> Result<(), String> {
+pub(crate) fn remove_workspace(
+    path: String,
+    state: tauri::State<'_, GuiState>,
+) -> Result<(), String> {
     let target = PathBuf::from(&path);
-    let mut roots: Vec<PathBuf> = load_workspaces()
-        .into_iter()
-        .filter(|r| *r != target)
-        .collect();
-    // Also drop entries that refer to the same dir through a different path.
-    if let Ok(canon) = std::fs::canonicalize(&target) {
-        roots.retain(|r| *r != canon);
+    let canon = std::fs::canonicalize(&target).unwrap_or_else(|_| target.clone());
+    crate::session_store::delete_sessions_for_workspace(&target, &state)?;
+    if canon != target {
+        crate::session_store::delete_sessions_for_workspace(&canon, &state)?;
     }
+    let roots: Vec<PathBuf> = load_workspaces()
+        .into_iter()
+        .filter(|r| *r != target && *r != canon)
+        .collect();
     save_workspaces(&roots)
 }

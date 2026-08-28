@@ -51,9 +51,8 @@ Ladder (lowest→highest): defaults < `~/.config/z-engine/config.toml` <
 `<project>/.z-engine/config.toml` < env (`ZENGINE_MODEL`, `ZENGINE_BASE_URL`)
 < CLI flags.
 
-Legacy `HARNESS_*` env vars, `~/.config/harness`, and `<project>/.harness`
-are still **read** when the new names/paths are missing. New writes go to
-the `z-engine` locations.
+Missing `~/.config/z-engine/config.toml` and `auth.json` are created on
+first launch. There is no fallback to the old `harness` paths.
 
 ```toml
 model = "anthropic/claude-sonnet-4"
@@ -73,9 +72,10 @@ command = "python3"
 args = ["scripts/mcp_echo_server.py"]
 ```
 
-API key: `ZENGINE_API_KEY` env var (or `HARNESS_API_KEY`), or a single-line
-file at `~/.config/z-engine/api-key` (then `~/.config/harness/api-key`).
-It never lives in config.toml.
+API key: set it in the GUI Settings page (stored in
+`~/.config/z-engine/auth.json`), or `ZENGINE_API_KEY`. It never lives in
+config.toml. MCP servers, permissions, and other options are also edited
+from Settings.
 
 ## Tools the model gets
 
@@ -99,8 +99,7 @@ Every turn appends newline-delimited JSON events under
 `~/Library/Application Support/z-engine/sessions/<ulid>.jsonl`
 (macOS), `~/.local/share/z-engine/sessions` (Linux), or
 `%APPDATA%\z-engine\sessions` (Windows). Crashes tear at most the last
-line; `--session <ulid>` replays and continues. Existing `harness/sessions`
-files are still listed.
+line; `--session <ulid>` replays and continues.
 
 On Windows the GUI uses a native title bar. The `bash` tool prefers Git
 Bash (`bash -lc`) when it is on `PATH`, otherwise `cmd.exe /C`. Install

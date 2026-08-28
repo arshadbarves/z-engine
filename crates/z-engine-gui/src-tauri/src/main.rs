@@ -91,9 +91,10 @@ fn main() {
             commands::remove_permission_rule,
             commands::read_session,
             commands::save_general,
-            commands::set_cost_override,
-            commands::remove_cost_override,
+            commands::save_api_key,
             commands::list_mcp_servers,
+            commands::save_mcp_server,
+            commands::remove_mcp_server,
             commands::test_mcp_server,
             commands::list_project_files,
             commands::get_config,
@@ -107,6 +108,7 @@ fn main() {
             commands::install_update
         ])
         .setup(|app| {
+            let _ = z_engine_core::config::ensure_user_config();
             let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             let cfg = Config::load(&CliOverrides::default(), Some(&project_root))
                 .map_err(|e| e.to_string())?;

@@ -73,12 +73,13 @@ export const updateStore = {
     isMockActive = true;
     info = {
       available: true,
-      current: "1.2.0",
-      latest: "1.3.0",
+      current: "1.3.0",
+      latest: "1.4.0",
       url: "https://github.com/arshadbarves/z-engine/releases",
       releaseNotes:
-        "### What's New in v1.3.0\n" +
+        "### What's New in v1.4.0\n" +
         "- Complete UI/UX & cognitive ergonomics redesign\n" +
+        "- Apple-grade fluid animations across sidebar, diff, and modals\n" +
         "- Live download progress tracking with byte metrics\n" +
         "- Real-time memory headroom & cache analytics\n" +
         "- Enhanced syntax-highlighted code blocks & line counters\n" +

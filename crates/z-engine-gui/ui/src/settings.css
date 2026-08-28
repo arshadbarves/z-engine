@@ -1,4 +1,4 @@
-/* ── psychology-centered settings experience ────────────────────────────── */
+/* ── settings ───────────────────────────────────────────────────────────── */
 
 .settings-page {
   position: fixed;
@@ -10,14 +10,14 @@
 }
 
 .settings-nav {
-  width: 250px;
+  width: 196px;
   flex-shrink: 0;
-  padding: 36px 14px 16px;
+  padding: 28px 12px 16px;
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 html.plat-mac .settings-nav {
@@ -27,39 +27,31 @@ html.plat-mac .settings-nav {
 .settings-back {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   align-self: flex-start;
-  margin-bottom: 12px;
-  padding: 6px 10px;
+  margin: 0 4px 10px;
+  padding: 4px 8px;
   font-size: 12.5px;
   font-weight: 500;
   color: var(--text-2);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
+  background: transparent;
+  border: none;
   border-radius: var(--radius-s);
   cursor: pointer;
-  transition: all 0.14s ease;
 }
 
 .settings-back:hover {
-  background: var(--surface-3);
+  background: var(--surface-2);
   color: var(--text);
-  border-color: var(--border-strong);
 }
 
 .settings-brand {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 4px 10px 14px;
-  font-size: 13.5px;
+  padding: 2px 10px 12px;
+  font-size: 11px;
   font-weight: 650;
-  letter-spacing: -0.01em;
-  color: var(--text);
-}
-
-.settings-brand svg {
-  color: var(--ok);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
 }
 
 .settings-nav-item {
@@ -67,34 +59,15 @@ html.plat-mac .settings-nav {
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 9px 12px;
+  padding: 8px 10px;
   font-size: 13px;
+  font-weight: 500;
   color: var(--text-2);
   background: transparent;
-  border: 1px solid transparent;
+  border: none;
   border-radius: var(--radius-s);
   text-align: left;
   cursor: pointer;
-  transition: all 0.13s ease;
-}
-
-.settings-nav-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-
-.settings-nav-copy strong {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-2);
-}
-
-.settings-nav-copy em {
-  font-style: normal;
-  font-size: 11px;
-  color: var(--text-3);
 }
 
 .settings-nav-item:hover {
@@ -104,11 +77,6 @@ html.plat-mac .settings-nav {
 
 .settings-nav-item.active {
   background: var(--surface-3);
-  border-color: var(--border-strong);
-  color: var(--text);
-}
-
-.settings-nav-item.active strong {
   color: var(--text);
 }
 
@@ -117,11 +85,9 @@ html.plat-mac .settings-nav {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  padding: 42px 48px 36px;
+  padding: 32px 40px 36px;
   overflow-y: auto;
-  background:
-    radial-gradient(900px 320px at 0% -8%, rgba(78, 189, 143, 0.035), transparent 50%),
-    var(--bg);
+  background: var(--bg);
 }
 
 html.plat-mac .settings-main {
@@ -129,43 +95,77 @@ html.plat-mac .settings-main {
 }
 
 .settings-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  margin-bottom: 24px;
-  max-width: 600px;
+  margin-bottom: 20px;
+  max-width: 560px;
 }
 
 .settings-head h2 {
   margin: 0;
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 650;
   letter-spacing: -0.02em;
   color: var(--text);
 }
 
-.settings-sub {
-  margin: 4px 0 0;
-  font-size: 13px;
+.settings-page .tab-body {
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding-bottom: 40px;
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-group > h3 {
+  margin: 0 2px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   color: var(--text-3);
 }
 
-.settings-page .tab-body {
-  max-width: 600px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding-bottom: 40px;
+.settings-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  overflow: hidden;
 }
 
 .settings-page .form-row {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 16px 18px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-m);
+  padding: 14px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+}
+
+.settings-card .form-row:last-child {
+  border-bottom: none;
+}
+
+.settings-page .form-row > button.ghost {
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-3);
+  cursor: pointer;
+}
+
+.settings-page .form-row > button.ghost:hover {
+  color: var(--err);
 }
 
 .form-label-title {
@@ -301,7 +301,7 @@ html.plat-mac .settings-main {
   opacity: 0.92;
 }
 
-/* ── Rule & Cost Lists ── */
+/* ── Rule lists ── */
 
 .rule-list {
   list-style: none;
@@ -453,6 +453,13 @@ html.plat-mac .settings-main {
   font-family: var(--mono);
   font-size: 11.5px;
   color: var(--text-2);
+}
+
+.mcp-add {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
 }
 
 /* ── About Tab ── */

@@ -131,6 +131,65 @@ pub fn persist_general(
     Ok(path)
 }
 
+/// Persist an MCP stdio server into `<project>/.z-engine/config.toml`
+/// under `[mcp.servers.<name>]`. Later writes replace the same name.
+pub fn persist_mcp_server(
+    project_root: &std::path::Path,
+    name: &str,
+    command: &str,
+    args: Vec<String>,
+) -> std::io::Result<PathBuf> {
+    let name = name.trim();
+    let command = command.trim();
+    if name.is_empty() || command.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "mcp server needs a name and command",
+        ));
+    }
+    let path = project_config_path(project_root);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let text = read_project_text(project_root)?;
+    let mut fmt: FileFormat = toml::from_str(&text).map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("cannot parse {}: {e}", path.display()),
+        )
+    })?;
+    let mut section = fmt.mcp.take().unwrap_or_default();
+    section.servers.insert(
+        name.to_string(),
+        super::types::McpServerEntry {
+            command: command.to_string(),
+            args,
+        },
+    );
+    fmt.mcp = Some(section);
+    write_project_config(&path, &fmt)?;
+    Ok(path)
+}
+
+/// Remove an MCP server by name (idempotent).
+pub fn remove_mcp_server(project_root: &std::path::Path, name: &str) -> std::io::Result<()> {
+    let path = project_config_path(project_root);
+    let text = read_project_text(project_root)?;
+    if text.is_empty() {
+        return Ok(());
+    }
+    let mut fmt: FileFormat = toml::from_str(&text).map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("cannot parse {}: {e}", path.display()),
+        )
+    })?;
+    if let Some(mcp) = fmt.mcp.as_mut() {
+        mcp.servers.remove(name);
+    }
+    write_project_config(&path, &fmt)
+}
+
 /// Persist a per-model pricing override into
 /// `<project>/.z-engine/config.toml` under `[cost.overrides]`.
 pub fn set_cost_override(
@@ -280,5 +339,31 @@ mod tests {
         remove_cost_override(tmp.path(), "x/y").unwrap(); // absent rule ok
         let cfg = Config::load(&CliOverrides::default(), Some(tmp.path())).unwrap();
         assert!(cfg.cost_overrides.is_empty());
+    }
+
+    #[test]
+    fn mcp_server_roundtrip_replace_and_remove() {
+        let tmp = tempfile::tempdir().unwrap();
+        persist_mcp_server(
+            tmp.path(),
+            "fs",
+            "npx",
+            vec![
+                "-y".into(),
+                "@modelcontextprotocol/server-filesystem".into(),
+            ],
+        )
+        .unwrap();
+        persist_mcp_server(tmp.path(), "fs", "uvx", vec!["mcp-server-git".into()]).unwrap();
+        let cfg = Config::load(&CliOverrides::default(), Some(tmp.path())).unwrap();
+        assert_eq!(cfg.mcp_servers.len(), 1);
+        assert_eq!(cfg.mcp_servers[0].name, "fs");
+        assert_eq!(cfg.mcp_servers[0].command, "uvx");
+        assert_eq!(cfg.mcp_servers[0].args, vec!["mcp-server-git"]);
+        remove_mcp_server(tmp.path(), "fs").unwrap();
+        remove_mcp_server(tmp.path(), "missing").unwrap();
+        let cfg = Config::load(&CliOverrides::default(), Some(tmp.path())).unwrap();
+        assert!(cfg.mcp_servers.is_empty());
+        assert!(persist_mcp_server(tmp.path(), "  ", "npx", vec![]).is_err());
     }
 }

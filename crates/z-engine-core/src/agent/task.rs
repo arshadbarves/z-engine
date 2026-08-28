@@ -247,6 +247,11 @@ pub(super) async fn agent_task(
                 cfg.model = id.clone();
                 let _ = ev_tx.send(Event::StatusNote(format!("model set to {id}")));
             }
+            Command::SetApiKey(key) => {
+                client.set_api_key(key.clone());
+                cfg.api_key = key;
+                let _ = ev_tx.send(Event::StatusNote("api key updated".into()));
+            }
             Command::SetReasoningEffort(effort) => {
                 state.reasoning_effort = effort.clone();
                 let note = match effort {

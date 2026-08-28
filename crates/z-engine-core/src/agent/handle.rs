@@ -60,6 +60,11 @@ impl AgentHandle {
         let _ = self.cmd_tx.send(Command::SetModel(model.into()));
     }
 
+    /// Hot-apply a new OpenRouter API key (Settings).
+    pub fn set_api_key(&self, key: Option<String>) {
+        let _ = self.cmd_tx.send(Command::SetApiKey(key));
+    }
+
     /// Pick the reasoning effort for reasoning-capable models; `None`
     /// stops sending the parameter entirely.
     pub fn set_reasoning_effort(&self, effort: Option<String>) {
@@ -142,9 +147,9 @@ pub fn spawn_with_recorder(
 ) -> (AgentHandle, EventRx) {
     let abort_flag = Arc::new(AtomicBool::new(false));
 
-    // Sub-agent runner shares the provider client and the parent's abort
-    // flag so Esc tears down the whole subtree.
-    let sub_client = match Client::new(&cfg.base_url, cfg.api_key.clone()) {
+    // One client, cloned for the sub-agent runner so Settings key updates
+    // apply to parent and delegated loops.
+    let client = match Client::new(&cfg.base_url, cfg.api_key.clone()) {
         Ok(c) => c,
         Err(e) => {
             let (_cmd_tx, _cmd_rx) = mpsc::unbounded_channel::<Command>();
@@ -161,6 +166,7 @@ pub fn spawn_with_recorder(
             );
         }
     };
+    let sub_client = client.clone();
     let model = cfg.model.clone();
     let project_root = cfg.project_root.clone();
     let tmp_dir = cfg.tmp_dir.clone();
@@ -189,34 +195,23 @@ pub fn spawn_with_recorder(
     };
     let last_prompt = Arc::new(Mutex::new(Some(inspect)));
 
-    match Client::new(&cfg.base_url, cfg.api_key.clone()) {
-        Ok(client) => {
-            let perms = Arc::new(Mutex::new(PolicyEngine::new(
-                cfg.initial_allow_rules.clone(),
-            )));
-            let registry = ToolRegistry::builtins();
-            tokio::spawn(agent_task(
-                cfg,
-                client,
-                perms,
-                registry,
-                cmd_rx,
-                ev_tx,
-                resume,
-                recorder,
-                runner,
-                abort_flag,
-                Arc::clone(&last_prompt),
-            ));
-        }
-        Err(e) => {
-            // Surface asynchronously so callers can still attach to events.
-            let ev_tx2 = ev_tx.clone();
-            tokio::spawn(async move {
-                let _ = ev_tx2.send(Event::Error(format!("provider init failed: {e}")));
-            });
-        }
-    }
+    let perms = Arc::new(Mutex::new(PolicyEngine::new(
+        cfg.initial_allow_rules.clone(),
+    )));
+    let registry = ToolRegistry::builtins();
+    tokio::spawn(agent_task(
+        cfg,
+        client,
+        perms,
+        registry,
+        cmd_rx,
+        ev_tx,
+        resume,
+        recorder,
+        runner,
+        abort_flag,
+        Arc::clone(&last_prompt),
+    ));
     (
         AgentHandle {
             cmd_tx,

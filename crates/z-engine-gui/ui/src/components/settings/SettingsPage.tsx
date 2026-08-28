@@ -1,23 +1,20 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { ChevronLeft, Coins, Info, Server, Settings, Shield } from "lucide-react";
+import { ChevronLeft, Info, Server, Settings, Shield } from "lucide-react";
 import { getConfig, type HarnessConfig } from "../../lib/commands";
 import { updateStore } from "../../lib/updateStore";
-import { LogoMark } from "../LogoMark";
 import { AboutTab } from "./AboutTab";
-import { CostTab } from "./CostTab";
 import { GeneralTab } from "./GeneralTab";
 import { McpTab } from "./McpTab";
 import { PermissionsTab } from "./PermissionsTab";
 import "../../settings.css";
 
-type Tab = "general" | "permissions" | "mcp" | "cost" | "about";
+type Tab = "general" | "permissions" | "mcp" | "about";
 
-const TABS: Array<{ id: Tab; label: string; hint: string; icon: typeof Settings }> = [
-  { id: "general", label: "General", hint: "Model and context", icon: Settings },
-  { id: "permissions", label: "Permissions", hint: "Bash allow rules", icon: Shield },
-  { id: "mcp", label: "MCP servers", hint: "External tools", icon: Server },
-  { id: "cost", label: "Cost", hint: "Token pricing", icon: Coins },
-  { id: "about", label: "About", hint: "Paths and version", icon: Info },
+const TABS: Array<{ id: Tab; label: string; icon: typeof Settings }> = [
+  { id: "general", label: "General", icon: Settings },
+  { id: "permissions", label: "Permissions", icon: Shield },
+  { id: "mcp", label: "MCP", icon: Server },
+  { id: "about", label: "About", icon: Info },
 ];
 
 export function SettingsPage({ onClose }: { onClose: () => void }) {
@@ -28,7 +25,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     getConfig().then(setCfg).catch(console.error);
-  }, []);
+  }, [tab]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -45,27 +42,22 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
           <ChevronLeft size={15} />
           <span>Back</span>
         </button>
-        <div className="settings-brand">
-          <LogoMark size={18} />
-          <span>Settings</span>
-        </div>
+        <div className="settings-brand">Settings</div>
         {TABS.map((t) => {
           const Icon = t.icon;
           return (
             <button
               key={t.id}
+              type="button"
               className={`settings-nav-item${tab === t.id ? " active" : ""}`}
               onClick={() => setTab(t.id)}
             >
               <Icon size={15} />
-              <span className="settings-nav-copy">
-                <strong>
-                  {t.label}
-                  {t.id === "about" && update.info?.available && (
-                    <span className="update-dot inline" role="status" aria-label="Update available" />
-                  )}
-                </strong>
-                <em>{t.hint}</em>
+              <span>
+                {t.label}
+                {t.id === "about" && update.info?.available && (
+                  <span className="update-dot inline" role="status" aria-label="Update available" />
+                )}
               </span>
             </button>
           );
@@ -73,16 +65,12 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
       </nav>
       <div className="settings-main">
         <header className="settings-head">
-          <div>
-            <h2>{current?.label}</h2>
-            <p className="settings-sub">{current?.hint}</p>
-          </div>
+          <h2>{current?.label}</h2>
         </header>
         {!cfg && <div className="tab-body">Loading…</div>}
         {cfg && tab === "general" && <GeneralTab key="g" cfg={cfg} />}
         {cfg && tab === "permissions" && <PermissionsTab key="p" />}
         {cfg && tab === "mcp" && <McpTab key="m" />}
-        {cfg && tab === "cost" && <CostTab key="c" cfg={cfg} />}
         {cfg && tab === "about" && <AboutTab key="a" cfg={cfg} />}
       </div>
     </div>

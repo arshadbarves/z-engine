@@ -12,6 +12,12 @@ export function sessionLabel(title: string | null | undefined): string {
   return t ? t : "(empty)";
 }
 
+/** File-stem ULID from a session path (`…/01ABC.jsonl` → `01ABC`). */
+export function ulidFromPath(path: string): string {
+  const base = path.split(/[/\\]/).pop() ?? path;
+  return base.replace(/\.[^.]+$/, "");
+}
+
 /** Drop chats that have not been titled yet — they stay out of the list
  * until the first user message. */
 export function titledSessions(list: SessionEntry[]): SessionEntry[] {
@@ -62,20 +68,28 @@ export function patchSessionTitle(
   );
 }
 
-/** Combine a disk listing with in-memory chats so a brand-new session
- * stays visible if `list_sessions` has not caught up yet. Disk wins on
- * conflict so generated titles replace the optimistic placeholder. */
+/** Combine a disk listing with in-memory chats so a brand-new (still
+ * untitled) session stays visible if `list_sessions` has not caught up.
+ * Disk is the source of truth for which titled chats still exist — a
+ * deleted file must not come back from the previous React state. */
 export function mergeSessionLists(
   disk: SessionEntry[],
   current: SessionEntry[],
 ): SessionEntry[] {
+  const currentByUlid = new Map(current.map((s) => [s.ulid, s]));
+  const diskUlids = new Set(disk.map((s) => s.ulid));
   const byUlid = new Map<string, SessionEntry>();
-  for (const s of current) byUlid.set(s.ulid, s);
   for (const s of disk) {
-    const mem = byUlid.get(s.ulid);
+    const mem = currentByUlid.get(s.ulid);
     const title = s.firstUserMsg ?? mem?.firstUserMsg ?? null;
     const modifiedMs = Math.max(Number(s.modifiedMs), Number(mem?.modifiedMs ?? 0));
     byUlid.set(s.ulid, { ...s, firstUserMsg: title, modifiedMs });
+  }
+  for (const s of current) {
+    if (diskUlids.has(s.ulid)) continue;
+    // Pending create: not on disk yet and not yet titled. Titled chats
+    // missing from disk were deleted.
+    if (!s.firstUserMsg?.trim()) byUlid.set(s.ulid, s);
   }
   return [...byUlid.values()].sort((a, b) => Number(b.modifiedMs) - Number(a.modifiedMs));
 }

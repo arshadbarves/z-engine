@@ -1,33 +1,16 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
-  transcriptStore,
-  busyStore,
-  approvalGateStore,
-  toastStore,
-  sessionStore,
-  modelStore,
-  setMaxTokens,
-  initEvents,
-  pushToast,
-  queueStore,
-  drainReadyQueues,
-  submitOnSession,
-  sessionActivityStore,
-  sessionsTickStore,
-  hydrateStore,
+  transcriptStore, busyStore, approvalGateStore, toastStore, sessionStore,
+  modelStore, setMaxTokens, initEvents, parkCurrentAndReset, pushToast,
+  queueStore, drainReadyQueues, submitOnSession, sessionActivityStore,
+  sessionsTickStore, hydrateStore,
 } from "./lib/events";
 import { configStore } from "./lib/configStore";
 import { updateStore } from "./lib/updateStore";
-import {
-  submit,
-  getConfig,
-  listSessions,
-  deleteSession,
-  createWorktree,
-} from "./lib/commands";
+import { submit, getConfig, listSessions, deleteSession, createWorktree } from "./lib/commands";
 import { handleApprove, handleDeny } from "./lib/approvalDispatch";
 import { hydrateNewSession, hydrateOpenSession } from "./lib/sessionOpen";
-import { applyFirstUserTitle, mergeSessionLists, titledSessions } from "./lib/sessionList";
+import { applyFirstUserTitle, mergeSessionLists, titledSessions, ulidFromPath } from "./lib/sessionList";
 import { Composer } from "./components/Composer";
 import { CommandPalette } from "./components/CommandPalette";
 import { SettingsPage } from "./components/settings/SettingsPage";
@@ -37,7 +20,7 @@ import { MsgList } from "./components/MsgList";
 import { AppSidebar } from "./components/AppSidebar";
 import { paletteActions } from "./lib/paletteActions";
 import type { SessionEntry } from "./lib/util";
-import { workspaceStore, wsBasename } from "./lib/workspaces";
+import { workspaceStore, wsBasename, sameWorkspacePath } from "./lib/workspaces";
 import { refreshCustomCommands } from "./lib/slash";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -133,9 +116,10 @@ export default function App() {
   }
 
   async function newTask() {
-    const created = await hydrateNewSession(workspaces.active);
+    const root = workspaceStore.getSnapshot().active;
+    const created = await hydrateNewSession(root);
     pendingNew.current = created?.path
-      ? { ulid: created.ulid, path: created.path, projectRoot: workspaces.active }
+      ? { ulid: created.ulid, path: created.path, projectRoot: root }
       : null;
     void refreshCustomCommands();
     void refreshSessions();
@@ -159,28 +143,49 @@ export default function App() {
   }
 
   async function removeWorkspace(root: string) {
+    const chats = sessionsList.filter((s) => sameWorkspacePath(s.projectRoot, root));
+    const activeId = sessionStore.getSnapshot();
+    const deletingActive =
+      sameWorkspacePath(workspaces.active, root) || chats.some((s) => s.ulid === activeId);
+    setSessionsList((prev) => prev.filter((s) => !sameWorkspacePath(s.projectRoot, root)));
     try {
       await workspaceStore.remove(root);
-      pushToast("Workspace removed", "info");
+      pushToast(
+        chats.length > 0
+          ? `Workspace and ${chats.length} chat${chats.length === 1 ? "" : "s"} deleted`
+          : "Workspace deleted",
+        "info",
+      );
     } catch (e) {
       console.error(e);
+      pushToast("Could not delete workspace", "warn");
+      await refreshSessions();
+      return;
     }
-  }
-
-  async function delSession(path: string) {
-    // No window.confirm here: it is a silent no-op in Tauri's WKWebView
-    // and made the [x] button dead. Delete immediately, say so.
-    try {
-      await deleteSession(path);
-      pushToast("Session deleted", "info");
-    } catch (e) {
-      console.error(e);
-      pushToast("Delete failed", "warn");
+    if (deletingActive) {
+      const next = workspaceStore.getSnapshot().active;
+      if (next) await newTask();
+      else parkCurrentAndReset();
     }
     await refreshSessions();
   }
 
-
+  async function delSession(path: string) {
+    const id = ulidFromPath(path);
+    const wasActive = id === sessionStore.getSnapshot();
+    setSessionsList((prev) => prev.filter((s) => s.path !== path && s.ulid !== id));
+    try {
+      await deleteSession(path);
+      pushToast("Chat deleted", "info");
+    } catch (e) {
+      console.error(e);
+      pushToast("Delete failed", "warn");
+      await refreshSessions();
+      return;
+    }
+    if (wasActive) await newTask();
+    await refreshSessions();
+  }
 
   useEffect(() => {
     void (async () => {

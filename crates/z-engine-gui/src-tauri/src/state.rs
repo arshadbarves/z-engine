@@ -110,18 +110,7 @@ fn workspaces_file_write() -> PathBuf {
 }
 
 fn workspaces_file_read() -> PathBuf {
-    let neu = workspaces_file_write();
-    let old = dirs::data_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("harness")
-        .join("workspaces.json");
-    if neu.exists() {
-        neu
-    } else if old.exists() {
-        old
-    } else {
-        neu
-    }
+    workspaces_file_write()
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]

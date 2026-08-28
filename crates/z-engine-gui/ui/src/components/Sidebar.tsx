@@ -3,7 +3,7 @@ import { ChevronRight, Folder, MessageSquare, Plus, Search, Trash2 } from "lucid
 import type { SessionActivity } from "../lib/events";
 import { filterSessions, type SessionEntry } from "../lib/util";
 import { sessionLabel } from "../lib/sessionList";
-import { wsBasename } from "../lib/workspaces";
+import { wsBasename, sameWorkspacePath } from "../lib/workspaces";
 
 function WorkspaceRow({
   root,
@@ -66,7 +66,7 @@ function WorkspaceRow({
           <span className="ws-count">{items.length || ""}</span>
           <button
             className="del"
-            title="Remove workspace from list (sessions are kept)"
+            title="Delete workspace and all of its chats"
             onClick={(e) => {
               e.stopPropagation();
               onRemove(root);
@@ -185,8 +185,10 @@ export function Sidebar({
     for (const root of workspaces) m.set(root, []);
     const other: SessionEntry[] = [];
     for (const s of filtered) {
-      const hit = s.projectRoot ? m.get(s.projectRoot) : undefined;
-      if (hit) hit.push(s);
+      const hit = s.projectRoot
+        ? workspaces.find((root) => sameWorkspacePath(s.projectRoot, root))
+        : undefined;
+      if (hit) m.get(hit)!.push(s);
       else other.push(s);
     }
     return { m, other };
@@ -217,7 +219,7 @@ export function Sidebar({
           <WorkspaceRow
             key={root}
             root={root}
-            active={activeWorkspace === root}
+            active={sameWorkspacePath(activeWorkspace, root)}
             sessions={byWs.m.get(root) ?? []}
             activeUlid={activeUlid}
             activity={activity}

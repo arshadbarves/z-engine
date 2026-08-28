@@ -3,7 +3,7 @@ import { ChevronDown, Search, Sparkles } from "lucide-react";
 import { modelStore } from "../lib/events";
 import { setModel } from "../lib/commands";
 import { shortModel } from "../lib/util";
-import { catalogStore, fmtLimit } from "../lib/catalog";
+import { catalogStore, catalogForPicker, fmtLimit } from "../lib/catalog";
 
 /** Provider-grouped model picker backed by the models.dev catalog
  * (merged with local overrides). Falls back to presets while offline. */
@@ -34,7 +34,8 @@ export function ModelPicker() {
     const q = query.trim().toLowerCase();
     const out: { provider: string; items: { id: string; name: string; context?: number; output?: number; reasoning: boolean }[] }[] = [];
     if (!catalog) return out;
-    for (const [pid, prov] of Object.entries(catalog)) {
+    const filtered = catalogForPicker(catalog);
+    for (const [pid, prov] of Object.entries(filtered)) {
       const items = Object.entries(prov.models)
         .filter(([id, m]) => {
           if (id === model) return false;
@@ -79,7 +80,9 @@ export function ModelPicker() {
           </div>
           <div className="popover-scroll">
             {groups.length === 0 && !query && (
-              <div className="pop-note">loading catalog…</div>
+              <div className="pop-note">
+                {catalog ? "No OpenRouter models — check Settings for your API key." : "loading catalog…"}
+              </div>
             )}
             {groups.map((g) => (
               <div key={g.provider}>

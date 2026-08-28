@@ -65,16 +65,16 @@ pub struct CliOverrides {
 pub struct EnvVars {
     pub harness_model: Option<String>,
     pub harness_base_url: Option<String>,
-    /// Test hook: redirect the global config file location.
+    /// Test / `ZENGINE_CONFIG` hook: redirect the global config file location.
     pub harness_config: Option<String>,
 }
 
 impl EnvVars {
     pub(super) fn from_process_env() -> Self {
         Self {
-            harness_model: first_env(&["ZENGINE_MODEL", "HARNESS_MODEL"]),
-            harness_base_url: first_env(&["ZENGINE_BASE_URL", "HARNESS_BASE_URL"]),
-            harness_config: first_env(&["ZENGINE_CONFIG", "HARNESS_CONFIG"]),
+            harness_model: first_env(&["ZENGINE_MODEL"]),
+            harness_base_url: first_env(&["ZENGINE_BASE_URL"]),
+            harness_config: first_env(&["ZENGINE_CONFIG"]),
         }
     }
 }

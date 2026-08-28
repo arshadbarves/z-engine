@@ -17,15 +17,11 @@ import {
   transcriptStore,
   type ReplayEvent,
 } from "./events";
+import { ulidFromPath } from "./sessionList";
 
 function applyUsageFromTranscript() {
   const messages = transcriptStore.getSnapshot();
   setUsageTokens(estimatePromptTokens(messages), estimateCompletionTokens(messages));
-}
-
-function ulidFromPath(path: string): string {
-  const base = path.split(/[/\\]/).pop() ?? path;
-  return base.replace(/\.[^.]+$/, "");
 }
 
 /** Open a chat. If it is already running in the background, just show it —

@@ -26,8 +26,10 @@ export function PermissionsTab() {
 
   return (
     <div className="tab-body">
-      <p className="form-note">Bash prefix rules — matching commands skip approval.</p>
-      <ul className="rule-list">
+      <section className="settings-group">
+        <h3>Allow rules</h3>
+        <p className="form-note">Bash prefixes that skip approval.</p>
+        <ul className="rule-list">
         {rules.map((r) => (
           <li key={r}>
             <code>{r}</code>
@@ -55,6 +57,7 @@ export function PermissionsTab() {
           Add rule
         </button>
       </form>
+      </section>
     </div>
   );
 }
