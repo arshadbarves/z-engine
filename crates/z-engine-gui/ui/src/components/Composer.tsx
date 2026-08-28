@@ -182,48 +182,25 @@ export function Composer() {
     syncCaret();
     if (showSlash && slashMatches && slashMatches.length > 0) {
       const n = slashMatches.length;
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setSlashSel((s) => (s + 1) % n);
-        return;
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setSlashSel((s) => (s - 1 + n) % n);
-        return;
-      }
+      if (e.key === "ArrowDown") { e.preventDefault(); setSlashSel((s) => (s + 1) % n); return; }
+      if (e.key === "ArrowUp") { e.preventDefault(); setSlashSel((s) => (s - 1 + n) % n); return; }
       if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault();
         runCommand(slashMatches[Math.min(slashSel, n - 1)].name);
         return;
       }
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setDismissed(true);
-        return;
-      }
+      if (e.key === "Escape") { e.preventDefault(); setDismissed(true); return; }
     }
     if (showFiles && files && files.length > 0) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setFileSel((s) => (s + 1) % files.length);
-        return;
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setFileSel((s) => (s - 1 + files.length) % files.length);
-        return;
-      }
+      const fn = files.length;
+      if (e.key === "ArrowDown") { e.preventDefault(); setFileSel((s) => (s + 1) % fn); return; }
+      if (e.key === "ArrowUp") { e.preventDefault(); setFileSel((s) => (s - 1 + fn) % fn); return; }
       if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault();
-        insertFile(files[Math.min(fileSel, files.length - 1)]);
+        insertFile(files[Math.min(fileSel, fn - 1)]);
         return;
       }
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setDismissed(true);
-        return;
-      }
+      if (e.key === "Escape") { e.preventDefault(); setDismissed(true); return; }
     }
     if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !input.includes("\n")) {
       e.preventDefault();
@@ -232,17 +209,9 @@ export function Composer() {
       return;
     }
     if (e.key === "Escape") {
-      if (busyNow) {
-        e.preventDefault();
-        void abort();
-      } else if (shell.visible) {
-        e.preventDefault();
-        hideShell();
-      } else if (input) {
-        e.preventDefault();
-        draftStore.set("");
-        setCaret(0);
-      }
+      if (busyNow) { e.preventDefault(); void abort(); }
+      else if (shell.visible) { e.preventDefault(); hideShell(); }
+      else if (input) { e.preventDefault(); draftStore.set(""); setCaret(0); }
       return;
     }
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
@@ -327,7 +296,7 @@ export function Composer() {
               <EffortSelector catalog={catalogStore.getSnapshot()} />
               <button
                 type="button"
-                className="icon-btn"
+                className="composer-icon-btn"
                 title="Attach file or image"
                 onClick={() => fileInputRef.current?.click()}
               >
@@ -336,8 +305,8 @@ export function Composer() {
               {!shell.visible && shell.entries.length > 0 && (
                 <button
                   type="button"
-                  className="icon-btn"
-                  title="Show terminal"
+                  className="composer-icon-btn"
+                  title="Show terminal drawer"
                   onClick={showShell}
                 >
                   <Terminal size={13} />
@@ -348,9 +317,17 @@ export function Composer() {
 
           <div className="composer-actions-right">
             {!shellMode && (
-              <span className="composer-hint">
-                <kbd>!</kbd> shell · <kbd>/</kbd> cmds · <kbd>@</kbd> files
-              </span>
+              <div className="composer-hints-deck">
+                <span className="c-hint">
+                  <kbd>@</kbd> files
+                </span>
+                <span className="c-hint">
+                  <kbd>/</kbd> cmds
+                </span>
+                <span className="c-hint">
+                  <kbd>!</kbd> bash
+                </span>
+              </div>
             )}
             {busyNow ? (
               <button
@@ -359,7 +336,7 @@ export function Composer() {
                 onClick={() => void abort()}
                 type="button"
               >
-                <Square size={12} fill="currentColor" />
+                <Square size={11} fill="currentColor" />
               </button>
             ) : shellMode ? (
               <button
@@ -369,7 +346,8 @@ export function Composer() {
                 disabled={!input.slice(1).trim()}
                 type="button"
               >
-                <CornerDownLeft size={13} />
+                <CornerDownLeft size={12} />
+                <span>Run</span>
               </button>
             ) : (
               <button
