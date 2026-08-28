@@ -13,6 +13,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: "help", desc: "Show commands and keys" },
   { name: "cost", desc: "Session token totals and cost" },
   { name: "status", desc: "Model · mode · session · tokens" },
+  { name: "update-demo", desc: "Preview update notification & progress UI" },
 ];
 
 /** Custom commands discovered from disk; refreshed per session open. */

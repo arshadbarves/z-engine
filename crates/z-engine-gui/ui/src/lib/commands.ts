@@ -158,6 +158,13 @@ export interface UpdateInfo {
   releaseNotes?: string;
 }
 
+export interface UpdateProgress {
+  phase: "downloading" | "installing" | "ready";
+  downloadedBytes: number;
+  totalBytes?: number;
+  percentage?: number;
+}
+
 export const checkForUpdate = (force = false) =>
   invoke<UpdateInfo>("check_for_update", { force });
 

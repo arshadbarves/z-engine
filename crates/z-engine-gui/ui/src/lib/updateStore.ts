@@ -1,36 +1,94 @@
-import { checkForUpdate, installUpdate, openReleaseUrl, type UpdateInfo } from "./commands";
+import { listen } from "@tauri-apps/api/event";
+import {
+  checkForUpdate,
+  installUpdate,
+  openReleaseUrl,
+  type UpdateInfo,
+  type UpdateProgress,
+} from "./commands";
 import { pushToast } from "./events";
 
-type Snapshot = {
+export type UpdateSnapshot = {
   info: UpdateInfo | null;
   checking: boolean;
   installing: boolean;
+  progress: UpdateProgress | null;
+  popoverOpen: boolean;
 };
 
 let info: UpdateInfo | null = null;
 let checking = false;
 let installing = false;
+let progress: UpdateProgress | null = null;
+let popoverOpen = false;
 let toastShown = false;
+let listenerAttached = false;
+let isMockActive = false;
 const subs = new Set<() => void>();
-let snapshot: Snapshot = { info, checking, installing };
+let snapshot: UpdateSnapshot = { info, checking, installing, progress, popoverOpen };
 
 function emit() {
-  snapshot = { info, checking, installing };
+  snapshot = { info, checking, installing, progress, popoverOpen };
   for (const l of subs) l();
+}
+
+function ensureListener() {
+  if (listenerAttached || typeof window === "undefined") return;
+  listenerAttached = true;
+  listen<UpdateProgress>("update-progress", (e) => {
+    progress = e.payload;
+    if (e.payload.phase === "ready" || e.payload.phase === "installing") {
+      installing = true;
+    }
+    emit();
+  }).catch((err) => console.warn("Failed to listen to update-progress", err));
 }
 
 export const updateStore = {
   subscribe(l: () => void) {
+    ensureListener();
     subs.add(l);
     return () => {
       subs.delete(l);
     };
   },
-  getSnapshot(): Snapshot {
+  getSnapshot(): UpdateSnapshot {
     return snapshot;
   },
+  setPopoverOpen(open: boolean) {
+    popoverOpen = open;
+    emit();
+  },
+  triggerMock(enable = true) {
+    if (!enable || (isMockActive && info?.available)) {
+      info = null;
+      installing = false;
+      progress = null;
+      popoverOpen = false;
+      isMockActive = false;
+      emit();
+      return;
+    }
+    isMockActive = true;
+    info = {
+      available: true,
+      current: "1.2.0",
+      latest: "1.3.0",
+      url: "https://github.com/arshadbarves/z-engine/releases",
+      releaseNotes:
+        "### What's New in v1.3.0\n" +
+        "- Complete UI/UX & cognitive ergonomics redesign\n" +
+        "- Live download progress tracking with byte metrics\n" +
+        "- Real-time memory headroom & cache analytics\n" +
+        "- Enhanced syntax-highlighted code blocks & line counters\n" +
+        "- Ultra-minimalist branding and zero color-banding finish",
+    };
+    popoverOpen = true;
+    emit();
+  },
   async check(force = false) {
-    if (checking || installing) return;
+    if (checking || installing || isMockActive) return;
+    ensureListener();
     checking = true;
     emit();
     try {
@@ -49,7 +107,31 @@ export const updateStore = {
   },
   async install() {
     if (checking || installing || !info?.available) return;
+    ensureListener();
+
+    if (isMockActive) {
+      installing = true;
+      const total = 58.4 * 1024 * 1024;
+      for (let p = 10; p <= 100; p += 15) {
+        progress = {
+          phase: p < 95 ? "downloading" : "installing",
+          downloadedBytes: Math.round((p / 100) * total),
+          totalBytes: total,
+          percentage: p,
+        };
+        emit();
+        await new Promise((r) => setTimeout(r, 450));
+      }
+      installing = false;
+      progress = null;
+      popoverOpen = false;
+      pushToast("Mock update download finished successfully!", "ok");
+      emit();
+      return;
+    }
+
     installing = true;
+    progress = { phase: "downloading", downloadedBytes: 0 };
     emit();
     pushToast(`Downloading v${info.latest}…`, "info");
     try {
@@ -65,6 +147,7 @@ export const updateStore = {
       }
     } finally {
       installing = false;
+      progress = null;
       emit();
     }
   },
@@ -72,3 +155,9 @@ export const updateStore = {
     if (info?.url) void openReleaseUrl(info.url);
   },
 };
+
+if (typeof window !== "undefined") {
+  (window as unknown as { __previewUpdate?: (show?: boolean) => void }).__previewUpdate = (
+    show = true,
+  ) => updateStore.triggerMock(show);
+}

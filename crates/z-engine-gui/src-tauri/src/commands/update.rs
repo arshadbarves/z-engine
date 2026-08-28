@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::Emitter;
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_updater::UpdaterExt;
 
@@ -17,6 +18,17 @@ pub struct UpdateInfo {
     pub url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub release_notes: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateProgress {
+    pub phase: String,
+    pub downloaded_bytes: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub percentage: Option<f64>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -177,10 +189,57 @@ pub(crate) async fn install_update(app: tauri::AppHandle) -> Result<(), String> 
         return Err("no update available".into());
     };
 
+    let app_handle = app.clone();
+    let mut downloaded = 0u64;
+
     update
-        .download_and_install(|_, _| {}, || {})
+        .download_and_install(
+            move |chunk_length, content_length| {
+                downloaded += chunk_length as u64;
+                let percentage = content_length.map(|total| {
+                    if total > 0 {
+                        ((downloaded as f64 / total as f64) * 100.0).clamp(0.0, 100.0)
+                    } else {
+                        0.0
+                    }
+                });
+                let _ = app_handle.emit(
+                    "update-progress",
+                    UpdateProgress {
+                        phase: "downloading".into(),
+                        downloaded_bytes: downloaded,
+                        total_bytes: content_length,
+                        percentage,
+                    },
+                );
+            },
+            {
+                let app_handle2 = app.clone();
+                move || {
+                    let _ = app_handle2.emit(
+                        "update-progress",
+                        UpdateProgress {
+                            phase: "installing".into(),
+                            downloaded_bytes: downloaded,
+                            total_bytes: None,
+                            percentage: Some(100.0),
+                        },
+                    );
+                }
+            },
+        )
         .await
         .map_err(|e| e.to_string())?;
+
+    let _ = app.emit(
+        "update-progress",
+        UpdateProgress {
+            phase: "ready".into(),
+            downloaded_bytes: downloaded,
+            total_bytes: None,
+            percentage: Some(100.0),
+        },
+    );
 
     app.request_restart();
     Ok(())

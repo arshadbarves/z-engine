@@ -10,6 +10,7 @@ import {
 } from "./events";
 import { compact, notes, readSlashCommand, submit } from "./commands";
 import { getCustomCommands } from "./slash";
+import { updateStore } from "./updateStore";
 import { estimateCost, fmtCost } from "./util";
 import { modLabel } from "./platform";
 
@@ -69,6 +70,10 @@ export function dispatchSlashCommand(name: string, input: string): void {
           sessionStore.getSnapshot() || "(new)"
         } · tokens ${u.promptTokens + u.completionTokens}/${u.maxTokens}`,
       );
+      break;
+    }
+    case "update-demo": {
+      updateStore.triggerMock();
       break;
     }
   }
