@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, ExternalLink, KeyRound, Sparkles } from "lucide-react";
+import { Check, ChevronDown, ExternalLink, KeyRound, Sparkles } from "lucide-react";
 import {
   getConfig,
   openReleaseUrl,
@@ -118,6 +118,7 @@ function detectProviderId(baseUrl: string | null | undefined): string {
 
 export function GeneralTab({ cfg }: { cfg: HarnessConfig }) {
   const [selectedProviderId, setSelectedProviderId] = useState(() => detectProviderId(cfg.baseUrl));
+  const [providerMenuOpen, setProviderMenuOpen] = useState(false);
   const [model, setModel] = useState(cfg.model);
   const [baseUrl, setBaseUrl] = useState(cfg.baseUrl ?? "");
   const [maxCtx, setMaxCtx] = useState(String(cfg.maxContextTokens));
@@ -131,6 +132,7 @@ export function GeneralTab({ cfg }: { cfg: HarnessConfig }) {
 
   function handleProviderChange(id: string) {
     setSelectedProviderId(id);
+    setProviderMenuOpen(false);
     const p = PROVIDERS.find((item) => item.id === id);
     if (!p) return;
     if (p.baseUrl) setBaseUrl(p.baseUrl);
@@ -184,7 +186,7 @@ export function GeneralTab({ cfg }: { cfg: HarnessConfig }) {
           <span className="settings-group-sub">Choose your model provider and connect your API credentials</span>
         </div>
         <div className="settings-card">
-          <div className="form-row">
+          <div className="form-row custom-select-row">
             <div className="form-label-row">
               <span className="form-label-title">Provider</span>
               {activeProvider.keyUrl && (
@@ -199,18 +201,55 @@ export function GeneralTab({ cfg }: { cfg: HarnessConfig }) {
                 </button>
               )}
             </div>
-            <span className="form-label-desc">{activeProvider.desc}</span>
-            <select
-              className="settings-select"
-              value={selectedProviderId}
-              onChange={(e) => handleProviderChange(e.currentTarget.value)}
-            >
-              {PROVIDERS.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+
+            <div className="custom-select-wrap">
+              {providerMenuOpen && (
+                <div
+                  className="custom-select-backdrop"
+                  onClick={() => setProviderMenuOpen(false)}
+                />
+              )}
+              <button
+                type="button"
+                className={`custom-select-trigger${providerMenuOpen ? " active" : ""}`}
+                onClick={() => setProviderMenuOpen((o) => !o)}
+                aria-haspopup="listbox"
+                aria-expanded={providerMenuOpen}
+              >
+                <div className="custom-select-val">
+                  <span className="custom-select-name">{activeProvider.name}</span>
+                  <span className="custom-select-desc">{activeProvider.desc}</span>
+                </div>
+                <ChevronDown size={14} className={`select-arrow${providerMenuOpen ? " open" : ""}`} />
+              </button>
+
+              {providerMenuOpen && (
+                <div className="custom-select-popover" role="listbox">
+                  <div className="custom-select-head">Select Model Provider</div>
+                  <div className="custom-select-list">
+                    {PROVIDERS.map((p) => {
+                      const isSelected = p.id === selectedProviderId;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          className={`custom-select-item${isSelected ? " selected" : ""}`}
+                          role="option"
+                          aria-selected={isSelected}
+                          onClick={() => handleProviderChange(p.id)}
+                        >
+                          <div className="custom-select-item-text">
+                            <span className="custom-select-item-name">{p.name}</span>
+                            <span className="custom-select-item-desc">{p.desc}</span>
+                          </div>
+                          {isSelected && <Check size={14} className="custom-select-check" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <label className="form-row">
