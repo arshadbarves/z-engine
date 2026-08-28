@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Check } from "lucide-react";
 import { getConfig, saveGeneral, type HarnessConfig } from "../../lib/commands";
 import { configStore } from "../../lib/configStore";
 import { modelStore } from "../../lib/events";
@@ -26,29 +27,43 @@ export function GeneralTab({ cfg }: { cfg: HarnessConfig }) {
   return (
     <div className="tab-body">
       <label className="form-row">
-        <span>Model id</span>
-        <input value={model} onChange={(e) => setModel(e.currentTarget.value)} spellCheck={false} />
+        <span className="form-label-title">Default Model ID</span>
+        <span className="form-label-desc">Primary AI model for new turns and sessions</span>
+        <input value={model} onChange={(e) => setModel(e.currentTarget.value)} spellCheck={false} placeholder="e.g. claude-3-7-sonnet" />
       </label>
       <label className="form-row">
-        <span>Base URL</span>
-        <input value={baseUrl} onChange={(e) => setBaseUrl(e.currentTarget.value)} spellCheck={false} />
+        <span className="form-label-title">Custom Base URL</span>
+        <span className="form-label-desc">Optional LLM endpoint or proxy (e.g. OpenRouter, Ollama)</span>
+        <input value={baseUrl} onChange={(e) => setBaseUrl(e.currentTarget.value)} spellCheck={false} placeholder="https://api.openai.com/v1" />
       </label>
       <label className="form-row">
-        <span>Max context tokens</span>
-        <input type="number" value={maxCtx} onChange={(e) => setMaxCtx(e.currentTarget.value)} />
+        <span className="form-label-title">Max Context Tokens</span>
+        <span className="form-label-desc">Context window capacity before auto-compaction triggers</span>
+        <input type="number" value={maxCtx} onChange={(e) => setMaxCtx(e.currentTarget.value)} placeholder="128000" />
       </label>
-      <label className="form-row check">
-        <input type="checkbox" checked={review} onChange={(e) => setReview(e.currentTarget.checked)} />
-        <span>Post-edit reviewer pass</span>
-      </label>
+      <div className="form-row check">
+        <div>
+          <span className="form-label-title">Post-Edit Reviewer Pass</span>
+          <span className="form-label-desc">Inspect and verify diffs with a fast reviewer sub-agent</span>
+        </div>
+        <label className="switch-toggle">
+          <input type="checkbox" checked={review} onChange={(e) => setReview(e.currentTarget.checked)} />
+          <span className="switch-slider" />
+        </label>
+      </div>
       <p className="form-note">
-        Written to <code>.z-engine/config.toml</code> (still reads{" "}
-        <code>.harness/config.toml</code> if the new file is missing). The model applies to new
-        turns immediately.
+        Saved to <code>.z-engine/config.toml</code>. Changes apply immediately to new turns.
       </p>
       <div className="tab-actions">
-        <button className="primary" onClick={() => void save()}>
-          {saved ? "Saved" : "Save"}
+        <button className="primary" onClick={() => void save()} type="button">
+          {saved ? (
+            <>
+              <Check size={13} />
+              <span>Saved</span>
+            </>
+          ) : (
+            "Save changes"
+          )}
         </button>
       </div>
     </div>

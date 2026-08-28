@@ -31,6 +31,31 @@ function Elapsed({ tools }: { tools: Msg[] }) {
   return <span className="act-dur">{fmtDur(dur)}</span>;
 }
 
+function OutputBox({ output, streaming }: { output: string; streaming?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const content = streaming ? tailLines(output).join("\n") : output;
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(output);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      console.error("Failed to copy output");
+    }
+  }
+  return (
+    <div className="tool-output-wrap">
+      <div className="tool-output-bar">
+        <span className="tool-output-lines">{output.split("\n").length} lines</span>
+        <button type="button" className="tool-copy-btn" onClick={() => void copy()} title="Copy output">
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <pre className={streaming ? "tool-tail" : "tool-full"}>{content}</pre>
+    </div>
+  );
+}
+
 /** One quiet line per tool group; expand for tags and output. */
 export function ActionCard({ family, tools }: { family: string; tools: Msg[] }) {
   const [open, setOpen] = useState(false);
@@ -75,9 +100,7 @@ export function ActionCard({ family, tools }: { family: string; tools: Msg[] }) 
           )}
           {tools.map((m) =>
             m.output ? (
-              <pre key={m.id} className={m.streaming ? "tool-tail" : "tool-full"}>
-                {m.streaming ? tailLines(m.output).join("\n") : m.output}
-              </pre>
+              <OutputBox key={m.id} output={m.output} streaming={m.streaming} />
             ) : (
               <ToolCard key={m.id} m={m} />
             ),

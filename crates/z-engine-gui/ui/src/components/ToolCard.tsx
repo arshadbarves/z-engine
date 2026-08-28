@@ -30,6 +30,31 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
+function OutputBox({ output, streaming }: { output: string; streaming?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const content = streaming ? tailLines(output).join("\n") : output;
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(output);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      console.error("Failed to copy output");
+    }
+  }
+  return (
+    <div className="tool-output-wrap">
+      <div className="tool-output-bar">
+        <span className="tool-output-lines">{output.split("\n").length} lines</span>
+        <button type="button" className="tool-copy-btn" onClick={() => void copy()} title="Copy output">
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <pre className={streaming ? "tool-tail" : "tool-full"}>{content}</pre>
+    </div>
+  );
+}
+
 /** Quiet one-line tool row. Output is hidden until the user expands it. */
 export function ToolCard({ m }: { m: Msg }) {
   const [expanded, setExpanded] = useState(false);
@@ -59,9 +84,7 @@ export function ToolCard({ m }: { m: Msg }) {
         {m.streaming ? <Elapsed /> : <span className="tool-elapsed">{m.durationMs ? fmtDur(m.durationMs) : ""}</span>}
       </button>
       {expanded && hasOutput && (
-        <pre className={m.streaming ? "tool-tail" : "tool-full"}>
-          {m.streaming ? tailLines(m.output ?? "").join("\n") : m.output}
-        </pre>
+        <OutputBox output={m.output ?? ""} streaming={m.streaming} />
       )}
     </div>
   );

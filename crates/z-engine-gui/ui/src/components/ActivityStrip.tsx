@@ -7,19 +7,23 @@ import { ActionCard } from "./ActionCard";
 function ReasonLine({ msg, text }: { msg: Msg; text: string }) {
   const [open, setOpen] = useState(false);
   const body = msg.thinkingBody;
+  const isStreaming = Boolean(msg.streaming);
   return (
-    <div className="reason-line">
+    <div className={`reason-line${isStreaming ? " streaming" : ""}`}>
       <button
         type="button"
         className="reason-btn"
         onClick={() => body && setOpen((v) => !v)}
-        disabled={!body && !msg.streaming}
+        disabled={!body && !isStreaming}
       >
         <span className={`reason-chevron${open ? " open" : ""}`}>
           <ChevronRight size={11} />
         </span>
-        <span className="reason-label">Reasoning</span>
-        <span className="reason-text">{text || (msg.streaming ? "thinking…" : "")}</span>
+        <span className="reason-label">
+          {isStreaming && <span className="reason-pulse-dot" aria-hidden />}
+          Reasoning
+        </span>
+        <span className="reason-text">{text || (isStreaming ? "thinking…" : "")}</span>
       </button>
       {open && body && <pre className="thinking-body">{body}</pre>}
     </div>

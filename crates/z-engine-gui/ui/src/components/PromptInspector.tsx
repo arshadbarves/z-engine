@@ -130,27 +130,26 @@ export function PromptInspector({ onClose }: { onClose: () => void }) {
       {err && <p className="prompt-inspect-err">{err}</p>}
       {snap && ins && (
         <>
-          <div className="prompt-inspect-sum">
-            <span>{snap.model}</span>
-            <span>
-              {snap.messages.length} messages · {snap.tools.length} tools · ~
-              {fmtTokens(snap.totalTokens)}
-            </span>
-          </div>
-          <div className="prompt-inspect-meta">
-            <div>
-              <em>Largest sink</em>
+          <div className="prompt-inspect-overview">
+            <div className="prompt-overview-card">
+              <em>Active Model</em>
+              <strong>{snap.model}</strong>
+            </div>
+            <div className="prompt-overview-card">
+              <em>Total Request</em>
               <strong>
+                ~{fmtTokens(snap.totalTokens)} ({snap.messages.length} msgs · {snap.tools.length} tools)
+              </strong>
+            </div>
+            <div className="prompt-overview-card">
+              <em>Largest Sink</em>
+              <strong title={ins.largest.name}>
                 {ins.largest.name} · {pct(ins.largest.share)}
               </strong>
             </div>
-            <div>
-              <em>Stable prefix</em>
-              <strong>{ins.stablePrefix}</strong>
-            </div>
-            <div>
-              <em>Volatile tail</em>
-              <strong>{ins.volatileTail}</strong>
+            <div className="prompt-overview-card">
+              <em>Cache Stability</em>
+              <strong>{ins.stablePrefix} stable</strong>
             </div>
           </div>
           <PromptInspectChart ins={ins} />
@@ -194,12 +193,14 @@ export function PromptInspector({ onClose }: { onClose: () => void }) {
             <div className="prompt-inspect-pane">
               {ins.layers[sel] && (
                 <div className="prompt-part-stats">
-                  <span>~{fmtTokens(ins.layers[sel].tokens)}</span>
-                  <span>{ins.layers[sel].chars.toLocaleString()} chars</span>
-                  <span>{ins.layers[sel].lines} lines</span>
-                  <span>{pct(ins.layers[sel].share)} of request</span>
-                  <span>{ins.layers[sel].cacheable ? "cacheable" : "volatile"}</span>
-                  <span>wire #{ins.layers[sel].order}</span>
+                  <span className="stat-badge">~{fmtTokens(ins.layers[sel].tokens)}</span>
+                  <span className="stat-badge">{ins.layers[sel].chars.toLocaleString()} chars</span>
+                  <span className="stat-badge">{ins.layers[sel].lines} lines</span>
+                  <span className="stat-badge">{pct(ins.layers[sel].share)} of budget</span>
+                  <span className={`stat-badge ${ins.layers[sel].cacheable ? "cacheable" : "volatile"}`}>
+                    {ins.layers[sel].cacheable ? "Cacheable" : "Volatile"}
+                  </span>
+                  <span className="stat-badge">Wire #{ins.layers[sel].order}</span>
                 </div>
               )}
               <pre className="prompt-inspect-content">{active ? bodyOf(active) : ""}</pre>

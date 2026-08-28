@@ -7,12 +7,7 @@ import { LogoMark } from "./LogoMark";
 import { draftStore, hydrateStore, type Msg } from "../lib/events";
 import { groupTranscript } from "../lib/activity";
 import { ChatTimeline } from "./ChatTimeline";
-
-export const HERO_EXAMPLES = [
-  "Fix the failing tests",
-  "Explain this codebase in 5 bullets",
-  "Add input validation to the CLI",
-];
+import { HERO_EXAMPLES } from "../lib/constants";
 
 function WorkingRow() {
   const [secs, setSecs] = useState(0);
@@ -90,7 +85,9 @@ export function MsgList({
       <div className="transcript-inner">
       {messages.length === 0 && !hydrating && (
         <div className="hero">
-          <LogoMark size={28} />
+          <div className="hero-icon-wrap">
+            <LogoMark size={26} />
+          </div>
           <h1>What should we build{projectName ? ` in ${projectName}` : ""}?</h1>
           <p>
             Describe a task — Z Engine reads files, runs commands, edits code and verifies the
@@ -98,7 +95,7 @@ export function MsgList({
           </p>
           <div className="hero-chips">
             {HERO_EXAMPLES.map((ex) => (
-              <button key={ex} className="chip" onClick={() => draftStore.set(ex)}>
+              <button key={ex} className="chip" onClick={() => draftStore.set(ex)} type="button">
                 {ex}
               </button>
             ))}

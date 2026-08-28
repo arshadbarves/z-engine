@@ -1,34 +1,36 @@
-/* ── Z Engine · premium dark theme (codex-desktop inspired) ────────────── */
+/* ── Z Engine · ergonomic balanced dark theme ────────────────────────── */
 
 :root {
   color-scheme: dark;
 
-  --bg: #101012;
-  --bg-sidebar: #0b0b0d;
-  --surface: #17171a;
-  --surface-2: #1d1d21;
-  --surface-3: #242429;
-  --border: rgba(255, 255, 255, 0.07);
-  --border-strong: rgba(255, 255, 255, 0.13);
-  --text: #ededf0;
-  --text-2: #a2a2ac;
-  --text-3: #66666f;
-  --ok: #3ddc97;
-  --accent: #3ddc97;
-  --accent-dim: rgba(61, 220, 151, 0.14);
-  --accent-ring: rgba(61, 220, 151, 0.35);
-  --err: #f47174;
-  --warn: #e8b45a;
+  --bg: #121316;
+  --bg-sidebar: #0f1013;
+  --bg-elev: #181920;
+  --surface: #16171d;
+  --surface-2: #1b1d24;
+  --surface-3: #22242d;
+  --border: rgba(255, 255, 255, 0.045);
+  --border-strong: rgba(255, 255, 255, 0.08);
+  --text: #dcdce4;
+  --text-2: #8f92a2;
+  --text-3: #5c6070;
+  --ok: #4ebd8f;
+  --accent: #4ebd8f;
+  --accent-dim: rgba(78, 189, 143, 0.10);
+  --accent-ring: rgba(78, 189, 143, 0.25);
+  --err: #d96568;
+  --warn: #d69e48;
 
-  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Geist", "Inter",
     "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  --mono: ui-monospace, "SF Mono", "Geist Mono", "Cascadia Code", Menlo, monospace;
 
-  --radius-s: 8px;
-  --radius-m: 12px;
-  --radius-l: 18px;
+  --radius-s: 7px;
+  --radius-m: 11px;
+  --radius-l: 16px;
 
-  --shadow-pop: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 32px rgba(0, 0, 0, 0.35);
+  --shadow-pop: 0 4px 16px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.035);
+  --shadow-floating: 0 12px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
 * {
@@ -44,8 +46,10 @@ body,
 
 body {
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 13.5px;
+  letter-spacing: -0.012em;
   background: var(--bg);
+  background-image: radial-gradient(1200px 500px at 50% 0%, rgba(78, 189, 143, 0.018), transparent 70%);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -128,48 +132,61 @@ html.plat-mac .sidebar {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 2px 6px;
+  padding: 4px 8px;
   user-select: none;
 }
 
 .brand svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   color: var(--ok);
+  opacity: 0.95;
 }
 
 .brand span {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+  color: var(--text);
 }
 
 .newtask {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 7px;
+  justify-content: space-between;
   width: 100%;
-  padding: 9px 12px;
-  font-size: 13px;
+  padding: 8px 12px;
+  font-size: 12.5px;
   font-weight: 500;
   color: var(--text);
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-m);
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: all 0.15s ease;
   -webkit-app-region: no-drag;
 }
 
 .newtask:hover {
   background: var(--surface-3);
-  border-color: var(--accent-ring);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
-.newtask svg {
-  width: 14px;
-  height: 14px;
-  opacity: 0.85;
+.newtask-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.newtask-left svg {
+  width: 13px;
+  height: 13px;
+  color: var(--text-2);
+}
+
+.newtask kbd {
+  font-size: 9.5px;
+  padding: 1px 4px;
 }
 
 .sess-head {
@@ -506,52 +523,91 @@ html.plat-mac .app.no-sidebar .chat-head {
 
 /* ── diff review panel ─────────────────────────────────────────────────── */
 
+/* ── docked diff review workbench ─────────────────────────────────────── */
+
 .diff-panel {
-  position: absolute;
-  top: 44px;
-  right: 14px;
-  bottom: 110px;
-  width: min(480px, 46%);
+  width: 440px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg-elev, #16161a);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-m);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-  z-index: 40;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  z-index: 30;
   overflow: hidden;
+  animation: slide-left 0.2s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes slide-left {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
 }
 
 .diff-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 9px 12px;
+  height: 46px;
+  padding: 0 14px;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.diff-head-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .diff-title {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.diff-count-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  border: 1px solid var(--border);
+}
+
+.diff-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .diff-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 8px 10px;
+  padding: 10px 12px;
 }
 
 .diff-file {
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--surface-2);
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+}
+
+.diff-file.is-open {
+  border-color: var(--border-strong);
 }
 
 .diff-file-head {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   width: 100%;
-  padding: 6px 8px;
+  padding: 7px 10px;
   border: none;
   background: transparent;
   color: var(--text-2);
@@ -559,12 +615,37 @@ html.plat-mac .app.no-sidebar .chat-head {
   font-size: 11.5px;
   text-align: left;
   cursor: pointer;
-  border-radius: var(--radius-s);
+  border-radius: 0;
 }
 
 .diff-file-head:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--text);
+}
+
+.diff-file-icon {
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.diff-path {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-file-head .badge {
+  margin-left: auto;
+}
+
+@media (max-width: 900px) {
+  .diff-panel {
+    position: absolute;
+    inset: 46px 0 0 0;
+    width: 100%;
+    z-index: 40;
+  }
 }
 
 .badge {
@@ -838,10 +919,11 @@ html.plat-mac .app.no-sidebar .chat-head {
   align-items: center;
   flex-wrap: nowrap;
   gap: 8px;
-  padding: 7px 8px;
-  border-radius: 10px;
+  padding: 6px 9px;
+  border-radius: var(--radius-s);
   cursor: pointer;
-  transition: background 0.13s ease;
+  transition: all 0.13s ease;
+  border: 1px solid transparent;
   -webkit-app-region: no-drag;
 }
 
@@ -851,7 +933,9 @@ html.plat-mac .app.no-sidebar .chat-head {
 }
 
 .session.active {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .session.active .sess-preview {
@@ -976,7 +1060,26 @@ html.plat-mac .app.no-sidebar .chat-head {
   user-select: none;
 }
 
-/* ── chat column ────────────────────────────────────────────────────────── */
+/* ── workstation stage & canvas ────────────────────────────────────────── */
+
+.workstation-stage {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+}
+
+.canvas-pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: var(--bg);
+}
 
 .chat {
   flex: 1;
@@ -1005,10 +1108,34 @@ html.plat-mac .app.no-sidebar .chat-head {
   flex: 1;
 }
 
+.chat-title-icon {
+  color: var(--ok);
+  opacity: 0.85;
+}
+
 .head-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+}
+
+.head-model-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  user-select: none;
+  -webkit-app-region: no-drag;
+}
+
+.head-model-badge svg {
+  color: var(--ok);
 }
 
 .icon-btn {
@@ -1040,6 +1167,16 @@ html.plat-mac .app.no-sidebar .chat-head {
 .icon-btn svg {
   width: 15px;
   height: 15px;
+}
+
+.icon-btn.spinning svg {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* context gauge */
@@ -1095,10 +1232,16 @@ html.plat-mac .app.no-sidebar .chat-head {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-3);
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  color: var(--text-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
 }
 
 .status {
@@ -1210,21 +1353,37 @@ html.plat-mac .app.no-sidebar .chat-head {
   padding: 64px 24px;
   text-align: center;
   animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-.hero svg {
-  width: 28px;
-  height: 28px;
-  color: var(--ok);
+.hero-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
   margin-bottom: 18px;
+  box-shadow: 0 0 24px rgba(78, 189, 143, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.04);
+}
+
+.hero-icon-wrap svg {
+  width: 22px;
+  height: 22px;
+  color: var(--ok);
+  margin-bottom: 0;
 }
 
 .hero h1 {
   margin: 0 0 10px;
-  font-size: 26px;
-  font-weight: 550;
-  letter-spacing: -0.02em;
-  background: linear-gradient(180deg, #ffffff 30%, #9c9ca6);
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  background: linear-gradient(180deg, #dcdce4 40%, #8f92a2);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -1232,7 +1391,7 @@ html.plat-mac .app.no-sidebar .chat-head {
 
 .hero p {
   margin: 0;
-  max-width: 400px;
+  max-width: 440px;
   font-size: 13.5px;
   line-height: 1.6;
   color: var(--text-3);
@@ -1243,24 +1402,28 @@ html.plat-mac .app.no-sidebar .chat-head {
   flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
-  margin-top: 22px;
+  margin-top: 24px;
+  max-width: 560px;
 }
 
 .chip {
   padding: 7px 13px;
   font-size: 12.5px;
+  font-weight: 500;
   color: var(--text-2);
-  background: var(--surface);
+  background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 999px;
   transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 .chip:hover {
   color: var(--text);
-  border-color: var(--accent-ring);
-  background: var(--accent-dim);
+  border-color: rgba(78, 189, 143, 0.25);
+  background: var(--surface-3);
   transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
 }
 
 /* `! cmd` passthrough chip */
@@ -1325,13 +1488,14 @@ html.plat-mac .app.no-sidebar .chat-head {
 
 .msg.user {
   max-width: 100%;
-  padding: 10px 14px;
+  padding: 11px 16px;
   background: var(--surface-2);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-m);
-  border-bottom-right-radius: 5px;
+  border-bottom-right-radius: 4px;
   font-size: 14px;
   line-height: 1.55;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
 }
 
 .user-bubble {
@@ -1353,50 +1517,55 @@ html.plat-mac .app.no-sidebar .chat-head {
   color: var(--ok);
   font-size: 12px;
   font-weight: 550;
+  cursor: pointer;
 }
 
 .user-more:hover {
-  color: #7ee787;
+  color: #5fedab;
 }
 
 .msg-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 2px;
-  margin-top: 4px;
+  align-items: center;
+  gap: 4px;
+  margin-top: 5px;
   opacity: 0;
-  transition: opacity 0.13s ease;
+  transform: translateY(-2px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
 .user-wrap:hover .msg-actions,
 .user-wrap:focus-within .msg-actions {
   opacity: 1;
+  transform: translateY(0);
 }
 
 .msg-actions button {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 24px;
-  padding: 0 8px;
+  height: 22px;
+  padding: 0 7px;
   white-space: nowrap;
   font-size: 11px;
   font-weight: 500;
   color: var(--text-3);
-  background: transparent;
-  border: none;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 6px;
   cursor: pointer;
-  transition: color 0.13s ease, background 0.13s ease;
+  transition: all 0.12s ease;
 }
 
 .msg-actions button:hover:not(:disabled) {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border-strong);
+  background: var(--surface-3);
 }
 
 .msg-actions button:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: default;
 }
 
@@ -1409,13 +1578,22 @@ html.plat-mac .app.no-sidebar .chat-head {
   word-break: break-word;
 }
 
-.msg.assistant code {
+.msg.assistant :not(pre):not(.code-block) > code,
+.md :not(pre):not(.code-block) > code {
   font-family: var(--mono);
   font-size: 12.5px;
   padding: 1.5px 5px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 5px;
+}
+
+.code-block code,
+.code-block pre,
+.code-block span {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 /* tool calls — quiet mono rows (see .tool-card below) */
@@ -1517,11 +1695,19 @@ html.plat-mac .app.no-sidebar .chat-head {
 }
 
 .approval-kicker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--warn);
+}
+
+.approval-kicker-icon {
+  color: var(--warn);
+  flex-shrink: 0;
 }
 
 .approval-title {
@@ -1637,17 +1823,18 @@ html.plat-mac .app.no-sidebar .chat-head {
 .composer {
   max-width: 720px;
   margin: 0 auto;
-  background: var(--surface);
+  background: rgba(22, 23, 29, 0.88);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-l);
-  box-shadow: var(--shadow-pop);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: var(--shadow-floating);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .composer:focus-within {
-  border-color: rgba(255, 255, 255, 0.22);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 40px rgba(0, 0, 0, 0.45),
-    0 0 0 3px rgba(255, 255, 255, 0.04);
+  border-color: rgba(78, 189, 143, 0.35);
+  box-shadow: 0 0 0 1px rgba(78, 189, 143, 0.15), 0 12px 32px rgba(0, 0, 0, 0.45);
 }
 
 .composer textarea {
@@ -1939,13 +2126,15 @@ html.plat-mac .app.no-sidebar .chat-head {
 }
 
 .send {
-  background: #f5f5f7;
-  color: #111114;
+  background: linear-gradient(135deg, #48b886 0%, #36a575 100%);
+  color: #0c120f;
+  box-shadow: 0 2px 8px rgba(78, 189, 143, 0.22);
 }
 
 .send:hover:not(:disabled) {
-  background: #ffffff;
+  background: linear-gradient(135deg, #52c28f 0%, #3db07f 100%);
   transform: scale(1.05);
+  box-shadow: 0 3px 12px rgba(78, 189, 143, 0.32);
 }
 
 .send:active:not(:disabled) {
@@ -1955,22 +2144,27 @@ html.plat-mac .app.no-sidebar .chat-head {
 .send:disabled {
   background: var(--surface-3);
   color: var(--text-3);
+  box-shadow: none;
   cursor: default;
 }
 
 .send svg {
   width: 15px;
   height: 15px;
+  stroke: currentColor;
 }
 
 .stop {
-  background: rgba(244, 113, 116, 0.14);
-  border: 1px solid rgba(244, 113, 116, 0.35);
+  background: rgba(217, 101, 104, 0.14);
+  border: 1px solid rgba(217, 101, 104, 0.3);
   color: var(--err);
+  box-shadow: 0 2px 8px rgba(217, 101, 104, 0.15);
 }
 
 .stop:hover {
-  background: rgba(244, 113, 116, 0.22);
+  background: rgba(217, 101, 104, 0.22);
+  transform: scale(1.05);
+  box-shadow: 0 3px 12px rgba(217, 101, 104, 0.25);
 }
 
 .stop svg {
@@ -2064,6 +2258,72 @@ html.plat-mac .app.no-sidebar .chat-head {
   border: none;
   border-top: 1px solid var(--border);
   margin: 1em 0;
+}
+
+/* ── enhanced code block ─────────────────────────────────────────────────── */
+
+.code-block {
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: #0d0d10;
+  overflow: hidden;
+}
+
+.code-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.code-meta-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.code-lang {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.code-lines {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+
+.code-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-2);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.code-copy-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border-strong);
+}
+
+.code-copy-btn .copy-ok {
+  color: var(--ok);
 }
 
 /* ── tool cards (Claude Code style rows) ───────────────────────────────── */
@@ -2301,10 +2561,16 @@ html.plat-mac .app.no-sidebar .chat-head {
   -webkit-app-region: no-drag;
 }
 
+.side-foot-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .side-foot.gear:hover {
   color: var(--text);
-  background: var(--accent-dim);
-  border-color: var(--accent-ring);
+  background: var(--surface-3);
+  border-color: var(--border-strong);
 }
 
 .side-foot-note {
@@ -2478,30 +2744,45 @@ html.plat-mac .app.no-sidebar .chat-head {
   justify-content: center;
   align-items: flex-start;
   padding-top: 14vh;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(2px);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .palette {
-  width: min(520px, 92vw);
-  background: var(--surface-2);
+  width: min(540px, 92vw);
+  background: rgba(22, 22, 28, 0.94);
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-l);
-  box-shadow: var(--shadow-pop);
+  box-shadow: var(--shadow-floating);
   overflow: hidden;
   animation: rise 0.18s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
+.palette-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.palette-search-icon {
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
 .palette input {
   width: 100%;
-  padding: 15px 18px;
+  padding: 14px 0;
   font-family: inherit;
-  font-size: 15px;
+  font-size: 14.5px;
   color: var(--text);
   background: transparent;
   border: none;
   outline: none;
-  border-bottom: 1px solid var(--border);
 }
 
 .palette input::placeholder {
@@ -2512,6 +2793,22 @@ html.plat-mac .app.no-sidebar .chat-head {
   max-height: 300px;
   overflow-y: auto;
   padding: 6px;
+}
+
+.palette-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 16px;
+  font-size: 11px;
+  color: var(--text-3);
+  background: var(--surface-3);
+  border-top: 1px solid var(--border);
+}
+
+.palette-foot kbd {
+  font-size: 9.5px;
+  padding: 1px 4px;
 }
 
 /* ── settings modal ────────────────────────────────────────────────────── */

@@ -1,4 +1,4 @@
-import { ArrowDown, GitCompare, PanelLeft, Search } from "lucide-react";
+import { ArrowDown, FolderGit2, GitCompare, PanelLeft, Search } from "lucide-react";
 import { ContextMeter } from "./ContextMeter";
 import { UpdateButton } from "./UpdateButton";
 import { WindowControlsMaybe } from "./WindowControls";
@@ -38,7 +38,8 @@ export function ChatHeader({
           <Search size={13} />
         </button>
         <div className="chat-title" title={titleHint}>
-          {title}
+          <FolderGit2 size={12} className="chat-title-icon" />
+          <span>{title}</span>
         </div>
       </div>
       <div className="head-controls">

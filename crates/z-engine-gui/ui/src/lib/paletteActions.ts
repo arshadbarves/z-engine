@@ -1,6 +1,6 @@
 import { compact, notes, setMode, setModel, submit } from "./commands";
 import { draftStore, modeStore, modelStore, submitLocal } from "./events";
-import { HERO_EXAMPLES } from "../components/MsgList";
+import { HERO_EXAMPLES } from "./constants";
 import type { PaletteItem } from "../components/CommandPalette";
 import { modLabel } from "./platform";
 

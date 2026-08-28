@@ -9,26 +9,23 @@ import {
   setMaxTokens,
   initEvents,
   pushToast,
-  resolveApproval,
   queueStore,
   drainReadyQueues,
   submitOnSession,
   sessionActivityStore,
   sessionsTickStore,
   hydrateStore,
-  type Msg,
 } from "./lib/events";
 import { configStore } from "./lib/configStore";
 import { updateStore } from "./lib/updateStore";
 import {
   submit,
   getConfig,
-  approveWithRule,
-  deny,
   listSessions,
   deleteSession,
   createWorktree,
 } from "./lib/commands";
+import { handleApprove, handleDeny } from "./lib/approvalDispatch";
 import { hydrateNewSession, hydrateOpenSession } from "./lib/sessionOpen";
 import { applyFirstUserTitle, mergeSessionLists, titledSessions } from "./lib/sessionList";
 import { Composer } from "./components/Composer";
@@ -183,30 +180,7 @@ export default function App() {
     await refreshSessions();
   }
 
-  async function handleApprove(m: Msg, decision: "once" | "session" | "persist") {
-    if (m.approvalId == null) return;
-    // Trust-boundary logic lives in core (`PolicyEngine::suggested_rule`,
-    // delivered on the event); never synthesize rules client-side. If
-    // core sent none, degrade to a one-shot approval instead of guessing
-    // a wildcard like "bash*" or "rm -rf *".
-    let rule = "";
-    let effective = decision;
-    if (decision !== "once") {
-      if (m.suggestedRule) {
-        rule = m.suggestedRule;
-      } else {
-        effective = "once";
-      }
-    }
-    resolveApproval(m.approvalId, decision);
-    await approveWithRule(m.approvalId, effective, rule);
-  }
 
-  function handleDeny(m: Msg) {
-    if (m.approvalId == null) return;
-    resolveApproval(m.approvalId, "deny");
-    void deny(m.approvalId);
-  }
 
   useEffect(() => {
     void (async () => {
@@ -315,53 +289,56 @@ export default function App() {
         onSettings={() => setSettingsOpen(true)}
       />
 
-      <section className="chat">
-        <ChatHeader
-          title={workspaces.active ? wsBasename(workspaces.active) : config?.projectName || "Z Engine"}
-          titleHint={
-            workspaces.active
-              ? `workspace ${workspaces.active}${sessionId ? ` · session ${sessionId}` : ""}`
-              : sessionId
-                ? `session ${sessionId}`
-                : undefined
-          }
-          diffOpen={diffOpen}
-          sidebarOpen={sidebarOpen}
-          onToggleSidebar={() => setSidebarOpen((o) => !o)}
-          onPalette={() => setPaletteOpen(true)}
-          onToggleDiff={() => setDiffOpen((o) => !o)}
-        />
+      <section className="workstation-stage">
+        <div className="canvas-pane">
+          <ChatHeader
+            title={workspaces.active ? wsBasename(workspaces.active) : config?.projectName || "Z Engine"}
+            titleHint={
+              workspaces.active
+                ? `workspace ${workspaces.active}${sessionId ? ` · session ${sessionId}` : ""}`
+                : sessionId
+                  ? `session ${sessionId}`
+                  : undefined
+            }
+            diffOpen={diffOpen}
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen((o) => !o)}
+            onPalette={() => setPaletteOpen(true)}
+            onToggleDiff={() => setDiffOpen((o) => !o)}
+          />
 
-        <div className="transcript-wrap">
-          {hydrating && <div className="hydrate-shimmer" aria-label="Restoring chat" />}
-          <div className="transcript" ref={transcriptRef} onScroll={onTranscriptScroll}>
-            <MsgList
-              messages={messages}
-              busy={busy}
-              projectName={workspaces.active ? wsBasename(workspaces.active) : null}
-              onApprove={(m, d) => void handleApprove(m, d)}
-              onDeny={(m) => handleDeny(m)}
-            />
+          <div className="transcript-wrap">
+            {hydrating && <div className="hydrate-shimmer" aria-label="Restoring chat" />}
+            <div className="transcript" ref={transcriptRef} onScroll={onTranscriptScroll}>
+              <MsgList
+                messages={messages}
+                busy={busy}
+                projectName={workspaces.active ? wsBasename(workspaces.active) : null}
+                onApprove={(m, d) => void handleApprove(m, d)}
+                onDeny={(m) => handleDeny(m)}
+              />
+            </div>
+            {showJump && <JumpLatest onJump={jumpToLatest} />}
           </div>
-          {showJump && <JumpLatest onJump={jumpToLatest} />}
+
+          {queued.length > 0 && (
+            <div className="queue-strip">
+              <span className="queue-label">queued</span>
+              {queued.map((q, i) => (
+                <span key={i} className="queue-pill" title={q.text}>
+                  {q.text.slice(0, 48) || `(${q.images.length} image(s))`}
+                  <button title="Remove from queue" onClick={() => queueStore.removeAt(i)}>
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          <Composer />
         </div>
 
         {diffOpen && <DiffPanel onClose={() => setDiffOpen(false)} />}
-        {queued.length > 0 && (
-          <div className="queue-strip">
-            <span className="queue-label">queued</span>
-            {queued.map((q, i) => (
-              <span key={i} className="queue-pill" title={q.text}>
-                {q.text.slice(0, 48) || `(${q.images.length} image(s))`}
-                <button title="Remove from queue" onClick={() => queueStore.removeAt(i)}>
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-
-        <Composer />
       </section>
 
       {paletteOpen && (

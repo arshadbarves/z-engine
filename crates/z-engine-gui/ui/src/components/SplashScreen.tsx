@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import "../splash.css";
 
-const SPLASH_MS = 1400;
+const SPLASH_MS = 600;
 const BOOT_ID = "boot-splash";
 
 /** Drives the HTML boot splash (in index.html) through its leave
@@ -28,7 +28,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
     const doneAt = window.setTimeout(() => {
       el.remove();
       onDone();
-    }, SPLASH_MS + 320);
+    }, SPLASH_MS + 200);
     return () => {
       window.clearTimeout(leaveAt);
       window.clearTimeout(doneAt);

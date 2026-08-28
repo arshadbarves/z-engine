@@ -1,20 +1,23 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { CheckCircle2, AlertTriangle, AlertOctagon, Minimize2, Eye, X } from "lucide-react";
 import { configStore } from "../lib/configStore";
-import { transcriptStore, usageStore } from "../lib/events";
+import { transcriptStore, usageStore, pushToast } from "../lib/events";
 import { contextBreakdown } from "../lib/contextBreakdown";
+import { compact } from "../lib/commands";
 import { estimateCost, fmtCost, fmtTokens } from "../lib/util";
 import { PromptInspector } from "./PromptInspector";
 
 const RING_R = 7;
 const RING_C = 2 * Math.PI * RING_R;
 
-/** Header context ring. Click opens a two-column category chart. */
+/** Human-psychology centered context window monitor. */
 export function ContextMeter() {
   const usage = useSyncExternalStore(usageStore.subscribe, () => usageStore.getSnapshot());
   const messages = useSyncExternalStore(transcriptStore.subscribe, () => transcriptStore.getSnapshot());
   const cfg = useSyncExternalStore(configStore.subscribe, () => configStore.getSnapshot());
   const [open, setOpen] = useState(false);
   const [inspect, setInspect] = useState(false);
+  const [compacting, setCompacting] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -36,12 +39,31 @@ export function ContextMeter() {
   const max = Math.max(1, usage.maxTokens);
   const br = contextBreakdown(messages, usage.promptTokens, max);
   const pct = Math.min(100, Math.round((br.used / br.max) * 100));
-  const level = pct >= 92 ? "danger" : pct >= 80 ? "warn" : "ok";
+  const level = pct >= 85 ? "danger" : pct >= 65 ? "warn" : "ok";
   const cost = estimateCost(cfg?.pricing ?? null, usage.promptTokens, usage.completionTokens);
   const compactAt = cfg?.compactAtPercent ?? 92;
-  const mid = Math.ceil(br.slices.length / 2);
-  const left = br.slices.slice(0, mid);
-  const right = [...br.slices.slice(mid), { id: "rest", label: "Free", tokens: br.remaining, color: "rgba(255,255,255,0.18)" }];
+
+  async function handleCompact() {
+    setCompacting(true);
+    try {
+      pushToast("Compacting session context…", "ok");
+      await compact();
+      setOpen(false);
+    } catch (e) {
+      pushToast(String(e).replace("Error: ", ""), "warn");
+    } finally {
+      setCompacting(false);
+    }
+  }
+
+  const statusText =
+    level === "ok"
+      ? "Memory Healthy · Plenty of space"
+      : level === "warn"
+        ? "Memory Active · Moderately full"
+        : "Memory High · Compaction near";
+
+  const StatusIcon = level === "ok" ? CheckCircle2 : level === "warn" ? AlertTriangle : AlertOctagon;
 
   return (
     <div className={`ctx-meter ${level}`} ref={rootRef}>
@@ -50,7 +72,7 @@ export function ContextMeter() {
         className="ctx-ring-btn"
         aria-expanded={open}
         aria-label={`${pct}% context used`}
-        title={`${pct}% context used`}
+        title={`${pct}% context used (${fmtTokens(br.used)} / ${fmtTokens(br.max)})`}
         onClick={() => setOpen((v) => !v)}
       >
         <svg className="ctx-ring" viewBox="0 0 20 20" width={18} height={18} aria-hidden>
@@ -65,78 +87,106 @@ export function ContextMeter() {
           />
         </svg>
       </button>
+
       <div className="ctx-tip" role="tooltip">
         <strong>{pct}% context used</strong>
         <span>
-          {fmtTokens(br.used)} / {fmtTokens(br.max)}
+          {fmtTokens(br.used)} of {fmtTokens(br.max)}
         </span>
       </div>
+
       {open && (
-        <div className="ctx-pop" role="dialog" aria-label="Context usage">
-          <div className="ctx-pop-head">
-            <span>Context</span>
-            <button type="button" className="ctx-pop-x" onClick={() => setOpen(false)} aria-label="Close">
-              ×
+        <div className="ctx-popover" role="dialog" aria-label="Context usage">
+          <div className="ctx-pop-header">
+            <div className={`ctx-status-pill ${level}`}>
+              <StatusIcon size={13} />
+              <span>{statusText}</span>
+            </div>
+            <button type="button" className="icon-btn" onClick={() => setOpen(false)} aria-label="Close">
+              <X size={13} />
             </button>
           </div>
-          <div className="ctx-pop-sum">
-            <span>{pct}% full</span>
-            <span>
-              {fmtTokens(br.used)} / {fmtTokens(br.max)}
-            </span>
+
+          <div className="ctx-metrics-grid">
+            <div className="ctx-metric-card">
+              <span className="ctx-metric-label">Used</span>
+              <strong className="ctx-metric-val">{fmtTokens(br.used)}</strong>
+              <span className="ctx-metric-sub">{pct}% of window</span>
+            </div>
+            <div className="ctx-metric-card">
+              <span className="ctx-metric-label">Headroom</span>
+              <strong className="ctx-metric-val">{fmtTokens(br.remaining)}</strong>
+              <span className="ctx-metric-sub">{100 - pct}% available</span>
+            </div>
+            <div className="ctx-metric-card">
+              <span className="ctx-metric-label">Capacity</span>
+              <strong className="ctx-metric-val">{fmtTokens(br.max)}</strong>
+              <span className="ctx-metric-sub">{cost != null ? fmtCost(cost) : "tokens"}</span>
+            </div>
           </div>
-          <div className="ctx-bar-wrap">
-            <div className="ctx-bar" aria-hidden>
+
+          <div className="ctx-progress-section">
+            <div className="ctx-multi-bar" aria-hidden>
               {br.slices.map((s) => (
-                <i key={s.id} style={{ width: `${(s.tokens / br.max) * 100}%`, background: s.color }} />
+                <div
+                  key={s.id}
+                  className="ctx-slice-bar"
+                  style={{
+                    width: `${Math.max(1, (s.tokens / br.max) * 100)}%`,
+                    backgroundColor: s.color,
+                  }}
+                  title={`${s.label}: ${fmtTokens(s.tokens)} (${Math.round((s.tokens / br.max) * 100)}%)`}
+                />
               ))}
             </div>
-            <b className="ctx-compact-mark" style={{ left: `${compactAt}%` }} title={`Compact at ${compactAt}%`} />
+            <div className="ctx-compact-marker" style={{ left: `${compactAt}%` }} title={`Auto-compacts at ${compactAt}%`}>
+              <span>Compact {compactAt}%</span>
+            </div>
           </div>
-          <div className="ctx-cols">
-            <ul className="ctx-legend">
-              {left.map((s) => (
-                <li key={s.id}>
-                  <i className="swatch" style={{ background: s.color }} />
-                  {s.label}
-                  <span>
-                    {fmtTokens(s.tokens)}
-                    <em>{Math.round((s.tokens / br.max) * 100)}%</em>
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <ul className="ctx-legend">
-              {right.map((s) => (
-                <li key={s.id}>
-                  <i className="swatch" style={{ background: s.color }} />
-                  {s.label}
-                  <span>
-                    {fmtTokens(s.tokens)}
-                    <em>{Math.round((s.tokens / br.max) * 100)}%</em>
-                  </span>
-                </li>
-              ))}
-            </ul>
+
+          <div className="ctx-breakdown-list">
+            {br.slices.map((s) => {
+              const p = Math.round((s.tokens / br.max) * 100);
+              return (
+                <div key={s.id} className="ctx-breakdown-item">
+                  <div className="ctx-item-left">
+                    <span className="ctx-dot" style={{ backgroundColor: s.color }} />
+                    <span className="ctx-item-name">{s.label}</span>
+                  </div>
+                  <div className="ctx-item-right">
+                    <span className="ctx-item-tokens">{fmtTokens(s.tokens)}</span>
+                    <span className="ctx-item-pct">{p}%</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <p className="ctx-note">
-            Auto-compacts at {compactAt}%
-            {cost != null ? ` · est. ${fmtCost(cost)}` : ""}
-            {` · ${messages.filter((m) => m.kind === "user").length} user turns`}
-            {` · ${messages.filter((m) => m.kind === "tool").length} tool results`}
-          </p>
-          <button
-            type="button"
-            className="ctx-pop-more"
-            onClick={() => {
-              setOpen(false);
-              setInspect(true);
-            }}
-          >
-            View prompt
-          </button>
+
+          <div className="ctx-pop-footer">
+            <button
+              type="button"
+              className="ctx-btn-compact"
+              disabled={compacting}
+              onClick={() => void handleCompact()}
+            >
+              <Minimize2 size={12} />
+              <span>{compacting ? "Compacting…" : "Compact Now"}</span>
+            </button>
+            <button
+              type="button"
+              className="ctx-btn-inspect"
+              onClick={() => {
+                setOpen(false);
+                setInspect(true);
+              }}
+            >
+              <Eye size={12} />
+              <span>Inspect Prompt</span>
+            </button>
+          </div>
         </div>
       )}
+
       {inspect && <PromptInspector onClose={() => setInspect(false)} />}
     </div>
   );

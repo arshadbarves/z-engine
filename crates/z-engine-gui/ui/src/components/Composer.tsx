@@ -3,60 +3,28 @@ import {
   busyStore,
   setBusy,
   submitLocal,
-  usageStore,
   commandLocal,
   draftStore,
-  modeStore,
-  modelStore,
   attachmentStore,
-  sessionStore,
-  pushNotice,
   pushToast,
 } from "../lib/events";
-import { configStore } from "../lib/configStore";
-import {
-  abort,
-  compact,
-  notes,
-  listProjectFiles,
-  shellPassthrough,
-  submit,
-} from "../lib/commands";
+import { abort, listProjectFiles, shellPassthrough, submit } from "../lib/commands";
 import { activeAtToken, stripAtToken } from "../lib/atFile";
 import { queueStore } from "../lib/events";
-import { Terminal, X } from "lucide-react";
-import { filterSlash, getCustomCommands } from "../lib/slash";
-import { readSlashCommand } from "../lib/commands";
-import { estimateCost, fmtCost } from "../lib/util";
-import { modLabel } from "../lib/platform";
+import { Terminal, Paperclip } from "lucide-react";
+import { filterSlash } from "../lib/slash";
+import { dispatchSlashCommand } from "../lib/composerCommands";
+import { fileToDataUrl } from "../lib/imageUtil";
 import { ModelPicker } from "./ModelPicker";
 import { ModePicker } from "./ModePicker";
 import { EffortSelector } from "./EffortSelector";
 import { ShellOverlay } from "./ShellOverlay";
 import { catalogStore } from "../lib/catalog";
 import { hideShell, shellStore, showShell } from "../lib/shellStore";
+import { ComposerPopovers } from "./ComposerPopovers";
+import { ComposerAttachments } from "./ComposerAttachments";
 
-function fileName(p: string): string {
-  const i = p.lastIndexOf("/");
-  return i >= 0 ? p.slice(i + 1) : p;
-}
-
-function extLabel(p: string): string {
-  const n = fileName(p);
-  const d = n.lastIndexOf(".");
-  return d > 0 ? n.slice(d + 1).toUpperCase() : "FILE";
-}
-
-function FileIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor"
-      strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <path d="M14 2v6h6" />
-      <path d="M9 13h6M9 17h4" />
-    </svg>
-  );
-}
+import { useComposerHistory } from "../lib/composerHistory";
 
 export function Composer() {
   const input = useSyncExternalStore(draftStore.subscribe, () => draftStore.getSnapshot());
@@ -72,15 +40,13 @@ export function Composer() {
   const [slashSel, setSlashSel] = useState(0);
   const [fileSel, setFileSel] = useState(0);
   const [dismissed, setDismissed] = useState(false);
-  // fetched file list is keyed by its query so a new query shows "searching…"
-  // without synchronous setState inside the effect
   const [fileResult, setFileResult] = useState<{ q: string; list: string[] | null }>({
     q: "",
     list: null,
   });
   const taRef = useRef<HTMLTextAreaElement>(null);
-  const historyRef = useRef<string[]>([]);
-  const histPosRef = useRef<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { pushHistory, historyPrev, historyNext } = useComposerHistory();
 
   const busyNow = useSyncExternalStore(busyStore.subscribe, () => busyStore.getSnapshot());
   const shell = useSyncExternalStore(shellStore.subscribe, () => shellStore.getSnapshot());
@@ -93,7 +59,6 @@ export function Composer() {
   const showFiles = atQuery !== null;
   const files = fileResult.q === atQuery ? fileResult.list : null;
 
-  // debounced project-file lookup for the @ picker
   useEffect(() => {
     if (atQuery === null) return;
     let alive = true;
@@ -110,8 +75,7 @@ export function Composer() {
 
   function syncCaret() {
     const ta = taRef.current;
-    if (!ta) return;
-    setCaret(ta.selectionStart);
+    if (ta) setCaret(ta.selectionStart);
   }
 
   function onInputChanged(text: string, caretPos: number) {
@@ -123,70 +87,11 @@ export function Composer() {
   }
 
   function runCommand(name: string) {
+    const currentInput = input;
     draftStore.set("");
     setCaret(0);
     setDismissed(false);
-
-    // User-defined command: expand template ($ARGUMENTS ← typed args)
-    // and submit as a normal task message.
-    const custom = getCustomCommands().find((c) => c.name === name);
-    if (custom) {
-      const args = input.replace(/^\/\S*\s*/, "").trim();
-      void (async () => {
-        try {
-          const template = await readSlashCommand(name);
-          const prompt = template.replaceAll("$ARGUMENTS", args).replace(/\s+$/, "");
-          submitLocal(prompt);
-          setBusy(true);
-          await submit(prompt);
-        } catch (e) {
-          console.error(e);
-          setBusy(false);
-          pushNotice(`/${name}: ${String(e)}`);
-        }
-      })();
-      return;
-    }
-
-    switch (name) {
-      case "compact":
-        void compact();
-        break;
-      case "notes":
-        void notes();
-        break;
-      case "help":
-        pushNotice(
-          "commands: /help /compact /notes /cost /status\n" +
-            `keys: Enter send · Esc abort · ⇧⏎ newline · ! shell · @ files · ${modLabel()}K palette`,
-        );
-        break;
-      case "cost": {
-        const u = usageStore.getSnapshot();
-        const cfg = configStore.getSnapshot();
-        const cost = estimateCost(
-          cfg?.pricing ?? null,
-          u.promptTokens,
-          u.completionTokens,
-        );
-        const total = u.promptTokens + u.completionTokens;
-        pushNotice(
-          `tokens this session: prompt=${u.promptTokens} completion=${u.completionTokens} total=${total}` +
-            (cost != null ? ` · est. ${fmtCost(cost)}` : " · $–"),
-        );
-        break;
-      }
-      case "status": {
-        const u = usageStore.getSnapshot();
-        const cfg = configStore.getSnapshot();
-        pushNotice(
-          `model=${cfg?.model || modelStore.getSnapshot()} · mode=${modeStore.getSnapshot()} · session=${
-            sessionStore.getSnapshot() || "(new)"
-          } · tokens ${u.promptTokens + u.completionTokens}/${u.maxTokens}`,
-        );
-        break;
-      }
-    }
+    dispatchSlashCommand(name, currentInput);
   }
 
   function insertFile(path: string) {
@@ -204,31 +109,27 @@ export function Composer() {
     });
   }
 
-  /** Downscale pasted images to <=1568px long side and JPEG-encode to
-   * keep payloads sane for vision APIs. */
-  async function fileToDataUrl(file: File): Promise<string | null> {
-    if (!file.type.startsWith("image/")) return null;
-    const bitmap = await createImageBitmap(file).catch(() => null);
-    if (!bitmap) return null;
-    const maxSide = 1568;
-    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
-    const w = Math.max(1, Math.round(bitmap.width * scale));
-    const h = Math.max(1, Math.round(bitmap.height * scale));
-    const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = h;
-    canvas.getContext("2d")!.drawImage(bitmap, 0, 0, w, h);
-    return canvas.toDataURL("image/jpeg", 0.85);
-  }
-
   async function onPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
-    const files = Array.from(e.clipboardData.files ?? []);
-    if (files.length === 0) return;
+    const pasted = Array.from(e.clipboardData.files ?? []);
+    if (pasted.length === 0) return;
     e.preventDefault();
-    for (const f of files.slice(0, 4)) {
+    for (const f of pasted.slice(0, 4)) {
       const url = await fileToDataUrl(f);
       if (url) setImages((imgs) => [...imgs, url].slice(0, 6));
     }
+  }
+
+  async function onFileInputChanged(e: React.ChangeEvent<HTMLInputElement>) {
+    const list = Array.from(e.target.files ?? []);
+    for (const f of list.slice(0, 4)) {
+      if (f.type.startsWith("image/")) {
+        const url = await fileToDataUrl(f);
+        if (url) setImages((imgs) => [...imgs, url].slice(0, 6));
+      } else {
+        attachmentStore.add(f.name);
+      }
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   async function send() {
@@ -239,7 +140,6 @@ export function Composer() {
     attachmentStore.clear();
     setCaret(0);
     setDismissed(false);
-    histPosRef.current = null;
     const myImages = images;
     setImages([]);
     const composed =
@@ -247,7 +147,6 @@ export function Composer() {
         ? `${text}\n\n${atts.map((p) => `@${p}`).join(" ")}`
         : text;
 
-    // Busy → Codex-style follow-up queue instead of a dead input.
     if (busyNow) {
       if (composed || myImages.length > 0) {
         queueStore.push(composed, myImages);
@@ -256,7 +155,7 @@ export function Composer() {
       return;
     }
 
-    historyRef.current = [...historyRef.current, composed].slice(-100);
+    pushHistory(composed);
     if (text.startsWith("!")) {
       const cmd = text.slice(1).trim();
       if (!cmd) return;
@@ -273,43 +172,16 @@ export function Composer() {
     try {
       await submit(composed, myImages);
     } catch (e) {
-      // The turn will never complete, so clear busy ourselves or the
-      // composer soft-locks until restart.
       console.error(e);
       setBusy(false);
       pushToast(String(e).replace("Error: ", ""), "warn");
     }
   }
 
-  function historyPrev() {
-    const h = historyRef.current;
-    if (h.length === 0) return;
-    const pos =
-      histPosRef.current === null ? h.length - 1 : Math.max(0, histPosRef.current - 1);
-    histPosRef.current = pos;
-    draftStore.set(h[pos]);
-    setCaret(h[pos].length);
-  }
-
-  function historyNext() {
-    const h = historyRef.current;
-    const pos = histPosRef.current;
-    if (pos === null) return;
-    if (pos + 1 >= h.length) {
-      histPosRef.current = null;
-      draftStore.set("");
-      setCaret(0);
-    } else {
-      histPosRef.current = pos + 1;
-      draftStore.set(h[pos + 1]);
-      setCaret(h[pos + 1].length);
-    }
-  }
-
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     syncCaret();
-    if (showSlash) {
-      const n = slashMatches!.length;
+    if (showSlash && slashMatches && slashMatches.length > 0) {
+      const n = slashMatches.length;
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setSlashSel((s) => (s + 1) % n);
@@ -322,7 +194,7 @@ export function Composer() {
       }
       if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault();
-        runCommand(slashMatches![Math.min(slashSel, n - 1)].name);
+        runCommand(slashMatches[Math.min(slashSel, n - 1)].name);
         return;
       }
       if (e.key === "Escape") {
@@ -353,14 +225,12 @@ export function Composer() {
         return;
       }
     }
-    // TUI parity: ↑/↓ recall submission history on single-line drafts
     if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !input.includes("\n")) {
       e.preventDefault();
-      if (e.key === "ArrowUp") historyPrev();
-      else historyNext();
+      if (e.key === "ArrowUp") historyPrev(setCaret);
+      else historyNext(setCaret);
       return;
     }
-    // TUI parity: Esc aborts a running turn, else hides the terminal, else clears the draft
     if (e.key === "Escape") {
       if (busyNow) {
         e.preventDefault();
@@ -385,84 +255,24 @@ export function Composer() {
     <div className="composer-wrap">
       <ShellOverlay />
       <div className={`composer${shellMode ? " shell" : ""}`}>
-        {showSlash && (
-          <div className="composer-pop" role="listbox">
-            {slashMatches!.map((c, i) => (
-              <button
-                key={c.name}
-                role="option"
-                aria-selected={i === slashSel}
-                className={`pop-item${i === slashSel ? " sel" : ""}`}
-                onMouseEnter={() => setSlashSel(i)}
-                onClick={() => runCommand(c.name)}
-              >
-                <span className="pop-name">/{c.name}</span>
-                <span className="pop-desc">{c.desc}</span>
-              </button>
-            ))}
-          </div>
-        )}
-        {showFiles && (
-          <div className="composer-pop" role="listbox">
-            {files === null && <div className="pop-note">searching…</div>}
-            {files !== null && files.length === 0 && (
-              <div className="pop-note">no matching files</div>
-            )}
-            {files?.map((f, i) => (
-              <button
-                key={f}
-                role="option"
-                aria-selected={i === fileSel}
-                className={`pop-item mono${i === fileSel ? " sel" : ""}`}
-                onMouseEnter={() => setFileSel(i)}
-                onClick={() => insertFile(f)}
-              >
-                <span className="pop-name">{f}</span>
-              </button>
-            ))}
-          </div>
-        )}
-        {attachments.length > 0 && (
-          <div className="attachments">
-            {attachments.map((p) => (
-              <span key={p} className="attachment">
-                <button
-                  className="att-x"
-                  title={`Remove ${p}`}
-                  onClick={() => attachmentStore.remove(p)}
-                >
-                  <svg viewBox="0 0 24 24" width={9} height={9} fill="none" stroke="currentColor"
-                    strokeWidth={2.4} strokeLinecap="round" aria-hidden>
-                    <path d="M18 6L6 18M6 6l12 12" />
-                  </svg>
-                </button>
-                <span className="att-icon">
-                  <FileIcon />
-                </span>
-                <span className="att-text">
-                  <span className="att-name">{fileName(p)}</span>
-                  <span className="att-ext">{extLabel(p)}</span>
-                </span>
-              </span>
-            ))}
-          </div>
-        )}
-        {images.length > 0 && (
-          <div className="attachments img-chips">
-            {images.map((url, i) => (
-              <span key={i} className="attachment img-chip">
-                <button
-                  className="att-x"
-                  title="Remove image"
-                  onClick={() => setImages((imgs) => imgs.filter((_, j) => j !== i))}
-                >
-                  <X size={9} strokeWidth={2.4} />
-                </button>
-                <img src={url} alt={`paste ${i + 1}`} />
-              </span>
-            ))}
-          </div>
-        )}
+        <ComposerPopovers
+          showSlash={showSlash}
+          slashMatches={slashMatches}
+          slashSel={slashSel}
+          onSelectSlash={runCommand}
+          onHoverSlash={setSlashSel}
+          showFiles={showFiles}
+          files={files}
+          fileSel={fileSel}
+          onSelectFile={insertFile}
+          onHoverFile={setFileSel}
+        />
+        <ComposerAttachments
+          attachments={attachments}
+          images={images}
+          onRemoveAttachment={(p) => attachmentStore.remove(p)}
+          onRemoveImage={(i) => setImages((imgs) => imgs.filter((_, j) => j !== i))}
+        />
         <textarea
           ref={taRef}
           rows={2}
@@ -482,8 +292,15 @@ export function Composer() {
           onKeyUp={syncCaret}
           onKeyDown={onKeyDown}
           onPaste={(e) => void onPaste(e)}
-        ></textarea>
+        />
         <div className="composer-bar">
+          <input
+            type="file"
+            ref={fileInputRef}
+            multiple
+            style={{ display: "none" }}
+            onChange={(e) => void onFileInputChanged(e)}
+          />
           {shellMode && (
             <span className="shell-prompt" title="Shell command — not sent to the model">
               $
@@ -492,6 +309,14 @@ export function Composer() {
           <ModePicker />
           <ModelPicker />
           <EffortSelector catalog={catalogStore.getSnapshot()} />
+          <button
+            type="button"
+            className="icon-btn"
+            title="Attach file or image"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Paperclip size={13} />
+          </button>
           {!shell.visible && shell.entries.length > 0 && (
             <button
               type="button"
@@ -508,7 +333,7 @@ export function Composer() {
             </span>
           )}
           {busyNow ? (
-            <button className="stop" title="Stop" onClick={() => void abort()}>
+            <button className="stop" title="Stop" onClick={() => void abort()} type="button">
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                 <rect x="5" y="5" width="14" height="14" rx="2.5" />
               </svg>
@@ -519,9 +344,17 @@ export function Composer() {
               title="Send"
               onClick={() => void send()}
               disabled={!input.trim() && attachments.length === 0}
+              type="button"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4}
-                strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.4}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
                 <path d="M12 19V5M5 12l7-7 7 7" />
               </svg>
             </button>

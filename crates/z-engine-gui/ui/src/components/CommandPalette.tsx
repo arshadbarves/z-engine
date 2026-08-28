@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Search } from "lucide-react";
 import type { SessionEntry } from "../lib/util";
 import { sessionLabel } from "../lib/sessionList";
 import { wsBasename } from "../lib/workspaces";
@@ -102,33 +103,36 @@ export function CommandPalette({
   return (
     <div className="palette-overlay" onMouseDown={onClose}>
       <div className="palette" onMouseDown={(e) => e.stopPropagation()}>
-        <input
-          autoFocus
-          value={query}
-          onChange={(e) => {
-            setQuery(e.currentTarget.value);
-            setSel(0);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "ArrowDown") {
-              e.preventDefault();
-              setSel((s) => (s + 1) % Math.max(1, items.length));
-            } else if (e.key === "ArrowUp") {
-              e.preventDefault();
-              setSel((s) => (s - 1 + items.length) % Math.max(1, items.length));
-            } else if (e.key === "Enter") {
-              e.preventDefault();
-              run(selIndex);
-            } else if (e.key === "Escape") {
-              e.preventDefault();
-              onClose();
-            }
-          }}
-          placeholder="Type a command…"
-          spellCheck={false}
-        />
+        <div className="palette-input-wrap">
+          <Search size={14} className="palette-search-icon" />
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => {
+              setQuery(e.currentTarget.value);
+              setSel(0);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setSel((s) => (s + 1) % Math.max(1, items.length));
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setSel((s) => (s - 1 + items.length) % Math.max(1, items.length));
+              } else if (e.key === "Enter") {
+                e.preventDefault();
+                run(selIndex);
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                onClose();
+              }
+            }}
+            placeholder="Type a command or search…"
+            spellCheck={false}
+          />
+        </div>
         <div className="palette-list">
-          {items.length === 0 && <div className="pop-note">no matches</div>}
+          {items.length === 0 && <div className="pop-note">No matching commands</div>}
           {groups.map((g) => (
             <div key={g.name ?? "_commands"}>
               {g.name && <div className="palette-group">{g.name}</div>}
@@ -141,6 +145,7 @@ export function CommandPalette({
                     className={`pop-item${i === selIndex ? " sel" : ""}`}
                     onMouseEnter={() => setSel(i)}
                     onClick={() => run(i)}
+                    type="button"
                   >
                     <span className="pop-name">{item.label}</span>
                     {item.hint && <span className="pop-desc">{item.hint}</span>}
@@ -149,6 +154,11 @@ export function CommandPalette({
               })}
             </div>
           ))}
+        </div>
+        <div className="palette-foot">
+          <span><kbd>↑↓</kbd> navigate</span>
+          <span><kbd>↵</kbd> select</span>
+          <span><kbd>esc</kbd> close</span>
         </div>
       </div>
     </div>

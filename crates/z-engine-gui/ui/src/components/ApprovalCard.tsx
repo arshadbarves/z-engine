@@ -1,3 +1,4 @@
+import { ShieldAlert } from "lucide-react";
 import type { Msg } from "../lib/events";
 import { approvalCommand, approvalToolName } from "../lib/approvalPreview";
 import { looksLikeDiff } from "../lib/diffParse";
@@ -21,7 +22,10 @@ export function ApprovalCard({
 
   return (
     <div className="msg approval">
-      <div className="approval-kicker">Needs approval</div>
+      <div className="approval-kicker">
+        <ShieldAlert size={13} className="approval-kicker-icon" />
+        <span>Needs approval</span>
+      </div>
       <div className="approval-title">{tool}</div>
       {isDiff && preview && <DiffView text={preview} />}
       {!isDiff && command && (
@@ -30,16 +34,23 @@ export function ApprovalCard({
         </pre>
       )}
       <div className="approval-actions">
-        <button className="primary" onClick={() => onApprove("once")}>
+        <button className="primary" onClick={() => onApprove("once")} type="button">
           Allow once
         </button>
-        <button onClick={() => onApprove("session")}>Always · session</button>
-        {m.canPersist && <button onClick={() => onApprove("persist")}>Always · persist</button>}
-        <button className="deny" onClick={onDeny}>
+        <button onClick={() => onApprove("session")} type="button">
+          Always · session
+        </button>
+        {m.canPersist && (
+          <button onClick={() => onApprove("persist")} type="button">
+            Always · persist
+          </button>
+        )}
+        <button className="deny" onClick={onDeny} type="button">
           Deny
         </button>
         <span className="hint">
-          <kbd>y</kbd> once <kbd>s</kbd> session {m.canPersist && (
+          <kbd>y</kbd> once <kbd>s</kbd> session{" "}
+          {m.canPersist && (
             <>
               <kbd>p</kbd> persist{" "}
             </>
