@@ -22,8 +22,11 @@ cargo install --path crates/z-engine-tui
 
 Push or merge to the `release` branch (or run **Actions → release** by hand)
 to build the desktop app and CLI for macOS, Windows, and Linux. Installers
-are attached to the GitHub Release matching the version in
-`crates/z-engine-gui/src-tauri/tauri.conf.json`.
+and updater artifacts (`latest.json` + `.sig` files) are attached to the
+GitHub Release matching the version in
+`crates/z-engine-gui/src-tauri/tauri.conf.json`. The desktop app can then
+download, install, and restart in-place via **Update & Restart** (requires
+`TAURI_SIGNING_PRIVATE_KEY` / password secrets in the repo).
 
 Requirements: Rust stable (≥1.85), a Rust toolchain for projects it works
 on, `ZENGINE_API_KEY` (OpenRouter by default) or a local OpenAI-compatible

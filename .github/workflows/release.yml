@@ -97,7 +97,9 @@ jobs:
         with:
           projectPath: crates/z-engine-gui/src-tauri
           args: ${{ matrix.args }}
-          uploadUpdaterJson: false
+          uploadUpdaterJson: true
+          # Prefer NSIS over WiX for Windows updater downloads when both exist.
+          updaterJsonPreferNsis: true
           # PRs build installers as workflow artifacts; push/dispatch publishes.
           tagName: ${{ github.event_name != 'pull_request' && 'v__VERSION__' || '' }}
           releaseName: Z Engine v__VERSION__
