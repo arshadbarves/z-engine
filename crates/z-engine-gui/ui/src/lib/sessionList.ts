@@ -12,41 +12,6 @@ export function sessionLabel(title: string | null | undefined): string {
   return t ? t : "(empty)";
 }
 
-/** Natural human-friendly title display for sessions in sidebar. */
-export function humanSessionTitle(title: string | null | undefined): string {
-  const t = title?.trim();
-  if (!t || t === "(empty)") return "New Conversation";
-  if (/^\d+$/.test(t)) return `Chat #${t}`;
-  return t;
-}
-
-/** Formats session timestamp to human friendly relative or date string. */
-export function formatSessionTime(ms: number): string {
-  if (!ms || isNaN(ms)) return "";
-  const d = new Date(ms);
-  const now = Date.now();
-  const diffMs = now - ms;
-  if (diffMs < 60_000) return "Just now";
-  if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)}m ago`;
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (ms >= today.getTime()) {
-    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  }
-
-  const yesterday = new Date(today.getTime() - 86_400_000);
-  if (ms >= yesterday.getTime()) {
-    return "Yesterday";
-  }
-
-  if (diffMs < 7 * 86_400_000) {
-    return d.toLocaleDateString([], { weekday: "short" });
-  }
-
-  return d.toLocaleDateString([], { month: "short", day: "numeric" });
-}
-
 /** Drop chats that have not been titled yet — they stay out of the list
  * until the first user message. */
 export function titledSessions(list: SessionEntry[]): SessionEntry[] {

@@ -11,7 +11,7 @@ import {
 import { abort, listProjectFiles, shellPassthrough, submit } from "../lib/commands";
 import { activeAtToken, stripAtToken } from "../lib/atFile";
 import { queueStore } from "../lib/events";
-import { Terminal, Paperclip } from "lucide-react";
+import { Terminal, Paperclip, ArrowUp, CornerDownLeft, Square } from "lucide-react";
 import { filterSlash } from "../lib/slash";
 import { dispatchSlashCommand } from "../lib/composerCommands";
 import { fileToDataUrl } from "../lib/imageUtil";
@@ -273,26 +273,35 @@ export function Composer() {
           onRemoveAttachment={(p) => attachmentStore.remove(p)}
           onRemoveImage={(i) => setImages((imgs) => imgs.filter((_, j) => j !== i))}
         />
-        <textarea
-          ref={taRef}
-          rows={2}
-          placeholder={
-            busyNow
-              ? "Working… press Stop or Esc to abort."
-              : shellMode
-                ? "shell command…  (not sent to the model)"
-                : "Describe a task…  (! for shell · / commands · @ files)"
-          }
-          value={input}
-          onChange={(e) =>
-            onInputChanged(e.currentTarget.value, e.currentTarget.selectionStart)
-          }
-          onSelect={syncCaret}
-          onClick={syncCaret}
-          onKeyUp={syncCaret}
-          onKeyDown={onKeyDown}
-          onPaste={(e) => void onPaste(e)}
-        />
+        <div className={`composer-input-area${shellMode ? " shell-active" : ""}`}>
+          {shellMode && (
+            <div className="shell-prefix-glyph" aria-hidden="true">
+              <Terminal size={13} className="shell-glyph-icon" />
+              <span className="shell-glyph-arrow">❯</span>
+            </div>
+          )}
+          <textarea
+            ref={taRef}
+            rows={2}
+            className={shellMode ? "shell-textarea" : ""}
+            placeholder={
+              busyNow
+                ? "Working… press Stop or Esc to abort."
+                : shellMode
+                  ? "Enter shell command… (e.g. !git status, !cargo test)"
+                  : "Ask a question, describe a task, @ files, / commands…"
+            }
+            value={input}
+            onChange={(e) =>
+              onInputChanged(e.currentTarget.value, e.currentTarget.selectionStart)
+            }
+            onSelect={syncCaret}
+            onClick={syncCaret}
+            onKeyUp={syncCaret}
+            onKeyDown={onKeyDown}
+            onPaste={(e) => void onPaste(e)}
+          />
+        </div>
         <div className="composer-bar">
           <input
             type="file"
@@ -301,64 +310,79 @@ export function Composer() {
             style={{ display: "none" }}
             onChange={(e) => void onFileInputChanged(e)}
           />
-          {shellMode && (
-            <span className="shell-prompt" title="Shell command — not sent to the model">
-              $
-            </span>
-          )}
-          <ModePicker />
-          <ModelPicker />
-          <EffortSelector catalog={catalogStore.getSnapshot()} />
-          <button
-            type="button"
-            className="icon-btn"
-            title="Attach file or image"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Paperclip size={13} />
-          </button>
-          {!shell.visible && shell.entries.length > 0 && (
-            <button
-              type="button"
-              className="icon-btn"
-              title="Show terminal"
-              onClick={showShell}
-            >
-              <Terminal size={13} />
-            </button>
-          )}
-          {!shellMode && (
-            <span className="composer-hint">
-              <kbd>!</kbd> shell · <kbd>/</kbd> cmds · <kbd>@</kbd> files
-            </span>
-          )}
-          {busyNow ? (
-            <button className="stop" title="Stop" onClick={() => void abort()} type="button">
-              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                <rect x="5" y="5" width="14" height="14" rx="2.5" />
-              </svg>
-            </button>
+          {shellMode ? (
+            <div className="shell-bar-left">
+              <span className="shell-mode-pill">
+                <Terminal size={11} />
+                <span>Shell Pass-Through</span>
+              </span>
+              <span className="shell-hint-inline">
+                <kbd>Esc</kbd> to exit
+              </span>
+            </div>
           ) : (
-            <button
-              className="send"
-              title="Send"
-              onClick={() => void send()}
-              disabled={!input.trim() && attachments.length === 0}
-              type="button"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2.4}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
+            <div className="composer-controls-left">
+              <ModePicker />
+              <ModelPicker />
+              <EffortSelector catalog={catalogStore.getSnapshot()} />
+              <button
+                type="button"
+                className="icon-btn"
+                title="Attach file or image"
+                onClick={() => fileInputRef.current?.click()}
               >
-                <path d="M12 19V5M5 12l7-7 7 7" />
-              </svg>
-            </button>
+                <Paperclip size={13} />
+              </button>
+              {!shell.visible && shell.entries.length > 0 && (
+                <button
+                  type="button"
+                  className="icon-btn"
+                  title="Show terminal"
+                  onClick={showShell}
+                >
+                  <Terminal size={13} />
+                </button>
+              )}
+            </div>
           )}
+
+          <div className="composer-actions-right">
+            {!shellMode && (
+              <span className="composer-hint">
+                <kbd>!</kbd> shell · <kbd>/</kbd> cmds · <kbd>@</kbd> files
+              </span>
+            )}
+            {busyNow ? (
+              <button
+                className="stop"
+                title="Stop (Esc)"
+                onClick={() => void abort()}
+                type="button"
+              >
+                <Square size={12} fill="currentColor" />
+              </button>
+            ) : shellMode ? (
+              <button
+                className="send shell-send"
+                title="Run shell command (Enter)"
+                onClick={() => void send()}
+                disabled={!input.slice(1).trim()}
+                type="button"
+              >
+                <CornerDownLeft size={13} />
+              </button>
+            ) : (
+              <button
+                className="send"
+                title="Send (Enter)"
+                onClick={() => void send()}
+                disabled={!input.trim() && attachments.length === 0}
+                type="button"
+              >
+                <ArrowUp size={15} strokeWidth={2.4} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
