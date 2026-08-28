@@ -121,6 +121,12 @@ kbd {
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
   -webkit-app-region: drag;
+  transition: width 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+              padding 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.22s ease,
+              border-color 0.22s ease;
+  overflow: hidden;
+  will-change: width, opacity;
 }
 
 html.plat-mac .sidebar {
@@ -378,13 +384,19 @@ html.plat-mac .sidebar {
 
 /* ⌘B sidebar toggle */
 .app.no-sidebar .sidebar {
-  display: none;
+  width: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  border-right-color: transparent !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 /* Overlay title bar: traffic lights sit on the chat header when the
  * sidebar is gone. Keep icon buttons clear of close/minimize/zoom. */
 .app.no-sidebar .chat-head {
   padding-left: 12px;
+  transition: padding 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 html.plat-mac .app.no-sidebar .chat-head {
@@ -534,13 +546,18 @@ html.plat-mac .app.no-sidebar .chat-head {
   border-left: 1px solid var(--border);
   z-index: 30;
   overflow: hidden;
-  animation: slide-left 0.2s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: apple-slide-left 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
 }
 
-@keyframes slide-left {
+@keyframes apple-slide-left {
   from {
     opacity: 0;
-    transform: translateX(16px);
+    transform: translateX(32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 
@@ -2926,21 +2943,34 @@ html.plat-mac .app.no-sidebar .chat-head {
   justify-content: center;
   align-items: flex-start;
   padding-top: 14vh;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  animation: apple-backdrop-fade 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .palette {
   width: min(540px, 92vw);
   background: rgba(22, 22, 28, 0.94);
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-l);
-  box-shadow: var(--shadow-floating);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
   overflow: hidden;
-  animation: rise 0.18s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: apple-spotlight-enter 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+@keyframes apple-spotlight-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .palette-input-wrap {
@@ -3002,8 +3032,10 @@ html.plat-mac .app.no-sidebar .chat-head {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(2px);
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  animation: apple-backdrop-fade 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .modal {
@@ -3011,11 +3043,25 @@ html.plat-mac .app.no-sidebar .chat-head {
   flex-direction: column;
   width: min(600px, 94vw);
   max-height: 82vh;
-  background: var(--surface);
+  background: rgba(22, 24, 30, 0.96);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-l);
-  box-shadow: var(--shadow-pop);
-  animation: rise 0.18s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  animation: apple-modal-enter 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+@keyframes apple-modal-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .modal-head {

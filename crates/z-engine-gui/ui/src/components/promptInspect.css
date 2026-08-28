@@ -7,7 +7,19 @@
   display: flex;
   flex-direction: column;
   background: var(--bg);
-  animation: rise 0.18s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: apple-sheet-up 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+@keyframes apple-sheet-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .prompt-inspect-head {
