@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, Folder, MessageSquare, Plus, Search, Trash2 } from "lucide-react";
+import { ChevronRight, Folder, Plus, Search, Trash2 } from "lucide-react";
 import type { SessionActivity } from "../lib/events";
-import { filterSessions, type SessionEntry } from "../lib/util";
-import { sessionLabel } from "../lib/sessionList";
+import { filterSessions, groupSessions, type SessionEntry } from "../lib/util";
 import { wsBasename } from "../lib/workspaces";
+import { SessionRow } from "./SessionRow";
 
 function WorkspaceRow({
   root,
@@ -34,6 +34,8 @@ function WorkspaceRow({
   }, [active]);
 
   const items = useMemo(() => sessions.slice(0, 40), [sessions]);
+  const groups = useMemo(() => groupSessions(items), [items]);
+
   // Approval outranks working: a blocked session needs the user's eye first.
   const projectActivity = useMemo<SessionActivity | null>(() => {
     let working = false;
@@ -44,13 +46,14 @@ function WorkspaceRow({
     }
     return working ? "working" : null;
   }, [items, activity]);
+
   return (
     <div className={`ws-row${active ? " active" : ""}`}>
       <div
         className={`ws-head${projectActivity ? ` ${projectActivity}` : ""}`}
         role="button"
         tabIndex={0}
-        title={`${root}${active ? " · active" : " · click to make active"}`}
+        title={`${root}${active ? " · active" : " · click to select"}`}
         onClick={() => {
           onActivate(root);
           setOpen((o) => !o);
@@ -58,7 +61,7 @@ function WorkspaceRow({
         onKeyDown={(e) => e.key === "Enter" && onActivate(root)}
       >
         <span className={`ws-chevron${open ? " open" : ""}`}>
-          <ChevronRight size={10} />
+          <ChevronRight size={11} />
         </span>
         <Folder size={13} className="ws-icon" />
         <span className="ws-name">{wsBasename(root)}</span>
@@ -79,17 +82,22 @@ function WorkspaceRow({
       {open && (
         <div className="ws-sessions">
           {items.length === 0 ? (
-            <div className="sess-empty">No chats yet.</div>
+            <div className="sess-empty">No conversations yet</div>
           ) : (
-            items.map((s) => (
-              <SessionRow
-                key={s.path}
-                s={s}
-                active={s.ulid === activeUlid}
-                state={activity[s.ulid] ?? null}
-                onOpen={onOpen}
-                onDelete={onDelete}
-              />
+            groups.map((g) => (
+              <div key={g.label} className="sess-group">
+                <div className="sess-group-label">{g.label}</div>
+                {g.items.map((s) => (
+                  <SessionRow
+                    key={s.path}
+                    s={s}
+                    active={s.ulid === activeUlid}
+                    state={activity[s.ulid] ?? null}
+                    onOpen={onOpen}
+                    onDelete={onDelete}
+                  />
+                ))}
+              </div>
             ))
           )}
         </div>
@@ -98,62 +106,7 @@ function WorkspaceRow({
   );
 }
 
-function SessionRow({
-  s,
-  active,
-  state,
-  onOpen,
-  onDelete,
-}: {
-  s: SessionEntry;
-  active: boolean;
-  state: SessionActivity | null;
-  onOpen: (path: string, projectRoot?: string | null) => void;
-  onDelete: (path: string) => void;
-}) {
-  const unread = !active && !state && (s.unreadOutcome === "completed" || s.unreadOutcome === "aborted")
-    ? s.unreadOutcome
-    : null;
-  const title = sessionLabel(s.firstUserMsg);
-  return (
-    <div
-      className={`session${active ? " active" : ""}${state ? ` ${state}` : ""}${unread ? ` unread unread-${unread}` : ""}`}
-      role="button"
-      tabIndex={0}
-      title={
-        state === "approval"
-          ? `Approval needed — ${title}`
-          : unread
-            ? `${unread === "aborted" ? "Aborted" : "Done"} — ${title}`
-            : title
-      }
-      onClick={(e) => {
-        e.stopPropagation();
-        onOpen(s.path, s.projectRoot);
-      }}
-      onKeyDown={(e) => e.key === "Enter" && onOpen(s.path, s.projectRoot)}
-    >
-      <MessageSquare size={13} className="sess-icon" />
-      <div className="sess-preview">{title}</div>
-      <span className="sess-tail">
-        {unread && <span className="sess-unread-dot" role="status" aria-label={`${unread} — unopened`} />}
-        <button
-          className="del"
-          title="Delete chat"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(s.path);
-          }}
-        >
-          <Trash2 size={11} />
-        </button>
-      </span>
-    </div>
-  );
-}
-
-/** Codex-shaped sessions sidebar: search, projects with nested chats,
- * then Recents for transcripts from unregistered folders. */
+/** Human-centric sessions sidebar: search, workspaces, chronological day groupings. */
 export function Sidebar({
   sessions,
   workspaces,
@@ -180,6 +133,7 @@ export function Sidebar({
   const [query, setQuery] = useState("");
   const [recentsOpen, setRecentsOpen] = useState(true);
   const filtered = useMemo(() => filterSessions(sessions, query), [sessions, query]);
+
   const byWs = useMemo(() => {
     const m = new Map<string, SessionEntry[]>();
     for (const root of workspaces) m.set(root, []);
@@ -192,27 +146,35 @@ export function Sidebar({
     return { m, other };
   }, [filtered, workspaces]);
 
+  const otherGroups = useMemo(
+    () => groupSessions(byWs.other.slice(0, 30)),
+    [byWs.other],
+  );
+
   return (
     <div className="sessions">
       <div className="sess-search">
-        <Search size={12} />
+        <Search size={13} className="sess-search-icon" />
         <input
           value={query}
           onChange={(e) => setQuery(e.currentTarget.value)}
-          placeholder="Search chats…"
+          placeholder="Search conversations…"
           spellCheck={false}
         />
       </div>
+
       <div className="sess-list">
         <div className="ws-section-head">
-          <span>Projects</span>
-          <button className="mini" title="Add workspace…" onClick={onAddWorkspace}>
+          <span>Workspaces</span>
+          <button className="mini" title="Add workspace folder…" onClick={onAddWorkspace}>
             <Plus size={12} />
           </button>
         </div>
+
         {workspaces.length === 0 && (
-          <div className="sess-empty">No projects — add a folder.</div>
+          <div className="sess-empty">No workspace added yet.</div>
         )}
+
         {workspaces.map((root) => (
           <WorkspaceRow
             key={root}
@@ -227,6 +189,7 @@ export function Sidebar({
             onRemove={onRemoveWorkspace}
           />
         ))}
+
         {byWs.other.length > 0 && (
           <>
             <div
@@ -236,18 +199,31 @@ export function Sidebar({
               onClick={() => setRecentsOpen((o) => !o)}
               onKeyDown={(e) => e.key === "Enter" && setRecentsOpen((o) => !o)}
             >
-              <span>Recents</span>
-            </div>
-            {recentsOpen &&
-              byWs.other.slice(0, 24).map((s) => (
-                <SessionRow
-                  key={s.path}
-                  s={s}
-                  active={s.ulid === activeUlid}
-                  state={activity[s.ulid] ?? null}
-                  onOpen={onOpen}
-                  onDelete={onDelete}
+              <div className="ws-head-left">
+                <ChevronRight
+                  size={11}
+                  className={`ws-chevron${recentsOpen ? " open" : ""}`}
                 />
+                <span>Recent Conversations</span>
+              </div>
+              <span className="ws-count">{byWs.other.length}</span>
+            </div>
+
+            {recentsOpen &&
+              otherGroups.map((g) => (
+                <div key={g.label} className="sess-group">
+                  <div className="sess-group-label">{g.label}</div>
+                  {g.items.map((s) => (
+                    <SessionRow
+                      key={s.path}
+                      s={s}
+                      active={s.ulid === activeUlid}
+                      state={activity[s.ulid] ?? null}
+                      onOpen={onOpen}
+                      onDelete={onDelete}
+                    />
+                  ))}
+                </div>
               ))}
           </>
         )}
