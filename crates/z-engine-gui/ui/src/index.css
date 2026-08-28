@@ -2322,9 +2322,38 @@ html.plat-mac .app.no-sidebar .chat-head {
   margin: 0.55em 0;
 }
 
+/* ── Apple-Grade Smooth Fluid Physics ─────────────────────────────────── */
+
+.msg {
+  animation: apple-fade-up 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes apple-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tool-card,
+.thinking-block {
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tool-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+/* ── modern hierarchical list markers ─────────────────────────────────── */
+
 .md ul,
 .md ol {
-  margin: 0.6em 0;
+  margin: 0.65em 0;
   padding-left: 0;
   list-style: none;
 }
@@ -2333,68 +2362,98 @@ html.plat-mac .app.no-sidebar .chat-head {
   counter-reset: md-ol-counter;
 }
 
-/* Level 1 bullet */
+/* Level 1 bullet item */
 .md ul > li {
   position: relative;
-  padding-left: 1.35em;
-  margin: 0.3em 0;
-  line-height: 1.65;
+  padding-left: 1.4em;
+  margin: 0.35em 0;
+  line-height: 1.68;
 }
 
 .md ul > li::before {
-  content: "•";
-  position: absolute;
-  left: 0.25em;
-  top: -0.05em;
-  font-size: 1.1em;
-  color: var(--text-3);
-}
-
-/* Level 2 nested hollow circle ○ */
-.md ul > li > ul > li::before {
-  content: "○";
-  position: absolute;
-  left: 0.25em;
-  top: -0.05em;
-  font-size: 0.95em;
-  color: var(--text-3);
-}
-
-/* Level 3 nested square ▪ */
-.md ul > li > ul > li > ul > li::before {
-  content: "▪";
+  content: "";
   position: absolute;
   left: 0.3em;
-  top: -0.05em;
-  font-size: 0.85em;
-  color: var(--text-3);
+  top: 0.62em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #4ebd8f;
+  box-shadow: 0 0 6px rgba(78, 189, 143, 0.45);
 }
 
-/* Ordered list numbered items */
+/* Level 2 nested list item (Hollow Ring ○) */
+.md ul > li > ul > li {
+  position: relative;
+  padding-left: 1.4em;
+  margin: 0.3em 0;
+}
+
+.md ul > li > ul > li::before {
+  content: "";
+  position: absolute;
+  left: 0.3em;
+  top: 0.62em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1.5px solid #8e95a5;
+  box-shadow: none;
+}
+
+/* Level 3 sub-nested item (Precision Dash —) */
+.md ul > li > ul > li > ul > li {
+  position: relative;
+  padding-left: 1.4em;
+  margin: 0.25em 0;
+}
+
+.md ul > li > ul > li > ul > li::before {
+  content: "";
+  position: absolute;
+  left: 0.3em;
+  top: 0.75em;
+  width: 5px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: #6b7280;
+  border: none;
+}
+
+/* Ordered list numbered badges */
 .md ol > li {
   position: relative;
-  padding-left: 1.75em;
-  margin: 0.3em 0;
-  line-height: 1.65;
+  padding-left: 2em;
+  margin: 0.38em 0;
+  line-height: 1.68;
   counter-increment: md-ol-counter;
 }
 
 .md ol > li::before {
-  content: counter(md-ol-counter) ".";
+  content: counter(md-ol-counter);
   position: absolute;
   left: 0;
-  top: 0;
-  width: 1.3em;
+  top: 0.22em;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-family: var(--mono);
-  font-size: 0.9em;
+  font-size: 10.5px;
   font-weight: 600;
-  color: var(--text-3);
-  text-align: right;
+  color: #4ebd8f;
+  background: rgba(78, 189, 143, 0.12);
+  border: 1px solid rgba(78, 189, 143, 0.25);
+  border-radius: 4px;
+  line-height: 1;
 }
 
 .md li > ul,
 .md li > ol {
-  margin: 0.25em 0 0.25em 0.8em;
+  margin: 0.3em 0 0.3em 0.8em;
 }
 
 .md h1,

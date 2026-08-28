@@ -243,12 +243,6 @@ export function Composer() {
           onRemoveImage={(i) => setImages((imgs) => imgs.filter((_, j) => j !== i))}
         />
         <div className={`composer-input-area${shellMode ? " shell-active" : ""}`}>
-          {shellMode && (
-            <div className="shell-prefix-glyph" aria-hidden="true">
-              <Terminal size={13} className="shell-glyph-icon" />
-              <span className="shell-glyph-arrow">❯</span>
-            </div>
-          )}
           <textarea
             ref={taRef}
             rows={2}
@@ -283,10 +277,10 @@ export function Composer() {
             <div className="shell-bar-left">
               <span className="shell-mode-pill">
                 <Terminal size={11} />
-                <span>Shell Pass-Through</span>
+                <span>Bash Mode</span>
               </span>
               <span className="shell-hint-inline">
-                <kbd>Esc</kbd> to exit
+                <kbd>Esc</kbd> to return
               </span>
             </div>
           ) : (
