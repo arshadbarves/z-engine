@@ -2349,111 +2349,39 @@ html.plat-mac .app.no-sidebar .chat-head {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
 
-/* ── modern hierarchical list markers ─────────────────────────────────── */
+/* ── markdown lists ────────────────────────────────────────────────────── */
 
 .md ul,
 .md ol {
-  margin: 0.65em 0;
-  padding-left: 0;
-  list-style: none;
+  margin: 0.55em 0;
+  padding-left: 1.5em;
+}
+
+.md ul {
+  list-style-type: disc;
 }
 
 .md ol {
-  counter-reset: md-ol-counter;
+  list-style-type: decimal;
 }
 
-/* Level 1 bullet item */
-.md ul > li {
-  position: relative;
-  padding-left: 1.4em;
-  margin: 0.35em 0;
-  line-height: 1.68;
-}
-
-.md ul > li::before {
-  content: "";
-  position: absolute;
-  left: 0.3em;
-  top: 0.62em;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #4ebd8f;
-  box-shadow: 0 0 6px rgba(78, 189, 143, 0.45);
-}
-
-/* Level 2 nested list item (Hollow Ring ○) */
-.md ul > li > ul > li {
-  position: relative;
-  padding-left: 1.4em;
-  margin: 0.3em 0;
-}
-
-.md ul > li > ul > li::before {
-  content: "";
-  position: absolute;
-  left: 0.3em;
-  top: 0.62em;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: transparent;
-  border: 1.5px solid #8e95a5;
-  box-shadow: none;
-}
-
-/* Level 3 sub-nested item (Precision Dash —) */
-.md ul > li > ul > li > ul > li {
-  position: relative;
-  padding-left: 1.4em;
+.md li {
   margin: 0.25em 0;
-}
-
-.md ul > li > ul > li > ul > li::before {
-  content: "";
-  position: absolute;
-  left: 0.3em;
-  top: 0.75em;
-  width: 5px;
-  height: 1.5px;
-  border-radius: 1px;
-  background: #6b7280;
-  border: none;
-}
-
-/* Ordered list numbered badges */
-.md ol > li {
-  position: relative;
-  padding-left: 2em;
-  margin: 0.38em 0;
-  line-height: 1.68;
-  counter-increment: md-ol-counter;
-}
-
-.md ol > li::before {
-  content: counter(md-ol-counter);
-  position: absolute;
-  left: 0;
-  top: 0.22em;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--mono);
-  font-size: 10.5px;
-  font-weight: 600;
-  color: #4ebd8f;
-  background: rgba(78, 189, 143, 0.12);
-  border: 1px solid rgba(78, 189, 143, 0.25);
-  border-radius: 4px;
-  line-height: 1;
+  line-height: 1.6;
 }
 
 .md li > ul,
 .md li > ol {
-  margin: 0.3em 0 0.3em 0.8em;
+  margin: 0.2em 0;
+  padding-left: 1.25em;
+}
+
+.md ul > li > ul {
+  list-style-type: circle;
+}
+
+.md ul > li > ul > li > ul {
+  list-style-type: square;
 }
 
 .md h1,
