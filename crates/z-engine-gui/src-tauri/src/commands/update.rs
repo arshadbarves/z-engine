@@ -157,7 +157,9 @@ pub(crate) async fn check_for_update(force: Option<bool>) -> Result<UpdateInfo, 
     if force != Some(true) {
         if let Some(cached) = read_cache() {
             let age = now_secs().saturating_sub(cached.checked_at);
-            if age < CACHE_TTL_SECS {
+            // Ignore cache from a different binary version (e.g. after a
+            // manual install) so we never keep advertising a stale update.
+            if age < CACHE_TTL_SECS && cached.info.current == current {
                 return Ok(cached.info);
             }
         }
@@ -179,20 +181,28 @@ pub(crate) fn open_release_url(app: tauri::AppHandle, url: String) -> Result<(),
 /// Download, install, and restart when a signed updater bundle is available.
 #[tauri::command]
 pub(crate) async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
-    let Some(update) = app
-        .updater()
-        .map_err(|e| e.to_string())?
-        .check()
-        .await
-        .map_err(|e| e.to_string())?
-    else {
-        return Err("no update available".into());
+    let update = match app.updater() {
+        Ok(updater) => match updater.check().await {
+            Ok(Some(update)) => update,
+            Ok(None) => {
+                tracing::info!("updater check: already on latest");
+                return Err("no update available".into());
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "updater check failed");
+                return Err(e.to_string());
+            }
+        },
+        Err(e) => {
+            tracing::warn!(error = %e, "updater init failed");
+            return Err(e.to_string());
+        }
     };
 
     let app_handle = app.clone();
     let mut downloaded = 0u64;
 
-    update
+    if let Err(e) = update
         .download_and_install(
             move |chunk_length, content_length| {
                 downloaded += chunk_length as u64;
@@ -229,7 +239,10 @@ pub(crate) async fn install_update(app: tauri::AppHandle) -> Result<(), String> 
             },
         )
         .await
-        .map_err(|e| e.to_string())?;
+    {
+        tracing::warn!(error = %e, "updater download/install failed");
+        return Err(e.to_string());
+    }
 
     let _ = app.emit(
         "update-progress",

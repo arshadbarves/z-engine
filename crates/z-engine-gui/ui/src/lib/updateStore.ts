@@ -140,13 +140,23 @@ export const updateStore = {
       await installUpdate();
       // request_restart() ends the process; no return expected.
     } catch (e) {
-      console.warn("updater install failed, falling back to browser", e);
-      if (info.url) {
-        pushToast("Opening release download…", "info");
-        await openReleaseUrl(info.url);
-      } else {
-        pushToast("Could not install update automatically", "warn");
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn("updater install failed", e);
+      installing = false;
+      progress = null;
+
+      // Already on latest (stale banner) — clear and re-check; do not open browser.
+      if (/no update available/i.test(msg)) {
+        info = info ? { ...info, available: false } : null;
+        popoverOpen = false;
+        pushToast("You're already on the latest version", "ok");
+        emit();
+        void updateStore.check(true);
+        return;
       }
+
+      pushToast(`Update failed: ${msg}`, "warn");
+      emit();
     } finally {
       installing = false;
       progress = null;
