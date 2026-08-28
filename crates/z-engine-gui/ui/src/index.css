@@ -29,6 +29,9 @@
   --radius-m: 11px;
   --radius-l: 16px;
 
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+
   --shadow-pop: 0 4px 16px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.035);
   --shadow-floating: 0 12px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
@@ -102,11 +105,23 @@ kbd {
   color: var(--text-3);
 }
 
-/* ── layout ─────────────────────────────────────────────────────────────── */
+/* ── layout & app entrance ──────────────────────────────────────────────── */
 
 .app {
   display: flex;
   height: 100vh;
+  animation: app-fade-in 0.24s var(--ease-spring) both;
+}
+
+@keyframes app-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.996);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* ── sidebar ────────────────────────────────────────────────────────────── */
@@ -121,6 +136,18 @@ kbd {
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
   -webkit-app-region: drag;
+  animation: sidebar-slide-in 0.26s var(--ease-spring) both;
+}
+
+@keyframes sidebar-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 html.plat-mac .sidebar {
@@ -1490,12 +1517,16 @@ html.plat-mac .app.no-sidebar .chat-head {
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(10px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
 .msg {
-  animation: rise 0.25s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: rise 0.22s var(--ease-spring) both;
 }
 
 /* user — compact bubble, right aligned; actions sit below the bar */
@@ -1506,6 +1537,18 @@ html.plat-mac .app.no-sidebar .chat-head {
   align-items: flex-end;
   max-width: 82%;
   scroll-margin-top: 12px;
+  animation: msg-user-in 0.24s var(--ease-spring) both;
+}
+
+@keyframes msg-user-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .msg.user {
@@ -2842,8 +2885,19 @@ html.plat-mac .app.no-sidebar .chat-head {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(2px);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: backdrop-fade-in 0.2s var(--ease-spring) both;
+}
+
+@keyframes backdrop-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .modal {
@@ -2855,7 +2909,18 @@ html.plat-mac .app.no-sidebar .chat-head {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-l);
   box-shadow: var(--shadow-pop);
-  animation: rise 0.18s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: modal-card-spring 0.22s var(--ease-spring) both;
+}
+
+@keyframes modal-card-spring {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .modal-head {
@@ -3286,4 +3351,20 @@ html.plat-mac .app.no-sidebar .chat-head {
   color: var(--text);
   background: var(--surface-2);
   transform: scale(1.08);
+}
+
+/* ── micro-interactions & motion safety ─────────────────────────────────── */
+
+button:active:not(:disabled) {
+  transform: scale(0.975);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
