@@ -27,6 +27,7 @@ mod edit_ladder;
 mod fsutil;
 mod grep_backend;
 mod proc_helpers;
+mod read_file_evidence;
 mod shell;
 
 use std::collections::HashMap;
@@ -34,7 +35,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-pub use context::{SubAgentFuture, SubAgentRunner, ToolCtx, ToolOutputChunk};
+pub use context::{EvidenceStore, SubAgentFuture, SubAgentRunner, ToolCtx, ToolOutputChunk};
 pub(crate) use fsutil::atomic_write;
 pub use fsutil::{MAX_TOOL_OUTPUT_CHARS, truncate_with_tempfile, unified_diff};
 
@@ -62,6 +63,10 @@ pub struct ToolOutput {
     /// One-line human summary for TUI events.
     pub summary: String,
     pub ok: bool,
+    /// IDs of any [`crate::evidence::EvidenceRecord`]s recorded by this
+    /// call (guarded mode, Task 3+). Empty when no evidence recorder is
+    /// attached, or for binary/failed reads, which never authorize edits.
+    pub evidence_ids: Vec<String>,
 }
 
 impl ToolOutput {
@@ -70,6 +75,7 @@ impl ToolOutput {
             result: result.into(),
             summary: summary.into(),
             ok: true,
+            evidence_ids: Vec::new(),
         }
     }
 
@@ -78,6 +84,7 @@ impl ToolOutput {
             result: result.into(),
             summary: summary.into(),
             ok: false,
+            evidence_ids: Vec::new(),
         }
     }
 }

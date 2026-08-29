@@ -1,9 +1,10 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use super::{checkpoint, file_state};
+use crate::evidence::{BlobHandle, BlobStore, EvidenceLedger, EvidenceRecord};
 use crate::perms::PolicyEngine;
 
 /// Shared execution context threaded through every tool call.
@@ -36,6 +37,37 @@ pub struct ToolCtx {
     pub checkpoints: Arc<checkpoint::CheckpointStore>,
     /// Live tool output streaming (bash stdout tails etc).
     pub output_tx: Arc<tokio::sync::mpsc::UnboundedSender<ToolOutputChunk>>,
+    /// Optional revision-scoped evidence recorder (guarded mode, Task 3+).
+    /// `None` leaves reads behaving exactly as before this feature existed.
+    pub evidence: Option<Arc<EvidenceStore>>,
+}
+
+/// Bundles the ledger and blob store used to record and check freshness of
+/// file-read evidence, plus an in-memory index of the latest record per
+/// path so repeated freshness checks don't need to replay the whole
+/// on-disk ledger. This wires storage handles from the `evidence` module
+/// onto `ToolCtx`; it reuses that module's hashing/CAS logic rather than
+/// duplicating it.
+pub struct EvidenceStore {
+    ledger: Arc<EvidenceLedger>,
+    blobs: Arc<dyn BlobStore + Send + Sync>,
+    latest: Mutex<HashMap<PathBuf, EvidenceRecord>>,
+}
+
+impl EvidenceStore {
+    pub fn new(ledger: Arc<EvidenceLedger>, blobs: Arc<dyn BlobStore + Send + Sync>) -> Self {
+        Self {
+            ledger,
+            blobs,
+            latest: Mutex::new(HashMap::new()),
+        }
+    }
+}
+
+impl std::fmt::Debug for EvidenceStore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EvidenceStore").finish_non_exhaustive()
+    }
 }
 
 /// A chunk of live tool output emitted while a tool is running.
@@ -69,6 +101,7 @@ impl ToolCtx {
             edit_journal: Arc::new(Mutex::new(Vec::new())),
             checkpoints: Arc::new(checkpoint::CheckpointStore::default()),
             output_tx: Arc::new(tokio::sync::mpsc::unbounded_channel().0),
+            evidence: None,
         }
     }
 
@@ -96,6 +129,83 @@ impl ToolCtx {
     pub fn with_task_runner(mut self, runner: SubAgentRunner) -> Self {
         self.task_runner = Some(runner);
         self
+    }
+
+    /// Attach a revision-scoped evidence recorder (builder style). Once
+    /// set, successful bounded reads become durable, edit-authorizing
+    /// evidence (Task 3+); leaving it unset preserves prior behavior.
+    pub fn with_evidence(mut self, store: Arc<EvidenceStore>) -> Self {
+        self.evidence = Some(store);
+        self
+    }
+
+    /// Record one successful bounded read as immutable evidence: the
+    /// returned range's bytes are stored once in the content-addressed
+    /// blob store, a durable [`EvidenceRecord`] is appended to the
+    /// ledger, and the in-memory freshness index is updated so later
+    /// [`ToolCtx::fresh_read_evidence`] calls avoid re-scanning the
+    /// on-disk ledger.
+    ///
+    /// Returns `Ok(None)` when no evidence recorder is attached
+    /// (unguarded mode — existing behavior). Storage failures are typed
+    /// and fail closed rather than silently dropping evidence a later
+    /// guarded gate might otherwise trust.
+    ///
+    /// Callers must only invoke this for genuinely successful, non-binary
+    /// reads — binary or failed reads must never become edit-authorizing
+    /// evidence.
+    pub fn record_read_evidence(
+        &self,
+        resolved_path: &Path,
+        line_range: Option<(u32, u32)>,
+        full_file_bytes: &[u8],
+        range_bytes: &[u8],
+    ) -> Result<Option<String>, super::ToolError> {
+        let Some(store) = &self.evidence else {
+            return Ok(None);
+        };
+        let rel_path = to_repo_relative(resolved_path, &self.project_root);
+        let file_hash = BlobHandle::of(full_file_bytes).to_string();
+        let blob = store
+            .blobs
+            .put(range_bytes)
+            .map_err(|e| super::ToolError::Failed(format!("recording read evidence: {e}")))?;
+        let record = EvidenceRecord::new(
+            rel_path,
+            line_range,
+            file_hash,
+            blob,
+            "read_file",
+            git_head_or_working_tree(&self.project_root),
+        );
+        store
+            .ledger
+            .append(&record)
+            .map_err(|e| super::ToolError::Failed(format!("recording read evidence: {e}")))?;
+        let id = record.id.clone();
+        if let Ok(mut latest) = store.latest.lock() {
+            latest.insert(resolved_path.to_path_buf(), record);
+        }
+        Ok(Some(id))
+    }
+
+    /// The most recent read evidence for `path` (resolved the same way as
+    /// other path-taking methods on this context), only if the file's
+    /// content on disk still matches the hash captured at read time.
+    ///
+    /// `None` means no evidence recorder is attached, nothing was ever
+    /// read, or the file has since changed on disk — any of which must
+    /// block edit-authorizing use of stale or absent evidence.
+    pub fn fresh_read_evidence(&self, path: &Path) -> Option<EvidenceRecord> {
+        let store = self.evidence.as_ref()?;
+        let resolved = self.resolve(path);
+        let record = {
+            let latest = store.latest.lock().ok()?;
+            latest.get(&resolved)?.clone()
+        };
+        let current = std::fs::read(&resolved).ok()?;
+        let current_hash = BlobHandle::of(&current).to_string();
+        (current_hash == record.file_hash).then_some(record)
     }
 
     /// Canonicalized best-effort containment check: does `p` (relative to
@@ -193,4 +303,32 @@ impl std::fmt::Debug for ToolCtx {
             .field("aborted", &self.aborted())
             .finish_non_exhaustive()
     }
+}
+
+/// Canonical, forward-slash-separated path relative to `root` (falls back
+/// to `path`'s own slash-normalized form when it isn't under `root`), so
+/// evidence records compare consistently regardless of platform path
+/// separators.
+fn to_repo_relative(path: &Path, root: &Path) -> String {
+    let rel = path.strip_prefix(root).unwrap_or(path);
+    rel.components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+/// Best-effort git HEAD for `root`; falls back to `"working-tree"` when the
+/// directory isn't a git repository or the command fails for any reason —
+/// evidence capture must never depend on `git` being present or working.
+fn git_head_or_working_tree(root: &Path) -> String {
+    std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(root)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "working-tree".to_string())
 }
