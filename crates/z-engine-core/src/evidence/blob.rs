@@ -89,11 +89,18 @@ pub struct FsBlobStore {
 }
 
 impl FsBlobStore {
-    /// Open (creating if needed) a blob store rooted at `root`.
-    pub fn new(root: impl Into<PathBuf>) -> Self {
+    /// Open a blob store rooted at `root`, creating the directory if
+    /// needed. Construction fails closed: if `root` cannot be created
+    /// (e.g. a file already occupies that path, or permissions deny it),
+    /// this returns a typed [`EvidenceError::Init`] instead of silently
+    /// producing a store that will only fail later on first use.
+    pub fn new(root: impl Into<PathBuf>) -> Result<Self, EvidenceError> {
         let root = root.into();
-        let _ = std::fs::create_dir_all(&root);
-        Self { root }
+        std::fs::create_dir_all(&root).map_err(|source| EvidenceError::Init {
+            path: root.clone(),
+            source,
+        })?;
+        Ok(Self { root })
     }
 
     fn path_for(&self, handle: &BlobHandle) -> PathBuf {
@@ -106,8 +113,23 @@ impl BlobStore for FsBlobStore {
         let handle = BlobHandle::of(bytes);
         let path = self.path_for(&handle);
         if path.exists() {
-            // Content-addressed: an existing file at this path already
-            // holds these exact bytes, so there is nothing left to do.
+            // Content-addressed: a file already at this path is *expected*
+            // to hold these exact bytes, but that must be verified rather
+            // than assumed — an on-disk blob can be corrupted or tampered
+            // with independently of this store. Re-hash it before trusting
+            // it as a match.
+            let existing = std::fs::read(&path).map_err(|source| EvidenceError::BlobRead {
+                handle: handle.clone(),
+                path: path.clone(),
+                source,
+            })?;
+            let actual = BlobHandle::of(&existing);
+            if actual != handle {
+                return Err(EvidenceError::HashMismatch {
+                    handle: handle.clone(),
+                    actual,
+                });
+            }
             return Ok(handle);
         }
         atomic_write(&path, bytes).map_err(|source| EvidenceError::BlobWrite {
@@ -149,11 +171,18 @@ impl BlobStore for FsBlobStore {
 /// atomically rename over the target. Mirrors `tools::fsutil::atomic_write`
 /// but stays synchronous and dependency-free of the tools module, since
 /// evidence storage must not couple to tool/agent/UI layers.
+///
+/// `FsBlobStore::new` already validated/created `root` once at
+/// construction, so the common case here does not redundantly call
+/// `create_dir_all` on every write. If the directory has since
+/// disappeared (e.g. deleted out-of-band between construction and this
+/// call), creating the temp file fails with `NotFound`; only then is the
+/// directory (re)created and the write retried once, preserving
+/// correctness without paying the extra syscall on the hot path.
 fn atomic_write(target: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let dir = target
         .parent()
         .ok_or_else(|| std::io::Error::other("target has no parent directory"))?;
-    std::fs::create_dir_all(dir)?;
     let tmp = dir.join(format!(
         ".{}.tmp-{}",
         target
@@ -162,10 +191,17 @@ fn atomic_write(target: &Path, bytes: &[u8]) -> std::io::Result<()> {
             .unwrap_or_else(|| "blob".into()),
         ulid::Ulid::new()
     ));
+    let mut file = match std::fs::File::create(&tmp) {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            std::fs::create_dir_all(dir)?;
+            std::fs::File::create(&tmp)?
+        }
+        Err(e) => return Err(e),
+    };
     let result = (|| -> std::io::Result<()> {
-        let mut f = std::fs::File::create(&tmp)?;
-        f.write_all(bytes)?;
-        f.sync_all()
+        file.write_all(bytes)?;
+        file.sync_all()
     })();
     if let Err(e) = result {
         let _ = std::fs::remove_file(&tmp);
@@ -191,21 +227,21 @@ mod tests {
         // the `let store = ...` statement, leaving `store` pointed at a
         // directory that no longer exists.
         let dir = tempfile::tempdir().unwrap();
-        let store = FsBlobStore::new(dir.path());
+        let store = FsBlobStore::new(dir.path()).unwrap();
         assert_eq!(store.put(b"same").unwrap(), store.put(b"same").unwrap());
     }
 
     #[test]
     fn distinct_bytes_get_distinct_handles() {
         let dir = tempfile::tempdir().unwrap();
-        let store = FsBlobStore::new(dir.path());
+        let store = FsBlobStore::new(dir.path()).unwrap();
         assert_ne!(store.put(b"a").unwrap(), store.put(b"b").unwrap());
     }
 
     #[test]
     fn put_then_get_roundtrips_bytes() {
         let dir = tempfile::tempdir().unwrap();
-        let store = FsBlobStore::new(dir.path());
+        let store = FsBlobStore::new(dir.path()).unwrap();
         let handle = store.put(b"payload").unwrap();
         assert_eq!(store.get(&handle).unwrap(), b"payload");
     }
@@ -213,7 +249,7 @@ mod tests {
     #[test]
     fn get_of_unknown_handle_is_missing_not_panic() {
         let dir = tempfile::tempdir().unwrap();
-        let store = FsBlobStore::new(dir.path());
+        let store = FsBlobStore::new(dir.path()).unwrap();
         let handle = BlobHandle::of(b"never written");
         let err = store.get(&handle).unwrap_err();
         assert!(matches!(err, EvidenceError::BlobMissing { .. }));
@@ -222,13 +258,53 @@ mod tests {
     #[test]
     fn get_detects_on_disk_corruption_via_hash_mismatch() {
         let dir = tempfile::tempdir().unwrap();
-        let store = FsBlobStore::new(dir.path());
+        let store = FsBlobStore::new(dir.path()).unwrap();
         let handle = store.put(b"original").unwrap();
         // Simulate on-disk tampering/corruption after the write.
         std::fs::write(dir.path().join(handle.as_str()), b"tampered").unwrap();
 
         let err = store.get(&handle).unwrap_err();
         assert!(matches!(err, EvidenceError::HashMismatch { .. }));
+    }
+
+    #[test]
+    fn put_detects_pre_corrupted_existing_blob() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FsBlobStore::new(dir.path()).unwrap();
+        let handle = store.put(b"original").unwrap();
+        // Tamper with the on-disk blob out-of-band, then ask the store to
+        // `put` the same original bytes again. Trusting the existing file
+        // just because it exists at the content-addressed path would
+        // silently paper over the corruption; `put` must re-hash and fail.
+        std::fs::write(dir.path().join(handle.as_str()), b"tampered").unwrap();
+
+        let err = store.put(b"original").unwrap_err();
+        assert!(matches!(err, EvidenceError::HashMismatch { .. }));
+    }
+
+    #[test]
+    fn new_fails_closed_when_root_cannot_be_created() {
+        let dir = tempfile::tempdir().unwrap();
+        // Occupy the intended root path with a plain file, so creating a
+        // directory there is guaranteed to fail.
+        let blocked_root = dir.path().join("blocked-root");
+        std::fs::write(&blocked_root, b"not a directory").unwrap();
+
+        let err = FsBlobStore::new(&blocked_root).unwrap_err();
+        assert!(matches!(err, EvidenceError::Init { .. }));
+    }
+
+    #[test]
+    fn put_recreates_root_directory_if_it_disappears_after_construction() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FsBlobStore::new(dir.path()).unwrap();
+        // Simulate the root directory vanishing after construction (e.g.
+        // deleted out-of-band). `put` must self-heal rather than assume
+        // the directory validated at construction still exists.
+        std::fs::remove_dir_all(dir.path()).unwrap();
+
+        let handle = store.put(b"payload").unwrap();
+        assert_eq!(store.get(&handle).unwrap(), b"payload");
     }
 
     #[test]

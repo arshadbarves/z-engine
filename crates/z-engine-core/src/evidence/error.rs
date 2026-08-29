@@ -11,6 +11,13 @@ pub enum EvidenceError {
     #[error("malformed blob handle {0:?}: expected 64 lowercase hex characters")]
     MalformedHandle(String),
 
+    #[error("failed initializing blob store root at {path}: {source}")]
+    Init {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
     #[error("failed writing blob {handle} at {path}: {source}")]
     BlobWrite {
         handle: BlobHandle,
