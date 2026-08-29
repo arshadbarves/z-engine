@@ -14,6 +14,7 @@ pub mod agent;
 pub mod config;
 pub mod context;
 pub mod evidence;
+pub mod governance;
 pub mod lsp;
 pub mod mcp;
 pub mod perms;
