@@ -110,6 +110,11 @@ pub(super) async fn run_turn(
         if let Some(notes_block) = notes.lock().ok().and_then(|n| n.render_block()) {
             request_messages.push(ChatMessage::system(notes_block));
         }
+        // Guarded runs pin the accepted work order just above the
+        // conversation, so the declared scope is always in view.
+        if let Some(digest) = state.work_order_digest() {
+            request_messages.push(ChatMessage::system(digest));
+        }
         request_messages.extend(state.working.iter().cloned());
 
         let mut request =
@@ -121,9 +126,12 @@ pub(super) async fn run_turn(
             request = request.with_reasoning_effort(effort);
         }
         if let Ok(mut slot) = state.last_prompt.lock() {
-            *slot = Some(super::prompt_inspect::PromptInspect::from_request(
-                &request, true,
-            ));
+            *slot = Some(
+                super::prompt_inspect::PromptInspect::from_request(&request, true).with_manifest(
+                    state.active_work_order().as_deref(),
+                    u64::from(cfg.max_context_tokens),
+                ),
+            );
         }
         let mut stream = client.stream_chat(&request, Arc::clone(abort_flag));
 

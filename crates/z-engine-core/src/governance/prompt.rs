@@ -1,31 +1,35 @@
-//! Pure, deterministic prompt assembly from a pinned snapshot and
-//! token budget.  No I/O, no global state — the caller captures the
-//! snapshot once and passes it in.
+//! Pure, deterministic prompt assembly from a pinned snapshot and a
+//! token budget. No I/O, no global state, no clocks: the caller captures
+//! the snapshot once and passes it in, so the same snapshot always yields
+//! byte-identical output.
+//!
+//! Token counting reuses the one canonical estimator
+//! ([`crate::context::budget::estimate_tokens`]) so a manifest can be
+//! compared with the loop's own pressure numbers.
 
 use serde::Serialize;
 
-/// Immutable snapshot of all data that feeds into a prompt. Callers
-/// capture this once per turn; the prompt builder is a pure function
-/// over `(&PromptSnapshot, budget)`.
+use crate::context::budget::estimate_tokens;
+
+/// Immutable snapshot of everything that feeds one prompt.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PromptSnapshot {
     /// L0 system instructions (rendered markdown).
     pub system_instructions: String,
     /// Active work-order digest (empty when no order is active).
     pub order_digest: String,
-    /// Evidence excerpts relevant to the current order.
+    /// Evidence excerpts backing the active order.
     pub evidence_excerpts: Vec<String>,
-    /// Recent failure messages for retry context.
+    /// Recent failure messages, oldest first.
     pub recent_failures: Vec<String>,
-    /// Working conversation messages (serialized).
+    /// Working conversation messages, oldest first.
     pub working_messages: Vec<String>,
-    /// Tool definitions (name + schema, serialized).
+    /// Tool definitions (name + description + schema).
     pub tool_defs: Vec<String>,
 }
 
-/// The assembled prompt manifest: sections in canonical order with a
-/// token estimate that the caller can check against the provider's
-/// context window.
+/// The assembled prompt: sections in canonical order plus the estimated
+/// total the caller can check against the provider's context window.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PromptManifest {
     /// Ordered sections exactly as they will appear in the prompt.
@@ -37,12 +41,17 @@ pub struct PromptManifest {
 /// One section of the assembled prompt.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PromptSection {
+    /// Stable identity of the section (`system-instructions`,
+    /// `working-7`, `working-omitted`, …); indices are the snapshot's, so
+    /// a gap is visible when older content was trimmed.
     pub label: String,
+    /// Exact text this section contributes to the prompt.
     pub content: String,
+    /// Estimated tokens for `content`.
     pub estimated_tokens: u64,
 }
 
-/// Error when pinned (non-trimmable) content alone exceeds the budget.
+/// Pinned (non-trimmable) content alone exceeds the budget.
 #[derive(Debug, thiserror::Error)]
 #[error("pinned content alone requires ~{required} tokens, exceeding budget of {budget}")]
 pub struct PromptOverflow {
@@ -50,52 +59,46 @@ pub struct PromptOverflow {
     pub budget: u64,
 }
 
-fn estimate_tokens(text: &str) -> u64 {
-    // ~4 bytes per token for code/English
-    (text.len() as u64).div_ceil(4).max(if text.is_empty() { 0 } else { 1 })
-}
-
-/// Build a prompt manifest from a pinned snapshot and token budget.
+/// Build a prompt manifest from a pinned snapshot and a token budget.
 ///
-/// This is a **pure function**: same inputs → same output, no I/O, no
-/// side effects, no hidden global state.  Sections appear in a fixed
-/// canonical order:
+/// Sections appear in a fixed canonical order:
 ///
 /// 1. System instructions (pinned)
-/// 2. Order digest (pinned, if present)
-/// 3. Evidence excerpts (pinned, if present)
-/// 4. Recent failures (trimmable)
-/// 5. Working messages (trimmable)
+/// 2. Order digest (pinned, when an order is active)
+/// 3. Evidence excerpts (pinned)
+/// 4. Recent failures (trimmed oldest-first)
+/// 5. Working messages (trimmed oldest-first)
 /// 6. Tool definitions (pinned)
 ///
-/// Returns `Err(PromptOverflow)` when pinned content alone exceeds
+/// Trimmed groups keep the **newest contiguous** run that fits — never a
+/// scattered subset — and, when anything was dropped, carry an explicit
+/// omission marker so the model can see that history is missing rather
+/// than silently reading a doctored transcript.
+///
+/// Returns [`PromptOverflow`] when pinned content alone exceeds
 /// `budget_tokens`.
 pub fn build_prompt(
     snapshot: &PromptSnapshot,
     budget_tokens: u64,
 ) -> Result<PromptManifest, PromptOverflow> {
-    let mut sections = Vec::new();
-
-    // --- pinned sections ---
-    let sys = make_section("system-instructions", &snapshot.system_instructions);
-    sections.push(sys);
-
+    let mut sections = vec![make_section(
+        "system-instructions",
+        &snapshot.system_instructions,
+    )];
     if !snapshot.order_digest.is_empty() {
         sections.push(make_section("order-digest", &snapshot.order_digest));
     }
-
     for (i, excerpt) in snapshot.evidence_excerpts.iter().enumerate() {
         sections.push(make_section(&format!("evidence-{i}"), excerpt));
     }
+    let tool_sections: Vec<PromptSection> = snapshot
+        .tool_defs
+        .iter()
+        .enumerate()
+        .map(|(i, def)| make_section(&format!("tool-{i}"), def))
+        .collect();
 
-    let mut tool_sections = Vec::new();
-    for (i, def) in snapshot.tool_defs.iter().enumerate() {
-        tool_sections.push(make_section(&format!("tool-{i}"), def));
-    }
-
-    let pinned_tokens: u64 = sections.iter().map(|s| s.estimated_tokens).sum::<u64>()
-        + tool_sections.iter().map(|s| s.estimated_tokens).sum::<u64>();
-
+    let pinned_tokens = total_tokens(&sections).saturating_add(total_tokens(&tool_sections));
     if pinned_tokens > budget_tokens {
         return Err(PromptOverflow {
             required: pinned_tokens,
@@ -103,32 +106,70 @@ pub fn build_prompt(
         });
     }
 
-    // --- trimmable sections (trim from oldest first if over budget) ---
     let mut remaining = budget_tokens - pinned_tokens;
-
-    for (i, failure) in snapshot.recent_failures.iter().enumerate() {
-        let sec = make_section(&format!("failure-{i}"), failure);
-        if sec.estimated_tokens <= remaining {
-            remaining -= sec.estimated_tokens;
-            sections.push(sec);
-        }
-    }
-
-    for (i, msg) in snapshot.working_messages.iter().enumerate() {
-        let sec = make_section(&format!("working-{i}"), msg);
-        if sec.estimated_tokens <= remaining {
-            remaining -= sec.estimated_tokens;
-            sections.push(sec);
-        }
-    }
-
+    remaining = push_recent(
+        &mut sections,
+        &snapshot.recent_failures,
+        "failure",
+        "earlier failures",
+        remaining,
+    );
+    push_recent(
+        &mut sections,
+        &snapshot.working_messages,
+        "working",
+        "earlier messages",
+        remaining,
+    );
     sections.extend(tool_sections);
 
-    let estimated_tokens = sections.iter().map(|s| s.estimated_tokens).sum();
+    let estimated_tokens = total_tokens(&sections);
     Ok(PromptManifest {
         sections,
         estimated_tokens,
     })
+}
+
+/// Append the newest contiguous run of `items` that fits in `budget`,
+/// preceded by an omission marker when older items were dropped. Returns
+/// the budget left over.
+fn push_recent(
+    sections: &mut Vec<PromptSection>,
+    items: &[String],
+    label: &str,
+    noun: &str,
+    budget: u64,
+) -> u64 {
+    let mut start = items.len();
+    let mut used = 0u64;
+    for (i, item) in items.iter().enumerate().rev() {
+        let cost = estimate_tokens(item);
+        // Accepting `i` leaves `i` older items omitted, and the marker
+        // announcing them costs tokens too.
+        let marker = (i > 0).then(|| estimate_tokens(&omission_text(i, noun)));
+        if used + cost + marker.unwrap_or(0) > budget {
+            break;
+        }
+        used += cost;
+        start = i;
+    }
+    if start > 0 {
+        let marker = make_section(&format!("{label}-omitted"), &omission_text(start, noun));
+        used += marker.estimated_tokens;
+        sections.push(marker);
+    }
+    for (i, item) in items.iter().enumerate().skip(start) {
+        sections.push(make_section(&format!("{label}-{i}"), item));
+    }
+    budget.saturating_sub(used)
+}
+
+fn omission_text(count: usize, noun: &str) -> String {
+    format!("[{count} {noun} omitted to fit the context budget]")
+}
+
+fn total_tokens(sections: &[PromptSection]) -> u64 {
+    sections.iter().map(|s| s.estimated_tokens).sum()
 }
 
 fn make_section(label: &str, content: &str) -> PromptSection {
@@ -154,37 +195,68 @@ mod tests {
         }
     }
 
+    fn labels(manifest: &PromptManifest) -> Vec<&str> {
+        manifest.sections.iter().map(|s| s.label.as_str()).collect()
+    }
+
     #[test]
     fn build_prompt_is_deterministic() {
-        let snapshot = test_snapshot();
-        let a = build_prompt(&snapshot, 25_000).unwrap();
-        let b = build_prompt(&snapshot, 25_000).unwrap();
+        assert_eq!(
+            build_prompt(&test_snapshot(), 25_000).unwrap(),
+            build_prompt(&test_snapshot(), 25_000).unwrap()
+        );
+    }
+
+    #[test]
+    fn manifest_serializes_byte_identically_for_equal_snapshots() {
+        let a = serde_json::to_vec(&build_prompt(&test_snapshot(), 25_000).unwrap()).unwrap();
+        let b = serde_json::to_vec(&build_prompt(&test_snapshot(), 25_000).unwrap()).unwrap();
         assert_eq!(a, b);
     }
 
     #[test]
+    fn manifest_serialization_matches_pinned_bytes() {
+        let snapshot = PromptSnapshot {
+            system_instructions: "sys".into(),
+            order_digest: String::new(),
+            evidence_excerpts: vec![],
+            recent_failures: vec![],
+            working_messages: vec!["hi".into()],
+            tool_defs: vec!["t".into()],
+        };
+        let json = serde_json::to_string(&build_prompt(&snapshot, 100).unwrap()).unwrap();
+        assert_eq!(
+            json,
+            r#"{"sections":[{"label":"system-instructions","content":"sys","estimated_tokens":1},{"label":"working-0","content":"hi","estimated_tokens":1},{"label":"tool-0","content":"t","estimated_tokens":1}],"estimated_tokens":3}"#
+        );
+    }
+
+    #[test]
     fn build_prompt_respects_budget() {
-        let snapshot = test_snapshot();
-        let manifest = build_prompt(&snapshot, 25_000).unwrap();
+        let manifest = build_prompt(&test_snapshot(), 25_000).unwrap();
         assert!(manifest.estimated_tokens <= 25_000);
+        assert_eq!(
+            manifest.estimated_tokens,
+            manifest
+                .sections
+                .iter()
+                .map(|s| s.estimated_tokens)
+                .sum::<u64>()
+        );
     }
 
     #[test]
     fn build_prompt_overflow_when_pinned_exceeds_budget() {
-        let snapshot = test_snapshot();
-        // Budget of 1 token should fail since system instructions alone need more.
-        let err = build_prompt(&snapshot, 1).unwrap_err();
+        let err = build_prompt(&test_snapshot(), 1).unwrap_err();
         assert!(err.required > 1);
         assert_eq!(err.budget, 1);
     }
 
     #[test]
     fn build_prompt_sections_in_canonical_order() {
-        let snapshot = test_snapshot();
-        let manifest = build_prompt(&snapshot, 25_000).unwrap();
-        let labels: Vec<&str> = manifest.sections.iter().map(|s| s.label.as_str()).collect();
+        let manifest = build_prompt(&test_snapshot(), 25_000).unwrap();
         assert_eq!(
-            labels,
+            labels(&manifest),
             [
                 "system-instructions",
                 "order-digest",
@@ -197,23 +269,51 @@ mod tests {
     }
 
     #[test]
-    fn build_prompt_trims_working_messages_when_tight() {
+    fn trimming_keeps_the_newest_contiguous_messages() {
         let mut snapshot = test_snapshot();
-        // Add many large working messages
-        for i in 0..100 {
-            snapshot
-                .working_messages
-                .push(format!("message {i}: {}", "x".repeat(400)));
-        }
-        let manifest = build_prompt(&snapshot, 100).unwrap();
-        // Should have fewer working messages than input due to trimming.
-        let working_count = manifest
+        snapshot.recent_failures.clear();
+        snapshot.working_messages = (0..10)
+            .map(|i| format!("m{i}: {}", "x".repeat(36)))
+            .collect();
+        // Pinned content is ~17 tokens; leave room for ~3 messages.
+        let manifest = build_prompt(&snapshot, 60).unwrap();
+
+        let kept: Vec<&str> = labels(&manifest)
+            .into_iter()
+            .filter(|l| l.starts_with("working-"))
+            .collect();
+        assert!(kept.len() > 1 && kept.len() < 11, "kept: {kept:?}");
+        // The marker comes first, then an unbroken run ending at the newest.
+        assert_eq!(kept[0], "working-omitted");
+        let indices: Vec<usize> = kept[1..]
+            .iter()
+            .map(|l| l.trim_start_matches("working-").parse().unwrap())
+            .collect();
+        assert_eq!(*indices.last().unwrap(), 9, "newest message must survive");
+        assert!(
+            indices.windows(2).all(|w| w[1] == w[0] + 1),
+            "trimmed run must be contiguous: {indices:?}"
+        );
+        // The marker names exactly how many older messages are missing.
+        let marker = manifest
             .sections
             .iter()
-            .filter(|s| s.label.starts_with("working-"))
-            .count();
-        assert!(working_count < 101);
-        assert!(manifest.estimated_tokens <= 100);
+            .find(|s| s.label == "working-omitted")
+            .unwrap();
+        assert_eq!(
+            marker.content,
+            format!(
+                "[{} earlier messages omitted to fit the context budget]",
+                indices[0]
+            )
+        );
+        assert!(manifest.estimated_tokens <= 60);
+    }
+
+    #[test]
+    fn nothing_omitted_means_no_marker() {
+        let manifest = build_prompt(&test_snapshot(), 25_000).unwrap();
+        assert!(!labels(&manifest).iter().any(|l| l.ends_with("-omitted")));
     }
 
     #[test]
@@ -221,9 +321,6 @@ mod tests {
         let mut snapshot = test_snapshot();
         snapshot.order_digest = String::new();
         let manifest = build_prompt(&snapshot, 25_000).unwrap();
-        assert!(!manifest
-            .sections
-            .iter()
-            .any(|s| s.label == "order-digest"));
+        assert!(!labels(&manifest).contains(&"order-digest"));
     }
 }

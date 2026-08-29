@@ -22,9 +22,25 @@ pub(super) struct LoopState {
     pub(super) reasoning_effort: Option<String>,
     /// Last assembled request, shared with [`AgentHandle::last_prompt`].
     pub(super) last_prompt: Arc<Mutex<Option<PromptInspect>>>,
+    /// Guarded-mode work-order store shared with the tool context.
+    /// `None` in unguarded runs, where no order digest is ever pinned.
+    pub(super) work_orders: Option<Arc<crate::governance::WorkOrderStore>>,
 }
 
 impl LoopState {
+    /// The order this run is working under, if any.
+    pub(super) fn active_work_order(&self) -> Option<Arc<crate::governance::ActiveWorkOrder>> {
+        self.work_orders.as_ref()?.active()
+    }
+
+    /// Digest of the order this run is working under, pinned into every
+    /// request while it is active. `None` in unguarded runs and before an
+    /// order is accepted, which keeps those prompts byte-identical to
+    /// what they were before governance existed.
+    pub(super) fn work_order_digest(&self) -> Option<String> {
+        Some(self.active_work_order()?.digest())
+    }
+
     pub(super) fn estimate_working(&self) -> u64 {
         let mut bytes = 0usize;
         for m in &self.working {

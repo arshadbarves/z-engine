@@ -33,6 +33,10 @@ pub struct LoopConfig {
     pub auto_allow_tools: Vec<String>,
     /// Starting permission mode (spec section 9 v1.1 parity).
     pub initial_mode: crate::agent::events::PermissionMode,
+    /// Guarded mode (opt-in, spec Task 4): record reads as evidence and
+    /// require a work order to scope changes. `false` runs exactly as
+    /// before the governance feature existed.
+    pub guarded: bool,
 }
 
 impl LoopConfig {
@@ -53,6 +57,7 @@ impl LoopConfig {
             mcp_servers: Vec::new(),
             auto_allow_tools: Vec::new(),
             initial_mode: crate::agent::events::PermissionMode::Normal,
+            guarded: false,
         }
     }
 }

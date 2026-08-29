@@ -8,6 +8,9 @@ const AUTO_ALLOW_TOOLS: &[&str] = &[
     "glob",
     "grep",
     "update_context_notes",
+    // Declaring scope is not a mutation: the work order is validated
+    // against fresh evidence and only ever narrows what may be written.
+    "set_work_order",
     // Sub-agent delegation is read-only by construction (spec section 9 v0.7).
     "task",
     "go_to_definition",

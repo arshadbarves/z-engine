@@ -16,6 +16,7 @@ pub mod events;
 
 mod config;
 mod execute;
+mod guarded;
 mod handle;
 mod prompt_inspect;
 mod revert;

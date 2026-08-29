@@ -17,6 +17,7 @@ pub mod glob;
 pub mod grep;
 pub mod lsp_tools;
 pub mod read_file;
+pub mod set_work_order;
 pub mod task;
 pub mod write_file;
 
@@ -30,6 +31,7 @@ mod path_identity;
 mod proc_helpers;
 mod read_file_evidence;
 mod shell;
+mod work_order_ctx;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -162,6 +164,15 @@ impl ToolRegistry {
                 )
             })
             .collect()
+    }
+
+    /// Guarded-mode toolset (spec Task 4): the built-ins plus
+    /// `set_work_order`. Guarded runs are opt-in, so `builtins()` stays
+    /// exactly as it was — an unguarded run never sees governance tools.
+    pub fn guarded_builtins() -> Self {
+        let mut reg = Self::builtins();
+        reg.register(Arc::new(set_work_order::SetWorkOrderTool));
+        reg
     }
 
     /// Built-in toolset (grows each version).

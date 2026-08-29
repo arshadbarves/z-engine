@@ -20,6 +20,7 @@ use crate::tools::{ToolCtx, ToolRegistry};
 
 use super::LoopConfig;
 use super::events::{Command, Event};
+use super::guarded;
 use super::handle::ResumeState;
 use super::prompt_inspect::PromptInspect;
 use super::revert::{revert_last_turn, revert_to_turn, trim_working_before_user_turn};
@@ -71,6 +72,9 @@ pub(super) async fn agent_task(
             }
         }
     }
+    // Guarded mode (opt-in): per-run evidence + work-order stores, and the
+    // governance tool. Unguarded runs get `None` and change nothing.
+    let guarded = guarded::attach(&cfg, &mut registry, &ev_tx);
     if let Ok(mut slot) = last_prompt.lock() {
         *slot = Some(PromptInspect::preview(&cfg, registry.defs()));
     }
@@ -83,6 +87,11 @@ pub(super) async fn agent_task(
         cfg.tmp_dir.clone(),
     )
     .with_task_runner(runner);
+    if let Some(g) = &guarded {
+        ctx = ctx
+            .with_evidence(Arc::clone(&g.evidence))
+            .with_work_orders(Arc::clone(&g.work_orders));
+    }
     ctx.output_tx = Arc::new(output_tx);
     ctx.notes = Arc::clone(&notes);
 
@@ -126,6 +135,7 @@ pub(super) async fn agent_task(
         current_task: String::new(),
         reasoning_effort: None,
         last_prompt,
+        work_orders: guarded.as_ref().map(|g| Arc::clone(&g.work_orders)),
     };
     // Seed from a previous session's transcript (resume).
     let mut titled = resume.is_some();

@@ -1,13 +1,19 @@
-//! Governance boundary: typed work orders that bind agent goals to
+//! Governance boundary: typed work orders binding an agent's goal to
 //! evidence-backed writable paths, and a pure prompt builder that
 //! assembles model instructions deterministically from a pinned
 //! snapshot.
 //!
-//! Work-order validation is deliberately separate from prompt
-//! assembly so each concern can be tested and evolved independently.
+//! Split by reason to change: the port onto workspace evidence
+//! (`evidence_view`), admission rules (`work_order`), the admitted order
+//! and its single-slot store (`active`), and bounded prompt assembly
+//! (`prompt`).
 
+pub mod active;
+pub mod evidence_view;
 pub mod prompt;
 pub mod work_order;
 
+pub use active::{ActiveWorkOrder, WorkOrderStore};
+pub use evidence_view::EvidenceView;
 pub use prompt::{PromptManifest, PromptOverflow, PromptSection, PromptSnapshot, build_prompt};
-pub use work_order::{AcceptanceCommand, ActiveWorkOrder, WorkOrder, WorkOrderError};
+pub use work_order::{AcceptanceCommand, WorkOrder, WorkOrderError};

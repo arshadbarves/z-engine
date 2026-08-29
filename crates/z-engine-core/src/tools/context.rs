@@ -41,6 +41,10 @@ pub struct ToolCtx {
     /// Optional revision-scoped evidence recorder (guarded mode, Task 3+).
     /// `None` leaves reads behaving exactly as before this feature existed.
     pub evidence: Option<Arc<EvidenceStore>>,
+    /// Optional single-slot work-order store (guarded mode, Task 4+).
+    /// `None` means this run declares no scope, so `set_work_order` fails
+    /// closed and no order digest ever reaches the prompt.
+    pub work_orders: Option<Arc<crate::governance::WorkOrderStore>>,
 }
 
 /// Bundles the ledger and blob store used to record and check freshness of
@@ -62,6 +66,16 @@ impl EvidenceStore {
             blobs,
             latest: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Whether this run's ledger holds a record with `id`. A ledger that
+    /// cannot be read reports `false`: an unreadable transcript must never
+    /// make a cited evidence id look genuine.
+    pub(super) fn knows(&self, id: &str) -> bool {
+        self.ledger
+            .read_all()
+            .map(|records| records.iter().any(|r| r.id == id))
+            .unwrap_or(false)
     }
 }
 
@@ -103,6 +117,7 @@ impl ToolCtx {
             checkpoints: Arc::new(checkpoint::CheckpointStore::default()),
             output_tx: Arc::new(tokio::sync::mpsc::unbounded_channel().0),
             evidence: None,
+            work_orders: None,
         }
     }
 
