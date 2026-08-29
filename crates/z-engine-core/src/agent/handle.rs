@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
-use z_engine_provider::{ChatMessage, Client};
+use z_engine_provider::{ChatMessage, ChatProvider, Client};
 
 use super::LoopConfig;
 use super::events::{Command, Event};
@@ -139,16 +139,14 @@ pub struct ResumeState {
 }
 
 /// Spawn with an optional session recorder (persistence) and optional
-/// replayed state (resume).
+/// replayed state (resume). Builds a real HTTP [`Client`] from
+/// `cfg.base_url`/`cfg.api_key`; use [`spawn_with_provider`] to inject a
+/// different transport (tests, Task 8 replay fixtures).
 pub fn spawn_with_recorder(
     cfg: LoopConfig,
     resume: Option<ResumeState>,
     recorder: Option<SessionWriter>,
 ) -> (AgentHandle, EventRx) {
-    let abort_flag = Arc::new(AtomicBool::new(false));
-
-    // One client, cloned for the sub-agent runner so Settings key updates
-    // apply to parent and delegated loops.
     let client = match Client::new(&cfg.base_url, cfg.api_key.clone()) {
         Ok(c) => c,
         Err(e) => {
@@ -166,14 +164,30 @@ pub fn spawn_with_recorder(
             );
         }
     };
-    let sub_client = client.clone();
+    spawn_with_provider(cfg, Arc::new(client), resume, recorder)
+}
+
+/// Spawn against an injected [`ChatProvider`] (any transport implementing
+/// the seam), bypassing `cfg.base_url`/`cfg.api_key` client construction.
+/// Used by mocked/replay tests (Task 8) that never touch the network.
+pub fn spawn_with_provider(
+    cfg: LoopConfig,
+    client: Arc<dyn ChatProvider>,
+    resume: Option<ResumeState>,
+    recorder: Option<SessionWriter>,
+) -> (AgentHandle, EventRx) {
+    let abort_flag = Arc::new(AtomicBool::new(false));
+
+    // One provider handle, cloned for the sub-agent runner so Settings
+    // key updates apply to parent and delegated loops.
+    let sub_client = Arc::clone(&client);
     let model = cfg.model.clone();
     let project_root = cfg.project_root.clone();
     let tmp_dir = cfg.tmp_dir.clone();
     let max_output = cfg.max_output_tokens;
     let sub_abort = Arc::clone(&abort_flag);
     let runner: crate::tools::SubAgentRunner = Arc::new(move |prompt: String, max_rounds: u32| {
-        let client = sub_client.clone();
+        let client = Arc::clone(&sub_client);
         let model = model.clone();
         let root = project_root.clone();
         let tmp = tmp_dir.clone();

@@ -4,7 +4,7 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use z_engine_provider::{ChatMessage, ChatRequest, Client, StreamEvent};
+use z_engine_provider::{ChatMessage, ChatProvider, ChatRequest, StreamEvent};
 
 use super::LoopConfig;
 
@@ -12,7 +12,7 @@ use super::LoopConfig;
 /// this round's diffs against the original task. Returns findings text, or
 /// None for "no findings" / transport failure (never blocks the turn).
 pub(super) async fn run_review(
-    client: &Client,
+    client: &dyn ChatProvider,
     model: &str,
     task: &str,
     edit_results: &[String],
@@ -56,7 +56,11 @@ pub(super) async fn run_review(
 }
 
 /// Side-request that compresses demoted turns into terse summary bullets.
-pub(super) async fn summarize_segment(client: &Client, cfg: &LoopConfig, input: &str) -> String {
+pub(super) async fn summarize_segment(
+    client: &dyn ChatProvider,
+    cfg: &LoopConfig,
+    input: &str,
+) -> String {
     let clipped: String = input.chars().take(12_000).collect();
     let req = ChatRequest::new(
         cfg.model.clone(),
@@ -85,7 +89,7 @@ pub(super) async fn summarize_segment(client: &Client, cfg: &LoopConfig, input: 
 /// Non-blocking title for the sessions sidebar. Failures return `None`
 /// so the caller can fall back to a clipped first line of the prompt.
 pub(super) async fn generate_session_title(
-    client: &Client,
+    client: &dyn ChatProvider,
     model: &str,
     prompt: &str,
 ) -> Option<String> {

@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use z_engine_provider::{
-    AccumulatedToolCall, ChatMessage, ChatRequest, Client, ToolCall, ToolCallAccumulator,
+    AccumulatedToolCall, ChatMessage, ChatProvider, ChatRequest, ToolCall, ToolCallAccumulator,
 };
 
 use crate::context::{
@@ -42,7 +42,7 @@ pub(super) enum TurnOutcome {
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn run_turn(
     cfg: &LoopConfig,
-    client: &Client,
+    client: &dyn ChatProvider,
     registry: &ToolRegistry,
     ctx: &ToolCtx,
     state: &mut LoopState,
@@ -276,7 +276,7 @@ pub(super) async fn run_turn(
 
 /// Compaction driver (spec section 6): elide L4, summarize L3 into L1.
 async fn compact_working_set(
-    client: &Client,
+    client: &dyn ChatProvider,
     cfg: &LoopConfig,
     state: &mut LoopState,
     notes: &Arc<Mutex<NotesStore>>,

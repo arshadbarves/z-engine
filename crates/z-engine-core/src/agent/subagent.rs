@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use z_engine_provider::{
-    AccumulatedToolCall, ChatMessage, ChatRequest, Client, StreamEvent, ToolCall,
+    AccumulatedToolCall, ChatMessage, ChatProvider, ChatRequest, StreamEvent, ToolCall,
     ToolCallAccumulator,
 };
 
@@ -19,7 +19,7 @@ use super::execute::parse_input;
 /// transcript, bounded rounds; returns the final assistant text only.
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn run_isolated(
-    client: Client,
+    client: Arc<dyn ChatProvider>,
     model: String,
     project_root: PathBuf,
     tmp_dir: PathBuf,

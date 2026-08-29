@@ -29,5 +29,7 @@ mod turn;
 
 pub use config::LoopConfig;
 pub use events::{ApprovalDecision, Command, Event, PermissionMode};
-pub use handle::{AgentHandle, EventRx, ResumeState, spawn, spawn_with_recorder};
+pub use handle::{
+    AgentHandle, EventRx, ResumeState, spawn, spawn_with_provider, spawn_with_recorder,
+};
 pub use prompt_inspect::PromptInspect;

@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use z_engine_provider::{ChatMessage, ChatRequest, Client, Usage};
+use z_engine_provider::{ChatMessage, ChatProvider, ChatRequest, Usage};
 
 use crate::context::{
     budget::BudgetMeter,
@@ -31,7 +31,7 @@ use super::turn::{TurnOutcome, run_turn};
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn agent_task(
     mut cfg: LoopConfig,
-    client: Client,
+    client: Arc<dyn ChatProvider>,
     perms: Arc<Mutex<PolicyEngine>>,
     registry: ToolRegistry,
     mut cmd_rx: UnboundedReceiver<Command>,
@@ -179,7 +179,7 @@ pub(super) async fn agent_task(
                     let ev_tx2 = ev_tx.clone();
                     let path = recorder.as_ref().map(|w| w.path.clone());
                     tokio::spawn(async move {
-                        let title = generate_session_title(&client, &model, &prompt)
+                        let title = generate_session_title(&*client, &model, &prompt)
                             .await
                             .unwrap_or_else(|| crate::session::fallback_title(&prompt));
                         if let Some(path) = path {
@@ -199,7 +199,7 @@ pub(super) async fn agent_task(
 
                 let outcome = run_turn(
                     &cfg,
-                    &client,
+                    &*client,
                     &registry,
                     &ctx,
                     &mut state,

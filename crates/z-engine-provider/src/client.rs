@@ -17,6 +17,7 @@
 //! logged; `Debug` renders it as `<redacted>`.
 
 use super::sse::SseDecoder;
+use super::transport::{ChatProvider, EventStream};
 use super::types::{ChatRequest, StreamEvent};
 use std::sync::Arc;
 use std::time::Duration;
@@ -240,6 +241,20 @@ impl Client {
         });
 
         rx
+    }
+}
+
+impl ChatProvider for Client {
+    fn stream_chat(
+        &self,
+        request: &ChatRequest,
+        abort: Arc<std::sync::atomic::AtomicBool>,
+    ) -> EventStream {
+        Client::stream_chat(self, request, abort)
+    }
+
+    fn set_api_key(&self, key: Option<String>) {
+        Client::set_api_key(self, key)
     }
 }
 
