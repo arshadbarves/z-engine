@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 use std::path::Path;
 
 use super::{Tool, ToolCtx, ToolError, ToolOutput, truncate_with_tempfile, unified_diff};
+use crate::governance::changed_line_range;
 
 const PREVIEW_DIFF_CHARS: usize = 1_600;
 
@@ -89,6 +90,13 @@ impl Tool for WriteFileTool {
         } else {
             String::new()
         };
+
+        // Guarded runs authorize the write against the work order and this
+        // run's evidence before creating directories or touching disk.
+        // `old` is the image being replaced, so freshness is judged against
+        // the bytes this write destroys.
+        ctx.authorize_mutation(&resolved, old.as_bytes(), changed_line_range(&old, content))
+            .await?;
 
         if let Some(parent) = resolved.parent() {
             tokio::fs::create_dir_all(parent)
@@ -199,5 +207,95 @@ mod tests {
         assert!(out.result.contains("+TWO"));
         assert!(out.result.contains("@@")); // hunk header
         assert_eq!(std::fs::read_to_string(&p).unwrap(), "line1\nTWO\nline3\n");
+    }
+
+    // ---- guarded mode (Task 5): authorization runs before any write ----
+
+    const LIB: &str = "pub fn parse(s: &str) -> usize {\n    s.len()\n}\n";
+
+    /// A guarded context that read only line 1 of `lib.rs` and declared an
+    /// order over it — enough scope, deliberately not enough coverage.
+    fn guarded_lib(repo: &Path) -> (ToolCtx, tempfile::TempDir) {
+        std::fs::write(repo.join("lib.rs"), LIB).unwrap();
+        let (ctx, store) =
+            crate::tools::test_support::guarded_ctx(repo, Some(crate::lsp::LspHealth::Ready));
+        let resolved = ctx.resolve(Path::new("lib.rs"));
+        ctx.note_read(&resolved);
+        let id = ctx
+            .record_read_evidence(
+                &resolved,
+                Some((1, 1)),
+                LIB.as_bytes(),
+                b"pub fn parse(s: &str) -> usize {",
+            )
+            .unwrap()
+            .unwrap();
+        ctx.set_work_order(&crate::governance::WorkOrder {
+            id: "wo-1".into(),
+            goal: "make parse fallible".into(),
+            writable_paths: vec![std::path::PathBuf::from("lib.rs")],
+            target_symbols: vec!["parse".into()],
+            evidence_ids: vec![id],
+            acceptance_commands: Vec::new(),
+        })
+        .unwrap();
+        (ctx, store)
+    }
+
+    #[tokio::test]
+    async fn guarded_overwrites_need_evidence_covering_every_changed_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (ctx, _store) = guarded_lib(tmp.path());
+
+        let err = WriteFileTool
+            .run(
+                json!({"path": "lib.rs", "content": "pub fn parse(s: &str) -> usize {\n    0\n}\n"}),
+                &ctx,
+            )
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("only covers"), "{err}");
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("lib.rs")).unwrap(),
+            LIB
+        );
+    }
+
+    #[tokio::test]
+    async fn guarded_creation_of_unread_files_is_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (ctx, _store) = guarded_lib(tmp.path());
+
+        let err = WriteFileTool
+            .run(json!({"path": "new.rs", "content": "fn main() {}\n"}), &ctx)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("guarded mode"), "{err}");
+        assert!(!tmp.path().join("new.rs").exists());
+    }
+
+    #[tokio::test]
+    async fn guarded_writes_inside_the_covered_range_still_apply() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (ctx, _store) = guarded_lib(tmp.path());
+        // Re-read the whole file: coverage now spans every changed line.
+        let resolved = ctx.resolve(Path::new("lib.rs"));
+        ctx.record_read_evidence(&resolved, None, LIB.as_bytes(), LIB.as_bytes())
+            .unwrap()
+            .unwrap();
+
+        let out = WriteFileTool
+            .run(
+                json!({"path": "lib.rs", "content": "pub fn parse(s: &str) -> usize {\n    0\n}\n"}),
+                &ctx,
+            )
+            .await
+            .unwrap();
+        assert!(out.ok, "{}", out.result);
+        assert!(
+            std::fs::read_to_string(tmp.path().join("lib.rs"))
+                .unwrap()
+                .contains("    0")
+        );
     }
 }

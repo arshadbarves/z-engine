@@ -31,6 +31,10 @@ pub struct ToolCtx {
     pub task_runner: Option<SubAgentRunner>,
     /// Language server when project supports one.
     pub lsp: Option<Arc<crate::lsp::LspClient>>,
+    /// Rust semantic health provider backing the mutation gate. Set with
+    /// `lsp` via [`ToolCtx::attach_lsp`]; `None` means the gate cannot
+    /// confirm semantics and must refuse guarded Rust mutations.
+    pub semantics: Option<Arc<dyn super::semantics::RustSemantics>>,
     /// Rendered results of this round's editing tools, drained by the
     /// reviewer pass (spec section 9 v0.9).
     pub edit_journal: Arc<Mutex<Vec<String>>>,
@@ -77,6 +81,14 @@ impl EvidenceStore {
             .map(|records| records.iter().any(|r| r.id == id))
             .unwrap_or(false)
     }
+
+    /// The latest record captured for an already-canonicalized path,
+    /// regardless of whether it still matches disk. Freshness is the
+    /// caller's judgement here — the mutation gate must distinguish
+    /// "never read" from "read, then changed" to explain its refusal.
+    pub(super) fn latest_for(&self, canonical: &Path) -> Option<EvidenceRecord> {
+        self.latest.lock().ok()?.get(canonical).cloned()
+    }
 }
 
 impl std::fmt::Debug for EvidenceStore {
@@ -113,6 +125,7 @@ impl ToolCtx {
             repo_map_dirty: Arc::new(std::sync::atomic::AtomicBool::new(true)),
             task_runner: None,
             lsp: None,
+            semantics: None,
             edit_journal: Arc::new(Mutex::new(Vec::new())),
             checkpoints: Arc::new(checkpoint::CheckpointStore::default()),
             output_tx: Arc::new(tokio::sync::mpsc::unbounded_channel().0),

@@ -26,11 +26,15 @@ mod checkpoint_restore;
 mod context;
 mod edit_ladder;
 mod fsutil;
+mod gate_ctx;
 mod grep_backend;
 mod path_identity;
 mod proc_helpers;
 mod read_file_evidence;
+mod semantics;
 mod shell;
+#[cfg(test)]
+mod test_support;
 mod work_order_ctx;
 
 use std::collections::HashMap;
@@ -54,6 +58,11 @@ pub(crate) fn shell_line(command: &str) -> tokio::process::Command {
 pub enum ToolError {
     #[error("invalid input for {tool}: {problem}")]
     InvalidInput { tool: &'static str, problem: String },
+    /// A guarded run refused this mutation. Carries the gate's own
+    /// vocabulary so the model reads the exact unmet condition rather than
+    /// a flattened string.
+    #[error(transparent)]
+    Gate(#[from] crate::governance::GateFailure),
     #[error("{0}")]
     Failed(String),
 }

@@ -57,6 +57,9 @@ impl Connection {
 
 pub mod batch;
 pub mod cargo_check;
+pub mod health;
+
+pub use health::LspHealth;
 
 /// Public wrapper used by LSP tooling to build document URIs.
 pub fn percent_encode_path_public(p: &Path) -> String {

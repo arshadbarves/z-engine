@@ -73,8 +73,12 @@ pub(super) async fn agent_task(
         }
     }
     // Guarded mode (opt-in): per-run evidence + work-order stores, and the
-    // governance tool. Unguarded runs get `None` and change nothing.
-    let guarded = guarded::attach(&cfg, &mut registry, &ev_tx);
+    // governance tool. Unguarded runs get `None` and change nothing; a
+    // guarded run whose governance storage fails ends here rather than
+    // executing tools with `cfg.guarded` set but nothing enforcing it.
+    let Ok(guarded) = guarded::attach(&cfg, &mut registry, &ev_tx) else {
+        return; // `attach` already reported why; the event stream closes here
+    };
     if let Ok(mut slot) = last_prompt.lock() {
         *slot = Some(PromptInspect::preview(&cfg, registry.defs()));
     }
@@ -116,7 +120,7 @@ pub(super) async fn agent_task(
     // Language server (spec section 9 v0.8): Rust projects with
     // rust-analyzer installed get compiler-grade tooling + edit hooks.
     if let Some(server) = crate::lsp::LspClient::probe(&cfg.project_root) {
-        ctx.lsp = Some(Arc::new(crate::lsp::LspClient::new(
+        ctx.attach_lsp(Arc::new(crate::lsp::LspClient::new(
             &cfg.project_root,
             server,
         )));

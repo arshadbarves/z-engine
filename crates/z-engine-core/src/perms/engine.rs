@@ -116,6 +116,17 @@ impl PolicyEngine {
         })
     }
 
+    /// True when **every** segment of the command line is on the built-in
+    /// read-only allowlist, so running it cannot change the working tree.
+    ///
+    /// Deliberately independent of session rules and prior approvals: those
+    /// record what a *user* permitted, which is not proof about a command's
+    /// write set. An unparseable command line proves nothing and is
+    /// therefore not read-only.
+    pub fn is_provably_read_only(command: &str) -> bool {
+        segments(command).is_some_and(|segs| segs.iter().all(|seg| segment_is_safe(seg.trim())))
+    }
+
     /// Derive the "always this prefix" rule shown by the approval modal:
     /// first two whitespace-separated tokens plus `*` (falls back to the
     /// whole trimmed command when there's only one token).

@@ -10,6 +10,7 @@ use std::path::Path;
 
 use super::edit_ladder::{Replacement, apply_ladder};
 use super::{Tool, ToolCtx, ToolError, ToolOutput, truncate_with_tempfile, unified_diff};
+use crate::governance::changed_line_range;
 
 /// How far (in lines) a hint may be from a match to count as "nearest".
 pub(crate) const PREVIEW_DIFF_CHARS: usize = 1_600;
@@ -125,6 +126,17 @@ impl Tool for EditFileTool {
             ToolError::Failed(msg)
         })?;
 
+        // Guarded runs authorize the *localized* patch against the work
+        // order and this run's evidence before anything reaches disk.
+        // `current` is the snapshot the ladder matched against, so the
+        // gate judges exactly the bytes about to be replaced.
+        ctx.authorize_mutation(
+            &resolved,
+            current.as_bytes(),
+            changed_line_range(&current, &rep.new_content),
+        )
+        .await?;
+
         super::atomic_write(&resolved, rep.new_content.as_bytes())
             .await
             .map_err(|e| ToolError::Failed(format!("write {disp}: {e}")))?;
@@ -223,5 +235,96 @@ mod tests {
             std::fs::read_to_string(&p).unwrap(),
             "one\nTWO\nTHREE\nfive\n"
         );
+    }
+
+    // ---- guarded mode (Task 5): authorization runs before any write ----
+
+    const LIB: &str = "pub fn parse(s: &str) -> usize {\n    s.len()\n}\n";
+
+    /// A guarded context that has read `lib.rs` and (optionally) declared
+    /// an order over it, mirroring what `read_file` + `set_work_order` do.
+    fn guarded_lib(repo: &Path, with_order: bool) -> (ToolCtx, tempfile::TempDir) {
+        std::fs::write(repo.join("lib.rs"), LIB).unwrap();
+        let (ctx, store) =
+            crate::tools::test_support::guarded_ctx(repo, Some(crate::lsp::LspHealth::Ready));
+        let resolved = ctx.resolve(Path::new("lib.rs"));
+        ctx.note_read(&resolved);
+        let id = ctx
+            .record_read_evidence(&resolved, None, LIB.as_bytes(), LIB.as_bytes())
+            .unwrap()
+            .unwrap();
+        if with_order {
+            ctx.set_work_order(&crate::governance::WorkOrder {
+                id: "wo-1".into(),
+                goal: "make parse fallible".into(),
+                writable_paths: vec![std::path::PathBuf::from("lib.rs")],
+                target_symbols: vec!["parse".into()],
+                evidence_ids: vec![id],
+                acceptance_commands: Vec::new(),
+            })
+            .unwrap();
+        }
+        (ctx, store)
+    }
+
+    #[tokio::test]
+    async fn guarded_edits_without_a_work_order_never_touch_the_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (ctx, _store) = guarded_lib(tmp.path(), false);
+
+        let err = EditFileTool
+            .run(
+                json!({"path": "lib.rs", "old_string": "s.len()", "new_string": "s.len() + 1"}),
+                &ctx,
+            )
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("set_work_order"), "{err}");
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("lib.rs")).unwrap(),
+            LIB
+        );
+    }
+
+    #[tokio::test]
+    async fn guarded_edits_inside_the_order_still_apply() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (ctx, _store) = guarded_lib(tmp.path(), true);
+
+        let out = EditFileTool
+            .run(
+                json!({"path": "lib.rs", "old_string": "s.len()", "new_string": "s.len() + 1"}),
+                &ctx,
+            )
+            .await
+            .unwrap();
+        assert!(out.ok, "{}", out.result);
+        assert!(
+            std::fs::read_to_string(tmp.path().join("lib.rs"))
+                .unwrap()
+                .contains("s.len() + 1")
+        );
+    }
+
+    #[tokio::test]
+    async fn guarded_edits_outside_the_order_scope_are_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (ctx, _store) = guarded_lib(tmp.path(), true);
+        let other = tmp.path().join("other.rs");
+        std::fs::write(&other, LIB).unwrap();
+        ctx.note_read(&other);
+
+        let err = EditFileTool
+            .run(
+                json!({"path": "other.rs", "old_string": "s.len()", "new_string": "0"}),
+                &ctx,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("not in the active work order"),
+            "{err}"
+        );
+        assert_eq!(std::fs::read_to_string(&other).unwrap(), LIB);
     }
 }

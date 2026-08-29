@@ -84,6 +84,10 @@ impl Tool for BashTool {
             return Err(ToolError::Failed("aborted".into()));
         }
 
+        // A shell command's write set is only knowable after it runs, so a
+        // guarded run executes only commands proven to write nothing.
+        ctx.authorize_command(command)?;
+
         let start_cwd = ctx
             .shell_cwd
             .lock()
@@ -343,5 +347,26 @@ mod tests {
         assert_eq!(got.len(), 2);
         assert_eq!(got[0], "line-one\n");
         assert_eq!(got[1], "line-two\n");
+    }
+
+    #[tokio::test]
+    async fn guarded_runs_refuse_commands_whose_write_set_cannot_be_proven() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (ctx, _store) = crate::tools::test_support::guarded_ctx(tmp.path(), None);
+
+        let err = run_cmd(&ctx, json!({"command": "touch created.txt"}))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("write set"), "{err}");
+        assert!(!tmp.path().join("created.txt").exists());
+    }
+
+    #[tokio::test]
+    async fn guarded_runs_still_execute_provably_read_only_commands() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (ctx, _store) = crate::tools::test_support::guarded_ctx(tmp.path(), None);
+        let out = run_cmd(&ctx, json!({"command": "echo hi"})).await.unwrap();
+        assert!(out.ok);
+        assert!(out.result.contains("hi"));
     }
 }
