@@ -26,6 +26,7 @@ mod context;
 mod edit_ladder;
 mod fsutil;
 mod grep_backend;
+mod path_identity;
 mod proc_helpers;
 mod read_file_evidence;
 mod shell;

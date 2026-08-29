@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
+use super::path_identity::{canonical_in_root, canonicalize_root, to_repo_relative};
 use super::{checkpoint, file_state};
 use crate::evidence::{BlobHandle, BlobStore, EvidenceLedger, EvidenceRecord};
 use crate::perms::PolicyEngine;
@@ -146,14 +147,29 @@ impl ToolCtx {
     /// [`ToolCtx::fresh_read_evidence`] calls avoid re-scanning the
     /// on-disk ledger.
     ///
-    /// Returns `Ok(None)` when no evidence recorder is attached
-    /// (unguarded mode — existing behavior). Storage failures are typed
-    /// and fail closed rather than silently dropping evidence a later
-    /// guarded gate might otherwise trust.
+    /// `resolved_path` is canonicalized (symlinks resolved, `.`/`..`
+    /// normalized) before being used as the record's path and the
+    /// freshness-index key, so equivalent spellings of the same in-root
+    /// file (`./f.rs`, `sub/../f.rs`, a symlink into the repo, ...) always
+    /// key to the same evidence identity — see [`ToolCtx::fresh_read_evidence`].
+    /// Returns `Ok(None)` — recording nothing — both when no evidence
+    /// recorder is attached (unguarded mode) *and* when `resolved_path`
+    /// canonicalizes outside the project root: evidence's `path` field is
+    /// documented as repository-relative, so an outside-root read must
+    /// never be forced into a fabricated "relative" spelling or silently
+    /// authorize edits outside the project.
+    ///
+    /// Storage failures (once past those two skip cases) are typed and
+    /// fail closed rather than silently dropping evidence a later guarded
+    /// gate might otherwise trust.
     ///
     /// Callers must only invoke this for genuinely successful, non-binary
     /// reads — binary or failed reads must never become edit-authorizing
-    /// evidence.
+    /// evidence. `full_file_bytes` and `range_bytes` must both derive from
+    /// the *same* read of the file the caller already used to build the
+    /// displayed output — never from a second, independent read — so a
+    /// concurrent write can never make the evidence describe bytes the
+    /// model never saw.
     pub fn record_read_evidence(
         &self,
         resolved_path: &Path,
@@ -164,7 +180,10 @@ impl ToolCtx {
         let Some(store) = &self.evidence else {
             return Ok(None);
         };
-        let rel_path = to_repo_relative(resolved_path, &self.project_root);
+        let Some(canonical) = canonical_in_root(resolved_path, &self.project_root) else {
+            return Ok(None); // outside-root reads are never recorded as evidence
+        };
+        let rel_path = to_repo_relative(&canonical, &canonicalize_root(&self.project_root));
         let file_hash = BlobHandle::of(full_file_bytes).to_string();
         let blob = store
             .blobs
@@ -184,26 +203,30 @@ impl ToolCtx {
             .map_err(|e| super::ToolError::Failed(format!("recording read evidence: {e}")))?;
         let id = record.id.clone();
         if let Ok(mut latest) = store.latest.lock() {
-            latest.insert(resolved_path.to_path_buf(), record);
+            latest.insert(canonical, record);
         }
         Ok(Some(id))
     }
 
-    /// The most recent read evidence for `path` (resolved the same way as
-    /// other path-taking methods on this context), only if the file's
-    /// content on disk still matches the hash captured at read time.
+    /// The most recent read evidence for `path` (resolved and
+    /// canonicalized the same way as [`ToolCtx::record_read_evidence`], so
+    /// `./f.rs`, `sub/../f.rs`, and a symlink to `f.rs` all look up the
+    /// same record), only if the file's content on disk still matches the
+    /// hash captured at read time.
     ///
-    /// `None` means no evidence recorder is attached, nothing was ever
-    /// read, or the file has since changed on disk — any of which must
-    /// block edit-authorizing use of stale or absent evidence.
+    /// `None` means no evidence recorder is attached, `path` canonicalizes
+    /// outside the project root, nothing was ever read, or the file has
+    /// since changed on disk — any of which must block edit-authorizing
+    /// use of stale, foreign, or absent evidence.
     pub fn fresh_read_evidence(&self, path: &Path) -> Option<EvidenceRecord> {
         let store = self.evidence.as_ref()?;
         let resolved = self.resolve(path);
+        let canonical = canonical_in_root(&resolved, &self.project_root)?;
         let record = {
             let latest = store.latest.lock().ok()?;
-            latest.get(&resolved)?.clone()
+            latest.get(&canonical)?.clone()
         };
-        let current = std::fs::read(&resolved).ok()?;
+        let current = std::fs::read(&canonical).ok()?;
         let current_hash = BlobHandle::of(&current).to_string();
         (current_hash == record.file_hash).then_some(record)
     }
@@ -213,20 +236,7 @@ impl ToolCtx {
     /// gating and disable persistence for outside-root targets.
     pub fn is_outside_root(&self, p: &Path) -> bool {
         let resolved = self.resolve(p);
-        let canonical = if resolved.exists() {
-            std::fs::canonicalize(&resolved).ok()
-        } else {
-            resolved
-                .parent()
-                .and_then(|parent| std::fs::canonicalize(parent).ok())
-                .map(|parent| parent.join(resolved.file_name().unwrap_or_default()))
-        };
-        let Some(canonical) = canonical else {
-            return true; // cannot anchor => treat as outside
-        };
-        let root =
-            std::fs::canonicalize(&self.project_root).unwrap_or_else(|_| self.project_root.clone());
-        !canonical.starts_with(&root)
+        canonical_in_root(&resolved, &self.project_root).is_none()
     }
 
     /// Record a successful read so later edits of this path are permitted;
@@ -303,18 +313,6 @@ impl std::fmt::Debug for ToolCtx {
             .field("aborted", &self.aborted())
             .finish_non_exhaustive()
     }
-}
-
-/// Canonical, forward-slash-separated path relative to `root` (falls back
-/// to `path`'s own slash-normalized form when it isn't under `root`), so
-/// evidence records compare consistently regardless of platform path
-/// separators.
-fn to_repo_relative(path: &Path, root: &Path) -> String {
-    let rel = path.strip_prefix(root).unwrap_or(path);
-    rel.components()
-        .map(|c| c.as_os_str().to_string_lossy().into_owned())
-        .collect::<Vec<_>>()
-        .join("/")
 }
 
 /// Best-effort git HEAD for `root`; falls back to `"working-tree"` when the
