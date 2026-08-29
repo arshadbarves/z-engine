@@ -216,3 +216,44 @@ async fn approvals_are_denied_without_a_terminal_and_the_run_continues() {
     assert_eq!(*approvals.denied.borrow(), vec![7]);
     assert!(approvals.approved.borrow().is_empty());
 }
+
+/// A turn a gate refused is not a finished turn: a one-shot run must
+/// exit non-zero even though the model produced a confident final
+/// answer, and the message must name the gate that refused.
+#[tokio::test]
+async fn a_blocked_turn_exits_non_zero_and_names_the_gate() {
+    let err = run(vec![
+        Event::TokenDelta("All done — everything passes.".into()),
+        Event::TurnBlocked {
+            gate: "completion".into(),
+            reason: "verification did not pass: `cargo check` failed (exit 101)".into(),
+            manifest_path: Some("/repo/.z-engine/runs/01ABC/verification.json".into()),
+        },
+    ])
+    .await
+    .expect_err("a blocked turn must not exit zero");
+
+    let msg = err.to_string();
+    assert!(msg.contains("completion gate blocked the turn"), "{msg}");
+    assert!(msg.contains("cargo check"), "{msg}");
+}
+
+/// The refusal is terminal for the turn: nothing after it — including a
+/// stray `TurnCompleted` — can turn a blocked run into a clean exit.
+#[tokio::test]
+async fn nothing_after_a_blocked_turn_can_make_it_succeed() {
+    let err = run(vec![
+        Event::TurnBlocked {
+            gate: "completion".into(),
+            reason: "nothing was verified".into(),
+            manifest_path: None,
+        },
+        Event::TurnCompleted {
+            prompt_tokens: 1,
+            completion_tokens: 1,
+        },
+    ])
+    .await
+    .expect_err("a blocked turn must not exit zero");
+    assert!(err.to_string().contains("nothing was verified"), "{err}");
+}

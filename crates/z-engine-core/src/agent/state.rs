@@ -25,6 +25,10 @@ pub(super) struct LoopState {
     /// Guarded-mode work-order store shared with the tool context.
     /// `None` in unguarded runs, where no order digest is ever pinned.
     pub(super) work_orders: Option<Arc<crate::governance::WorkOrderStore>>,
+    /// This run's `.z-engine/runs/<run-id>/` directory, where completion
+    /// verification writes its manifest beside the evidence that produced
+    /// it. `None` in unguarded runs, which never verify.
+    pub(super) run_dir: Option<std::path::PathBuf>,
 }
 
 impl LoopState {
@@ -79,6 +83,26 @@ impl LoopState {
             reported
         } else {
             self.estimate_working()
+        }
+    }
+}
+
+/// Minimal state for tests of the pieces that only read a field or two,
+/// so they need neither a provider nor a running loop.
+#[cfg(test)]
+impl LoopState {
+    pub(super) fn for_test(run_dir: Option<std::path::PathBuf>) -> Self {
+        Self {
+            working: Vec::new(),
+            approval_counter: 0,
+            last_usage: z_engine_provider::Usage::default(),
+            force_compact: false,
+            repo_map_text: None,
+            current_task: String::new(),
+            reasoning_effort: None,
+            last_prompt: Arc::new(Mutex::new(None)),
+            work_orders: None,
+            run_dir,
         }
     }
 }

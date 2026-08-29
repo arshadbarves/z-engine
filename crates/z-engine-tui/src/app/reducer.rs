@@ -118,6 +118,23 @@ impl App {
                 self.blocks.push(Block::Error(msg));
                 self.turn_active = false;
             }
+            // A gate refused to accept the turn as finished. Distinct from
+            // `RunBlocked`: the session survives this, so the transcript
+            // says what was refused and why rather than ending.
+            Event::TurnBlocked {
+                gate,
+                reason,
+                manifest_path,
+            } => {
+                self.close_thinking();
+                self.finish_streaming();
+                self.blocks
+                    .push(Block::Error(format!("■ {gate} blocked — {reason}")));
+                if let Some(path) = manifest_path {
+                    self.blocks.push(Block::Notice(format!("evidence: {path}")));
+                }
+                self.turn_active = false;
+            }
             // The run is over and was refused. The preceding `Error` block
             // carries the detail; this adds the verdict so the transcript
             // never reads like a run that simply stopped.

@@ -114,6 +114,7 @@ pub(super) async fn agent_task(
         reasoning_effort: None,
         last_prompt,
         work_orders: guarded.as_ref().map(|g| Arc::clone(&g.work_orders)),
+        run_dir: guarded.as_ref().map(|g| g.dir.clone()),
     };
     // Seed from a previous session's transcript (resume).
     let mut titled = resume.is_some();
@@ -221,6 +222,25 @@ pub(super) async fn agent_task(
                             });
                         }
                         let _ = ev_tx.send(Event::TurnAborted);
+                    }
+                    // A gate refused to call the turn done. Recorded and
+                    // reported distinctly from both a completion and an
+                    // error, so no consumer can mistake it for either.
+                    TurnOutcome::Blocked {
+                        gate,
+                        reason,
+                        manifest_path,
+                    } => {
+                        if let Some(w) = recorder.as_mut() {
+                            let _ = w.record(&SessionEvent::TurnEnd {
+                                outcome: format!("blocked:{gate}"),
+                            });
+                        }
+                        let _ = ev_tx.send(Event::TurnBlocked {
+                            gate: gate.to_string(),
+                            reason,
+                            manifest_path,
+                        });
                     }
                     TurnOutcome::Failed(msg) => {
                         let _ = ev_tx.send(Event::Error(msg));

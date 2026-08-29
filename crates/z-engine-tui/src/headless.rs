@@ -116,6 +116,19 @@ async fn drive<E: Events>(
             Some(Event::TurnAborted) => {
                 anyhow::bail!("aborted");
             }
+            // A gate refused to accept the turn as finished. The work was
+            // not proven done, so a one-shot run must exit non-zero and
+            // say which gate refused.
+            Some(Event::TurnBlocked {
+                gate,
+                reason,
+                manifest_path,
+            }) => {
+                if let Some(path) = manifest_path {
+                    eprintln!("[evidence] {path}");
+                }
+                anyhow::bail!("{gate} gate blocked the turn: {reason}");
+            }
             // A refused run reports the detail as an `Error` and the
             // verdict as the `RunBlocked` that follows it, so exiting on
             // the first `Error` would make the blocked exit unreachable.

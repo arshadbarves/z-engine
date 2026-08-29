@@ -21,7 +21,17 @@ pub fn run(project_root: &Path) -> Result<Vec<Diagnostic>, String> {
         .output()
         .map_err(|e| format!("spawn cargo: {e}"))?;
 
-    let stdout = String::from_utf8_lossy(&out.stdout);
+    Ok(parse(&String::from_utf8_lossy(&out.stdout)))
+}
+
+/// Parse `cargo --message-format=json` stdout into diagnostics.
+///
+/// Separate from [`run`] so callers that already own a bounded child
+/// process (the guarded verification runner) can reuse this decoding
+/// instead of spawning cargo a second way. Note that an empty result does
+/// *not* mean success — a manifest error, for instance, emits no
+/// compiler messages at all — so the exit status stays authoritative.
+pub fn parse(stdout: &str) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     for line in stdout.lines() {
         let Ok(v) = serde_json::from_str::<Value>(line) else {
@@ -80,7 +90,7 @@ pub fn run(project_root: &Path) -> Result<Vec<Diagnostic>, String> {
             message: text,
         });
     }
-    Ok(diags)
+    diags
 }
 
 /// Render into the same shape as the LSP renderer consumers expect.

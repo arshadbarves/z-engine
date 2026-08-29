@@ -14,6 +14,7 @@
 
 pub mod events;
 
+mod completion;
 mod config;
 mod execute;
 mod guarded;

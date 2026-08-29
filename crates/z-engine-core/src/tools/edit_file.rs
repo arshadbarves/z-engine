@@ -141,6 +141,9 @@ impl Tool for EditFileTool {
             .await
             .map_err(|e| ToolError::Failed(format!("write {disp}: {e}")))?;
         ctx.note_read(&resolved);
+        // The bytes are on disk: completion verification must now account
+        // for this file.
+        ctx.note_mutation(&resolved);
 
         let diff = unified_diff(&current, &rep.new_content, &disp);
         let body = format!("{disp}: edited (match: {})\n{diff}", rep.rung);

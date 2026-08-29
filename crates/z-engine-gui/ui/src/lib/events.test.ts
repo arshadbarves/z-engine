@@ -315,6 +315,21 @@ describe("turn markers", () => {
     expect(verdict?.text).toContain("refusing to run ungoverned");
     expect(toastStore.getSnapshot().some((t) => t.text.includes("Run blocked"))).toBe(true);
   });
+  it("turnBlocked refuses the turn without ending the session", () => {
+    setBusy(true);
+    handleEvent({
+      type: "turnBlocked",
+      gate: "completion",
+      reason: "verification did not pass: `cargo check` failed (exit 101)",
+      manifestPath: "/repo/.z-engine/runs/01ABC/verification.json",
+    });
+    const refusal = msgs().find((m) => m.kind === "error");
+    expect(refusal?.text).toContain("completion blocked the turn");
+    expect(refusal?.text).toContain("cargo check");
+    expect(msgs().some((m) => m.text.includes("verification.json"))).toBe(true);
+    expect(msgs().some((m) => m.text.startsWith("✓ done"))).toBe(false);
+    expect(toastStore.getSnapshot().some((t) => t.text.includes("Turn blocked"))).toBe(true);
+  });
   it("turnAborted leaves an aborted row, not a toast", () => {
     handleEvent({ type: "turnAborted" });
     expect(msgs().some((m) => m.kind === "status" && m.text.includes("aborted"))).toBe(true);

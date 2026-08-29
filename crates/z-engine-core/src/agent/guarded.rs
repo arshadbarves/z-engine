@@ -18,11 +18,14 @@ use crate::tools::{EvidenceStore, ToolRegistry, set_work_order::SetWorkOrderTool
 use super::LoopConfig;
 use super::events::Event;
 
-/// The per-run stores a guarded loop threads through `ToolCtx`.
+/// The per-run stores a guarded loop threads through `ToolCtx`, plus the
+/// directory they live in — completion verification writes its manifest
+/// beside the evidence that produced it.
 #[derive(Debug)]
 pub(super) struct Guarded {
     pub(super) evidence: Arc<EvidenceStore>,
     pub(super) work_orders: Arc<WorkOrderStore>,
+    pub(super) dir: PathBuf,
 }
 
 /// A guarded run that could not be governed.
@@ -52,7 +55,8 @@ pub(super) fn attach(
     if !cfg.guarded {
         return Ok(None);
     }
-    match open_run(&cfg.project_root) {
+    let dir = run_dir(&cfg.project_root);
+    match open_run(&dir) {
         Ok(evidence) => {
             registry.register(Arc::new(SetWorkOrderTool));
             let _ = ev_tx.send(Event::StatusNote(
@@ -62,6 +66,7 @@ pub(super) fn attach(
             Ok(Some(Guarded {
                 evidence: Arc::new(evidence),
                 work_orders: Arc::new(WorkOrderStore::new()),
+                dir,
             }))
         }
         Err(e) => {
@@ -78,10 +83,9 @@ pub(super) fn attach(
     }
 }
 
-/// Open `.z-engine/runs/<run-id>/` for this run's ledger and blobs.
-fn open_run(project_root: &Path) -> Result<EvidenceStore, EvidenceError> {
-    let dir = run_dir(project_root);
-    let ledger = Arc::new(EvidenceLedger::open(&dir)?);
+/// Open `dir` (`.z-engine/runs/<run-id>/`) for this run's ledger and blobs.
+fn open_run(dir: &Path) -> Result<EvidenceStore, EvidenceError> {
+    let ledger = Arc::new(EvidenceLedger::open(dir)?);
     let blobs = Arc::new(FsBlobStore::new(dir.join("blobs"))?);
     Ok(EvidenceStore::new(ledger, blobs))
 }
@@ -128,6 +132,11 @@ mod tests {
             .expect("guarded wiring");
         assert!(registry.names().iter().any(|n| n == "set_work_order"));
         assert!(guarded.work_orders.active().is_none());
+        assert!(
+            guarded.dir.starts_with(tmp.path().join(".z-engine/runs")),
+            "the manifest must land beside this run's evidence: {}",
+            guarded.dir.display()
+        );
         let runs = std::fs::read_dir(tmp.path().join(".z-engine/runs"))
             .unwrap()
             .count();

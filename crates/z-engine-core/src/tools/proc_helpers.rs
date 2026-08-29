@@ -1,12 +1,17 @@
-//! Child-process plumbing for the `bash` tool: pipe draining (plain and
-//! line-streaming) and whole-process-group termination.
+//! Child-process plumbing shared by every subprocess this crate owns:
+//! pipe draining (plain and line-streaming) and whole-process-group
+//! termination.
+//!
+//! `bash` and the guarded verification runner both spawn children that may
+//! outlive their own pid; both must reap the whole tree on timeout or
+//! abort. Keeping one implementation here is why neither re-invents it.
 
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt};
 
 /// Kill the child and everything it spawned: the child leads its own
 /// process group (set at spawn), so a group SIGKILL reaches grandchildren.
-pub(super) fn kill_tree(child: &mut tokio::process::Child) {
+pub(crate) fn kill_tree(child: &mut tokio::process::Child) {
     #[cfg(unix)]
     if let Some(pid) = child.id() {
         // `kill -9 -PGID` — safe-Rust path via the system kill binary,
@@ -29,7 +34,7 @@ pub(super) fn kill_tree(child: &mut tokio::process::Child) {
     let _ = child.start_kill();
 }
 
-pub(super) fn drain<R>(pipe: Option<R>) -> tokio::task::JoinHandle<String>
+pub(crate) fn drain<R>(pipe: Option<R>) -> tokio::task::JoinHandle<String>
 where
     R: tokio::io::AsyncRead + Unpin + Send + 'static,
 {

@@ -8,6 +8,8 @@
 //! model instructions — the instructions that tell an agent *when* to
 //! declare an order live in `prompts/system-main.md`.
 
+use std::collections::BTreeSet;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::evidence::EvidenceRecord;
@@ -87,13 +89,19 @@ fn range_label(record: &EvidenceRecord) -> String {
     }
 }
 
-/// Holds the one order a guarded run is currently working under.
+/// Holds the one order a guarded run is currently working under, and the
+/// paths actually changed under it.
+///
 /// Shared between the `set_work_order` tool (writer) and the turn
 /// pipeline (reader); a poisoned lock reports no active order, which
-/// keeps later gates fail-closed.
+/// keeps later gates fail-closed. The mutation log lives here rather than
+/// on the tool context because only a guarded run has one: an unguarded
+/// run has no store, so it records nothing and behaves exactly as it did
+/// before governance existed.
 #[derive(Debug, Default)]
 pub struct WorkOrderStore {
     active: Mutex<Option<Arc<ActiveWorkOrder>>>,
+    mutated: Mutex<BTreeSet<PathBuf>>,
 }
 
 impl WorkOrderStore {
@@ -114,6 +122,23 @@ impl WorkOrderStore {
 
     pub fn active(&self) -> Option<Arc<ActiveWorkOrder>> {
         self.active.lock().ok()?.clone()
+    }
+
+    /// Record that `repo_relative` was changed under this run. Called
+    /// only after a mutation actually reached disk, so a refused edit
+    /// never makes the run look like it changed something.
+    pub fn note_mutation(&self, repo_relative: PathBuf) {
+        if let Ok(mut set) = self.mutated.lock() {
+            set.insert(repo_relative);
+        }
+    }
+
+    /// Paths changed under this run, deduplicated and ordered.
+    pub fn mutated_paths(&self) -> Vec<PathBuf> {
+        self.mutated
+            .lock()
+            .map(|set| set.iter().cloned().collect())
+            .unwrap_or_default()
     }
 }
 
@@ -157,5 +182,18 @@ mod tests {
         store.set(second).unwrap();
         let held = store.active().unwrap();
         assert_eq!(held.order.goal, "second goal");
+    }
+
+    #[test]
+    fn the_mutation_log_is_deduplicated_and_ordered() {
+        let store = WorkOrderStore::new();
+        assert!(store.mutated_paths().is_empty());
+        store.note_mutation(PathBuf::from("src/lib.rs"));
+        store.note_mutation(PathBuf::from("Cargo.toml"));
+        store.note_mutation(PathBuf::from("src/lib.rs"));
+        assert_eq!(
+            store.mutated_paths(),
+            [PathBuf::from("Cargo.toml"), PathBuf::from("src/lib.rs")]
+        );
     }
 }

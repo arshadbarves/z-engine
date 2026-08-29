@@ -117,6 +117,18 @@ pub enum Event {
     },
     TurnAborted,
     Error(String),
+    /// The turn produced a final answer that a guarded gate refused to
+    /// accept as completion — the work was not proven done. Terminal for
+    /// the turn (no `TurnCompleted` follows) but not for the run: the
+    /// session stays alive so the failure can be addressed.
+    TurnBlocked {
+        /// Which gate refused, e.g. `"completion"`.
+        gate: String,
+        reason: String,
+        /// Where the evidence for the refusal was written, when there is
+        /// a manifest to point at.
+        manifest_path: Option<String>,
+    },
     /// The run was refused before it could start and is over: guarded mode
     /// was requested but could not be established. Terminal, unlike
     /// [`Event::Error`], which a run can survive — consumers must show it
@@ -190,6 +202,14 @@ impl serde::Serialize for Event {
             }),
             Event::TurnAborted => json!({"type": "turnAborted"}),
             Event::Error(m) => json!({"type": "error", "message": m}),
+            Event::TurnBlocked {
+                gate,
+                reason,
+                manifest_path,
+            } => json!({
+                "type": "turnBlocked", "gate": gate, "reason": reason,
+                "manifestPath": manifest_path
+            }),
             Event::RunBlocked { reason } => json!({"type": "runBlocked", "reason": reason}),
             Event::TranscriptTrimmed { keep_turn } => {
                 json!({"type": "transcriptTrimmed", "keepTurn": keep_turn})

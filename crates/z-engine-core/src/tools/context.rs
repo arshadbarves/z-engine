@@ -89,6 +89,18 @@ impl EvidenceStore {
     pub(super) fn latest_for(&self, canonical: &Path) -> Option<EvidenceRecord> {
         self.latest.lock().ok()?.get(canonical).cloned()
     }
+
+    /// The latest record per path this run read. Completion verification
+    /// re-checks these hashes, so a change to a file the run observed but
+    /// never declared writable cannot pass unnoticed. A poisoned lock
+    /// yields no witnesses rather than a partial set that would make an
+    /// unaudited path look audited.
+    pub(super) fn witnesses(&self) -> Vec<EvidenceRecord> {
+        self.latest
+            .lock()
+            .map(|m| m.values().cloned().collect())
+            .unwrap_or_default()
+    }
 }
 
 impl std::fmt::Debug for EvidenceStore {

@@ -35,7 +35,8 @@ mod read_file_evidence;
 mod semantics;
 mod shell;
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;
+mod verify_ctx;
 mod work_order_ctx;
 
 use std::collections::HashMap;
@@ -46,6 +47,10 @@ use async_trait::async_trait;
 pub use context::{EvidenceStore, SubAgentFuture, SubAgentRunner, ToolCtx, ToolOutputChunk};
 pub(crate) use fsutil::atomic_write;
 pub use fsutil::{MAX_TOOL_OUTPUT_CHARS, truncate_with_tempfile, unified_diff};
+/// Shared subprocess plumbing, re-exported under intent-revealing names so
+/// other subsystems (the guarded verification runner) reuse the bash
+/// tool's process-tree handling instead of writing a second one.
+pub(crate) use proc_helpers::{drain as drain_pipe, kill_tree as kill_process_tree};
 
 /// Spawn `sh -c` (or Windows `bash`/`cmd`) for a one-shot command line.
 pub(crate) fn shell_line(command: &str) -> tokio::process::Command {

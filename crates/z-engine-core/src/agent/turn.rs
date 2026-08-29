@@ -33,10 +33,22 @@ use super::system_prompt::l0_message;
 /// guards pathological provider behavior. Recorded in docs/deviations.md.
 const DEFAULT_MAX_TOOL_ROUNDS: u32 = 500;
 
+/// How a turn ended. `Completed` is the only outcome a guarded run can
+/// reach on the strength of the model's final message alone — and only
+/// when it changed nothing; anything it did change must clear the
+/// completion gate first (see [`super::completion`]).
+#[derive(Debug)]
 pub(super) enum TurnOutcome {
     Completed,
     Aborted,
     Failed(String),
+    /// A gate refused to accept the turn as finished. Terminal for the
+    /// turn, but the session survives it.
+    Blocked {
+        gate: &'static str,
+        reason: String,
+        manifest_path: Option<String>,
+    },
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -229,7 +241,9 @@ pub(super) async fn run_turn(
         }
 
         if complete_calls.is_empty() {
-            return TurnOutcome::Completed;
+            // The model says it is done. In a guarded run that changed
+            // anything, that claim has to be earned.
+            return super::completion::settle_completion(ctx, state, ev_tx).await;
         }
         // Even when finish_reason â  tool_calls, emitted calls demand execution.
 

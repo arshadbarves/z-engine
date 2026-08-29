@@ -107,6 +107,9 @@ impl Tool for WriteFileTool {
             .await
             .map_err(|e| ToolError::Failed(format!("write {}: {e}", resolved.display())))?;
         ctx.note_read(&resolved);
+        // The bytes are on disk: completion verification must now account
+        // for this file.
+        ctx.note_mutation(&resolved);
 
         let diff = if existed {
             unified_diff(&old, content, &disp)
