@@ -25,6 +25,7 @@ reqwest.workspace = true
 tracing.workspace = true
 dirs.workspace = true
 tracing-subscriber.workspace = true
+window-vibrancy = "0.6"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

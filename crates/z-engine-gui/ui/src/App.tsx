@@ -15,7 +15,8 @@ import { Composer } from "./components/Composer";
 import { CommandPalette } from "./components/CommandPalette";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { SplashScreen } from "./components/SplashScreen";
-import { ChatHeader, JumpLatest } from "./components/ChatHeader";
+import { TopBar } from "./components/TopBar";
+import { JumpLatest } from "./components/ChatHeader";
 import { MsgList } from "./components/MsgList";
 import { AppSidebar } from "./components/AppSidebar";
 import { paletteActions } from "./lib/paletteActions";
@@ -278,73 +279,76 @@ export default function App() {
     <>
       {splash && <SplashScreen onDone={() => setSplash(false)} />}
     <main className={`app${sidebarOpen ? "" : " no-sidebar"}`}>
-      <AppSidebar
-        sessions={sessionsList}
-        workspaces={workspaces.roots}
-        activeWorkspace={workspaces.active}
-        activeUlid={sessionId}
-        activity={sessionActivity}
-        version={config?.version}
-        onNewChat={() => void newTask()}
-        onOpen={(p, root) => void openSession(p, root)}
-        onDelete={(p) => void delSession(p)}
-        onAddWorkspace={() => void addWorkspace()}
-        onRemoveWorkspace={(root) => void removeWorkspace(root)}
-        onActivateWorkspace={(root) => workspaceStore.setActive(root)}
+      <TopBar
+        title={workspaces.active ? wsBasename(workspaces.active) : config?.projectName || "Z Engine"}
+        titleHint={
+          workspaces.active
+            ? `workspace ${workspaces.active}${sessionId ? ` · session ${sessionId}` : ""}`
+            : sessionId
+              ? `session ${sessionId}`
+              : undefined
+        }
+        diffOpen={diffOpen}
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={() => setSidebarOpen((o) => !o)}
+        onPalette={() => setPaletteOpen(true)}
+        onToggleDiff={() => setDiffOpen((o) => !o)}
         onSettings={() => setSettingsOpen(true)}
       />
 
-      <section className="workstation-stage">
-        <div className="canvas-pane">
-          <ChatHeader
-            title={workspaces.active ? wsBasename(workspaces.active) : config?.projectName || "Z Engine"}
-            titleHint={
-              workspaces.active
-                ? `workspace ${workspaces.active}${sessionId ? ` · session ${sessionId}` : ""}`
-                : sessionId
-                  ? `session ${sessionId}`
-                  : undefined
-            }
-            diffOpen={diffOpen}
-            sidebarOpen={sidebarOpen}
-            onToggleSidebar={() => setSidebarOpen((o) => !o)}
-            onPalette={() => setPaletteOpen(true)}
-            onToggleDiff={() => setDiffOpen((o) => !o)}
-          />
+      <div className="app-body">
+        <AppSidebar
+          sessions={sessionsList}
+          workspaces={workspaces.roots}
+          activeWorkspace={workspaces.active}
+          activeUlid={sessionId}
+          activity={sessionActivity}
+          version={config?.version}
+          onNewChat={() => void newTask()}
+          onOpen={(p, root) => void openSession(p, root)}
+          onDelete={(p) => void delSession(p)}
+          onAddWorkspace={() => void addWorkspace()}
+          onRemoveWorkspace={(root) => void removeWorkspace(root)}
+          onActivateWorkspace={(root) => workspaceStore.setActive(root)}
+          onSettings={() => setSettingsOpen(true)}
+        />
 
-          <div className="transcript-wrap">
-            {hydrating && <div className="hydrate-shimmer" aria-label="Restoring chat" />}
-            <div className="transcript" ref={transcriptRef} onScroll={onTranscriptScroll}>
-              <MsgList
-                messages={messages}
-                busy={busy}
-                projectName={workspaces.active ? wsBasename(workspaces.active) : null}
-                onApprove={(m, d) => void handleApprove(m, d)}
-                onDeny={(m) => handleDeny(m)}
-              />
+        <section className="workstation-stage">
+          <div className="canvas-pane">
+            <div className="transcript-wrap">
+              {hydrating && <div className="hydrate-shimmer" aria-label="Restoring chat" />}
+              <div className="transcript" ref={transcriptRef} onScroll={onTranscriptScroll}>
+                <MsgList
+                  messages={messages}
+                  busy={busy}
+                  projectName={workspaces.active ? wsBasename(workspaces.active) : null}
+                  onApprove={(m, d) => void handleApprove(m, d)}
+                  onDeny={(m) => handleDeny(m)}
+                />
+              </div>
+              {showJump && <JumpLatest onJump={jumpToLatest} />}
             </div>
-            {showJump && <JumpLatest onJump={jumpToLatest} />}
+
+            {queued.length > 0 && (
+              <div className="queue-strip">
+                <span className="queue-label">queued</span>
+                {queued.map((q, i) => (
+                  <span key={i} className="queue-pill" title={q.text}>
+                    {q.text.slice(0, 48) || `(${q.images.length} image(s))`}
+                    <button title="Remove from queue" onClick={() => queueStore.removeAt(i)}>
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <Composer />
           </div>
 
-          {queued.length > 0 && (
-            <div className="queue-strip">
-              <span className="queue-label">queued</span>
-              {queued.map((q, i) => (
-                <span key={i} className="queue-pill" title={q.text}>
-                  {q.text.slice(0, 48) || `(${q.images.length} image(s))`}
-                  <button title="Remove from queue" onClick={() => queueStore.removeAt(i)}>
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-
-          <Composer />
-        </div>
-
-        {diffOpen && <DiffPanel onClose={() => setDiffOpen(false)} />}
-      </section>
+          {diffOpen && <DiffPanel onClose={() => setDiffOpen(false)} />}
+        </section>
+      </div>
 
       {paletteOpen && (
         <CommandPalette

@@ -15,3 +15,4 @@ node_modules/
 crates/z-engine-gui/ui/node_modules/
 crates/z-engine-gui/ui/dist/
 crates/z-engine-gui/src-tauri/gen/
+.worktrees/

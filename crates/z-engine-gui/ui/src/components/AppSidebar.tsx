@@ -35,37 +35,39 @@ export function AppSidebar({
   onSettings: () => void;
 }) {
   return (
-    <aside className="sidebar">
-      <div className="brand">
-        <LogoMark size={18} />
-        <span>Z Engine</span>
-      </div>
-      <button className="newtask" onClick={onNewChat} type="button">
-        <span className="newtask-left">
-          <Plus size={13} />
-          <span>New chat</span>
-        </span>
-        <kbd>{modLabel()}N</kbd>
-      </button>
-      <Sidebar
-        sessions={sessions}
-        workspaces={workspaces}
-        activeWorkspace={activeWorkspace}
-        activeUlid={activeUlid}
-        activity={activity}
-        onOpen={onOpen}
-        onDelete={onDelete}
-        onAddWorkspace={onAddWorkspace}
-        onRemoveWorkspace={onRemoveWorkspace}
-        onActivateWorkspace={onActivateWorkspace}
-      />
-      <button className="side-foot gear" title="Settings" onClick={onSettings} type="button">
-        <span className="side-foot-left">
-          <Settings size={13} />
-          <span>Settings</span>
-        </span>
-        <span className="side-foot-note">{version ? `v${version}` : "Z Engine"}</span>
-      </button>
-    </aside>
+    <div className="sidebar-slot">
+      <aside className="sidebar">
+        <div className="brand">
+          <LogoMark size={18} />
+          <span>Z Engine</span>
+        </div>
+        <button className="newtask" onClick={onNewChat} type="button">
+          <span className="newtask-left">
+            <Plus size={13} strokeWidth={1.8} />
+            <span>New chat</span>
+          </span>
+          <kbd>{modLabel()}N</kbd>
+        </button>
+        <Sidebar
+          sessions={sessions}
+          workspaces={workspaces}
+          activeWorkspace={activeWorkspace}
+          activeUlid={activeUlid}
+          activity={activity}
+          onOpen={onOpen}
+          onDelete={onDelete}
+          onAddWorkspace={onAddWorkspace}
+          onRemoveWorkspace={onRemoveWorkspace}
+          onActivateWorkspace={onActivateWorkspace}
+        />
+        <button className="side-foot gear" title="Settings" onClick={onSettings} type="button">
+          <span className="side-foot-left">
+            <Settings size={13} strokeWidth={1.8} />
+            <span>Settings</span>
+          </span>
+          <span className="side-foot-note">{version ? `v${version}` : "Z Engine"}</span>
+        </button>
+      </aside>
+    </div>
   );
 }

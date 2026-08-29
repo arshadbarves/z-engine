@@ -133,19 +133,45 @@ fn main() {
             .inner_size(1100.0, 760.0)
             .min_inner_size(720.0, 520.0)
             .maximized(true);
-            // macOS: traffic lights overlay the sidebar. Windows: frameless
-            // chrome with custom caption buttons in the chat header.
+            // macOS: overlay title bar with native shadow & vibrancy.
+            // Windows: frameless with Mica material & custom controls.
             #[cfg(target_os = "macos")]
             {
+                // Align native traffic lights with the 40px `.app-topbar`.
+                // tao's inset sets titlebar height = button_height + y and keeps
+                // buttons near the bottom of that container, so y ≈ desired
+                // vertical center (20 for a 40px bar), not a top-edge inset.
                 builder = builder
                     .title_bar_style(tauri::TitleBarStyle::Overlay)
-                    .hidden_title(true);
+                    .hidden_title(true)
+                    .traffic_light_position(tauri::LogicalPosition::new(12.50, 22.50))
+                    .shadow(true);
             }
             #[cfg(target_os = "windows")]
             {
                 builder = builder.decorations(false);
             }
+            #[cfg(target_os = "linux")]
+            {
+                builder = builder.shadow(true);
+            }
             let window = builder.build().map_err(|e| e.to_string())?;
+
+            #[cfg(target_os = "macos")]
+            {
+                use window_vibrancy::{NSVisualEffectMaterial, apply_vibrancy};
+                let _ = apply_vibrancy(
+                    &window,
+                    NSVisualEffectMaterial::UnderWindowBackground,
+                    None,
+                    None,
+                );
+            }
+            #[cfg(target_os = "windows")]
+            {
+                use window_vibrancy::apply_mica;
+                let _ = apply_mica(&window, None);
+            }
 
             forward_events(ev_rx, window, "boot".into());
             Ok(())
