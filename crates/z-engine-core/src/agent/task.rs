@@ -22,6 +22,7 @@ use super::LoopConfig;
 use super::events::{Command, Event};
 use super::guarded;
 use super::handle::ResumeState;
+use super::mcp_setup;
 use super::prompt_inspect::PromptInspect;
 use super::revert::{revert_last_turn, revert_to_turn, trim_working_before_user_turn};
 use super::side_requests::generate_session_title;
@@ -43,47 +44,8 @@ pub(super) async fn agent_task(
     abort_flag: Arc<AtomicBool>,
     last_prompt: Arc<Mutex<Option<PromptInspect>>>,
 ) {
-    // Register external MCP tools (spec section 9 v0.9). Failures are
-    // logged and skipped: a broken server must not kill the session.
-    //
-    // Guarded runs get none of them: an MCP tool's effects are opaque to
-    // this process, so it can neither be proven read-only nor routed
-    // through the mutation gate. Advertising one would leave an
-    // ungoverned path to the working tree in a run whose whole premise is
-    // that every mutation is authorized.
     let mut registry = registry;
-    if cfg.guarded && !cfg.mcp_servers.is_empty() {
-        let _ = ev_tx.send(Event::StatusNote(format!(
-            "guarded mode: {} mcp server(s) not registered — external tools cannot be governed",
-            cfg.mcp_servers.len()
-        )));
-    }
-    for srv_cfg in cfg.mcp_servers.iter().filter(|_| !cfg.guarded) {
-        let conn = crate::mcp::McpConnection::new(
-            &srv_cfg.name,
-            &srv_cfg.command,
-            &srv_cfg.args,
-            &cfg.project_root,
-        );
-        match conn.ensure().await {
-            Err(e) => {
-                tracing::warn!(server = %srv_cfg.name, error = %e, "mcp server failed to start")
-            }
-            Ok(()) => {
-                for info in conn.list_tools().await {
-                    let tool = crate::mcp::tool_adapter::McpTool {
-                        conn: Arc::new(conn.clone()),
-                        info,
-                    };
-                    registry.register(Arc::new(tool));
-                }
-                let _ = ev_tx.send(Event::StatusNote(format!(
-                    "registered mcp server '{}'",
-                    srv_cfg.name
-                )));
-            }
-        }
-    }
+    mcp_setup::register_servers(&cfg, &mut registry, &ev_tx).await;
     // Guarded mode (opt-in): per-run evidence + work-order stores, and the
     // governance tool. Unguarded runs get `None` and change nothing; a
     // guarded run whose governance storage fails ends here rather than

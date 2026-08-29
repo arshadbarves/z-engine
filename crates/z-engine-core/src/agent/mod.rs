@@ -18,6 +18,7 @@ mod config;
 mod execute;
 mod guarded;
 mod handle;
+mod mcp_setup;
 mod prompt_inspect;
 mod revert;
 mod side_requests;
