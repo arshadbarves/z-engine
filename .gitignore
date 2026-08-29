@@ -6,6 +6,7 @@
 
 # scratch/demo repos used for acceptance runs
 /tmp/
+/.worktrees/
 
 # logs
 *.log
