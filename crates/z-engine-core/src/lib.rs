@@ -13,6 +13,7 @@ pub use z_engine_provider;
 pub mod agent;
 pub mod config;
 pub mod context;
+pub mod evidence;
 pub mod lsp;
 pub mod mcp;
 pub mod perms;
