@@ -159,6 +159,11 @@ pub(super) fn tokenize(seg: &str) -> Option<(String, Vec<String>, bool)> {
         if in_double {
             match c {
                 '"' => in_double = false,
+                // Double quotes suppress globbing and word splitting, but
+                // NOT expansion: `"$(cmd)"` and "`cmd`" still execute. A
+                // predicate that claims to prove a command writes nothing
+                // must refuse them here exactly as it does unquoted.
+                '`' | '$' => return None,
                 '\\' => {
                     if let Some(n) = chars.next() {
                         cur.push(n);
@@ -187,7 +192,11 @@ pub(super) fn tokenize(seg: &str) -> Option<(String, Vec<String>, bool)> {
                 }
             }
             '<' | '`' => return None,
-            '$' if chars.peek() == Some(&'(') => return None,
+            // Any `$` is refused, not just `$(`: parameter expansion can
+            // execute (`${v@P}` runs prompt expansion, which performs
+            // command substitution) and can inject arbitrary words into
+            // the argument list. Neither is provable ahead of time.
+            '$' => return None,
             '\\' => {
                 if let Some(n) = chars.next() {
                     cur.push(n);
@@ -229,10 +238,22 @@ pub(super) fn segment_is_safe(seg: &str) -> bool {
         && args.iter().any(|a| {
             matches!(
                 a.as_str(),
+                // Actions that run a command…
                 "-delete" | "-exec" | "-execdir" | "-ok" | "-okdir"
+                // …and GNU find's file-writing print actions.
+                    | "-fprint"
+                    | "-fprint0"
+                    | "-fprintf"
+                    | "-fls"
             )
         })
     {
+        return false;
+    }
+    // `env` runs whatever operand follows its assignments, so it is only
+    // read-only when every argument is a `NAME=VALUE` assignment and there
+    // is no command operand (bare `env` prints the environment).
+    if first == "env" && !args.iter().all(|a| a.contains('=') && !a.starts_with('-')) {
         return false;
     }
     if first == "sort"
@@ -294,5 +315,49 @@ mod tests {
         assert_eq!(e.decide_command("echo \"unterminated"), Decision::Gate);
         let huge = format!("echo {}", "x".repeat(10_001));
         assert_eq!(e.decide_command(&huge), Decision::Gate);
+    }
+
+    /// Quoting hides nothing from the shell, so it must hide nothing from
+    /// the tokenizer: double quotes suppress globbing and word splitting
+    /// but still expand `$(...)`, backticks, and parameters.
+    #[test]
+    fn expansion_inside_double_quotes_is_not_read_only() {
+        let e = engine(&[]);
+        for command in [
+            r#"echo "$(rm -rf build)""#,
+            "cat \"`rm -rf build`\"",
+            r#"echo "${payload@P}""#,
+            "echo ${payload@P}",
+            "echo $HOME",
+        ] {
+            assert!(
+                !PolicyEngine::is_provably_read_only(command),
+                "{command} must not be provable"
+            );
+            assert_eq!(e.decide_command(command), Decision::Gate, "{command}");
+        }
+    }
+
+    /// Commands that take another command as an operand launder anything
+    /// they are given, so they are only read-only without that operand.
+    #[test]
+    fn command_launderers_are_not_read_only() {
+        let e = engine(&[]);
+        for command in [
+            "env rm -rf build",
+            "env FOO=1 rm -rf build",
+            "find . -fprint /etc/x",
+            "find . -fprintf out.txt %p",
+            "find . -fls listing.txt",
+        ] {
+            assert!(
+                !PolicyEngine::is_provably_read_only(command),
+                "{command} must not be provable"
+            );
+            assert_eq!(e.decide_command(command), Decision::Gate, "{command}");
+        }
+        // Assignments alone just print the environment.
+        assert!(PolicyEngine::is_provably_read_only("env"));
+        assert!(PolicyEngine::is_provably_read_only("env FOO=1"));
     }
 }

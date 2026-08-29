@@ -14,8 +14,12 @@ use super::facts::LineRange;
 /// or a write that changes nothing at all, names `old`'s last line rather
 /// than a line that does not exist yet.
 pub fn changed_line_range(old: &str, new: &str) -> Option<LineRange> {
-    let o: Vec<&str> = old.lines().collect();
-    let n: Vec<&str> = new.lines().collect();
+    // `split_inclusive` keeps each line's terminator, so a change that only
+    // rewrites line endings (LF → CRLF) still counts as a change. `lines()`
+    // strips `\r`, which would hide those bytes from the comparison and let
+    // an unevidenced line be rewritten.
+    let o: Vec<&str> = old.split_inclusive('\n').collect();
+    let n: Vec<&str> = new.split_inclusive('\n').collect();
     if o.is_empty() {
         return None;
     }
@@ -86,5 +90,22 @@ mod tests {
         let old = "1\n2\n3\n4\n5\n6\n";
         let new = "1\n2\nTHREE\nFOUR\n5\n6\n";
         assert_eq!(changed_line_range(old, new), Some((3, 4)));
+    }
+
+    /// Line terminators are content: rewriting them changes those lines,
+    /// so the span must cover them or evidence could be sidestepped by
+    /// converting a file's endings.
+    #[test]
+    fn changing_only_line_endings_still_names_those_lines() {
+        assert_eq!(
+            changed_line_range("a\nb\nc\n", "a\r\nb\r\nc\n"),
+            Some((1, 2)),
+            "LF to CRLF on the first two lines"
+        );
+        assert_eq!(
+            changed_line_range("a\nb\n", "a\nb"),
+            Some((2, 2)),
+            "dropping the final newline changes the last line"
+        );
     }
 }

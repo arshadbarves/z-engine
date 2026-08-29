@@ -45,8 +45,20 @@ pub(super) async fn agent_task(
 ) {
     // Register external MCP tools (spec section 9 v0.9). Failures are
     // logged and skipped: a broken server must not kill the session.
+    //
+    // Guarded runs get none of them: an MCP tool's effects are opaque to
+    // this process, so it can neither be proven read-only nor routed
+    // through the mutation gate. Advertising one would leave an
+    // ungoverned path to the working tree in a run whose whole premise is
+    // that every mutation is authorized.
     let mut registry = registry;
-    for srv_cfg in &cfg.mcp_servers {
+    if cfg.guarded && !cfg.mcp_servers.is_empty() {
+        let _ = ev_tx.send(Event::StatusNote(format!(
+            "guarded mode: {} mcp server(s) not registered — external tools cannot be governed",
+            cfg.mcp_servers.len()
+        )));
+    }
+    for srv_cfg in cfg.mcp_servers.iter().filter(|_| !cfg.guarded) {
         let conn = crate::mcp::McpConnection::new(
             &srv_cfg.name,
             &srv_cfg.command,
