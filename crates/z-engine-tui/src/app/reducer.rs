@@ -118,6 +118,16 @@ impl App {
                 self.blocks.push(Block::Error(msg));
                 self.turn_active = false;
             }
+            // The run is over and was refused. The preceding `Error` block
+            // carries the detail; this adds the verdict so the transcript
+            // never reads like a run that simply stopped.
+            Event::RunBlocked { reason } => {
+                self.close_thinking();
+                self.finish_streaming();
+                self.blocks
+                    .push(Block::Notice(format!("■ run blocked — {reason}")));
+                self.turn_active = false;
+            }
             Event::TranscriptTrimmed { keep_turn } => {
                 self.close_thinking();
                 self.finish_streaming();

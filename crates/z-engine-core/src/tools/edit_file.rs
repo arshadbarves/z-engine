@@ -245,8 +245,12 @@ mod tests {
     /// an order over it, mirroring what `read_file` + `set_work_order` do.
     fn guarded_lib(repo: &Path, with_order: bool) -> (ToolCtx, tempfile::TempDir) {
         std::fs::write(repo.join("lib.rs"), LIB).unwrap();
-        let (ctx, store) =
-            crate::tools::test_support::guarded_ctx(repo, Some(crate::lsp::LspHealth::Ready));
+        let (ctx, store) = crate::tools::test_support::guarded_ctx(
+            repo,
+            Some(crate::tools::semantics::StubSemantics::resolving(&[
+                "parse",
+            ])),
+        );
         let resolved = ctx.resolve(Path::new("lib.rs"));
         ctx.note_read(&resolved);
         let id = ctx

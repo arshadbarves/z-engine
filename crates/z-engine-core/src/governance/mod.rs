@@ -18,7 +18,7 @@ pub use active::{ActiveWorkOrder, WorkOrderStore};
 pub use evidence_view::EvidenceView;
 pub use gate::{
     EvidenceState, GateDecision, GateEngine, GateFailure, LineRange, MutationRequest, RustFacts,
-    SemanticHealth, changed_line_range,
+    SemanticEvidence, SemanticHealth, changed_line_range,
 };
 pub use prompt::{PromptManifest, PromptOverflow, PromptSection, PromptSnapshot, build_prompt};
 pub use work_order::{AcceptanceCommand, WorkOrder, WorkOrderError};

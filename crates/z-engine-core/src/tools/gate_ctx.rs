@@ -1,25 +1,26 @@
-//! The tools-layer adapter for the governance mutation gate: gathers the
-//! facts [`crate::governance::gate`] needs and applies its verdict.
+//! The tools-layer adapter for the governance mutation gate: applies the
+//! pure gate's verdict to facts the rest of the run already owns.
 //!
-//! Thin by design. Every fact comes from something that already owns it —
-//! canonical path identity and evidence freshness from [`ToolCtx`]
-//! (Task 3), the active order from the work-order store (Task 4), Rust
-//! symbols from the repo map's tree-sitter outline, and semantic health
-//! from the language server behind [`RustSemantics`]. Nothing here
-//! re-implements hashing, path normalization, or symbol discovery, and
-//! none of the *rules* live here: they live in the pure gate.
+//! Thin by design, and staged by cost. Canonical path identity and
+//! evidence freshness come from [`ToolCtx`] (Task 3) and the active order
+//! from the work-order store (Task 4); those settle
+//! [`GateEngine::prescreen`] with no I/O. Only a request that survives it
+//! pays for Rust semantic facts (see [`super::gate_facts`]), so a missing
+//! work order never waits on rust-analyzer. Nothing here re-implements
+//! hashing, path normalization, or symbol discovery, and none of the
+//! *rules* live here: they live in the pure gate.
 
 use std::path::Path;
 
 use crate::evidence::{BlobHandle, EvidenceRecord};
 use crate::governance::{
-    EvidenceState, GateEngine, GateFailure, LineRange, MutationRequest, RustFacts, SemanticHealth,
+    EvidenceState, EvidenceView, GateEngine, GateFailure, LineRange, MutationRequest,
 };
-use crate::lsp::LspHealth;
 use crate::perms::PolicyEngine;
 
 use super::ToolCtx;
-use super::path_identity::{canonical_in_root, canonicalize_root, to_repo_relative};
+use super::gate_facts::is_rust;
+use super::path_identity::canonical_in_root;
 
 impl ToolCtx {
     /// Authorize one mutation before it reaches disk.
@@ -43,23 +44,23 @@ impl ToolCtx {
             return Ok(());
         }
         let order = self.active_work_order();
-        let identity = self.gate_identity(path);
-        let rust = match is_rust(path) {
-            false => None,
-            true => Some(RustFacts {
-                health: semantic_health(self.semantic_health().await),
-                declared: declared_symbols(current),
-            }),
-        };
-        GateEngine::authorize(&MutationRequest {
+        let identity = self.repo_relative_identity(path);
+        let request = MutationRequest {
             path,
             identity: identity.as_deref(),
             order: order.as_deref(),
             changed,
             evidence: self.evidence_state(path, current),
-            rust,
-        })
-        .into_result()
+            rust: is_rust(path),
+        };
+        let prescreen = GateEngine::prescreen(&request);
+        if !prescreen.is_pass() || !request.rust {
+            return prescreen.into_result();
+        }
+        // Semantics are gathered only for a change that is otherwise
+        // authorized, and are the only thing that can localize it.
+        let facts = self.rust_facts(path, current).await;
+        GateEngine::authorize(&request, Some(&facts)).into_result()
     }
 
     /// Authorize one shell command. Guarded runs only run commands whose
@@ -71,16 +72,6 @@ impl ToolCtx {
         }
         GateEngine::authorize_command(command, PolicyEngine::is_provably_read_only(command))
             .into_result()
-    }
-
-    /// Canonical repository-relative identity, reusing the same rules that
-    /// admitted the work order (`EvidenceView::repo_relative_identity`).
-    fn gate_identity(&self, path: &Path) -> Option<String> {
-        let canonical = canonical_in_root(&self.resolve(path), &self.project_root)?;
-        Some(to_repo_relative(
-            &canonical,
-            &canonicalize_root(&self.project_root),
-        ))
     }
 
     /// Compare the run's latest read of `path` against the bytes about to
@@ -108,37 +99,13 @@ impl ToolCtx {
     }
 }
 
-/// Rust source is the only content this slice makes semantic claims about.
-fn is_rust(path: &Path) -> bool {
-    path.extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("rs"))
-}
-
-/// Symbols declared in `bytes`, via the repo map's tree-sitter outline —
-/// the project's one Rust symbol extractor. Non-UTF-8 or unparseable
-/// content declares nothing, which blocks rather than passes.
-fn declared_symbols(bytes: &[u8]) -> Vec<String> {
-    let Ok(text) = std::str::from_utf8(bytes) else {
-        return Vec::new();
-    };
-    crate::context::repo_map::extract_rust(text)
-        .map(|outline| outline.symbols.into_iter().map(|s| s.name).collect())
-        .unwrap_or_default()
-}
-
-fn semantic_health(health: LspHealth) -> SemanticHealth {
-    match health {
-        LspHealth::Ready => SemanticHealth::Ready,
-        LspHealth::Unavailable(reason) => SemanticHealth::Unavailable { reason },
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::governance::gate::GateFailure;
     use crate::governance::{AcceptanceCommand, WorkOrder};
-    use crate::lsp::LspHealth;
+    use crate::lsp::SymbolAnswer;
+    use crate::tools::semantics::StubSemantics;
     use crate::tools::test_support::{guarded_ctx, plain_ctx};
     use std::path::{Path, PathBuf};
 
@@ -165,11 +132,12 @@ mod tests {
             .expect("in-root read must be recorded")
     }
 
-    /// A guarded run that has read `lib.rs` and declared an order over it.
-    fn ready(health: LspHealth) -> (ToolCtx, tempfile::TempDir, tempfile::TempDir) {
+    /// A guarded run that has read `lib.rs` and declared an order over it,
+    /// with `semantics` scripted for whatever the test needs to prove.
+    fn ready(semantics: StubSemantics) -> (ToolCtx, tempfile::TempDir, tempfile::TempDir) {
         let repo = tempfile::tempdir().unwrap();
         std::fs::write(repo.path().join("lib.rs"), LIB).unwrap();
-        let (ctx, store) = guarded_ctx(repo.path(), Some(health));
+        let (ctx, store) = guarded_ctx(repo.path(), Some(semantics));
         let id = read(&ctx, "lib.rs", LIB.as_bytes());
         ctx.set_work_order(&order(&["lib.rs"], &["parse"], &[&id]))
             .unwrap();
@@ -192,7 +160,7 @@ mod tests {
     async fn guarded_runs_refuse_mutations_before_an_order_is_declared() {
         let repo = tempfile::tempdir().unwrap();
         std::fs::write(repo.path().join("lib.rs"), LIB).unwrap();
-        let (ctx, _store) = guarded_ctx(repo.path(), Some(LspHealth::Ready));
+        let (ctx, _store) = guarded_ctx(repo.path(), Some(StubSemantics::resolving(&["parse"])));
         read(&ctx, "lib.rs", LIB.as_bytes());
 
         let err = ctx
@@ -208,7 +176,7 @@ mod tests {
 
     #[tokio::test]
     async fn guarded_runs_authorize_a_scoped_evidence_backed_rust_edit() {
-        let (ctx, _store, repo) = ready(LspHealth::Ready);
+        let (ctx, _store, repo) = ready(StubSemantics::resolving(&["parse"]));
         ctx.authorize_mutation(&repo.path().join("lib.rs"), LIB.as_bytes(), Some((2, 2)))
             .await
             .expect("scoped, evidence-backed, localized edit must pass");
@@ -216,7 +184,7 @@ mod tests {
 
     #[tokio::test]
     async fn guarded_runs_refuse_paths_outside_the_declared_scope() {
-        let (ctx, _store, repo) = ready(LspHealth::Ready);
+        let (ctx, _store, repo) = ready(StubSemantics::resolving(&["parse"]));
         std::fs::write(repo.path().join("other.rs"), LIB).unwrap();
         let err = ctx
             .authorize_mutation(&repo.path().join("other.rs"), LIB.as_bytes(), Some((1, 1)))
@@ -227,7 +195,7 @@ mod tests {
 
     #[tokio::test]
     async fn guarded_runs_refuse_bytes_that_no_longer_match_the_read() {
-        let (ctx, _store, repo) = ready(LspHealth::Ready);
+        let (ctx, _store, repo) = ready(StubSemantics::resolving(&["parse"]));
         // The bytes about to be modified are not the bytes that were read.
         let err = ctx
             .authorize_mutation(
@@ -242,7 +210,7 @@ mod tests {
 
     #[tokio::test]
     async fn guarded_runs_refuse_rust_edits_without_a_healthy_semantic_provider() {
-        let (ctx, _store, repo) = ready(LspHealth::Unavailable("spawn failed".into()));
+        let (ctx, _store, repo) = ready(StubSemantics::unavailable("spawn failed"));
         let err = ctx
             .authorize_mutation(&repo.path().join("lib.rs"), LIB.as_bytes(), Some((2, 2)))
             .await
@@ -273,7 +241,7 @@ mod tests {
     async fn guarded_runs_refuse_rust_edits_whose_target_symbol_is_absent() {
         let repo = tempfile::tempdir().unwrap();
         std::fs::write(repo.path().join("lib.rs"), LIB).unwrap();
-        let (ctx, _store) = guarded_ctx(repo.path(), Some(LspHealth::Ready));
+        let (ctx, _store) = guarded_ctx(repo.path(), Some(StubSemantics::resolving(&["parse"])));
         let id = read(&ctx, "lib.rs", LIB.as_bytes());
         ctx.set_work_order(&order(&["lib.rs"], &["render"], &[&id]))
             .unwrap();
@@ -302,10 +270,69 @@ mod tests {
             .expect("markdown carries no Rust semantic claim");
     }
 
+    /// The load-bearing case for finding 2: the text really does declare
+    /// the symbol, but the language server does not place it here. A
+    /// tree-sitter outline is not evidence, so this must refuse.
+    #[tokio::test]
+    async fn a_tree_sitter_match_cannot_stand_in_for_semantic_evidence() {
+        let (ctx, _store, repo) = ready(StubSemantics::resolving(&["render"]));
+        let err = ctx
+            .authorize_mutation(&repo.path().join("lib.rs"), LIB.as_bytes(), Some((2, 2)))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, GateFailure::UnresolvedTargetSymbol { .. }),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_unindexed_file_blocks_instead_of_passing_on_an_empty_answer() {
+        let (ctx, _store, repo) = ready(StubSemantics::answering(SymbolAnswer::Unindexed(
+            "the server reported no symbols for this file".into(),
+        )));
+        let err = ctx
+            .authorize_mutation(&repo.path().join("lib.rs"), LIB.as_bytes(), Some((2, 2)))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, GateFailure::SemanticEvidenceUnavailable { .. }),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_answer_about_another_document_is_never_trusted() {
+        let (ctx, _store, repo) = ready(StubSemantics::answering(SymbolAnswer::Mismatched(
+            "symbols were reported for file:///elsewhere.rs".into(),
+        )));
+        let err = ctx
+            .authorize_mutation(&repo.path().join("lib.rs"), LIB.as_bytes(), Some((2, 2)))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, GateFailure::SemanticEvidenceMismatch { .. }),
+            "{err}"
+        );
+    }
+
+    /// Cheap rules answer first: an out-of-scope path is refused as such
+    /// even when the semantic provider would also have blocked it.
+    #[tokio::test]
+    async fn semantics_are_not_consulted_for_a_change_the_order_already_refuses() {
+        let (ctx, _store, repo) = ready(StubSemantics::unavailable("spawn failed"));
+        std::fs::write(repo.path().join("other.rs"), LIB).unwrap();
+        let err = ctx
+            .authorize_mutation(&repo.path().join("other.rs"), LIB.as_bytes(), Some((1, 1)))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, GateFailure::OutOfScope { .. }), "{err}");
+    }
+
     #[test]
     fn guarded_runs_allow_provably_read_only_commands_and_refuse_the_rest() {
         let tmp = tempfile::tempdir().unwrap();
-        let (ctx, _store) = guarded_ctx(tmp.path(), Some(LspHealth::Ready));
+        let (ctx, _store) = guarded_ctx(tmp.path(), Some(StubSemantics::resolving(&["parse"])));
         assert!(ctx.authorize_command("ls -la").is_ok());
         assert!(ctx.authorize_command("git status").is_ok());
         let err = ctx.authorize_command("rm -rf build").unwrap_err();

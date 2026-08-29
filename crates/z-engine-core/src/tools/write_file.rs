@@ -217,8 +217,12 @@ mod tests {
     /// order over it — enough scope, deliberately not enough coverage.
     fn guarded_lib(repo: &Path) -> (ToolCtx, tempfile::TempDir) {
         std::fs::write(repo.join("lib.rs"), LIB).unwrap();
-        let (ctx, store) =
-            crate::tools::test_support::guarded_ctx(repo, Some(crate::lsp::LspHealth::Ready));
+        let (ctx, store) = crate::tools::test_support::guarded_ctx(
+            repo,
+            Some(crate::tools::semantics::StubSemantics::resolving(&[
+                "parse",
+            ])),
+        );
         let resolved = ctx.resolve(Path::new("lib.rs"));
         ctx.note_read(&resolved);
         let id = ctx

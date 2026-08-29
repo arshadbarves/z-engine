@@ -303,6 +303,18 @@ describe("turn markers", () => {
     expect(row?.text).toMatch(/^✓ done/);
     expect(row?.ok).toBe(true);
   });
+  it("runBlocked is a visible refusal, not a quiet end of turn", () => {
+    setBusy(true);
+    handleEvent({ type: "error", message: "guarded mode unavailable" });
+    handleEvent({
+      type: "runBlocked",
+      reason: "guarded mode unavailable; refusing to run ungoverned",
+    });
+    expect(msgs().some((m) => m.kind === "error")).toBe(true);
+    const verdict = msgs().find((m) => m.text.includes("Run blocked"));
+    expect(verdict?.text).toContain("refusing to run ungoverned");
+    expect(toastStore.getSnapshot().some((t) => t.text.includes("Run blocked"))).toBe(true);
+  });
   it("turnAborted leaves an aborted row, not a toast", () => {
     handleEvent({ type: "turnAborted" });
     expect(msgs().some((m) => m.kind === "status" && m.text.includes("aborted"))).toBe(true);

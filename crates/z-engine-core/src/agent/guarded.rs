@@ -67,7 +67,12 @@ pub(super) fn attach(
         Err(e) => {
             let err = GuardedUnavailable(e);
             tracing::error!(error = %err, "refusing guarded run");
-            let _ = ev_tx.send(Event::Error(format!("{err}; refusing to run ungoverned")));
+            let reason = format!("{err}; refusing to run ungoverned");
+            // Error first so every consumer shows the detail, then the
+            // terminal marker so none of them mistake the closing channel
+            // for a run that finished normally.
+            let _ = ev_tx.send(Event::Error(reason.clone()));
+            let _ = ev_tx.send(Event::RunBlocked { reason });
             Err(err)
         }
     }
@@ -155,5 +160,45 @@ mod tests {
                 .any(|e| matches!(e, Event::Error(m) if m.contains("guarded mode"))),
             "{reported:?}"
         );
+    }
+
+    /// A refusal must be legible as a *blocked* run, not a clean exit: the
+    /// detail arrives first, then the terminal marker, and nothing follows
+    /// it before the channel closes.
+    #[test]
+    fn a_refused_run_ends_with_a_terminal_blocked_event() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".z-engine")).unwrap();
+        std::fs::write(tmp.path().join(".z-engine/runs"), b"not a directory").unwrap();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut registry = ToolRegistry::builtins();
+
+        attach(&cfg(tmp.path(), true), &mut registry, &tx).unwrap_err();
+
+        let reported = std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>();
+        let error_at = reported
+            .iter()
+            .position(|e| matches!(e, Event::Error(_)))
+            .expect("the refusal explains itself");
+        let blocked_at = reported
+            .iter()
+            .position(|e| matches!(e, Event::RunBlocked { .. }))
+            .expect("the refusal is terminal");
+        assert!(error_at < blocked_at, "{reported:?}");
+        assert_eq!(blocked_at, reported.len() - 1, "{reported:?}");
+        let Event::RunBlocked { reason } = &reported[blocked_at] else {
+            unreachable!()
+        };
+        assert!(reason.contains("refusing to run ungoverned"), "{reason}");
+    }
+
+    #[test]
+    fn a_blocked_run_is_distinguishable_on_the_wire() {
+        let json = serde_json::to_value(Event::RunBlocked {
+            reason: "guarded mode unavailable".into(),
+        })
+        .unwrap();
+        assert_eq!(json["type"], "runBlocked");
+        assert_eq!(json["reason"], "guarded mode unavailable");
     }
 }

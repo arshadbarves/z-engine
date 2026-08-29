@@ -15,6 +15,7 @@
 //! the conversation so the model reroutes.
 
 mod engine;
+mod read_only;
 mod shell_syntax;
 
 pub use engine::{Decision, PolicyEngine};

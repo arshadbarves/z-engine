@@ -1,6 +1,7 @@
 use serde_json::Value;
 
-use super::shell_syntax::{FS_MUTATING_CMDS, segment_is_safe, segments, tokenize};
+use super::read_only::segment_is_safe;
+use super::shell_syntax::{FS_MUTATING_CMDS, segments, tokenize};
 
 /// Tools that never prompt (safe information gathering).
 const AUTO_ALLOW_TOOLS: &[&str] = &[

@@ -1,77 +1,10 @@
-/// Built-in read-only bash commands (Claude Code's "read-only commands"
-/// set): never prompt, in every mode. First-token match.
-const SAFE_BASH: &[&str] = &[
-    "ls",
-    "cat",
-    "head",
-    "tail",
-    "grep",
-    "egrep",
-    "fgrep",
-    "rg",
-    "find",
-    "wc",
-    "which",
-    "type",
-    "file",
-    "stat",
-    "du",
-    "df",
-    "pwd",
-    "echo",
-    "printf",
-    "cd",
-    "diff",
-    "cmp",
-    "comm",
-    "sort",
-    "uniq",
-    "tree",
-    "env",
-    "printenv",
-    "id",
-    "whoami",
-    "hostname",
-    "uname",
-    "date",
-    "seq",
-    "expr",
-    "test",
-    "[",
-    "fmt",
-    "pr",
-    "numfmt",
-    "tsort",
-    "getconf",
-    "basename",
-    "dirname",
-    "realpath",
-    "readlink",
-    "md5sum",
-    "shasum",
-    "sha256sum",
-    "cksum",
-    "nl",
-    "bat",
-    "jq",
-];
-
-/// `git` subcommands considered read-only.
-const SAFE_GIT_SUBCOMMANDS: &[&str] = &[
-    "status",
-    "log",
-    "diff",
-    "show",
-    "blame",
-    "rev-parse",
-    "describe",
-    "ls-files",
-];
-
-/// Toolchain version probes: `<cmd> --version` style, read-only.
-const VERSION_PROBE_CMDS: &[&str] = &[
-    "cargo", "rustc", "node", "npm", "python3", "python", "go", "rustup",
-];
+//! Shell surface syntax: splitting a command line into segments and one
+//! segment into tokens. Nothing here decides anything — it only reports
+//! what the shell would see, and refuses (with `None`) any construct
+//! whose effects cannot be read off the text: redirections, command
+//! substitution, parameter expansion, unbalanced quotes.
+//!
+//! The read-only verdict built on top of this lives in `super::read_only`.
 
 /// Common filesystem commands auto-approved in `accept-edits` mode
 /// (Claude Code parity). Relative targets only — the project cwd is the
@@ -224,64 +157,6 @@ pub(super) fn tokenize(seg: &str) -> Option<(String, Vec<String>, bool)> {
     Some((first, tokens.into_iter().skip(1).collect(), unquoted_glob))
 }
 
-/// Built-in read-only verdict for one segment (no separators left).
-pub(super) fn segment_is_safe(seg: &str) -> bool {
-    let Some((first, args, unquoted_glob)) = tokenize(seg) else {
-        return false;
-    };
-    // An unquoted glob could expand to a write-capable flag
-    // (`find *` → `find -delete`).
-    if unquoted_glob && matches!(first.as_str(), "find" | "sort") {
-        return false;
-    }
-    if first == "find"
-        && args.iter().any(|a| {
-            matches!(
-                a.as_str(),
-                // Actions that run a command…
-                "-delete" | "-exec" | "-execdir" | "-ok" | "-okdir"
-                // …and GNU find's file-writing print actions.
-                    | "-fprint"
-                    | "-fprint0"
-                    | "-fprintf"
-                    | "-fls"
-            )
-        })
-    {
-        return false;
-    }
-    // `env` runs whatever operand follows its assignments, so it is only
-    // read-only when every argument is a `NAME=VALUE` assignment and there
-    // is no command operand (bare `env` prints the environment).
-    if first == "env" && !args.iter().all(|a| a.contains('=') && !a.starts_with('-')) {
-        return false;
-    }
-    if first == "sort"
-        && args
-            .iter()
-            .any(|a| a == "-o" || a == "--output" || a.starts_with("--output="))
-    {
-        return false;
-    }
-    if first == "git" {
-        return args
-            .first()
-            .is_some_and(|sub| SAFE_GIT_SUBCOMMANDS.contains(&sub.as_str()) || sub == "--version");
-    }
-    if VERSION_PROBE_CMDS.contains(&first.as_str())
-        && !args.is_empty()
-        && args
-            .iter()
-            .all(|a| matches!(a.as_str(), "--version" | "-V"))
-    {
-        return true;
-    }
-    if first == "cargo" && !args.is_empty() && args.iter().all(|a| a == "--list") {
-        return true;
-    }
-    SAFE_BASH.contains(&first.as_str())
-}
-
 #[cfg(test)]
 mod tests {
     use super::super::{Decision, PolicyEngine};
@@ -290,23 +165,18 @@ mod tests {
         PolicyEngine::new(rules.iter().map(|s| s.to_string()).collect())
     }
 
+    /// The tokenizer reports unquoted globs because the shell expands
+    /// them before the command sees them: `find *` can arrive as
+    /// `find -delete`.
     #[test]
-    fn write_capable_flags_and_globs_gate() {
+    fn unquoted_globs_are_reported_and_gate_option_taking_commands() {
         let e = engine(&[]);
-        assert_eq!(e.decide_command("find . -delete"), Decision::Gate);
-        assert_eq!(
-            e.decide_command("find . -name x -exec rm {} \\;"),
-            Decision::Gate
-        );
-        assert_eq!(
-            e.decide_command("sort -o /etc/passwd in.txt"),
-            Decision::Gate
-        );
-        // unquoted glob could expand to a flag for write-capable commands
         assert_eq!(e.decide_command("find *"), Decision::Gate);
         assert_eq!(e.decide_command("sort *"), Decision::Gate);
-        // globs are fine for plain readers
+        assert_eq!(e.decide_command("rg foo *"), Decision::Gate);
+        // …but a command with no dangerous option cannot be harmed by one
         assert_eq!(e.decide_command("wc -l src/*.rs"), Decision::Allow);
+        assert_eq!(e.decide_command("find . -name '*.rs'"), Decision::Allow);
     }
 
     #[test]
@@ -338,26 +208,14 @@ mod tests {
         }
     }
 
-    /// Commands that take another command as an operand launder anything
-    /// they are given, so they are only read-only without that operand.
+    /// Redirections are writes and fd duplications are not, and the
+    /// distinction has to survive tokenization.
     #[test]
-    fn command_launderers_are_not_read_only() {
+    fn redirection_is_a_write_but_fd_duplication_is_not() {
         let e = engine(&[]);
-        for command in [
-            "env rm -rf build",
-            "env FOO=1 rm -rf build",
-            "find . -fprint /etc/x",
-            "find . -fprintf out.txt %p",
-            "find . -fls listing.txt",
-        ] {
-            assert!(
-                !PolicyEngine::is_provably_read_only(command),
-                "{command} must not be provable"
-            );
-            assert_eq!(e.decide_command(command), Decision::Gate, "{command}");
-        }
-        // Assignments alone just print the environment.
-        assert!(PolicyEngine::is_provably_read_only("env"));
-        assert!(PolicyEngine::is_provably_read_only("env FOO=1"));
+        assert_eq!(e.decide_command("echo hi > out"), Decision::Gate);
+        assert_eq!(e.decide_command("echo hi >> out"), Decision::Gate);
+        assert_eq!(e.decide_command("cat < secret"), Decision::Gate);
+        assert_eq!(e.decide_command("ls 2>&1"), Decision::Allow);
     }
 }

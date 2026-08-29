@@ -17,7 +17,9 @@
 //! 3. Did this run actually read the bytes it is about to overwrite —
 //!    and the *lines* it is about to change?
 //! 4. For Rust source: is the semantic provider healthy, and does a
-//!    declared target symbol really live in this file?
+//!    *declared target symbol* really live in this file according to that
+//!    provider? Tree-sitter may narrow the candidates; only the language
+//!    server can authorize.
 //!
 //! Anything unproven blocks. [`GateDecision::NeedsEvidence`] marks the
 //! subset a model can clear by reading; [`GateDecision::Fail`] marks the
@@ -25,16 +27,20 @@
 //!
 //! Split by reason to change: the model-facing refusal vocabulary
 //! (`failure`), the facts the rules consume (`facts`), the patch rules
-//! themselves (`engine`), the shell rule (`command`), and the pure line
-//! arithmetic that localizes a change (`range`).
+//! themselves (`engine`), Rust localization (`localize`), the shell rule
+//! (`command`), and the pure line arithmetic that localizes a change
+//! (`range`).
 
 mod command;
 mod engine;
 mod facts;
 mod failure;
+mod localize;
 mod range;
 
 pub use engine::{GateDecision, GateEngine};
-pub use facts::{EvidenceState, LineRange, MutationRequest, RustFacts, SemanticHealth};
+pub use facts::{
+    EvidenceState, LineRange, MutationRequest, RustFacts, SemanticEvidence, SemanticHealth,
+};
 pub use failure::GateFailure;
 pub use range::changed_line_range;

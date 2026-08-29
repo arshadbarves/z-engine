@@ -7,18 +7,22 @@ use std::sync::{Arc, Mutex};
 
 use crate::evidence::{BlobStore, EvidenceLedger, FsBlobStore};
 use crate::governance::WorkOrderStore;
-use crate::lsp::LspHealth;
 use crate::perms::PolicyEngine;
 
+use super::semantics::StubSemantics;
 use super::{EvidenceStore, ToolCtx};
 
 /// A guarded `ToolCtx` rooted at `root`: per-run evidence storage, a
-/// work-order slot, and — when `health` is given — a stubbed Rust
-/// semantic provider so tests never spawn rust-analyzer.
+/// work-order slot, and — when `semantics` is given — a scripted Rust
+/// semantic provider so tests never spawn rust-analyzer and can drive
+/// every answer the gate distinguishes.
 ///
 /// The returned `TempDir` must stay bound for the whole test: dropping it
 /// deletes the ledger and blob files out from under the store.
-pub(crate) fn guarded_ctx(root: &Path, health: Option<LspHealth>) -> (ToolCtx, tempfile::TempDir) {
+pub(crate) fn guarded_ctx(
+    root: &Path,
+    semantics: Option<StubSemantics>,
+) -> (ToolCtx, tempfile::TempDir) {
     let dir = tempfile::tempdir().unwrap();
     let ledger = Arc::new(EvidenceLedger::open(dir.path()).unwrap());
     let blobs: Arc<dyn BlobStore + Send + Sync> =
@@ -30,8 +34,8 @@ pub(crate) fn guarded_ctx(root: &Path, health: Option<LspHealth>) -> (ToolCtx, t
     )
     .with_evidence(Arc::new(EvidenceStore::new(ledger, blobs)))
     .with_work_orders(Arc::new(WorkOrderStore::new()));
-    if let Some(health) = health {
-        ctx.semantics = Some(Arc::new(super::semantics::StubSemantics(health)));
+    if let Some(stub) = semantics {
+        ctx.semantics = Some(Arc::new(stub));
     }
     (ctx, dir)
 }

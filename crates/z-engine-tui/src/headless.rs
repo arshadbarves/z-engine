@@ -74,6 +74,11 @@ pub async fn run_one_shot(
             Some(Event::Error(msg)) => {
                 anyhow::bail!(msg);
             }
+            // Terminal, and not a clean exit: say so distinctly so a
+            // wrapping script can tell a refused run from a finished one.
+            Some(Event::RunBlocked { reason }) => {
+                anyhow::bail!("run blocked: {reason}");
+            }
             Some(Event::TranscriptTrimmed { .. }) => {}
             Some(Event::SessionTitle { .. }) => {}
             None => return Ok(()),

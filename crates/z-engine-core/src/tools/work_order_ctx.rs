@@ -68,29 +68,9 @@ impl EvidenceView for ToolCtx {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::evidence::{BlobStore, EvidenceLedger, FsBlobStore};
     use crate::governance::AcceptanceCommand;
-    use crate::perms::PolicyEngine;
+    use crate::tools::test_support::{guarded_ctx, plain_ctx};
     use std::path::PathBuf;
-    use std::sync::Mutex;
-
-    /// A guarded `ToolCtx` rooted at `root`. The returned `TempDir` must
-    /// stay bound for the whole test: dropping it deletes the ledger and
-    /// blob files out from under the store.
-    fn guarded_ctx(root: &Path) -> (ToolCtx, tempfile::TempDir) {
-        let dir = tempfile::tempdir().unwrap();
-        let ledger = Arc::new(EvidenceLedger::open(dir.path()).unwrap());
-        let blobs: Arc<dyn BlobStore + Send + Sync> =
-            Arc::new(FsBlobStore::new(dir.path().join("blobs")).unwrap());
-        let ctx = ToolCtx::new(
-            root.to_path_buf(),
-            Arc::new(Mutex::new(PolicyEngine::new(vec![]))),
-            tempfile::tempdir().unwrap().keep(),
-        )
-        .with_evidence(Arc::new(super::super::EvidenceStore::new(ledger, blobs)))
-        .with_work_orders(Arc::new(WorkOrderStore::new()));
-        (ctx, dir)
-    }
 
     fn order(paths: &[&str], evidence: &[&str]) -> WorkOrder {
         WorkOrder {
@@ -118,7 +98,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::create_dir(tmp.path().join("src")).unwrap();
         std::fs::write(tmp.path().join("src/lib.rs"), b"pub fn parse() {}\n").unwrap();
-        let (ctx, _dir) = guarded_ctx(tmp.path());
+        let (ctx, _dir) = guarded_ctx(tmp.path(), None);
 
         for spelling in ["src/lib.rs", "./src/lib.rs", "src/../src/lib.rs"] {
             assert_eq!(
@@ -140,7 +120,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::create_dir(tmp.path().join("src")).unwrap();
         std::fs::write(tmp.path().join("src/lib.rs"), b"pub fn parse() {}\n").unwrap();
-        let (ctx, _dir) = guarded_ctx(tmp.path());
+        let (ctx, _dir) = guarded_ctx(tmp.path(), None);
         let id = read(&ctx, "./src/lib.rs", b"pub fn parse() {}\n");
 
         let active = ctx
@@ -154,7 +134,7 @@ mod tests {
     fn rejects_order_whose_evidence_went_stale_on_disk() {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::write(tmp.path().join("f.rs"), b"before\n").unwrap();
-        let (ctx, _dir) = guarded_ctx(tmp.path());
+        let (ctx, _dir) = guarded_ctx(tmp.path(), None);
         let id = read(&ctx, "f.rs", b"before\n");
         std::fs::write(tmp.path().join("f.rs"), b"after\n").unwrap();
 
@@ -167,7 +147,7 @@ mod tests {
     fn rejects_invented_evidence_ids() {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::write(tmp.path().join("f.rs"), b"before\n").unwrap();
-        let (ctx, _dir) = guarded_ctx(tmp.path());
+        let (ctx, _dir) = guarded_ctx(tmp.path(), None);
         read(&ctx, "f.rs", b"before\n");
 
         let err = ctx
@@ -179,11 +159,7 @@ mod tests {
     #[test]
     fn unguarded_contexts_refuse_work_orders() {
         let tmp = tempfile::tempdir().unwrap();
-        let ctx = ToolCtx::new(
-            tmp.path().to_path_buf(),
-            Arc::new(Mutex::new(PolicyEngine::new(vec![]))),
-            tempfile::tempdir().unwrap().keep(),
-        );
+        let ctx = plain_ctx(tmp.path());
         assert_eq!(
             ctx.set_work_order(&order(&["f.rs"], &[])).unwrap_err(),
             WorkOrderError::NotGuarded

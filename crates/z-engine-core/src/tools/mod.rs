@@ -27,6 +27,7 @@ mod context;
 mod edit_ladder;
 mod fsutil;
 mod gate_ctx;
+mod gate_facts;
 mod grep_backend;
 mod path_identity;
 mod proc_helpers;

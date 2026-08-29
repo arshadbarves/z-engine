@@ -36,15 +36,35 @@ pub enum SemanticHealth {
     Unavailable { reason: String },
 }
 
-/// The Rust-specific facts, supplied only when the target *is* Rust
-/// source. `None` in [`MutationRequest::rust`] means no semantic claim is
-/// being made, so none is demanded.
+/// What the *semantic* provider (rust-analyzer) said about the file
+/// being changed. Only [`SemanticEvidence::Resolved`] can authorize:
+/// "the server has nothing for this file" and "the server answered about
+/// another file" are refusals, never empty successes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SemanticEvidence {
+    /// Declarations the provider resolved in this document.
+    Resolved { symbols: Vec<String> },
+    /// Provider reachable, but no analysis for this file.
+    Unindexed { reason: String },
+    /// Provider answered about a different document, or unreadably.
+    Mismatched { reason: String },
+}
+
+/// The Rust-specific facts, gathered only once the semantics-free rules
+/// have passed (see [`super::GateEngine::prescreen`]).
+///
+/// Two sources, deliberately unequal: `outline` is the tree-sitter view
+/// of the text, which may *narrow* candidates but can authorize nothing —
+/// it cannot tell a declaration from a lookalike, and it is what the
+/// model just wrote. `semantic` is the language server's view, and is the
+/// only thing a mutation may be authorized against.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustFacts {
     pub health: SemanticHealth,
-    /// Symbol names declared in the bytes about to change, as discovered
-    /// by the repo map's tree-sitter outline.
-    pub declared: Vec<String>,
+    /// Symbol names from the repo map's tree-sitter outline. `None` when
+    /// no outline could be produced, in which case it narrows nothing.
+    pub outline: Option<Vec<String>>,
+    pub semantic: SemanticEvidence,
 }
 
 /// Everything the gate weighs for one mutation, gathered by the caller.
@@ -61,5 +81,7 @@ pub struct MutationRequest<'a> {
     /// `None` means the whole file is replaced or created.
     pub changed: Option<LineRange>,
     pub evidence: EvidenceState,
-    pub rust: Option<RustFacts>,
+    /// True when the target is Rust source and therefore must be
+    /// localized semantically before it may be written.
+    pub rust: bool,
 }

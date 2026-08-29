@@ -1,12 +1,20 @@
 //! The rules. Given [`MutationRequest`] facts, decide — in the order a
 //! reviewer would ask — whether the change may touch the working tree.
+//!
+//! Two phases, because they cost different things. [`GateEngine::prescreen`]
+//! answers everything a work order and the run's own evidence can settle:
+//! no I/O, no language server, no waiting. Only when it passes is it worth
+//! gathering Rust semantic facts, which [`GateEngine::localize`] then
+//! judges. A caller holding every fact can use [`GateEngine::authorize`]
+//! and get exactly the same verdict.
 
 use std::path::{Path, PathBuf};
 
 use crate::governance::ActiveWorkOrder;
 
-use super::facts::{EvidenceState, LineRange, MutationRequest, RustFacts, SemanticHealth};
+use super::facts::{EvidenceState, LineRange, MutationRequest, RustFacts};
 use super::failure::GateFailure;
+use super::localize;
 
 /// The gate's verdict.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,6 +36,12 @@ impl GateDecision {
             Self::NeedsEvidence(f) | Self::Fail(f) => Err(f),
         }
     }
+
+    /// True when nothing is left to refuse — used by adapters that gather
+    /// expensive facts only for requests still in the running.
+    pub fn is_pass(&self) -> bool {
+        matches!(self, Self::Pass)
+    }
 }
 
 /// The pure decision procedure. No I/O, no clocks, no globals.
@@ -35,8 +49,11 @@ impl GateDecision {
 pub struct GateEngine;
 
 impl GateEngine {
-    /// Decide whether one mutation may touch the working tree.
-    pub fn authorize(req: &MutationRequest<'_>) -> GateDecision {
+    /// Everything decidable without a semantic provider: a declared work
+    /// order, an in-root and in-scope path, and read evidence covering the
+    /// lines about to change. Rust targets additionally need the order to
+    /// *name* a symbol — a question no language server has to answer.
+    pub fn prescreen(req: &MutationRequest<'_>) -> GateDecision {
         let Some(order) = req.order else {
             return GateDecision::Fail(GateFailure::NoWorkOrder);
         };
@@ -52,12 +69,40 @@ impl GateEngine {
                 allowed: join_paths(&order.order.writable_paths),
             });
         }
-        if let Some(blocked) = evidence_gap(&req.evidence, req.changed, scoped) {
-            return GateDecision::NeedsEvidence(blocked);
+        if req.rust && order.order.target_symbols.is_empty() {
+            return GateDecision::Fail(GateFailure::NoTargetSymbol);
         }
-        match &req.rust {
+        match evidence_gap(&req.evidence, req.changed, scoped) {
+            Some(blocked) => GateDecision::NeedsEvidence(blocked),
             None => GateDecision::Pass,
-            Some(rust) => authorize_rust(rust, order, scoped),
+        }
+    }
+
+    /// The Rust half: does the semantic provider place a declared target
+    /// symbol in this file? See [`super::localize`] for why tree-sitter
+    /// evidence cannot stand in for it.
+    pub fn localize(facts: &RustFacts, order: &ActiveWorkOrder, path: &Path) -> GateDecision {
+        localize::localize(facts, order, path)
+    }
+
+    /// Both phases at once. `rust` must be supplied whenever
+    /// [`MutationRequest::rust`] is set: a Rust change with no gathered
+    /// semantic facts is unproven, and unproven is refused.
+    pub fn authorize(req: &MutationRequest<'_>, rust: Option<&RustFacts>) -> GateDecision {
+        let prescreen = Self::prescreen(req);
+        if !prescreen.is_pass() || !req.rust {
+            return prescreen;
+        }
+        // Both are `Some`, or prescreen would not have passed.
+        let (Some(order), Some(identity)) = (req.order, req.identity) else {
+            return prescreen;
+        };
+        match rust {
+            Some(facts) => Self::localize(facts, order, Path::new(identity)),
+            None => GateDecision::Fail(GateFailure::SemanticEvidenceUnavailable {
+                path: PathBuf::from(identity),
+                reason: "no semantic facts were gathered for this change".into(),
+            }),
         }
     }
 }
@@ -87,31 +132,6 @@ fn evidence_gap(
     }
 }
 
-/// Localization for Rust source: a healthy provider, and a declared
-/// target symbol that really lives in this file.
-fn authorize_rust(rust: &RustFacts, order: &ActiveWorkOrder, path: &Path) -> GateDecision {
-    if let SemanticHealth::Unavailable { reason } = &rust.health {
-        return GateDecision::Fail(GateFailure::SemanticProviderUnavailable {
-            reason: reason.clone(),
-        });
-    }
-    let targets = &order.order.target_symbols;
-    if targets.is_empty() {
-        return GateDecision::Fail(GateFailure::NoTargetSymbol);
-    }
-    if targets
-        .iter()
-        .any(|t| rust.declared.iter().any(|d| d == leaf(t)))
-    {
-        GateDecision::Pass
-    } else {
-        GateDecision::Fail(GateFailure::UnresolvedTargetSymbol {
-            symbols: targets.join(", "),
-            path: path.to_path_buf(),
-        })
-    }
-}
-
 /// Does the evidence's `covered` span contain everything `changed`
 /// touches? Whole-file evidence covers anything; a bounded read never
 /// covers a whole-file rewrite.
@@ -138,19 +158,17 @@ fn join_paths(paths: &[PathBuf]) -> String {
         .join(", ")
 }
 
-/// Final segment of a possibly qualified symbol name (`Type::method` →
-/// `method`), which is what a file-level outline can declare.
-fn leaf(symbol: &str) -> &str {
-    symbol.rsplit("::").next().unwrap_or(symbol).trim()
-}
-
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
+    use crate::governance::gate::facts::{SemanticEvidence, SemanticHealth};
     use crate::governance::work_order::AcceptanceCommand;
     use crate::governance::{ActiveWorkOrder, WorkOrder};
 
-    fn active(paths: &[&str], symbols: &[&str]) -> ActiveWorkOrder {
+    /// An admitted order over `paths` promising to change `symbols`.
+    /// Shared with the localization tests so both halves of the gate are
+    /// exercised against the same shape of order.
+    pub(in crate::governance::gate) fn active(paths: &[&str], symbols: &[&str]) -> ActiveWorkOrder {
         ActiveWorkOrder::for_test(
             WorkOrder {
                 id: "wo-1".into(),
@@ -168,7 +186,7 @@ mod tests {
     }
 
     /// A request that passes every rule; each test spoils exactly one fact.
-    fn request<'a>(order: &'a ActiveWorkOrder, rust: Option<RustFacts>) -> MutationRequest<'a> {
+    fn request(order: &ActiveWorkOrder, rust: bool) -> MutationRequest<'_> {
         MutationRequest {
             path: Path::new("src/lib.rs"),
             identity: Some("src/lib.rs"),
@@ -182,18 +200,21 @@ mod tests {
         }
     }
 
-    fn healthy(symbols: &[&str]) -> Option<RustFacts> {
-        Some(RustFacts {
+    fn proven(symbols: &[&str]) -> RustFacts {
+        RustFacts {
             health: SemanticHealth::Ready,
-            declared: symbols.iter().map(|s| (*s).to_string()).collect(),
-        })
+            outline: Some(symbols.iter().map(|s| (*s).to_string()).collect()),
+            semantic: SemanticEvidence::Resolved {
+                symbols: symbols.iter().map(|s| (*s).to_string()).collect(),
+            },
+        }
     }
 
     #[test]
     fn passes_when_scope_evidence_and_symbol_all_hold() {
         let order = active(&["src/lib.rs"], &["parse"]);
         assert_eq!(
-            GateEngine::authorize(&request(&order, healthy(&["parse", "render"]))),
+            GateEngine::authorize(&request(&order, true), Some(&proven(&["parse", "render"]))),
             GateDecision::Pass
         );
     }
@@ -201,10 +222,10 @@ mod tests {
     #[test]
     fn rejects_mutation_without_a_work_order() {
         let order = active(&["src/lib.rs"], &["parse"]);
-        let mut req = request(&order, healthy(&["parse"]));
+        let mut req = request(&order, true);
         req.order = None;
         assert_eq!(
-            GateEngine::authorize(&req),
+            GateEngine::prescreen(&req),
             GateDecision::Fail(GateFailure::NoWorkOrder)
         );
     }
@@ -212,7 +233,7 @@ mod tests {
     #[test]
     fn rejects_path_outside_the_active_scope() {
         let order = active(&["src/other.rs"], &["parse"]);
-        let decision = GateEngine::authorize(&request(&order, healthy(&["parse"])));
+        let decision = GateEngine::prescreen(&request(&order, true));
         assert!(
             matches!(&decision, GateDecision::Fail(GateFailure::OutOfScope { path, .. })
                 if path == Path::new("src/lib.rs")),
@@ -223,10 +244,10 @@ mod tests {
     #[test]
     fn rejects_path_that_resolves_outside_the_project_root() {
         let order = active(&["src/lib.rs"], &["parse"]);
-        let mut req = request(&order, healthy(&["parse"]));
+        let mut req = request(&order, true);
         req.identity = None;
         assert!(matches!(
-            GateEngine::authorize(&req),
+            GateEngine::prescreen(&req),
             GateDecision::Fail(GateFailure::OutsideRoot { .. })
         ));
     }
@@ -235,17 +256,17 @@ mod tests {
     fn unread_and_stale_files_ask_for_evidence_rather_than_failing_outright() {
         let order = active(&["src/lib.rs"], &["parse"]);
 
-        let mut missing = request(&order, healthy(&["parse"]));
+        let mut missing = request(&order, true);
         missing.evidence = EvidenceState::Missing;
         assert!(matches!(
-            GateEngine::authorize(&missing),
+            GateEngine::prescreen(&missing),
             GateDecision::NeedsEvidence(GateFailure::NoEvidence { .. })
         ));
 
-        let mut stale = request(&order, healthy(&["parse"]));
+        let mut stale = request(&order, true);
         stale.evidence = EvidenceState::Stale;
         assert!(matches!(
-            GateEngine::authorize(&stale),
+            GateEngine::prescreen(&stale),
             GateDecision::NeedsEvidence(GateFailure::StaleEvidence { .. })
         ));
     }
@@ -253,9 +274,9 @@ mod tests {
     #[test]
     fn rejects_edits_to_lines_the_run_never_read() {
         let order = active(&["src/lib.rs"], &["parse"]);
-        let mut req = request(&order, healthy(&["parse"]));
+        let mut req = request(&order, true);
         req.changed = Some((9, 12)); // evidence covers 1-10
-        let decision = GateEngine::authorize(&req);
+        let decision = GateEngine::prescreen(&req);
         assert!(
             matches!(
                 decision,
@@ -267,11 +288,11 @@ mod tests {
 
     #[test]
     fn whole_file_writes_need_whole_file_evidence() {
-        let order = active(&["src/lib.rs"], &["parse"]);
-        let mut bounded = request(&order, healthy(&["parse"]));
+        let order = active(&["src/lib.rs"], &[]);
+        let mut bounded = request(&order, false);
         bounded.changed = None; // whole-file rewrite
         assert!(matches!(
-            GateEngine::authorize(&bounded),
+            GateEngine::prescreen(&bounded),
             GateDecision::NeedsEvidence(GateFailure::RangeNotCovered { .. })
         ));
 
@@ -280,57 +301,17 @@ mod tests {
             id: "ev-1".into(),
             covered: None,
         };
-        assert_eq!(GateEngine::authorize(&whole), GateDecision::Pass);
+        assert_eq!(GateEngine::prescreen(&whole), GateDecision::Pass);
     }
 
+    /// Naming no target symbol is a work-order defect, so it is answered
+    /// before anyone waits on a language server.
     #[test]
-    fn rejects_rust_edits_when_the_semantic_provider_is_unhealthy() {
-        let order = active(&["src/lib.rs"], &["parse"]);
-        let mut req = request(&order, healthy(&["parse"]));
-        req.rust = Some(RustFacts {
-            health: SemanticHealth::Unavailable {
-                reason: "spawn rust-analyzer: not found".into(),
-            },
-            declared: vec!["parse".into()],
-        });
-        let decision = GateEngine::authorize(&req);
-        assert!(
-            matches!(
-                decision,
-                GateDecision::Fail(GateFailure::SemanticProviderUnavailable { .. })
-            ),
-            "{decision:?}"
-        );
-    }
-
-    #[test]
-    fn rejects_rust_edits_whose_target_symbol_is_not_declared_here() {
-        let order = active(&["src/lib.rs"], &["parse"]);
-        let decision = GateEngine::authorize(&request(&order, healthy(&["render", "main"])));
-        assert!(
-            matches!(
-                decision,
-                GateDecision::Fail(GateFailure::UnresolvedTargetSymbol { .. })
-            ),
-            "{decision:?}"
-        );
-    }
-
-    #[test]
-    fn rejects_rust_edits_when_the_order_names_no_target_symbol() {
+    fn rust_edits_without_a_target_symbol_fail_before_any_semantic_work() {
         let order = active(&["src/lib.rs"], &[]);
         assert_eq!(
-            GateEngine::authorize(&request(&order, healthy(&["parse"]))),
+            GateEngine::prescreen(&request(&order, true)),
             GateDecision::Fail(GateFailure::NoTargetSymbol)
-        );
-    }
-
-    #[test]
-    fn qualified_target_symbols_resolve_by_their_final_segment() {
-        let order = active(&["src/lib.rs"], &["WorkOrder::validate"]);
-        assert_eq!(
-            GateEngine::authorize(&request(&order, healthy(&["validate"]))),
-            GateDecision::Pass
         );
     }
 
@@ -338,18 +319,33 @@ mod tests {
     fn non_rust_targets_need_no_semantic_proof() {
         let order = active(&["src/lib.rs"], &[]);
         assert_eq!(
-            GateEngine::authorize(&request(&order, None)),
+            GateEngine::authorize(&request(&order, false), None),
             GateDecision::Pass
+        );
+    }
+
+    /// Composition must not become a loophole: a Rust change whose
+    /// semantic facts were never gathered is unproven, not authorized.
+    #[test]
+    fn a_rust_change_with_no_gathered_facts_is_refused() {
+        let order = active(&["src/lib.rs"], &["parse"]);
+        let decision = GateEngine::authorize(&request(&order, true), None);
+        assert!(
+            matches!(
+                decision,
+                GateDecision::Fail(GateFailure::SemanticEvidenceUnavailable { .. })
+            ),
+            "{decision:?}"
         );
     }
 
     #[test]
     fn scope_is_checked_before_evidence_so_the_model_fixes_the_order_first() {
         let order = active(&["src/other.rs"], &["parse"]);
-        let mut req = request(&order, healthy(&["parse"]));
+        let mut req = request(&order, true);
         req.evidence = EvidenceState::Missing;
         assert!(matches!(
-            GateEngine::authorize(&req),
+            GateEngine::prescreen(&req),
             GateDecision::Fail(GateFailure::OutOfScope { .. })
         ));
     }

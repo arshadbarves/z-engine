@@ -117,6 +117,13 @@ pub enum Event {
     },
     TurnAborted,
     Error(String),
+    /// The run was refused before it could start and is over: guarded mode
+    /// was requested but could not be established. Terminal, unlike
+    /// [`Event::Error`], which a run can survive — consumers must show it
+    /// as a blocked run rather than a clean exit.
+    RunBlocked {
+        reason: String,
+    },
     /// Per-message revert: drop the user turn at `keep_turn` and everything
     /// after it from the in-memory transcript. `keep_turn` is the 0-based
     /// run-turn index of the user message being reverted.
@@ -183,6 +190,7 @@ impl serde::Serialize for Event {
             }),
             Event::TurnAborted => json!({"type": "turnAborted"}),
             Event::Error(m) => json!({"type": "error", "message": m}),
+            Event::RunBlocked { reason } => json!({"type": "runBlocked", "reason": reason}),
             Event::TranscriptTrimmed { keep_turn } => {
                 json!({"type": "transcriptTrimmed", "keepTurn": keep_turn})
             }

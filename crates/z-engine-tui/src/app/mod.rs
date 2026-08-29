@@ -194,6 +194,26 @@ mod tests {
         assert!(!screen2.contains("approval required"), "{screen2}");
     }
 
+    /// A refused guarded run must not read like a clean exit: both the
+    /// reason and the blocked verdict have to reach the screen, and the
+    /// turn has to end.
+    #[tokio::test]
+    async fn a_blocked_run_is_visible_in_the_transcript() {
+        let mut app = test_app();
+        app.turn_active = true;
+        app.on_core_event(Event::Error(
+            "guarded mode unavailable: evidence ledger is not a directory".into(),
+        ));
+        app.on_core_event(Event::RunBlocked {
+            reason: "guarded mode unavailable; refusing to run ungoverned".into(),
+        });
+
+        let screen = draw(&app);
+        assert!(screen.contains("run blocked"), "{screen}");
+        assert!(screen.contains("refusing to run ungoverned"), "{screen}");
+        assert!(!app.turn_active, "a blocked run is over");
+    }
+
     #[tokio::test]
     async fn history_navigation_roundtrip() {
         let mut app = test_app();

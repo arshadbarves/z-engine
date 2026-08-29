@@ -57,6 +57,17 @@ pub enum GateFailure {
     )]
     UnresolvedTargetSymbol { symbols: String, path: PathBuf },
     #[error(
+        "guarded mode: the Rust semantic provider has no analysis for {path} ({reason}), \
+         so this change cannot be localized — wait for indexing to finish, or make the \
+         file reachable from the workspace, then retry"
+    )]
+    SemanticEvidenceUnavailable { path: PathBuf, reason: String },
+    #[error(
+        "guarded mode: the Rust semantic provider's answer does not describe {path} \
+         ({reason}); refusing to act on evidence that is not about this file"
+    )]
+    SemanticEvidenceMismatch { path: PathBuf, reason: String },
+    #[error(
         "guarded mode: refusing to run `{command}` — its write set cannot be proven \
          before it runs; make changes with edit_file/write_file inside the work order's \
          scope"
@@ -97,6 +108,22 @@ mod tests {
             }
             .to_string()
             .contains("rm -rf target")
+        );
+        assert!(
+            GateFailure::SemanticEvidenceUnavailable {
+                path: PathBuf::from("src/lib.rs"),
+                reason: "documentSymbol returned nothing".into(),
+            }
+            .to_string()
+            .contains("no analysis for src/lib.rs")
+        );
+        assert!(
+            GateFailure::SemanticEvidenceMismatch {
+                path: PathBuf::from("src/lib.rs"),
+                reason: "symbols were reported for file:///other.rs".into(),
+            }
+            .to_string()
+            .contains("does not describe src/lib.rs")
         );
     }
 }

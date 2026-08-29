@@ -118,32 +118,14 @@ impl Tool for SetWorkOrderTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::evidence::{BlobStore, EvidenceLedger, FsBlobStore};
-    use crate::governance::WorkOrderStore;
-    use crate::perms::PolicyEngine;
+    use crate::tools::test_support::guarded_ctx;
     use std::path::Path;
-    use std::sync::{Arc, Mutex};
-
-    fn guarded_ctx(root: &Path) -> (ToolCtx, tempfile::TempDir) {
-        let dir = tempfile::tempdir().unwrap();
-        let ledger = Arc::new(EvidenceLedger::open(dir.path()).unwrap());
-        let blobs: Arc<dyn BlobStore + Send + Sync> =
-            Arc::new(FsBlobStore::new(dir.path().join("blobs")).unwrap());
-        let ctx = ToolCtx::new(
-            root.to_path_buf(),
-            Arc::new(Mutex::new(PolicyEngine::new(vec![]))),
-            tempfile::tempdir().unwrap().keep(),
-        )
-        .with_evidence(Arc::new(super::super::EvidenceStore::new(ledger, blobs)))
-        .with_work_orders(Arc::new(WorkOrderStore::new()));
-        (ctx, dir)
-    }
 
     #[tokio::test]
     async fn accepted_order_is_stored_and_echoed_as_a_digest() {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::write(tmp.path().join("f.rs"), b"pub fn parse() {}\n").unwrap();
-        let (ctx, _dir) = guarded_ctx(tmp.path());
+        let (ctx, _dir) = guarded_ctx(tmp.path(), None);
         let id = ctx
             .record_read_evidence(
                 &ctx.resolve(Path::new("f.rs")),
@@ -181,7 +163,7 @@ mod tests {
     async fn order_without_fresh_evidence_is_refused_with_model_facing_text() {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::write(tmp.path().join("f.rs"), b"pub fn parse() {}\n").unwrap();
-        let (ctx, _dir) = guarded_ctx(tmp.path());
+        let (ctx, _dir) = guarded_ctx(tmp.path(), None);
 
         let err = SetWorkOrderTool
             .run(
@@ -201,7 +183,7 @@ mod tests {
     #[tokio::test]
     async fn malformed_input_is_invalid_not_a_silent_pass() {
         let tmp = tempfile::tempdir().unwrap();
-        let (ctx, _dir) = guarded_ctx(tmp.path());
+        let (ctx, _dir) = guarded_ctx(tmp.path(), None);
         let err = SetWorkOrderTool
             .run(json!({"goal": "no paths field"}), &ctx)
             .await

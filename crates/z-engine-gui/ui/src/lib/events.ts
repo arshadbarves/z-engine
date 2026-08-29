@@ -866,6 +866,17 @@ function dispatchEvent(ev: EventPayload) {
       push("error", `ERROR: ${ev.message}`);
       emitChange();
       break;
+    // Terminal refusal (e.g. guarded mode could not be established). The
+    // preceding `error` carries the detail; this states the verdict so a
+    // blocked run never looks like one that simply ended.
+    case "runBlocked":
+      closeThinking();
+      endAssistant();
+      busy = false;
+      push("notice", `Run blocked — ${ev.reason}`);
+      pushToast("Run blocked", "warn");
+      emitChange();
+      break;
   }
 }
 
