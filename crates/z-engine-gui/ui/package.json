@@ -5,33 +5,32 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
+    "check": "svelte-check --tsconfig ./tsconfig.app.json",
     "lint": "oxlint",
     "preview": "vite preview",
+    "test": "vitest run",
     "tauri": "tauri"
   },
   "dependencies": {
     "@hugeicons/core-free-icons": "^4.3.0",
-    "@hugeicons/react": "^1.1.10",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/cli": "^2.11.4",
     "@tauri-apps/plugin-dialog": "^2.7.2",
-    "@types/react-syntax-highlighter": "^15.5.13",
+    "bits-ui": "^2.14.4",
+    "highlight.js": "^11.11.1",
     "mermaid": "^11.17.2",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "react-markdown": "^10.1.0",
-    "react-syntax-highlighter": "^16.1.1",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "svelte": "^5.46.0",
+    "svelte-exmarkdown": "^5.0.2"
   },
   "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^6.2.0",
     "@types/node": "^24.13.3",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
-    "@vitejs/plugin-react": "^6.1.0",
     "oxlint": "^1.79.0",
+    "svelte-check": "^4.3.4",
     "typescript": "~6.0.2",
-    "vite": "^8.2.2",
+    "vite": "^7.1.5",
     "vitest": "^4.1.11"
   }
 }

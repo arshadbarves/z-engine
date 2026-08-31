@@ -100,10 +100,24 @@ crates/
         ├── mod.rs agent.rs settings.rs misc.rs
 ```
 
-The React frontend lives in `z-engine-gui/ui/src`: `components/` (one
-file per component), `lib/` (stores + typed `commands.ts` boundary).
-Backend access goes ONLY through `lib/commands.ts`; event handling only
-through `lib/events.ts`.
+The desktop frontend is **Svelte 5 + Bits UI + Vite** in
+`z-engine-gui/ui/src`. Canonical UI rules:
+[`docs/design/gui-ui-guide.md`](docs/design/gui-ui-guide.md).
+
+```
+ui/src/
+├── App.svelte              # composition root (wiring only)
+├── lib/commands.ts         # ONLY Tauri invoke wrappers
+├── lib/runtime/            # agent events, transcript, session park/replay
+├── lib/domain/             # pure helpers (tested with vitest)
+├── lib/stores/             # config / workspace / update / chrome UI
+├── lib/ui/                 # Bits UI wrappers + Icon + Button (ONLY bits-ui import)
+└── components/{chrome,sidebar,chat,settings,overlays}/
+```
+
+Rules: screens never `invoke()` or import `bits-ui`; event listening only
+in `lib/runtime/listen.ts`; file budget ≤300 / hard cap 400. Do not add
+SvelteKit, Tailwind, shadcn-svelte, React, or a second design system.
 
 ## How to add things (follow exactly)
 
@@ -112,6 +126,8 @@ through `lib/events.ts`.
 | a tool | new `tools/<name>.rs` implementing `Tool`; register in `ToolRegistry::builtins()` |
 | a prompt | new `prompts/<name>.md` + one `pub const` in `src/prompts.rs` + reference it |
 | an IPC command | fn in the matching `commands/<domain>.rs` with `#[tauri::command]` + add to `generate_handler!` in `main.rs`; frontend wrapper in `ui/src/lib/commands.ts` |
+| a GUI screen | new `ui/src/components/<area>/<Name>.svelte`; use `lib/ui` primitives; follow `docs/design/gui-ui-guide.md` |
+| a GUI primitive | wrapper in `ui/src/lib/ui/` around Bits UI; never import `bits-ui` from a screen |
 | a config key | `config/types.rs` (struct + Partial) → `loader.rs` apply → default in `types.rs` |
 | an event variant | `agent/events.rs` enum + its serde shape in one place |
 
