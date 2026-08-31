@@ -85,6 +85,8 @@ fn main() {
             commands::read_slash_command,
             commands::list_changed_files,
             commands::diff_for_file,
+            commands::list_session_changed_files,
+            commands::session_diff_for_file,
             commands::create_worktree,
             commands::list_permission_rules,
             commands::save_permission_rule,

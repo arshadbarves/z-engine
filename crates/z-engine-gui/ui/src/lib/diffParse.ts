@@ -79,6 +79,8 @@ export function parseGitDiff(text: string): GitDiff {
   const body = text.replace(/\n$/, "");
   if (!body) return { path: null, added: 0, deleted: 0, rows };
 
+  let seenFileHeader = false;
+
   for (const line of body.split("\n")) {
     if (
       line.startsWith("diff ") ||
@@ -92,10 +94,12 @@ export function parseGitDiff(text: string): GitDiff {
     }
     if (line.startsWith("--- ")) {
       oldPath = cleanDiffPath(line.slice(4));
+      seenFileHeader = true;
       continue;
     }
     if (line.startsWith("+++ ")) {
       newPath = cleanDiffPath(line.slice(4));
+      seenFileHeader = true;
       continue;
     }
     const hunk = HUNK_RE.exec(line);
@@ -115,6 +119,26 @@ export function parseGitDiff(text: string): GitDiff {
       newLine = newStart;
       inHunk = true;
       continue;
+    }
+    // Some previews omit @@ (hand-rolled /dev/null diffs). Treat the body
+    // as one synthetic hunk so created-file content is still visible.
+    if (
+      !inHunk &&
+      seenFileHeader &&
+      (line.startsWith("+") || line.startsWith("-") || line.startsWith(" "))
+    ) {
+      inHunk = true;
+      hunkCount = 1;
+      if (line.startsWith("+")) {
+        oldLine = 0;
+        newLine = 1;
+      } else if (line.startsWith("-")) {
+        oldLine = 1;
+        newLine = 0;
+      } else {
+        oldLine = 1;
+        newLine = 1;
+      }
     }
     if (line.startsWith("\\") || !inHunk) continue;
     if (line.startsWith("+")) {

@@ -14,13 +14,16 @@ use super::subagent::run_isolated;
 use super::task::agent_task;
 use crate::perms::PolicyEngine;
 use crate::session::SessionWriter;
-use crate::tools::ToolRegistry;
+use crate::tools::{CheckpointStore, SessionFileChange, ToolRegistry};
 
 /// Cloneable sender-side handle for driving the agent.
 #[derive(Debug, Clone)]
 pub struct AgentHandle {
     cmd_tx: UnboundedSender<Command>,
     last_prompt: Arc<Mutex<Option<PromptInspect>>>,
+    /// Shared with the agent task so the UI can query chat-scoped diffs.
+    checkpoints: Arc<CheckpointStore>,
+    project_root: std::path::PathBuf,
 }
 
 type PromptSlot = Arc<Mutex<Option<PromptInspect>>>;
@@ -106,6 +109,16 @@ impl AgentHandle {
     pub fn last_prompt(&self) -> Option<PromptInspect> {
         self.last_prompt.lock().ok().and_then(|g| g.clone())
     }
+
+    /// Files this chat mutated that still differ from their checkpoint baseline.
+    pub fn session_changed_files(&self) -> Vec<SessionFileChange> {
+        crate::tools::list_session_changes(&self.checkpoints, &self.project_root)
+    }
+
+    /// Unified diff for one path vs this chat's checkpoint pre-image.
+    pub fn session_diff_for_file(&self, path: &str) -> Result<String, String> {
+        crate::tools::session_diff_for(&self.checkpoints, &self.project_root, path)
+    }
 }
 
 /// Receiver end of the core→UI event feed.
@@ -161,6 +174,8 @@ pub fn spawn_with_recorder(
                 AgentHandle {
                     cmd_tx: _cmd_tx,
                     last_prompt: empty_prompt_slot(),
+                    checkpoints: Arc::new(CheckpointStore::default()),
+                    project_root: cfg.project_root.clone(),
                 },
                 EventRx { rx: ev_rx },
             );
@@ -194,6 +209,8 @@ pub fn spawn_with_recorder(
         _ => PromptInspect::preview(&cfg, tools),
     };
     let last_prompt = Arc::new(Mutex::new(Some(inspect)));
+    let checkpoints = Arc::new(CheckpointStore::default());
+    let handle_root = cfg.project_root.clone();
 
     let perms = Arc::new(Mutex::new(PolicyEngine::new(
         cfg.initial_allow_rules.clone(),
@@ -211,11 +228,14 @@ pub fn spawn_with_recorder(
         runner,
         abort_flag,
         Arc::clone(&last_prompt),
+        Arc::clone(&checkpoints),
     ));
     (
         AgentHandle {
             cmd_tx,
             last_prompt,
+            checkpoints,
+            project_root: handle_root,
         },
         EventRx { rx: ev_rx },
     )

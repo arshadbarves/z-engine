@@ -67,7 +67,7 @@
         <pre>{#if children}{@render children()}{/if}</pre>
       </div>
     {/snippet}
-    {#snippet code({ children, class: className }: { children?: Snippet; class?: string })}
+    {#snippet code({ children, class: className }: { children?: Snippet; class?: any })}
       <code class={className}>{#if children}{@render children()}{/if}</code>
     {/snippet}
   </Markdown>

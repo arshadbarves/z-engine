@@ -10,6 +10,7 @@
 
 pub mod bash;
 pub mod checkpoint;
+mod checkpoint_session;
 pub mod context_notes;
 pub mod edit_file;
 pub mod file_state;
@@ -34,6 +35,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
+pub use checkpoint::CheckpointStore;
+pub use checkpoint_session::{SessionFileChange, list_session_changes, session_diff_for};
 pub use context::{SubAgentFuture, SubAgentRunner, ToolCtx, ToolOutputChunk};
 pub(crate) use fsutil::atomic_write;
 pub use fsutil::{MAX_TOOL_OUTPUT_CHARS, truncate_with_tempfile, unified_diff};

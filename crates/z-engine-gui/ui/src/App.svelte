@@ -9,10 +9,11 @@
   import CommandPalette from "./components/overlays/CommandPalette.svelte";
   import DiffPanel from "./components/overlays/DiffPanel.svelte";
   import PromptInspector from "./components/overlays/PromptInspector.svelte";
-  import WorktreeModal from "./components/overlays/WorktreeModal.svelte";
+  import WorktreePanel from "./components/overlays/WorktreePanel.svelte";
   import SettingsPage from "./components/settings/SettingsPage.svelte";
   import AppSidebar from "./components/sidebar/AppSidebar.svelte";
   import { getConfig } from "./lib/commands";
+  import { sessionLabel } from "./lib/sessionList";
   import { configStore } from "./lib/configStore";
   import { paletteActions } from "./lib/paletteActions";
   import {
@@ -44,6 +45,7 @@
   } from "./lib/stores/app-actions";
   import { bindStore } from "./lib/svelte/bind.svelte";
   import { presence } from "./lib/ui/presence.svelte";
+  import { createScrollController } from "./lib/ui/scrollController.svelte";
   import { updateStore } from "./lib/updateStore";
   import type { SessionEntry } from "./lib/util";
   import { workspaceStore, wsBasename } from "./lib/workspaces";
@@ -59,6 +61,8 @@
   const sessionActivity = bindStore(sessionActivityStore);
   const hydrating = bindStore(hydrateStore);
 
+  const scroller = createScrollController({ bottomThreshold: 24 });
+
   let sessionsList = $state<SessionEntry[]>([]);
   let settingsOpen = $state(false);
   let inspectOpen = $state(false);
@@ -67,11 +71,8 @@
   let sidebarOpen = $state(true);
   let diffOpen = $state(false);
   let worktreeOpen = $state(false);
-  let showJump = $state(false);
   let pendingNew = $state<PendingNew>(null);
   let transcriptEl: HTMLDivElement | undefined = $state();
-  let stickToBottom = $state(true);
-  let scrollRaf = 0;
 
   const palettePresence = presence(() => paletteOpen, 180);
   const settingsPresence = presence(() => settingsOpen, 180);
@@ -121,44 +122,14 @@
   });
 
   $effect(() => {
-    const last = messages.current[messages.current.length - 1];
-    if (last?.kind === "user") {
-      stickToBottom = true;
-      showJump = false;
-      applyUserTitle(messages.current, sessionId.current, pendingNew, setList);
-    }
-    // Streaming updates fire this often — only follow when pinned, and
-    // batch to one rAF so wheel/touch can detach without fighting scrollTo.
-    if (!stickToBottom || !transcriptEl) return;
-    cancelAnimationFrame(scrollRaf);
-    const el = transcriptEl;
-    scrollRaf = requestAnimationFrame(() => {
-      el.scrollTop = el.scrollHeight;
-    });
+    return scroller.bindContainer(transcriptEl);
   });
 
-  function onTranscriptScroll() {
-    const el = transcriptEl;
-    if (!el) return;
-    const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
-    const atBottom = gap < 48;
-    stickToBottom = atBottom;
-    showJump = !atBottom;
-  }
-
-  /** Detach pin as soon as the user scrolls up — don't wait for layout. */
-  function onTranscriptWheel(e: WheelEvent) {
-    if (e.deltaY < 0 && stickToBottom) {
-      stickToBottom = false;
-      showJump = true;
-    }
-  }
-
-  function jumpToLatest() {
-    stickToBottom = true;
-    showJump = false;
-    transcriptEl?.scrollTo({ top: transcriptEl.scrollHeight, behavior: "smooth" });
-  }
+  $effect(() => {
+    scroller.onMessagesUpdated(messages.current, sessionId.current, () => {
+      applyUserTitle(messages.current, sessionId.current, pendingNew, setList);
+    });
+  });
 
   $effect(() => {
     function onDblClick(e: MouseEvent) {
@@ -190,6 +161,19 @@
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
+  const activeWorkspaceName = $derived(
+    workspaces.current.active
+      ? wsBasename(workspaces.current.active)
+      : config.current?.projectName || null,
+  );
+
+  const activeChatTitle = $derived.by(() => {
+    const current = sessionsList.find((s) => s.ulid === sessionId.current);
+    if (current?.firstUserMsg) return sessionLabel(current.firstUserMsg);
+    const firstUser = messages.current.find((m) => m.kind === "user");
+    if (firstUser?.text) return sessionLabel(firstUser.text);
+    return "New Chat";
+  });
 </script>
 
 {#if splash}
@@ -200,7 +184,8 @@
 
 <main class={`app${sidebarOpen ? "" : " no-sidebar"}${splash ? "" : " app-enter"}`}>
   <TopBar
-    title={workspaces.current.active ? wsBasename(workspaces.current.active) : config.current?.projectName || "Z Engine"}
+    workspaceName={activeWorkspaceName}
+    chatTitle={activeChatTitle}
     titleHint={workspaces.current.active
       ? `workspace ${workspaces.current.active}${sessionId.current ? ` · session ${sessionId.current}` : ""}`
       : sessionId.current
@@ -238,12 +223,7 @@
           {#if hydrating.current}
             <div class="hydrate-shimmer" aria-label="Restoring chat"></div>
           {/if}
-          <div
-            class="transcript"
-            bind:this={transcriptEl}
-            onscroll={onTranscriptScroll}
-            onwheel={onTranscriptWheel}
-          >
+          <div class="transcript" bind:this={transcriptEl}>
             <MsgList
               messages={messages.current}
               busy={busy.current}
@@ -252,8 +232,8 @@
               onDeny={(m) => handleDeny(m)}
             />
           </div>
-          {#if showJump}
-            <JumpLatest onJump={jumpToLatest} />
+          {#if scroller.showJump}
+            <JumpLatest onJump={() => scroller.jumpToLatest()} busy={busy.current} />
           {/if}
         </div>
 
@@ -271,6 +251,17 @@
 
         <Composer />
       </div>
+
+      {#if worktreePresence.mounted}
+        <WorktreePanel
+          isClosing={worktreePresence.closing}
+          onClose={() => (worktreeOpen = false)}
+          onCreate={(n) => void createWorktreeAndStart(n, startNew)}
+          workspaces={workspaces.current.roots}
+          activeWorkspace={workspaces.current.active}
+          onActivateWorkspace={(root) => workspaceStore.setActive(root)}
+        />
+      {/if}
 
       {#if diffPresence.mounted}
         <DiffPanel isClosing={diffPresence.closing} onClose={() => (diffOpen = false)} />
@@ -302,12 +293,5 @@
   {/if}
   {#if inspectPresence.mounted}
     <PromptInspector isClosing={inspectPresence.closing} onClose={() => (inspectOpen = false)} />
-  {/if}
-  {#if worktreePresence.mounted}
-    <WorktreeModal
-      isClosing={worktreePresence.closing}
-      onClose={() => (worktreeOpen = false)}
-      onCreate={(n) => void createWorktreeAndStart(n, startNew)}
-    />
   {/if}
 </main>

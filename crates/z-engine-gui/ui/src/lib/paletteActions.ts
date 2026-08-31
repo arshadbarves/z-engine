@@ -63,9 +63,9 @@ export function paletteActions(opts: {
       run: opts.openWorktree,
     },
     {
-      label: "Review uncommitted changes",
-      hint: "Diff workbench",
-      keywords: "diff review changes files git",
+      label: "Review session changes",
+      hint: "This chat’s edits",
+      keywords: "diff review changes files git session chat",
       group: "Actions",
       icon: GitCompare,
       run: opts.openDiff,

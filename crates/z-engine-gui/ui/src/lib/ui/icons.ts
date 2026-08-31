@@ -16,6 +16,7 @@ import {
   CornerDownLeftIcon,
   Delete02Icon,
   Download01Icon,
+  EnergyIcon,
   ExternalLinkIcon,
   EyeIcon,
   File01Icon,
@@ -42,6 +43,7 @@ import {
   SparklesIcon,
   SquareTerminalIcon,
   StopIcon,
+  Target01Icon,
   TerminalIcon,
   Tick02Icon,
   Undo02Icon,
@@ -104,3 +106,7 @@ export const Workflow = WorkflowIcon;
 export const Wrench = Wrench02Icon;
 export const KeyRound = KeyRoundIcon;
 export const User = User02Icon;
+export const Zap = EnergyIcon;
+export const Flash = EnergyIcon;
+export const Target = Target01Icon;
+

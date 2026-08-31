@@ -32,11 +32,11 @@ export interface PromptInsights {
 }
 
 const STACK_COLORS: Record<string, string> = {
-  system: "#8b8b96",
+  system: "#94a3b8",
   user: "#f0a090",
   assistant: "#7dd3fc",
-  tool: "#7c85e0",
-  "tool def": "#a78bfa",
+  tool: "#a78bfa",
+  "tool def": "#818cf8",
 };
 
 function layer(

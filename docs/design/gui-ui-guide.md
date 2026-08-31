@@ -174,6 +174,30 @@ unless Bits has no primitive for it (the boot splash is the exception).
 Add a new icon in `lib/ui/icons.ts` only. Do not import
 `@hugeicons/core-free-icons` from a screen.
 
+### 4.6 Full-screen overlay screens (Settings, Prompt Inspector, full-window views)
+
+Full-window overlays must match the home screen's stage + floating island container architecture:
+
+1. **Stage & Window Layout**:
+   - Outer stage background `#141416` with smooth `sheet-in` / `sheet-out` transitions.
+   - Draggable 40px TopBar (`.app-topbar`) with `data-tauri-drag-region`.
+   - macOS traffic lights clearance (`padding-left: 88px` on `html.plat-mac`).
+   - Back button on top-left (`<button class="icon-btn" title="Back (Esc)" onclick={onClose}><Icon icon={ChevronLeft} size={15} /></button>`).
+   - Breadcrumbs (`Root / ActiveSection`).
+   - Right-side `<WindowControlsMaybe />` for Windows/Linux.
+
+2. **Floating Islands**:
+   - Body has `padding: 0 6px 6px 6px` and `gap: 6px` (identical to `.app-body`).
+   - Left Navigation Island (`.settings-nav-island`): `background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: var(--radius-m); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);`.
+   - Right Canvas Island (`.settings-canvas-pane`): `background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-m); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);`.
+   - Top of canvas has a 46px header bar (`.settings-pane-head`) matching `.chat-head`.
+   - Content body is centered with `max-width: 720px` (or `920px` for wide inspector/diff views).
+
+3. **Navigation & Shortcuts**:
+   - Do not display explicit `<kbd>Esc</kbd>` close badges.
+   - Always bind a keyboard `keydown` listener for `Escape` to trigger `onClose()`.
+   - Never create flat edge-to-edge sheets without the floating container structure.
+
 ## 5. How to add things
 
 | Adding… | Do this |

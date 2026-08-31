@@ -45,7 +45,7 @@
     onclick={() => hasBody && (open = !open)}
     disabled={!hasBody}
   >
-    <span class="act-icon" aria-hidden="true">
+    <span class={`act-icon act-icon-${family.toLowerCase()}`} aria-hidden="true">
       <Icon icon={icon} size={12} />
     </span>
     <span class="act-title">{familyTitle(family, tools.length)}</span>

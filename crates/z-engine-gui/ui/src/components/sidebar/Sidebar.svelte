@@ -138,7 +138,7 @@
         <Icon icon={MessageSquare} size={13} strokeWidth={1.8} class="session-msg-icon" />
       {/if}
     </div>
-    <span class="session-item-title">{title}</span>
+    <span class="session-item-title"><span class="title-text">{title}</span></span>
     <div class="session-item-tail">
       {#if isWorking}
         <span class="session-live-pill working" title="Agent working">Live</span>
@@ -192,7 +192,7 @@
         {/if}
       </span>
       <Icon icon={FolderGit2} size={13} strokeWidth={1.8} class="workspace-folder-icon" />
-      <span class="workspace-title">{name}</span>
+      <span class="workspace-title"><span class="title-text">{name}</span></span>
       <div class="workspace-actions">
         {#if wsActivity === "working"}
           <span class="ws-activity-dot working" title="Agent working in this workspace"></span>

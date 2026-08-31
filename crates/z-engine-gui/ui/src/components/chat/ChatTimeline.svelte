@@ -7,10 +7,19 @@
   const users = $derived(messages.filter((m) => m.kind === "user"));
 
   function jumpTo(id: number) {
-    document.getElementById(`msg-${id}`)?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
+    const el = document.getElementById(`msg-${id}`);
+    const transcript = el?.closest(".transcript");
+    if (el && transcript) {
+      const tRect = transcript.getBoundingClientRect();
+      const elRect = el.getBoundingClientRect();
+      const offset = elRect.top - tRect.top + transcript.scrollTop - 20;
+      transcript.scrollTo({
+        top: Math.max(0, offset),
+        behavior: "smooth",
+      });
+    } else {
+      el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }
 </script>
 

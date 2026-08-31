@@ -58,7 +58,7 @@
         >
           {#if installing}
             <Icon icon={LoaderCircle} size={13} class="spin" />
-            <span>Installing…</span>
+            <span>{isInstalling && pct != null ? `Installing… ${pct}%` : "Installing…"}</span>
           {:else}
             <Icon icon={Download} size={13} />
             <span>Update & Restart</span>

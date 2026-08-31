@@ -152,6 +152,25 @@ impl CheckpointStore {
             .map(|t| t.iter().filter(|turn| !turn.files.is_empty()).count())
             .unwrap_or(0)
     }
+
+    /// Earliest retained pre-image per absolute path (session baseline).
+    /// First touch wins so later edits of the same file keep the pre-session
+    /// (or pre-first-touch) content for chat-scoped diffs.
+    pub fn earliest_baselines(&self) -> Vec<(PathBuf, Option<Vec<u8>>)> {
+        let Ok(turns) = self.turns.lock() else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for turn in turns.iter() {
+            for f in &turn.files {
+                if seen.insert(f.path.clone()) {
+                    out.push((f.path.clone(), f.original.clone()));
+                }
+            }
+        }
+        out
+    }
 }
 
 #[cfg(test)]

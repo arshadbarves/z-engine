@@ -16,7 +16,7 @@ use crate::context::{
 };
 use crate::perms::PolicyEngine;
 use crate::session::{SessionEvent, SessionWriter};
-use crate::tools::{ToolCtx, ToolRegistry};
+use crate::tools::{CheckpointStore, ToolCtx, ToolRegistry};
 
 use super::LoopConfig;
 use super::events::{Command, Event};
@@ -41,6 +41,7 @@ pub(super) async fn agent_task(
     runner: crate::tools::SubAgentRunner,
     abort_flag: Arc<AtomicBool>,
     last_prompt: Arc<Mutex<Option<PromptInspect>>>,
+    checkpoints: Arc<CheckpointStore>,
 ) {
     // Register external MCP tools (spec section 9 v0.9). Failures are
     // logged and skipped: a broken server must not kill the session.
@@ -83,6 +84,7 @@ pub(super) async fn agent_task(
         cfg.tmp_dir.clone(),
     )
     .with_task_runner(runner);
+    ctx.checkpoints = checkpoints;
     ctx.output_tx = Arc::new(output_tx);
     ctx.notes = Arc::clone(&notes);
 

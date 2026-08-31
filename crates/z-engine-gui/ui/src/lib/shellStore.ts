@@ -66,6 +66,11 @@ export function showShell() {
   emit();
 }
 
+export function clearShell() {
+  state = { ...state, entries: [] };
+  emit();
+}
+
 export function resetShell() {
   nextId = 1;
   state = { visible: false, entries: [] };

@@ -52,10 +52,17 @@ export const readSlashCommand = (name: string) =>
 
 export interface ChangedFile {
   path: string;
+  /** `added` | `modified` | `deleted` */
   status: string;
+  added: number;
+  deleted: number;
 }
 export const listChangedFiles = () => invoke<ChangedFile[]>("list_changed_files");
 export const diffForFile = (path: string) => invoke<string>("diff_for_file", { path });
+export const listSessionChangedFiles = (sessionId?: string | null) =>
+  invoke<ChangedFile[]>("list_session_changed_files", { sessionId: sessionId ?? null });
+export const sessionDiffForFile = (path: string, sessionId?: string | null) =>
+  invoke<string>("session_diff_for_file", { path, sessionId: sessionId ?? null });
 
 export const createWorktree = (name: string) => invoke<string>("create_worktree", { name });
 export const readSession = (path: string) =>

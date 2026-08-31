@@ -8,10 +8,22 @@
     pct,
   } from "$lib/promptInspectView";
   import { sessionStore } from "$lib/runtime";
-  import Icon, { Copy, Eye, Workflow, X } from "$lib/ui/icons";
+  import Icon, {
+    AlertTriangle,
+    Brain,
+    Check,
+    ChevronLeft,
+    Copy,
+    Sparkles,
+    Target,
+    Zap,
+  } from "$lib/ui/icons";
   import { fmtTokens } from "$lib/util";
   import LogoMark from "../chrome/LogoMark.svelte";
+  import WindowControlsMaybe from "../chrome/WindowControlsMaybe.svelte";
   import PromptInspectChart from "./PromptInspectChart.svelte";
+  import PromptInspectContent from "./PromptInspectContent.svelte";
+  import PromptInspectSidebar from "./PromptInspectSidebar.svelte";
   import "../../settings.css";
   import "../promptInspect.css";
 
@@ -20,42 +32,50 @@
 
   let snap = $state<PromptInspect | null>(null);
   let err = $state<string | null>(null);
+  let loading = $state(true);
   let sel = $state(0);
   let copied = $state(false);
 
   const rows = $derived(snap ? inspectRows(snap) : []);
   const ins = $derived(snap ? promptInsights(snap) : null);
-  const active = $derived(rows[sel] ?? rows[0]);
+  const activeRow = $derived(rows[sel] ?? rows[0]);
+  const activeLayer = $derived(ins?.layers[sel] ?? ins?.layers[0]);
   const activeLabel = $derived(
-    active
-      ? active.kind === "msg"
-        ? active.part.label
-        : active.tool.name
+    activeRow
+      ? activeRow.kind === "msg"
+        ? activeRow.part.label
+        : activeRow.tool.name
       : "Prompt part",
   );
 
   $effect(() => {
+    loading = true;
     const id = sessionStore.getSnapshot() || undefined;
     inspectPrompt(id)
       .then((s) => {
         snap = s;
         err = null;
         sel = 0;
+        loading = false;
       })
       .catch((e: unknown) => {
         err = String(e).replace(/^Error:\s*/, "");
+        loading = false;
       });
   });
 
   $effect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  async function onCopy() {
+  async function onCopyAll() {
     if (!snap) return;
     try {
       await navigator.clipboard.writeText(inspectCopyText(snap));
@@ -76,140 +96,157 @@
     tabindex="-1"
     aria-label="Prompt inspector"
   >
-    <aside class="settings-rail">
-      <div class="settings-brand">
-        <LogoMark size={22} />
-        <div>
-          <strong>Prompt</strong>
-          <span>Assembly inspector</span>
+    <header class="app-topbar settings-topbar" data-tauri-drag-region>
+      <div class="topbar-left" data-tauri-drag-region>
+        <button
+          type="button"
+          class="icon-btn settings-back-btn"
+          title="Back (Esc)"
+          onclick={onClose}
+          aria-label="Back"
+        >
+          <Icon icon={ChevronLeft} size={15} strokeWidth={1.8} />
+        </button>
+        <div class="settings-breadcrumb">
+          <span class="settings-breadcrumb-root">Prompt Inspector</span>
+          <span class="settings-breadcrumb-sep">/</span>
+          <span class="settings-breadcrumb-leaf">{snap ? activeLabel : "Assembly"}</span>
         </div>
       </div>
 
-      <nav class="settings-nav prompt-rail-nav" aria-label="Prompt parts">
-        {#if !snap && !err}
-          <div class="prompt-rail-loading">Loading parts…</div>
-        {:else if err}
-          <div class="prompt-rail-loading">Unavailable</div>
-        {:else if rows.length === 0}
-          <div class="prompt-rail-loading">No parts yet</div>
-        {:else}
-          {#each rows as row, i}
-            {@const layer = ins?.layers[i]}
-            {@const label = row.kind === "msg" ? row.part.label : row.tool.name}
-            {@const hint = row.kind === "msg" ? row.part.role : "tool def"}
-            {@const tokens = row.kind === "msg" ? row.part.tokens : row.tool.tokens}
-            <button
-              type="button"
-              class={`settings-nav-btn${sel === i ? " active" : ""}`}
-              onclick={() => (sel = i)}
-            >
-              <span class="settings-nav-icon">
-                <Icon icon={row.kind === "tool" ? Workflow : Eye} size={14} />
-              </span>
-              <span class="settings-nav-copy">
-                <em>
-                  <span class="prompt-ord">{layer?.order ?? i + 1}</span>
-                  {label}
-                </em>
-                <small>{hint} · {fmtTokens(tokens)}</small>
-              </span>
-            </button>
-          {/each}
+      <div class="topbar-center" data-tauri-drag-region>
+        <div class="settings-topbar-pill">
+          <LogoMark size={14} />
+          <span>Prompt Assembly Profiler</span>
+        </div>
+      </div>
+
+      <div class="topbar-right" data-tauri-drag-region>
+        {#if snap}
+          <span class="prompt-topbar-stat">
+            ~{fmtTokens(snap.totalTokens)} tok
+          </span>
         {/if}
-      </nav>
-
-      <div class="settings-rail-foot">
-        <span>{snap ? `~${fmtTokens(snap.totalTokens)} tokens` : "Prompt study"}</span>
+        <button
+          type="button"
+          class="settings-copy-btn"
+          onclick={() => void onCopyAll()}
+          disabled={!snap}
+          aria-label="Copy prompt assembly"
+          title="Copy full wire transcript and schemas to clipboard"
+        >
+          <Icon icon={copied ? Check : Copy} size={13} />
+          <span>{copied ? "Assembly Copied" : "Copy Full Assembly"}</span>
+        </button>
+        <WindowControlsMaybe />
       </div>
-    </aside>
+    </header>
 
-    <section class="settings-main">
-      <header class="settings-main-head">
-        <div>
-          <h2>{snap ? activeLabel : "Prompt assembly"}</h2>
-          <p>
-            {#if snap}
-              {snap.sent
-                ? "Wire order, budget share, and optimization hints"
-                : "Preview — L0 + tools until a turn is sent"}
-            {:else if err}
-              Could not load prompt assembly
+    <div class="app-body settings-body prompt-inspect-body">
+      <PromptInspectSidebar
+        {rows}
+        layers={ins?.layers ?? []}
+        selected={sel}
+        onSelect={(idx) => (sel = idx)}
+        totalTokens={snap?.totalTokens ?? 0}
+        {loading}
+        {err}
+      />
+
+      <section class="canvas-pane settings-canvas-pane prompt-canvas-pane">
+        <div class="settings-content-wrap">
+          <div class="prompt-main-scrollable">
+            {#if err}
+              <div class="prompt-inspect-err" role="alert">
+                <Icon icon={AlertTriangle} size={18} />
+                <div>
+                  <strong>Assembly Unavailable</strong>
+                  <p>{err}</p>
+                </div>
+              </div>
+            {:else if !snap || !ins}
+              <div class="settings-loading">
+                <Icon icon={Brain} size={24} />
+                <span>Profiling prompt context and wire token distribution…</span>
+              </div>
             {:else}
-              Loading prompt study…
+              <!-- Executive Profiler Stat Cards -->
+              <div class="prompt-kpi-grid">
+                <div class="prompt-kpi-card">
+                  <div class="kpi-icon-wrap model-icon">
+                    <Icon icon={Brain} size={16} />
+                  </div>
+                  <div class="kpi-body">
+                    <span class="kpi-label">Active Model</span>
+                    <strong class="kpi-value" title={snap.model}>{snap.model}</strong>
+                  </div>
+                </div>
+
+                <div class="prompt-kpi-card">
+                  <div class="kpi-icon-wrap footprint-icon">
+                    <Icon icon={Sparkles} size={16} />
+                  </div>
+                  <div class="kpi-body">
+                    <span class="kpi-label">Total Prompt Footprint</span>
+                    <strong class="kpi-value">~{fmtTokens(snap.totalTokens)} tok</strong>
+                    <small class="kpi-sub">{snap.messages.length} msgs · {snap.tools.length} tools</small>
+                  </div>
+                </div>
+
+                <div class="prompt-kpi-card">
+                  <div class="kpi-icon-wrap cache-icon">
+                    <Icon icon={Zap} size={16} />
+                  </div>
+                  <div class="kpi-body">
+                    <span class="kpi-label">Cache Efficiency</span>
+                    <strong class="kpi-value">{pct(ins.cacheableTokens / Math.max(1, snap.totalTokens))}</strong>
+                    <small class="kpi-sub">~{fmtTokens(ins.cacheableTokens)} static prefix</small>
+                  </div>
+                </div>
+
+                <div class="prompt-kpi-card">
+                  <div class="kpi-icon-wrap sink-icon">
+                    <Icon icon={Target} size={16} />
+                  </div>
+                  <div class="kpi-body">
+                    <span class="kpi-label">Primary Token Sink</span>
+                    <strong class="kpi-value" title={ins.largest.name}>{ins.largest.name}</strong>
+                    <small class="kpi-sub">{pct(ins.largest.share)} of total context</small>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Interactive Stack Distribution Bar & Legend -->
+              <PromptInspectChart {ins} />
+
+              <!-- Actionable Optimization Hints & Advisories -->
+              {#if ins.hints.length > 0}
+                <div class="prompt-advisory-box">
+                  <div class="advisory-head">
+                    <Icon icon={AlertTriangle} size={14} />
+                    <span>Optimization Opportunities ({ins.hints.length})</span>
+                  </div>
+                  <ul class="prompt-advisory-list">
+                    {#each ins.hints as h}
+                      <li>{h}</li>
+                    {/each}
+                  </ul>
+                </div>
+              {/if}
+
+              <!-- Deep Layer Content Inspector & Code Viewer -->
+              <PromptInspectContent
+                {activeRow}
+                {activeLayer}
+                rawContent={activeRow ? inspectBody(activeRow) : ""}
+                totalTokens={snap.totalTokens}
+              />
             {/if}
-          </p>
+          </div>
         </div>
-        <div class="prompt-head-actions">
-          <button
-            type="button"
-            class="settings-close"
-            onclick={() => void onCopy()}
-            disabled={!snap}
-            aria-label="Copy prompt study"
-          >
-            <Icon icon={Copy} size={13} />
-            <span>{copied ? "Copied" : "Copy"}</span>
-          </button>
-          <button type="button" class="settings-close" onclick={onClose} aria-label="Close prompt inspector">
-            <Icon icon={X} size={14} />
-            <kbd>Esc</kbd>
-          </button>
-        </div>
-      </header>
-
-      <div class="settings-content-wrap">
-        <div class="settings-content-body prompt-inspect-body-wrap">
-          {#if err}
-            <p class="prompt-inspect-err">{err}</p>
-          {:else if !snap || !ins}
-            <div class="settings-loading">Loading prompt assembly…</div>
-          {:else}
-            <div class="prompt-inspect-overview">
-              <div class="prompt-overview-card">
-                <em>Active Model</em>
-                <strong>{snap.model}</strong>
-              </div>
-              <div class="prompt-overview-card">
-                <em>Total Request</em>
-                <strong>~{fmtTokens(snap.totalTokens)} ({snap.messages.length} msgs · {snap.tools.length} tools)</strong>
-              </div>
-              <div class="prompt-overview-card">
-                <em>Largest Sink</em>
-                <strong title={ins.largest.name}>{ins.largest.name} · {pct(ins.largest.share)}</strong>
-              </div>
-              <div class="prompt-overview-card">
-                <em>Cache Stability</em>
-                <strong>{ins.stablePrefix} stable</strong>
-              </div>
-            </div>
-
-            <PromptInspectChart {ins} />
-
-            {#if ins.hints.length > 0}
-              <ul class="prompt-inspect-hints">
-                {#each ins.hints as h}
-                  <li>{h}</li>
-                {/each}
-              </ul>
-            {/if}
-
-            {#if ins.layers[sel]}
-              <div class="prompt-part-stats">
-                <span class="stat-badge">~{fmtTokens(ins.layers[sel].tokens)}</span>
-                <span class="stat-badge">{ins.layers[sel].chars.toLocaleString()} chars</span>
-                <span class="stat-badge">{ins.layers[sel].lines} lines</span>
-                <span class="stat-badge">{pct(ins.layers[sel].share)} of budget</span>
-                <span class={`stat-badge ${ins.layers[sel].cacheable ? "cacheable" : "volatile"}`}>
-                  {ins.layers[sel].cacheable ? "Cacheable" : "Volatile"}
-                </span>
-                <span class="stat-badge">Wire #{ins.layers[sel].order}</span>
-              </div>
-            {/if}
-
-            <pre class="prompt-inspect-content">{active ? inspectBody(active) : ""}</pre>
-          {/if}
-        </div>
-      </div>
-    </section>
+      </section>
+    </div>
   </div>
 </div>
+
+

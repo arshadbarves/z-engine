@@ -60,6 +60,15 @@ describe("parseGitDiff", () => {
     ]);
   });
 
+  it("shows created-file content even when @@ hunk header is missing", () => {
+    const d = parseGitDiff("--- /dev/null\n+++ b/new.txt\n+hello\n+world\n");
+    expect(d.path).toBe("new.txt");
+    expect(d.added).toBe(2);
+    expect(d.deleted).toBe(0);
+    expect(d.rows.map((r) => r.text)).toEqual(["hello", "world"]);
+    expect(d.rows.every((r) => r.kind === "add")).toBe(true);
+  });
+
   it("inserts a hunk separator when later hunks skip lines", () => {
     const d = parseGitDiff(`--- a/a.rs
 +++ b/a.rs
