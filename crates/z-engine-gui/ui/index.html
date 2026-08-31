@@ -21,7 +21,7 @@
   </style>
   <link rel="stylesheet" href="/src/splash.css" />
   <script>
-    // Fatal-error surface: replaces the app only when React never
+    // Fatal-error surface: replaces the app only when Svelte never
     // mounted (blank screen debugging). Runtime rejections after mount
     // get a small non-destructive banner instead.
     function __showFatal(label, detail) {
@@ -62,18 +62,19 @@
 <body>
   <div id="boot-splash" class="splash" role="status" aria-label="Z Engine">
     <div class="splash-minimal">
-      <svg class="splash-mark" width="80" height="80" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <svg class="splash-mark" width="72" height="72" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <rect x="1.5" y="1.5" width="21" height="21" rx="5.5" stroke="currentColor" stroke-width="1.2" />
         <g fill="currentColor">
-          <rect x="5.53" y="5.53" width="12.94" height="3" rx="0.47" />
-          <path d="M15.384 9.281h3.085L8.625 14.719H5.531z" />
-          <rect x="5.53" y="15.47" width="12.94" height="3" rx="0.47" />
+          <rect class="logo-bar logo-bar-top" x="5.53" y="5.53" width="12.94" height="3" rx="0.47" />
+          <path class="logo-bar logo-bar-fold" d="M15.384 9.281h3.085L8.625 14.719H5.531z" />
+          <rect class="logo-bar logo-bar-bot" x="5.53" y="15.47" width="12.94" height="3" rx="0.47" />
         </g>
       </svg>
+      <div class="splash-word">Z Engine</div>
     </div>
   </div>
   <div id="root"></div>
-  <script type="module" src="/src/main.tsx"></script>
+  <script type="module" src="/src/main.ts"></script>
 </body>
 
 </html>

@@ -1,7 +1,7 @@
 import { compact, notes, setMode, setModel, submit } from "./commands";
 import { draftStore, modeStore, modelStore, submitLocal } from "./events";
 import { HERO_EXAMPLES } from "./constants";
-import type { PaletteItem } from "../components/CommandPalette";
+import type { PaletteItem } from "./paletteTypes";
 import {
   Brain,
   FileText,
@@ -14,7 +14,7 @@ import {
   Shield,
   Sparkles,
   Workflow,
-} from "./icons";
+} from "./ui/icons";
 import { modLabel } from "./platform";
 
 const MODEL_PRESETS = [
