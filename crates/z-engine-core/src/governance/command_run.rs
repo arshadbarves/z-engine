@@ -19,6 +19,8 @@
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use crate::tools::{drain_pipe, kill_process_tree};
 
 use super::manifest::CheckStatus;
@@ -69,13 +71,25 @@ fn argv(command: &str) -> Result<Vec<String>, String> {
     Ok(out)
 }
 
+/// How often a running check notices the user asked to stop.
+const ABORT_POLL: Duration = Duration::from_millis(150);
+
+/// How long to wait for the pipes to close after the process group has
+/// been reaped. Bounded because a drain that never ends would defeat the
+/// wall-clock bound it is supposed to enforce.
+const DRAIN_GRACE: Duration = Duration::from_secs(5);
+
 /// Run `command` in `root`, bounded by `timeout`, if its program is in
 /// `allowed`. Never panics and never returns a pass it did not observe.
+///
+/// `abort` is polled while the child runs, so a user who stops the turn
+/// does not have to wait out the timeout.
 pub(super) async fn run_bounded(
     command: &str,
     root: &std::path::Path,
     timeout: Duration,
     allowed: &[String],
+    abort: Option<&AtomicBool>,
 ) -> CommandRun {
     let args = match argv(command) {
         Ok(a) => a,
@@ -120,35 +134,29 @@ pub(super) async fn run_bounded(
     let out_handle = drain_pipe(child.stdout.take());
     let err_handle = drain_pipe(child.stderr.take());
 
-    let waited = tokio::time::timeout(timeout, child.wait()).await;
-    let (status, timed_out) = match waited {
-        Ok(Ok(s)) => (Some(s), false),
-        // The child is unwaitable; treat it exactly like a timeout so the
-        // process tree still gets reaped and nothing reads as a pass.
-        Ok(Err(_)) => {
-            kill_process_tree(&mut child);
-            let _ = child.wait().await;
-            (None, false)
-        }
-        Err(_) => {
-            kill_process_tree(&mut child);
-            let _ = child.wait().await;
-            (None, true)
-        }
-    };
+    let ended = wait_bounded(&mut child, timeout, abort).await;
+    if !matches!(ended, Ended::Exited(_)) {
+        // Killed while the pid is still ours to name — after `wait()` it
+        // could name somebody else's group.
+        kill_process_tree(&mut child);
+        let _ = child.wait().await;
+    }
 
-    let stdout = out_handle.await.unwrap_or_default();
-    let stderr = err_handle.await.unwrap_or_default();
+    let stdout = drained(out_handle).await;
+    let stderr = drained(err_handle).await;
     let duration_ms = elapsed_ms(started);
-    let status = match (status, timed_out) {
-        (Some(s), _) if s.success() => CheckStatus::Passed,
-        (Some(s), _) => CheckStatus::Failed {
+    let status = match ended {
+        Ended::Exited(s) if s.success() => CheckStatus::Passed,
+        Ended::Exited(s) => CheckStatus::Failed {
             exit_code: s.code().unwrap_or(-1),
         },
-        (None, true) => CheckStatus::TimedOut {
+        Ended::TimedOut => CheckStatus::TimedOut {
             after_secs: timeout.as_secs().max(1),
         },
-        (None, false) => CheckStatus::Unavailable {
+        Ended::Aborted => CheckStatus::Unavailable {
+            reason: format!("{command}: stopped before it finished"),
+        },
+        Ended::Unwaitable => CheckStatus::Unavailable {
             reason: format!("{command}: the process could not be waited on"),
         },
     };
@@ -158,6 +166,58 @@ pub(super) async fn run_bounded(
         stdout,
         output_tail,
         duration_ms,
+    }
+}
+
+/// How a child stopped running. Only `Exited` carries a status anything
+/// may be concluded from.
+enum Ended {
+    Exited(std::process::ExitStatus),
+    TimedOut,
+    Aborted,
+    /// `wait()` itself failed, so nothing was observed either way.
+    Unwaitable,
+}
+
+/// Wait for `child`, giving up at `timeout` and noticing `abort` in
+/// between.
+async fn wait_bounded(
+    child: &mut tokio::process::Child,
+    timeout: Duration,
+    abort: Option<&AtomicBool>,
+) -> Ended {
+    let deadline = Instant::now() + timeout;
+    loop {
+        if abort.is_some_and(|f| f.load(Ordering::Relaxed)) {
+            return Ended::Aborted;
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Ended::TimedOut;
+        }
+        match tokio::time::timeout(remaining.min(ABORT_POLL), child.wait()).await {
+            Ok(Ok(status)) => return Ended::Exited(status),
+            Ok(Err(_)) => return Ended::Unwaitable,
+            // Poll expired, not the deadline: loop and re-check both.
+            Err(_) => continue,
+        }
+    }
+}
+
+/// Collect a drained pipe, giving up rather than waiting forever.
+///
+/// A grandchild that inherited the pipe keeps its write end open after
+/// the child itself exits, so the read would otherwise block for as long
+/// as that orphan lives — defeating the bound this module exists to
+/// enforce. The reader is dropped instead of killing the group by a pid
+/// that `wait()` has already released and the kernel may have reissued.
+async fn drained(mut handle: tokio::task::JoinHandle<String>) -> String {
+    match tokio::time::timeout(DRAIN_GRACE, &mut handle).await {
+        Ok(joined) => joined.unwrap_or_default(),
+        Err(_) => {
+            handle.abort();
+            String::new()
+        }
     }
 }
 
@@ -198,6 +258,7 @@ mod tests {
             tmp.path(),
             NOW,
             &allowed(["cargo"].as_slice()),
+            None,
         )
         .await;
         assert!(
@@ -217,7 +278,7 @@ mod tests {
             "cargo check > out.txt",
             "cargo $(whoami)",
         ] {
-            let run = run_bounded(command, tmp.path(), NOW, &allowed(&["cargo"])).await;
+            let run = run_bounded(command, tmp.path(), NOW, &allowed(&["cargo"]), None).await;
             let CheckStatus::Rejected { reason } = &run.status else {
                 panic!("{command} must be refused, got {:?}", run.status);
             };
@@ -233,6 +294,7 @@ mod tests {
             tmp.path(),
             NOW,
             &allowed(&["z-engine-no-such-program"]),
+            None,
         )
         .await;
         let CheckStatus::Unavailable { reason } = &run.status else {
@@ -244,9 +306,9 @@ mod tests {
     #[tokio::test]
     async fn a_passing_and_a_failing_command_are_distinguished_by_exit_status() {
         let tmp = tempfile::tempdir().unwrap();
-        let pass = run_bounded("true", tmp.path(), NOW, &allowed(&["true"])).await;
+        let pass = run_bounded("true", tmp.path(), NOW, &allowed(&["true"]), None).await;
         assert_eq!(pass.status, CheckStatus::Passed);
-        let fail = run_bounded("false", tmp.path(), NOW, &allowed(&["false"])).await;
+        let fail = run_bounded("false", tmp.path(), NOW, &allowed(&["false"]), None).await;
         assert_eq!(fail.status, CheckStatus::Failed { exit_code: 1 });
     }
 
@@ -262,6 +324,7 @@ mod tests {
             tmp.path(),
             Duration::from_millis(300),
             &allowed(&["sleep"]),
+            None,
         )
         .await;
         assert_eq!(run.status, CheckStatus::TimedOut { after_secs: 1 });
@@ -276,5 +339,31 @@ mod tests {
         let long = "x".repeat(MAX_TAIL_CHARS * 3);
         assert_eq!(tail(&long).chars().count(), MAX_TAIL_CHARS);
         assert_eq!(tail("  short  "), "short");
+    }
+
+    /// The bound has to hold when the *child* exits cleanly but leaves a
+    /// grandchild holding the pipes. Waiting on the drain alone would
+    /// block until that grandchild died — thirty seconds here, forever in
+    /// the general case — long past the timeout this function promises.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_grandchild_holding_the_pipes_cannot_outlive_the_check() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let script = tmp.path().join("holder.sh");
+        std::fs::write(&script, "#!/bin/sh\nsleep 30 &\nexit 0\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let path = script.display().to_string();
+
+        let started = Instant::now();
+        let run = run_bounded(&path, tmp.path(), NOW, &allowed(&[&path]), None).await;
+
+        assert_eq!(run.status, CheckStatus::Passed);
+        assert!(
+            started.elapsed() < Duration::from_secs(20),
+            "the drain must not wait on an orphaned grandchild: {:?}",
+            started.elapsed()
+        );
     }
 }

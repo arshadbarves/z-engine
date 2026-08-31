@@ -16,6 +16,8 @@
 //! own hash, so "changed" means exactly what it meant at capture time).
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 use crate::evidence::BlobHandle;
@@ -65,6 +67,7 @@ pub struct VerificationRunner {
     root: PathBuf,
     timeout: Duration,
     allowed: Vec<String>,
+    abort: Option<Arc<AtomicBool>>,
 }
 
 impl VerificationRunner {
@@ -76,7 +79,15 @@ impl VerificationRunner {
                 .iter()
                 .map(|p| (*p).to_string())
                 .collect(),
+            abort: None,
         }
+    }
+
+    /// Share the run's cooperative abort flag, so stopping the turn stops
+    /// the checks instead of waiting out their timeouts.
+    pub fn with_abort(mut self, abort: Arc<AtomicBool>) -> Self {
+        self.abort = Some(abort);
+        self
     }
 
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
@@ -93,14 +104,20 @@ impl VerificationRunner {
 
     /// Verify `plan` and return what was proven.
     pub async fn run(&self, plan: &VerificationPlan) -> VerificationManifest {
-        let mut checks = vec![self.cargo_check().await];
+        // Audit before running anything. The checks are processes that
+        // write to the workspace themselves — `cargo check` refreshes
+        // `Cargo.lock`, a test suite touches `target/` — and auditing
+        // afterwards would charge those writes to the agent as scope
+        // breaches it did not commit.
+        let breaches = self.audit_scope(plan);
+        let mut checks = vec![self.cargo_check(plan).await];
         checks.extend(self.acceptance_checks(&plan.acceptance).await);
         VerificationManifest {
             work_order_id: plan.work_order_id.clone(),
             goal: plan.goal.clone(),
             scope: plan.scope.clone(),
             mutated: plan.mutated.clone(),
-            breaches: self.audit_scope(plan),
+            breaches,
             checks,
         }
     }
@@ -138,18 +155,37 @@ impl VerificationRunner {
         breaches
     }
 
-    /// Does the workspace still compile? Required wherever there is a
-    /// cargo manifest to compile; explicitly skipped (and said so) where
-    /// there is not, so a non-Rust project is not silently unverifiable.
-    async fn cargo_check(&self) -> CheckOutcome {
-        if !self.root.join("Cargo.toml").is_file() {
-            return CheckOutcome::skipped(
-                "cargo-check",
-                CARGO_CHECK,
-                "no Cargo.toml at the project root",
-            );
-        }
-        let run = run_bounded(CARGO_CHECK, &self.root, self.timeout, &self.allowed).await;
+    /// Does the workspace still compile?
+    ///
+    /// Required whenever this run touched Rust — and if it touched Rust
+    /// with no manifest anywhere to compile against, that is a refusal,
+    /// not a skip: the alternative would leave the order's own acceptance
+    /// commands as the only required evidence, which is the model
+    /// grading its own work.
+    async fn cargo_check(&self, plan: &VerificationPlan) -> CheckOutcome {
+        let touched_rust = plan.mutated.iter().any(|p| is_rust_relevant(p));
+        let Some(dir) = self.cargo_root(plan) else {
+            return match touched_rust {
+                false => CheckOutcome::skipped(
+                    "cargo-check",
+                    CARGO_CHECK,
+                    "no Cargo.toml at the project root, and this run changed no Rust",
+                ),
+                true => CheckOutcome {
+                    name: "cargo-check".into(),
+                    command: CARGO_CHECK.into(),
+                    required: true,
+                    status: CheckStatus::Unavailable {
+                        reason: "this run changed Rust sources but no Cargo.toml was found to \
+                                 compile them against"
+                            .into(),
+                    },
+                    duration_ms: 0,
+                    output_tail: String::new(),
+                },
+            };
+        };
+        let run = run_bounded(CARGO_CHECK, &dir, self.timeout, &self.allowed, self.abort()).await;
         // The exit status is authoritative — a manifest error emits no
         // compiler messages at all — but when cargo did produce
         // diagnostics they explain the failure far better than raw JSON.
@@ -187,7 +223,14 @@ impl VerificationRunner {
         }
         let mut out = Vec::with_capacity(commands.len());
         for command in commands {
-            let run = run_bounded(&command.command, &self.root, self.timeout, &self.allowed).await;
+            let run = run_bounded(
+                &command.command,
+                &self.root,
+                self.timeout,
+                &self.allowed,
+                self.abort(),
+            )
+            .await;
             out.push(CheckOutcome {
                 name: "acceptance".into(),
                 command: command.command.clone(),
@@ -199,6 +242,40 @@ impl VerificationRunner {
         }
         out
     }
+
+    fn abort(&self) -> Option<&AtomicBool> {
+        self.abort.as_deref()
+    }
+
+    /// Where to run `cargo check`: the project root when it is a cargo
+    /// root, otherwise the nearest enclosing manifest above a Rust file
+    /// this run changed. Never escapes the project root.
+    fn cargo_root(&self, plan: &VerificationPlan) -> Option<PathBuf> {
+        if self.root.join("Cargo.toml").is_file() {
+            return Some(self.root.clone());
+        }
+        plan.mutated
+            .iter()
+            .filter(|p| is_rust_relevant(p))
+            .find_map(|p| {
+                let mut dir = self.root.join(p);
+                while dir.pop() && dir.starts_with(&self.root) {
+                    if dir.join("Cargo.toml").is_file() {
+                        return Some(dir);
+                    }
+                }
+                None
+            })
+    }
+}
+
+/// Whether changing this path can change what `cargo check` says.
+fn is_rust_relevant(path: &Path) -> bool {
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default();
+    path.extension().is_some_and(|e| e == "rs") || name == "Cargo.toml" || name == "Cargo.lock"
 }
 
 /// Render cargo's JSON diagnostics into the manifest tail, reusing the

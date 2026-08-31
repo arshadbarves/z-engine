@@ -243,7 +243,7 @@ pub(super) async fn run_turn(
         if complete_calls.is_empty() {
             // The model says it is done. In a guarded run that changed
             // anything, that claim has to be earned.
-            return super::completion::settle_completion(ctx, state, ev_tx).await;
+            return super::completion::settle_completion(ctx, state, cmd_rx, ev_tx).await;
         }
         // Even when finish_reason â  tool_calls, emitted calls demand execution.
 

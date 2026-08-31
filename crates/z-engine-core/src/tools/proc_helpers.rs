@@ -9,11 +9,12 @@
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt};
 
-/// Kill the child and everything it spawned: the child leads its own
-/// process group (set at spawn), so a group SIGKILL reaches grandchildren.
-pub(crate) fn kill_tree(child: &mut tokio::process::Child) {
+/// Kill a process group by the pid of its leader. Only sound while the
+/// pid is still the caller's to name: once a child has been waited on the
+/// kernel may reissue it, and the signal would reach a stranger.
+fn kill_group(pid: u32) {
     #[cfg(unix)]
-    if let Some(pid) = child.id() {
+    {
         // `kill -9 -PGID` — safe-Rust path via the system kill binary,
         // keeping the workspace-wide `unsafe_code = "forbid"` intact.
         let _ = std::process::Command::new("kill")
@@ -24,12 +25,20 @@ pub(crate) fn kill_tree(child: &mut tokio::process::Child) {
             .status();
     }
     #[cfg(windows)]
-    if let Some(pid) = child.id() {
+    {
         let _ = std::process::Command::new("taskkill")
             .args(["/PID", &pid.to_string(), "/T", "/F"])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status();
+    }
+}
+
+/// Kill the child and everything it spawned: the child leads its own
+/// process group (set at spawn), so a group SIGKILL reaches grandchildren.
+pub(crate) fn kill_tree(child: &mut tokio::process::Child) {
+    if let Some(pid) = child.id() {
+        kill_group(pid);
     }
     let _ = child.start_kill();
 }

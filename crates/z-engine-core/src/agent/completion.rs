@@ -16,14 +16,17 @@
 //! Unguarded runs never reach past the first line: they complete on the
 //! model's word exactly as they did before governance existed.
 
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use z_engine_provider::ChatMessage;
 
 use crate::governance::{Verdict, VerificationRunner, write_manifest};
 use crate::tools::ToolCtx;
 
-use super::events::Event;
+use super::events::{Command, Event};
 use super::state::LoopState;
 use super::turn::TurnOutcome;
 
@@ -31,9 +34,14 @@ use super::turn::TurnOutcome;
 const GATE: &str = "completion";
 
 /// Decide whether the final answer just produced may end the turn.
+///
+/// `cmd_rx` is drained while the checks run: verification is the last
+/// thing a turn does, so nothing else is listening for the user's abort,
+/// and without this a stop request would wait out every check's timeout.
 pub(super) async fn settle_completion(
     ctx: &ToolCtx,
     state: &mut LoopState,
+    cmd_rx: &mut UnboundedReceiver<Command>,
     ev_tx: &UnboundedSender<Event>,
 ) -> TurnOutcome {
     // A run that changed nothing has nothing to prove, guarded or not.
@@ -57,7 +65,18 @@ pub(super) async fn settle_completion(
         "verifying work order {} before completing the turn",
         plan.work_order_id
     )));
-    let manifest = VerificationRunner::new(&ctx.project_root).run(&plan).await;
+    let runner = VerificationRunner::new(&ctx.project_root).with_abort(Arc::clone(&ctx.abort));
+    let manifest = tokio::select! {
+        manifest = runner.run(&plan) => manifest,
+        () = watch_for_abort(cmd_rx, &ctx.abort) => {
+            // The flag is set; let the checks unwind and report the stop
+            // rather than a verdict they never reached.
+            return TurnOutcome::Aborted;
+        }
+    };
+    if ctx.aborted() {
+        return TurnOutcome::Aborted;
+    }
 
     // Persist first: the refusal points at the manifest, and a manifest
     // that could not be written is itself reported rather than ignored.
@@ -87,6 +106,20 @@ pub(super) async fn settle_completion(
             manifest_path,
         },
     }
+}
+
+/// Resolve once the user asks to stop, setting the shared flag so the
+/// running checks reap their own process trees. Pends forever otherwise,
+/// so it only ever loses the `select!`.
+async fn watch_for_abort(cmd_rx: &mut UnboundedReceiver<Command>, abort: &AtomicBool) {
+    while let Some(cmd) = cmd_rx.recv().await {
+        if matches!(cmd, Command::Abort | Command::Shutdown) {
+            abort.store(true, Ordering::Relaxed);
+            return;
+        }
+    }
+    // The sender is gone: nobody can abort, so never resolve.
+    std::future::pending().await
 }
 
 #[cfg(test)]
@@ -129,6 +162,12 @@ mod tests {
         tokio::sync::mpsc::unbounded_channel().0
     }
 
+    /// A command feed nobody sends on, so the abort watch never wins the
+    /// race and the verdict is the runner's alone.
+    fn commands() -> UnboundedReceiver<Command> {
+        tokio::sync::mpsc::unbounded_channel().1
+    }
+
     /// A guarded run set up over `Cargo.toml`, having just written
     /// `content` to it.
     fn mutated(content: &str) -> (ToolCtx, tempfile::TempDir, tempfile::TempDir) {
@@ -152,7 +191,7 @@ mod tests {
         let ctx = plain_ctx(tmp.path());
         let mut st = state(None);
         assert!(matches!(
-            settle_completion(&ctx, &mut st, &channel()).await,
+            settle_completion(&ctx, &mut st, &mut commands(), &channel()).await,
             TurnOutcome::Completed
         ));
         assert!(
@@ -167,7 +206,7 @@ mod tests {
         let (ctx, _store) = guarded_ctx(repo.path(), None);
         let mut st = state(None);
         assert!(matches!(
-            settle_completion(&ctx, &mut st, &channel()).await,
+            settle_completion(&ctx, &mut st, &mut commands(), &channel()).await,
             TurnOutcome::Completed
         ));
     }
@@ -178,7 +217,7 @@ mod tests {
         let run_dir = tempfile::tempdir().unwrap();
         let mut st = state(Some(run_dir.path().to_path_buf()));
 
-        let outcome = settle_completion(&ctx, &mut st, &channel()).await;
+        let outcome = settle_completion(&ctx, &mut st, &mut commands(), &channel()).await;
         let TurnOutcome::Blocked {
             gate,
             reason,
@@ -207,7 +246,7 @@ mod tests {
         let run_dir = tempfile::tempdir().unwrap();
         let mut st = state(Some(run_dir.path().to_path_buf()));
 
-        let outcome = settle_completion(&ctx, &mut st, &channel()).await;
+        let outcome = settle_completion(&ctx, &mut st, &mut commands(), &channel()).await;
         assert!(matches!(outcome, TurnOutcome::Completed), "{outcome:?}");
         assert!(run_dir.path().join("verification.json").is_file());
     }
@@ -222,7 +261,7 @@ mod tests {
         std::fs::write(&path, b"x").unwrap();
         let mut st = state(Some(path));
 
-        let outcome = settle_completion(&ctx, &mut st, &channel()).await;
+        let outcome = settle_completion(&ctx, &mut st, &mut commands(), &channel()).await;
         assert!(matches!(outcome, TurnOutcome::Completed), "{outcome:?}");
     }
 }
