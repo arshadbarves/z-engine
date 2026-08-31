@@ -35,7 +35,7 @@ const STACK_COLORS: Record<string, string> = {
   system: "#8b8b96",
   user: "#f0a090",
   assistant: "#7dd3fc",
-  tool: "#3ddc97",
+  tool: "#7c85e0",
   "tool def": "#a78bfa",
 };
 

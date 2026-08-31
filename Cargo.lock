@@ -6129,6 +6129,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "window-vibrancy",
  "z-engine-core",
 ]
 

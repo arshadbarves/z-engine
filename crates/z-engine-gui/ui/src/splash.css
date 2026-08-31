@@ -1,4 +1,4 @@
-/* ── pure, iconic minimal logo splash ──────────────────────────────────── */
+/* ── Apple-style iconic splash ─────────────────────────────────────────── */
 
 .splash {
   position: fixed;
@@ -7,33 +7,129 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #121316;
+  background: #0e0e10;
   user-select: none;
+  overflow: hidden;
+}
+
+.splash::before {
+  content: "";
+  position: absolute;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(94, 106, 210, 0.18) 0%, transparent 68%);
+  filter: blur(8px);
+  animation: splash-glow 1.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .splash-minimal {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  animation: splash-fade-in 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  gap: 18px;
+  animation: splash-rise 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .splash-mark {
-  color: #4ebd8f;
+  color: #e8e8ec;
+  filter: drop-shadow(0 0 24px rgba(94, 106, 210, 0.35));
+  animation: splash-mark 1.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.splash-mark .logo-bar-top {
+  animation: splash-bar 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.12s both;
+  transform-origin: left center;
+}
+
+.splash-mark .logo-bar-fold {
+  animation: splash-bar 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.22s both;
+  transform-origin: center;
+}
+
+.splash-mark .logo-bar-bot {
+  animation: splash-bar 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.32s both;
+  transform-origin: left center;
+}
+
+.splash-word {
+  font-size: 13px;
+  font-weight: 560;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(232, 232, 236, 0.55);
+  animation: splash-word 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.45s both;
 }
 
 .splash.leaving {
-  animation: splash-fade-out 0.2s ease-out forwards;
+  animation: splash-fade-out 0.42s cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
-@keyframes splash-fade-in {
+.splash.leaving .splash-minimal {
+  animation: splash-exit-scale 0.42s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes splash-glow {
   from {
     opacity: 0;
-    transform: scale(0.96);
+    transform: scale(0.6);
   }
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@keyframes splash-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes splash-mark {
+  0% {
+    opacity: 0;
+    transform: scale(0.84);
+    color: #e8e8ec;
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.04);
+    color: #5e6ad2;
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    color: #5e6ad2;
+  }
+}
+
+@keyframes splash-bar {
+  from {
+    opacity: 0;
+    transform: scaleX(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes splash-word {
+  from {
+    opacity: 0;
+    letter-spacing: 0.4em;
+  }
+  to {
+    opacity: 1;
+    letter-spacing: 0.22em;
   }
 }
 
@@ -44,9 +140,23 @@
   }
 }
 
+@keyframes splash-exit-scale {
+  to {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .splash::before,
   .splash-minimal,
-  .splash.leaving {
+  .splash-mark,
+  .splash-mark .logo-bar-top,
+  .splash-mark .logo-bar-fold,
+  .splash-mark .logo-bar-bot,
+  .splash-word,
+  .splash.leaving,
+  .splash.leaving .splash-minimal {
     animation: none;
   }
 }

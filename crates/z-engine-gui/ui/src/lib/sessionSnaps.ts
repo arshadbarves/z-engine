@@ -1,4 +1,4 @@
-import type { Msg } from "./events";
+import type { Msg } from "./types";
 
 export interface SessionSnap {
   messages: Msg[];

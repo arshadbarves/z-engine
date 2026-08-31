@@ -45,7 +45,7 @@ export function contextBreakdown(
   const raw = [
     { id: "system", label: "System", tokens: system, color: "#8b8b96" },
     { id: "tools", label: "Tools", tokens: tools, color: "#a78bfa" },
-    { id: "rules", label: "Rules", tokens: rules, color: "#3ddc97" },
+    { id: "rules", label: "Rules", tokens: rules, color: "#7c85e0" },
     { id: "chat", label: "Chat", tokens: conversation, color: "#f0a090" },
     { id: "files", label: "Files", tokens: files, color: "#7dd3fc" },
   ];
