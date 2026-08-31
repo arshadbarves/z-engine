@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, FileCode, RefreshCw, X } from "lucide-react";
+import { ChevronDown, ChevronRight, FileCode, RefreshCw, X } from "../lib/icons";
 import { diffForFile, listChangedFiles, type ChangedFile } from "../lib/commands";
 import { looksLikeDiff } from "../lib/diffParse";
 import { DiffView } from "./DiffView";
 
 /** Codex-style review panel: working-tree changes vs HEAD, with a
  * unified diff per file (full content for untracked files). */
-export function DiffPanel({ onClose }: { onClose: () => void }) {
+export function DiffPanel({
+  isClosing = false,
+  onClose,
+}: {
+  isClosing?: boolean;
+  onClose: () => void;
+}) {
   const [files, setFiles] = useState<ChangedFile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openPath, setOpenPath] = useState<string | null>(null);
@@ -58,7 +64,7 @@ export function DiffPanel({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <aside className="diff-panel">
+    <aside className={`diff-panel${isClosing ? " is-closing" : ""}`}>
       <div className="diff-head">
         <div className="diff-head-left">
           <span className="diff-title">Workbench Changes</span>

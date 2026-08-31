@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight } from "../lib/icons";
 import { splitWork } from "../lib/toolGroups";
 import type { Msg } from "../lib/events";
 import { ActionCard } from "./ActionCard";

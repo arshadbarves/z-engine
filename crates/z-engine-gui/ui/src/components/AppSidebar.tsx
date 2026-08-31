@@ -1,4 +1,4 @@
-import { Plus, Settings } from "lucide-react";
+import { Plus, Settings } from "../lib/icons";
 import { LogoMark } from "./LogoMark";
 import { Sidebar } from "./Sidebar";
 import type { SessionActivity } from "../lib/events";
@@ -37,17 +37,24 @@ export function AppSidebar({
   return (
     <div className="sidebar-slot">
       <aside className="sidebar">
-        <div className="brand">
-          <LogoMark size={18} />
-          <span>Z Engine</span>
+        {/* Brand Header */}
+        <div className="sidebar-top-bar">
+          <div className="sidebar-brand-pill">
+            <LogoMark size={16} />
+            <span className="sidebar-brand-text">Z Engine</span>
+          </div>
         </div>
-        <button className="newtask" onClick={onNewChat} type="button">
-          <span className="newtask-left">
-            <Plus size={13} strokeWidth={1.8} />
+
+        {/* Primary Action */}
+        <button className="sidebar-new-chat-btn" onClick={onNewChat} type="button">
+          <span className="btn-left">
+            <Plus size={13} strokeWidth={2} />
             <span>New chat</span>
           </span>
-          <kbd>{modLabel()}N</kbd>
+          <kbd className="sidebar-kbd">{modLabel()}N</kbd>
         </button>
+
+        {/* Tree & Session Deck */}
         <Sidebar
           sessions={sessions}
           workspaces={workspaces}
@@ -60,13 +67,20 @@ export function AppSidebar({
           onRemoveWorkspace={onRemoveWorkspace}
           onActivateWorkspace={onActivateWorkspace}
         />
-        <button className="side-foot gear" title="Settings" onClick={onSettings} type="button">
-          <span className="side-foot-left">
+
+        {/* Footer */}
+        <div className="sidebar-footer">
+          <button
+            className="sidebar-footer-btn"
+            title="Open Settings"
+            onClick={onSettings}
+            type="button"
+          >
             <Settings size={13} strokeWidth={1.8} />
-            <span>Settings</span>
-          </span>
-          <span className="side-foot-note">{version ? `v${version}` : "Z Engine"}</span>
-        </button>
+            <span className="footer-label">Settings</span>
+          </button>
+          <span className="footer-version-tag">{version ? `v${version}` : "v1.4.0"}</span>
+        </div>
       </aside>
     </div>
   );

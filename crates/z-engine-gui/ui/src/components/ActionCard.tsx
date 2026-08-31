@@ -8,7 +8,7 @@ import {
   SquareTerminal,
   Workflow,
   Wrench,
-} from "lucide-react";
+} from "../lib/icons";
 import { familyTitle, groupSummary, pathPills, toolPath } from "../lib/toolGroups";
 import { fmtDur } from "../lib/toolUi";
 import { tailLines, type Msg } from "../lib/events";

@@ -1,5 +1,5 @@
 import { useState, useSyncExternalStore } from "react";
-import { ChevronDown, Shield } from "lucide-react";
+import { ChevronDown, Shield } from "../lib/icons";
 import { modeStore } from "../lib/events";
 import { setMode } from "../lib/commands";
 

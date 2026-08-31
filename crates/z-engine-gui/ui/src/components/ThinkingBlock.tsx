@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronRight, Sparkles } from "../lib/icons";
 import { handleEvent, type Msg } from "../lib/events";
 
 /** Thinking stream: live while streaming, auto-collapses to a header

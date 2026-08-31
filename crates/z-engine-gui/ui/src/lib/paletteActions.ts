@@ -2,6 +2,19 @@ import { compact, notes, setMode, setModel, submit } from "./commands";
 import { draftStore, modeStore, modelStore, submitLocal } from "./events";
 import { HERO_EXAMPLES } from "./constants";
 import type { PaletteItem } from "../components/CommandPalette";
+import {
+  Brain,
+  FileText,
+  Folder,
+  GitBranch,
+  GitCompare,
+  PanelLeft,
+  Plus,
+  Settings,
+  Shield,
+  Sparkles,
+  Workflow,
+} from "./icons";
 import { modLabel } from "./platform";
 
 const MODEL_PRESETS = [
@@ -24,60 +37,100 @@ export function paletteActions(opts: {
   const nextMode =
     modeOrder[(modeOrder.indexOf(modeStore.getSnapshot()) + 1) % modeOrder.length];
   return [
-    { label: "New chat", hint: "session", keywords: "new task session chat", run: opts.newTask },
+    {
+      label: "New chat",
+      hint: "Create session",
+      keywords: "new task session chat create",
+      group: "Actions",
+      icon: Plus,
+      shortcut: `${modLabel()}N`,
+      run: opts.newTask,
+    },
     {
       label: "Add workspace…",
-      hint: "project",
+      hint: "Open folder",
       keywords: "add open folder workspace project",
+      group: "Actions",
+      icon: Folder,
       run: opts.addWorkspace,
     },
     {
       label: "New task in git worktree…",
-      hint: "isolated branch",
+      hint: "Isolated branch",
       keywords: "worktree branch isolate parallel task new",
+      group: "Actions",
+      icon: GitBranch,
       run: opts.openWorktree,
     },
     {
-      label: "Review changes",
-      hint: "diff panel",
+      label: "Review uncommitted changes",
+      hint: "Diff workbench",
       keywords: "diff review changes files git",
+      group: "Actions",
+      icon: GitCompare,
       run: opts.openDiff,
     },
-    { label: "/compact — force context compaction", hint: "context", keywords: "compact context", run: () => void compact() },
-    { label: "/notes — dump durable context notes", hint: "notes", keywords: "notes context", run: () => void notes() },
     {
       label: "Open settings…",
-      hint: "app",
+      hint: "Preferences",
       keywords: "settings preferences config permissions mcp cost",
+      group: "Actions",
+      icon: Settings,
+      shortcut: `${modLabel()},`,
       run: opts.openSettings,
     },
     {
+      label: "Toggle sidebar",
+      hint: "Toggle drawer",
+      keywords: "toggle sidebar view drawer",
+      group: "Actions",
+      icon: PanelLeft,
+      shortcut: `${modLabel()}B`,
+      run: opts.toggleSidebar,
+    },
+    {
       label: `Set permission mode · ${nextMode}`,
-      hint: "mode",
+      hint: "Permissions",
       keywords: "mode permission auto accept plan normal",
+      group: "Controls",
+      icon: Shield,
       run: () => {
         modeStore.set(nextMode);
         void setMode(nextMode);
       },
     },
+    {
+      label: "/compact — compact session context",
+      hint: "Free tokens",
+      keywords: "compact context tokens memory",
+      group: "Controls",
+      icon: Brain,
+      run: () => void compact(),
+    },
+    {
+      label: "/notes — dump durable context notes",
+      hint: "Persisted notes",
+      keywords: "notes context session memory",
+      group: "Controls",
+      icon: FileText,
+      run: () => void notes(),
+    },
     ...MODEL_PRESETS.map((p) => ({
       label: `Switch model · ${p}`,
-      hint: "model",
+      hint: "AI Model",
       keywords: `model switch ${p}`,
+      group: "Models",
+      icon: Sparkles,
       run: () => {
         void setModel(p).then(() => modelStore.set(p));
       },
     })),
-    {
-      label: "Toggle sidebar",
-      hint: `${modLabel()}B`,
-      keywords: "toggle sidebar view",
-      run: opts.toggleSidebar,
-    },
     ...HERO_EXAMPLES.map((ex) => ({
       label: ex,
-      hint: "start a task",
-      keywords: "task example prompt",
+      hint: "Starter task",
+      keywords: "task example prompt starter",
+      group: "Starters",
+      icon: Workflow,
       run: () => {
         draftStore.set("");
         submitLocal(ex);

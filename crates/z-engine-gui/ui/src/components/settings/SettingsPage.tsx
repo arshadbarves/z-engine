@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { ChevronLeft, Info, Server, Sliders, Shield } from "lucide-react";
+import { ChevronLeft, Info, Server, Sliders, Shield } from "../../lib/icons";
 import { getConfig, type HarnessConfig } from "../../lib/commands";
 import { updateStore } from "../../lib/updateStore";
 import { AboutTab } from "./AboutTab";
@@ -17,7 +17,13 @@ const TABS: Array<{ id: Tab; label: string; icon: typeof Sliders }> = [
   { id: "about", label: "About", icon: Info },
 ];
 
-export function SettingsPage({ onClose }: { onClose: () => void }) {
+export function SettingsPage({
+  isClosing = false,
+  onClose,
+}: {
+  isClosing?: boolean;
+  onClose: () => void;
+}) {
   const [tab, setTab] = useState<Tab>("general");
   const [cfg, setCfg] = useState<HarnessConfig | null>(null);
   const update = useSyncExternalStore(updateStore.subscribe, () => updateStore.getSnapshot());
@@ -35,7 +41,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
   }, [onClose]);
 
   return (
-    <div className="settings-page" role="dialog" aria-label="Settings">
+    <div className={`settings-page${isClosing ? " is-closing" : ""}`} role="dialog" aria-label="Settings">
       <header className="settings-top-bar">
         <div className="settings-bar-left">
           <button type="button" className="settings-back-btn" onClick={onClose}>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { CheckCircle2, AlertTriangle, AlertOctagon, Minimize2, Eye, X } from "lucide-react";
+import { CheckCircle2, AlertTriangle, AlertOctagon, Minimize2, Eye, X } from "../lib/icons";
 import { configStore } from "../lib/configStore";
 import { transcriptStore, usageStore, pushToast } from "../lib/events";
 import { contextBreakdown } from "../lib/contextBreakdown";

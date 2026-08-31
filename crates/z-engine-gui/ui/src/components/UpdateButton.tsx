@@ -1,8 +1,8 @@
 import { useSyncExternalStore } from "react";
-import { ExternalLink, LoaderCircle, Sparkles } from "lucide-react";
+import { Check, Download, ExternalLink, LoaderCircle } from "../lib/icons";
 import { updateStore } from "../lib/updateStore";
 
-/** One-click inline update button without intrusive popups. */
+/** Luxury update action capsule with relatable download iconography and live progress. */
 export function UpdateButton() {
   const { info, installing, progress } = useSyncExternalStore(
     updateStore.subscribe,
@@ -13,39 +13,51 @@ export function UpdateButton() {
 
   const pct = progress?.percentage != null ? Math.round(progress.percentage) : null;
   const isDownloading = installing && progress?.phase === "downloading";
-  const isInstalling =
-    installing && (progress?.phase === "installing" || progress?.phase === "ready");
-
-  const label = isInstalling
-    ? "Installing…"
-    : isDownloading
-      ? pct != null
-        ? `${pct}%`
-        : "Downloading…"
-      : `Update v${info.latest}`;
+  const isReady = installing && progress?.phase === "ready";
+  const isInstalling = installing && (progress?.phase === "installing" || isReady);
 
   return (
     <div className="update-btn-wrap">
       <button
         type="button"
-        className={`update-header-pill${installing ? " installing" : ""}`}
+        className={`luxury-update-pill${installing ? " is-active" : ""}${isReady ? " is-ready" : ""}`}
         title={
-          installing
-            ? "Downloading and installing update…"
-            : `Click to directly update to v${info.latest}`
+          isReady
+            ? "Update ready. Restart application to complete update."
+            : installing
+              ? `Downloading update${pct != null ? ` (${pct}%)` : "…"}`
+              : `Directly update to v${info.latest}`
         }
-        disabled={installing}
+        disabled={installing && !isReady}
         onClick={() => void updateStore.install()}
       >
-        {installing ? (
-          <LoaderCircle size={12} className="spin update-spin-icon" strokeWidth={2} />
-        ) : (
-          <Sparkles size={12} className="update-sparkle-icon" strokeWidth={1.8} />
-        )}
-        <span className="update-header-text">{label}</span>
+        <span className="update-icon-wrap">
+          {isReady ? (
+            <Check size={12} strokeWidth={2.4} className="update-check-icon" />
+          ) : installing ? (
+            <LoaderCircle size={12} strokeWidth={2.2} className="spin update-spin-icon" />
+          ) : (
+            <Download size={12} strokeWidth={2} className="update-download-icon" />
+          )}
+        </span>
+
+        <span className="update-label">
+          {isReady
+            ? "Restart to apply"
+            : isInstalling
+              ? "Installing…"
+              : isDownloading
+                ? pct != null
+                  ? `Downloading ${pct}%`
+                  : "Downloading…"
+                : `v${info.latest}`}
+        </span>
+
+        {!installing && <span className="update-beacon-dot" aria-hidden="true" />}
+
         {installing && pct != null && (
           <span
-            className="update-pill-progress-bar"
+            className="update-progress-fill"
             style={{ width: `${pct}%` }}
             aria-hidden="true"
           />
@@ -55,9 +67,10 @@ export function UpdateButton() {
       {info.url && !installing && (
         <button
           type="button"
-          className="update-fallback-icon-btn"
-          title="Download manually from GitHub Releases"
+          className="update-ext-btn"
+          title="Open GitHub release details"
           onClick={() => updateStore.openRelease()}
+          aria-label="Open GitHub release details"
         >
           <ExternalLink size={11} strokeWidth={1.8} />
         </button>

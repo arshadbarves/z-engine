@@ -11,7 +11,7 @@ import {
 import { abort, listProjectFiles, shellPassthrough, submit } from "../lib/commands";
 import { activeAtToken, stripAtToken } from "../lib/atFile";
 import { queueStore } from "../lib/events";
-import { Terminal, Paperclip, ArrowUp, CornerDownLeft, Square } from "lucide-react";
+import { Terminal, Paperclip, ArrowUp, CornerDownLeft, Square } from "../lib/icons";
 import { filterSlash } from "../lib/slash";
 import { dispatchSlashCommand } from "../lib/composerCommands";
 import { fileToDataUrl } from "../lib/imageUtil";
@@ -330,7 +330,7 @@ export function Composer() {
                 onClick={() => void abort()}
                 type="button"
               >
-                <Square size={11} fill="currentColor" />
+                <Square size={11} />
               </button>
             ) : shellMode ? (
               <button

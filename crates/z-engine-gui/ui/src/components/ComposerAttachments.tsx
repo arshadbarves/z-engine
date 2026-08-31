@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { X } from "../lib/icons";
 
 function fileName(p: string): string {
   const i = p.lastIndexOf("/");

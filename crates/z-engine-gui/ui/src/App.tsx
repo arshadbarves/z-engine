@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
-  transcriptStore, busyStore, approvalGateStore, toastStore, sessionStore,
+  transcriptStore, busyStore, approvalGateStore, sessionStore,
   modelStore, setMaxTokens, initEvents, parkCurrentAndReset, pushToast,
   queueStore, drainReadyQueues, submitOnSession, sessionActivityStore,
   sessionsTickStore, hydrateStore,
@@ -27,6 +27,7 @@ import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { DiffPanel } from "./components/DiffPanel";
 import { WorktreeModal } from "./components/WorktreeModal";
+import { usePresence } from "./lib/usePresence";
 
 export default function App() {
   const messages = useSyncExternalStore(
@@ -34,7 +35,6 @@ export default function App() {
     () => transcriptStore.getSnapshot(),
   );
   const busy = useSyncExternalStore(busyStore.subscribe, () => busyStore.getSnapshot());
-  const toasts = useSyncExternalStore(toastStore.subscribe, () => toastStore.getSnapshot());
   const sessionId = useSyncExternalStore(sessionStore.subscribe, () => sessionStore.getSnapshot());
   const sessionsTick = useSyncExternalStore(
     sessionsTickStore.subscribe,
@@ -53,6 +53,11 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [diffOpen, setDiffOpen] = useState(false);
   const [worktreeOpen, setWorktreeOpen] = useState(false);
+
+  const palettePresence = usePresence(paletteOpen, 260);
+  const settingsPresence = usePresence(settingsOpen, 280);
+  const worktreePresence = usePresence(worktreeOpen, 260);
+  const diffPresence = usePresence(diffOpen, 260);
   const queued = useSyncExternalStore(queueStore.subscribe, () => queueStore.getSnapshot());
   const awaitingApproval = useSyncExternalStore(
     approvalGateStore.subscribe,
@@ -346,12 +351,15 @@ export default function App() {
             <Composer />
           </div>
 
-          {diffOpen && <DiffPanel onClose={() => setDiffOpen(false)} />}
+          {diffPresence.mounted && (
+            <DiffPanel isClosing={diffPresence.isClosing} onClose={() => setDiffOpen(false)} />
+          )}
         </section>
       </div>
 
-      {paletteOpen && (
+      {palettePresence.mounted && (
         <CommandPalette
+          isClosing={palettePresence.isClosing}
           onClose={() => setPaletteOpen(false)}
           sessions={sessionsList}
           workspaces={workspaces.roots}
@@ -368,18 +376,16 @@ export default function App() {
           onActivateWorkspace={(root) => workspaceStore.setActive(root)}
         />
       )}
-      {settingsOpen && <SettingsPage onClose={() => setSettingsOpen(false)} />}
-      {worktreeOpen && (
-        <WorktreeModal onClose={() => setWorktreeOpen(false)} onCreate={(n) => void createWorktreeAndStart(n)} />
+      {settingsPresence.mounted && (
+        <SettingsPage isClosing={settingsPresence.isClosing} onClose={() => setSettingsOpen(false)} />
       )}
-
-      <div className="toasts" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} className={`toast ${t.tone}`}>
-            {t.text}
-          </div>
-        ))}
-      </div>
+      {worktreePresence.mounted && (
+        <WorktreeModal
+          isClosing={worktreePresence.isClosing}
+          onClose={() => setWorktreeOpen(false)}
+          onCreate={(n) => void createWorktreeAndStart(n)}
+        />
+      )}
     </main>
     </>
   );

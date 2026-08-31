@@ -1,5 +1,11 @@
-import { useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  FolderGit2,
+  MessageSquare,
+  Search,
+  X,
+  type IconComponent,
+} from "../lib/icons";
 import type { SessionEntry } from "../lib/util";
 import { sessionLabel } from "../lib/sessionList";
 import { wsBasename } from "../lib/workspaces";
@@ -8,8 +14,9 @@ export interface PaletteItem {
   label: string;
   hint?: string;
   keywords: string;
-  /** Section this item renders under; ungrouped items go last. */
   group?: string;
+  icon?: IconComponent;
+  shortcut?: string;
   run: () => void;
 }
 
@@ -18,7 +25,7 @@ export interface PaletteItem {
 function fuzzyScore(query: string, item: PaletteItem): number | null {
   const q = query.trim().toLowerCase();
   if (!q) return Number.POSITIVE_INFINITY; // everything matches when empty
-  const hay = `${item.label} ${item.keywords}`.toLowerCase();
+  const hay = `${item.label} ${item.keywords} ${item.group ?? ""}`.toLowerCase();
   let hi = 0;
   let prev = -1;
   let first = -1;
@@ -27,17 +34,16 @@ function fuzzyScore(query: string, item: PaletteItem): number | null {
     if (idx === -1) return null;
     if (first === -1) first = idx;
     if (idx === prev + 1) {
-      // contiguity bonus is implicit: keep span tight
       if (hi - first > 64) return null;
     }
     prev = idx;
     hi = idx;
   }
-  // Prefer matches near the start of the haystack.
   return hi - Math.max(0, first - 8);
 }
 
 export function CommandPalette({
+  isClosing = false,
   onClose,
   sessions,
   workspaces,
@@ -46,6 +52,7 @@ export function CommandPalette({
   onOpenSession,
   onActivateWorkspace,
 }: {
+  isClosing?: boolean;
   onClose: () => void;
   sessions: SessionEntry[];
   workspaces: string[];
@@ -56,24 +63,27 @@ export function CommandPalette({
 }) {
   const [query, setQuery] = useState("");
   const [sel, setSel] = useState(0);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const items = useMemo(() => {
-    const sessionItems: PaletteItem[] = sessions.slice(0, 6).map((s) => ({
+    const sessionItems: PaletteItem[] = sessions.slice(0, 8).map((s) => ({
       label: sessionLabel(s.firstUserMsg),
-      hint: "open session",
-      keywords: `session ${s.ulid}`,
-      group: "Sessions",
-      // Route through openSession (not bare startSession) so the
-      // transcript replays into the chat area.
+      hint: s.projectRoot ? wsBasename(s.projectRoot) : "Chat",
+      keywords: `session chat ${s.ulid} ${s.projectRoot ?? ""}`,
+      group: "Recent Chats",
+      icon: MessageSquare,
       run: () => onOpenSession(s.path, s.projectRoot),
     }));
+
     const wsItems: PaletteItem[] = workspaces.map((root) => ({
-      label: `Workspace · ${wsBasename(root)}`,
-      hint: root === activeWorkspace ? "active" : "set active",
-      keywords: `workspace project ${root}`,
+      label: wsBasename(root),
+      hint: root === activeWorkspace ? "Active Workspace" : "Switch Workspace",
+      keywords: `workspace project folder ${root}`,
       group: "Workspaces",
+      icon: FolderGit2,
       run: () => onActivateWorkspace(root),
     }));
+
     return [...actions, ...wsItems, ...sessionItems]
       .map((item) => ({ item, score: fuzzyScore(query, item) }))
       .filter(({ score }) => score !== null)
@@ -82,6 +92,14 @@ export function CommandPalette({
   }, [query, actions, workspaces, activeWorkspace, onOpenSession, onActivateWorkspace, sessions]);
 
   const selIndex = Math.min(sel, Math.max(0, items.length - 1));
+
+  // Scroll active item into view smoothly
+  useEffect(() => {
+    const activeEl = listRef.current?.querySelector(".palette-row.is-selected");
+    if (activeEl) {
+      activeEl.scrollIntoView({ block: "nearest" });
+    }
+  }, [selIndex]);
 
   function run(i: number) {
     const item = items[i];
@@ -98,15 +116,26 @@ export function CommandPalette({
     if (g) g.items.push(item);
     else groups.push({ name: item.group, items: [item] });
   }
+
   let flatIndex = -1;
 
   return (
-    <div className="palette-overlay" onMouseDown={onClose}>
-      <div className="palette" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="palette-input-wrap">
-          <Search size={14} className="palette-search-icon" />
+    <div
+      className={`palette-backdrop${isClosing ? " is-closing" : ""}`}
+      onMouseDown={onClose}
+    >
+      <div
+        className={`palette-spotlight${isClosing ? " is-closing" : ""}`}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        {/* Search Header Bar */}
+        <div className="palette-header">
+          <div className="palette-search-icon-box">
+            <Search size={15} strokeWidth={2} />
+          </div>
           <input
             autoFocus
+            className="palette-input"
             value={query}
             onChange={(e) => {
               setQuery(e.currentTarget.value);
@@ -127,40 +156,102 @@ export function CommandPalette({
                 onClose();
               }
             }}
-            placeholder="Type a command or search…"
+            placeholder="Type a command or search actions, chats, workspaces…"
             spellCheck={false}
           />
+          {query ? (
+            <button
+              type="button"
+              className="palette-clear-btn"
+              title="Clear search"
+              onClick={() => {
+                setQuery("");
+                setSel(0);
+              }}
+            >
+              <X size={13} strokeWidth={2} />
+            </button>
+          ) : (
+            <span className="palette-count-chip">{items.length}</span>
+          )}
         </div>
-        <div className="palette-list">
-          {items.length === 0 && <div className="pop-note">No matching commands</div>}
-          {groups.map((g) => (
-            <div key={g.name ?? "_commands"}>
-              {g.name && <div className="palette-group">{g.name}</div>}
-              {g.items.map((item) => {
-                flatIndex += 1;
-                const i = flatIndex;
-                return (
-                  <button
-                    key={`${item.label}-${i}`}
-                    className={`pop-item${i === selIndex ? " sel" : ""}`}
-                    onMouseEnter={() => setSel(i)}
-                    onClick={() => run(i)}
-                    type="button"
-                  >
-                    <span className="pop-name">{item.label}</span>
-                    {item.hint && <span className="pop-desc">{item.hint}</span>}
-                  </button>
-                );
-              })}
+
+        {/* Results List View */}
+        <div className="palette-body" ref={listRef}>
+          {items.length === 0 ? (
+            <div className="palette-empty-state">
+              <div className="palette-empty-icon">
+                <Search size={22} strokeWidth={1.5} />
+              </div>
+              <span className="palette-empty-title">No matching results</span>
+              <span className="palette-empty-sub">
+                Try typing an action name, workspace, or session keyword.
+              </span>
             </div>
-          ))}
+          ) : (
+            groups.map((g) => (
+              <div key={g.name ?? "_general"} className="palette-section">
+                {g.name && <div className="palette-section-title">{g.name}</div>}
+                {g.items.map((item) => {
+                  flatIndex += 1;
+                  const i = flatIndex;
+                  const isSelected = i === selIndex;
+                  const Icon = item.icon ?? Search;
+
+                  return (
+                    <button
+                      key={`${item.label}-${i}`}
+                      type="button"
+                      className={`palette-row${isSelected ? " is-selected" : ""}`}
+                      onMouseEnter={() => setSel(i)}
+                      onClick={() => run(i)}
+                    >
+                      <div className="palette-row-icon-box">
+                        <Icon size={14} strokeWidth={1.8} />
+                      </div>
+
+                      <div className="palette-row-content">
+                        <span className="palette-row-label">{item.label}</span>
+                        {item.hint && (
+                          <span className="palette-row-hint">{item.hint}</span>
+                        )}
+                      </div>
+
+                      <div className="palette-row-trailing">
+                        {item.shortcut ? (
+                          <kbd className="palette-shortcut-badge">{item.shortcut}</kbd>
+                        ) : isSelected ? (
+                          <kbd className="palette-shortcut-badge">↵</kbd>
+                        ) : null}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ))
+          )}
         </div>
-        <div className="palette-foot">
-          <span><kbd>↑↓</kbd> navigate</span>
-          <span><kbd>↵</kbd> select</span>
-          <span><kbd>esc</kbd> close</span>
+
+        {/* Bottom Status Deck */}
+        <div className="palette-footer">
+          <div className="palette-footer-shortcuts">
+            <span className="footer-shortcut-item">
+              <kbd>↑↓</kbd> Navigate
+            </span>
+            <span className="footer-shortcut-item">
+              <kbd>↵</kbd> Execute
+            </span>
+            <span className="footer-shortcut-item">
+              <kbd>Esc</kbd> Close
+            </span>
+          </div>
+
+          <div className="palette-footer-brand">
+            <span className="footer-brand-text">Z Engine Spotlight</span>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+

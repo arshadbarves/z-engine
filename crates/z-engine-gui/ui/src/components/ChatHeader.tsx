@@ -1,4 +1,4 @@
-import { ArrowDown, FolderGit2, GitCompare, PanelLeft, Search } from "lucide-react";
+import { ArrowDown, FolderGit2, GitCompare, PanelLeft, Search } from "../lib/icons";
 import { ContextMeter } from "./ContextMeter";
 import { UpdateButton } from "./UpdateButton";
 import { WindowControlsMaybe } from "./WindowControls";

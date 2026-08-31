@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, ChevronDown, ExternalLink, KeyRound, Sparkles } from "lucide-react";
+import { Check, ChevronDown, ExternalLink, KeyRound, Sparkles } from "../../lib/icons";
 import {
   getConfig,
   openReleaseUrl,

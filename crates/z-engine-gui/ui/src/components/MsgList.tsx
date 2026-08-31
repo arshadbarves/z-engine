@@ -7,7 +7,8 @@ import { LogoMark } from "./LogoMark";
 import { draftStore, hydrateStore, type Msg } from "../lib/events";
 import { groupTranscript } from "../lib/activity";
 import { ChatTimeline } from "./ChatTimeline";
-import { HERO_EXAMPLES } from "../lib/constants";
+import { HERO_STARTERS } from "../lib/constants";
+import { FolderGit2, Search, Sparkles, Workflow, Wrench } from "../lib/icons";
 
 function WorkingRow() {
   const [secs, setSecs] = useState(0);
@@ -56,6 +57,21 @@ function MsgCard({
   return null;
 }
 
+function StarterCardIcon({ name }: { name: string }) {
+  switch (name) {
+    case "Search":
+      return <Search size={14} strokeWidth={1.8} />;
+    case "Sparkles":
+      return <Sparkles size={14} strokeWidth={1.8} />;
+    case "Wrench":
+      return <Wrench size={14} strokeWidth={1.8} />;
+    case "Workflow":
+      return <Workflow size={14} strokeWidth={1.8} />;
+    default:
+      return <Sparkles size={14} strokeWidth={1.8} />;
+  }
+}
+
 export function MsgList({
   messages,
   busy,
@@ -83,38 +99,76 @@ export function MsgList({
     <div className="transcript-stage">
       <ChatTimeline messages={messages} />
       <div className="transcript-inner">
-      {messages.length === 0 && !hydrating && (
-        <div className="hero">
-          <div className="hero-icon-wrap">
-            <LogoMark size={26} />
+        {messages.length === 0 && !hydrating && (
+          <div className="start-hub">
+            {/* Center Brand Aura */}
+            <div className="start-hub-brand">
+              <div className="start-hub-icon-halo">
+                <LogoMark size={28} />
+              </div>
+              <h1 className="start-hub-title">What should we build today?</h1>
+              {projectName ? (
+                <div className="start-hub-ws-pill">
+                  <FolderGit2 size={12} strokeWidth={1.8} />
+                  <span>{projectName}</span>
+                </div>
+              ) : (
+                <p className="start-hub-desc">
+                  Autonomous coding agent with full codebase awareness, tool execution, and live verification.
+                </p>
+              )}
+            </div>
+
+            {/* Curated 2x2 Starter Action Cards */}
+            <div className="start-hub-grid">
+              {HERO_STARTERS.map((card, index) => (
+                <button
+                  key={card.id}
+                  type="button"
+                  className="start-hub-card"
+                  style={{ "--card-index": index } as React.CSSProperties}
+                  onClick={() => draftStore.set(card.prompt)}
+                >
+                  <div className="card-icon-box">
+                    <StarterCardIcon name={card.iconName} />
+                  </div>
+                  <div className="card-text-col">
+                    <span className="card-title">{card.title}</span>
+                    <span className="card-desc">{card.desc}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* Quick Syntax / Capability Hints */}
+            <div className="start-hub-hints">
+              <span className="hint-pill">
+                <kbd>@</kbd> Reference files
+              </span>
+              <span className="hint-pill">
+                <kbd>/</kbd> Slash commands
+              </span>
+              <span className="hint-pill">
+                <kbd>!</kbd> Bash mode
+              </span>
+            </div>
           </div>
-          <h1>What should we build{projectName ? ` in ${projectName}` : ""}?</h1>
-          <p>
-            Describe a task — Z Engine reads files, runs commands, edits code and verifies the
-            result before reporting back.
-          </p>
-          <div className="hero-chips">
-            {HERO_EXAMPLES.map((ex) => (
-              <button key={ex} className="chip" onClick={() => draftStore.set(ex)} type="button">
-                {ex}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      {blocks.map((b) =>
-        b.type === "work" ? (
-          <ActivityStrip key={b.items[0].id} items={b.items} />
-        ) : (
-          <MsgCard
-            key={b.msg.id}
-            m={b.msg}
-            onApprove={onApprove}
-            onDeny={onDeny}
-          />
-        ),
-      )}
-      {showWorking && <WorkingRow key={`working-${messages.length}`} />}
+        )}
+
+        {blocks.map((b) =>
+          b.type === "work" ? (
+            <ActivityStrip key={b.items[0].id} items={b.items} />
+          ) : (
+            <MsgCard
+              key={b.msg.id}
+              m={b.msg}
+              onApprove={onApprove}
+              onDeny={onDeny}
+            />
+          ),
+        )}
+
+        {showWorking && <WorkingRow key={`working-${messages.length}`} />}
       </div>
     </div>
   );

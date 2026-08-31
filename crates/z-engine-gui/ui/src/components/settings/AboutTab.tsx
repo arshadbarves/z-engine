@@ -7,7 +7,7 @@ import {
   LoaderCircle,
   RefreshCw,
   Sparkles,
-} from "lucide-react";
+} from "../../lib/icons";
 import { LogoMark } from "../LogoMark";
 import type { HarnessConfig } from "../../lib/commands";
 import { updateStore } from "../../lib/updateStore";

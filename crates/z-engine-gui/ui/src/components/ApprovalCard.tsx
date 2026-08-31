@@ -1,4 +1,4 @@
-import { ShieldAlert } from "lucide-react";
+import { ShieldAlert } from "../lib/icons";
 import type { Msg } from "../lib/events";
 import { approvalCommand, approvalToolName } from "../lib/approvalPreview";
 import { looksLikeDiff } from "../lib/diffParse";

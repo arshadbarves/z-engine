@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { ChevronDown, Search, Sparkles } from "lucide-react";
+import { ChevronDown, Search, Sparkles } from "../lib/icons";
 import { modelStore } from "../lib/events";
 import { setModel } from "../lib/commands";
 import { shortModel } from "../lib/util";

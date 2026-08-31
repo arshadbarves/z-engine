@@ -1,19 +1,19 @@
 import { useState, useSyncExternalStore } from "react";
-import { Check, Copy, Undo2 } from "lucide-react";
+import { Check, Copy, Undo2 } from "../lib/icons";
 import { abort, revertToTurn } from "../lib/commands";
 import { busyStore, draftStore, pushToast, trimTranscript, type Msg } from "../lib/events";
 
-const COLLAPSE_CHARS = 280;
-const COLLAPSE_LINES = 4;
+const COLLAPSE_CHARS = 380;
+const COLLAPSE_LINES = 6;
 
-/** User bubble with copy / edit-revert sitting under the bar. */
+/** Premium user prompt bubble with discrete micro-actions positioned below. */
 export function UserCard({ m }: { m: Msg }) {
   const busy = useSyncExternalStore(busyStore.subscribe, () => busyStore.getSnapshot());
   const [copied, setCopied] = useState(false);
   const [pending, setPending] = useState(false);
   const lines = m.text.split("\n").length;
-  const long = m.text.length > COLLAPSE_CHARS || lines > COLLAPSE_LINES;
-  const [expanded, setExpanded] = useState(!long);
+  const isLong = m.text.length > COLLAPSE_CHARS || lines > COLLAPSE_LINES;
+  const [expanded, setExpanded] = useState(!isLong);
 
   async function copy() {
     try {
@@ -31,7 +31,6 @@ export function UserCard({ m }: { m: Msg }) {
     if (!canRevert || pending) return;
     setPending(true);
     try {
-      // Abort first so RevertToTurn is not dropped mid-stream.
       if (busy) await abort();
       draftStore.set(m.text);
       trimTranscript(m.runTurn as number);
@@ -45,44 +44,62 @@ export function UserCard({ m }: { m: Msg }) {
   }
 
   return (
-    <div className="user-wrap" id={`msg-${m.id}`} data-msg-id={m.id}>
-      <div className="msg user">
-        <div className={`user-bubble${long && !expanded ? " collapsed" : ""}`}>
-          {m.text}
+    <div className="user-message-row" id={`msg-${m.id}`} data-msg-id={m.id}>
+      <div className="user-message-wrapper">
+        {/* Main User Prompt Bubble */}
+        <div className="user-message-bubble">
+          <div className={`user-prompt-text${isLong && !expanded ? " collapsed" : ""}`}>
+            {m.text}
+          </div>
+
           {m.images && m.images.length > 0 && (
-            <span className="msg-images">
+            <div className="user-attached-images">
               {m.images.map((url, i) => (
-                <img key={i} src={url} alt={`attached ${i + 1}`} />
+                <img key={i} src={url} alt={`attached ${i + 1}`} className="user-img-thumb" />
               ))}
-            </span>
+            </div>
+          )}
+
+          {isLong && (
+            <button
+              type="button"
+              className="user-expand-btn"
+              onClick={() => setExpanded((v) => !v)}
+            >
+              {expanded ? "Show less" : "Show more"}
+            </button>
           )}
         </div>
-        {long && (
-          <button type="button" className="user-more" onClick={() => setExpanded((v) => !v)}>
-            {expanded ? "Show less" : "Show more"}
+
+        {/* Micro-Actions Below the Chat Bubble (Hover Only, Minimalist Icon Buttons) */}
+        <div className="user-bubble-actions">
+          <button
+            type="button"
+            className={`bubble-action-icon-btn${copied ? " ok" : ""}`}
+            title={copied ? "Copied" : "Copy prompt"}
+            onClick={() => void copy()}
+            aria-label="Copy prompt"
+          >
+            {copied ? (
+              <Check size={12} strokeWidth={2} className="copy-ok" />
+            ) : (
+              <Copy size={12} strokeWidth={1.8} />
+            )}
           </button>
-        )}
-      </div>
-      <div className="msg-actions">
-        <button type="button" title={copied ? "Copied" : "Copy"} onClick={() => void copy()}>
-          {copied ? <Check size={12} /> : <Copy size={12} />}
-          <span>{copied ? "Copied" : "Copy"}</span>
-        </button>
-        <button
-          type="button"
-          disabled={!canRevert || pending}
-          title={
-            canRevert
-              ? busy
-                ? "Stop this turn and move the prompt back to the composer"
-                : "Move this prompt back to the composer"
-              : "This prompt cannot be restored"
-          }
-          onClick={() => void revert()}
-        >
-          <Undo2 size={12} />
-          <span>{busy ? "Edit" : "Revert"}</span>
-        </button>
+
+          {canRevert && (
+            <button
+              type="button"
+              className="bubble-action-icon-btn"
+              disabled={pending}
+              title={busy ? "Stop & edit prompt" : "Revert & edit prompt"}
+              onClick={() => void revert()}
+              aria-label="Revert & edit prompt"
+            >
+              <Undo2 size={12} strokeWidth={1.8} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

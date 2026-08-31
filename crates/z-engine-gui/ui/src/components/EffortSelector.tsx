@@ -1,5 +1,5 @@
 import { useState, useSyncExternalStore } from "react";
-import { Brain, ChevronDown } from "lucide-react";
+import { Brain, ChevronDown } from "../lib/icons";
 import { setReasoningEffort } from "../lib/commands";
 import { lookupModel } from "../lib/catalog";
 import type { CatalogData } from "../lib/catalog";

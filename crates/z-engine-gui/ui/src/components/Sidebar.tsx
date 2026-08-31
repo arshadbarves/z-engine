@@ -1,11 +1,105 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, Folder, MessageSquare, Plus, Search, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  FolderGit2,
+  LoaderCircle,
+  MessageSquare,
+  Plus,
+  Search,
+  ShieldAlert,
+  Trash2,
+  X,
+} from "../lib/icons";
 import type { SessionActivity } from "../lib/events";
 import { filterSessions, type SessionEntry } from "../lib/util";
 import { sessionLabel } from "../lib/sessionList";
 import { wsBasename, sameWorkspacePath } from "../lib/workspaces";
 
-function WorkspaceRow({
+/* ── Session Row Component ─────────────────────────────────────────────── */
+
+function SessionTreeItem({
+  session,
+  active,
+  activityState,
+  onOpen,
+  onDelete,
+}: {
+  session: SessionEntry;
+  active: boolean;
+  activityState: SessionActivity | null;
+  onOpen: (path: string, projectRoot?: string | null) => void;
+  onDelete: (path: string) => void;
+}) {
+  const title = sessionLabel(session.firstUserMsg);
+  const isWorking = activityState === "working";
+  const isApproval = activityState === "approval";
+  const unreadOutcome =
+    !active && !activityState && (session.unreadOutcome === "completed" || session.unreadOutcome === "aborted")
+      ? session.unreadOutcome
+      : null;
+
+  return (
+    <div
+      className={`sidebar-session-item${active ? " active" : ""}${
+        isWorking ? " working" : ""
+      }${isApproval ? " approval" : ""}${
+        unreadOutcome ? ` unread unread-${unreadOutcome}` : ""
+      }`}
+      role="button"
+      tabIndex={0}
+      title={
+        isApproval
+          ? `Action Required · ${title}`
+          : isWorking
+            ? `Agent Working · ${title}`
+            : title
+      }
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen(session.path, session.projectRoot);
+      }}
+      onKeyDown={(e) => e.key === "Enter" && onOpen(session.path, session.projectRoot)}
+    >
+      <div className="session-item-icon-wrap">
+        {isWorking ? (
+          <LoaderCircle size={13} className="spin session-spin-icon" strokeWidth={2} />
+        ) : isApproval ? (
+          <ShieldAlert size={13} className="session-alert-icon" strokeWidth={2} />
+        ) : (
+          <MessageSquare size={13} className="session-msg-icon" strokeWidth={1.8} />
+        )}
+      </div>
+
+      <span className="session-item-title">{title}</span>
+
+      <div className="session-item-tail">
+        {unreadOutcome && (
+          <span
+            className={`session-status-dot dot-${unreadOutcome}`}
+            title={unreadOutcome === "completed" ? "Completed" : "Stopped"}
+            aria-label={unreadOutcome}
+          />
+        )}
+        <button
+          type="button"
+          className="session-delete-btn"
+          title="Delete chat"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(session.path);
+          }}
+        >
+          <Trash2 size={11} strokeWidth={1.8} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Workspace Accordion Item ──────────────────────────────────────────── */
+
+function WorkspaceTreeItem({
   root,
   active,
   sessions,
@@ -28,14 +122,17 @@ function WorkspaceRow({
 }) {
   const [open, setOpen] = useState(active);
   const wasActive = useRef(active);
+
   useEffect(() => {
     if (active && !wasActive.current) setOpen(true);
     wasActive.current = active;
   }, [active]);
 
   const items = useMemo(() => sessions.slice(0, 40), [sessions]);
-  // Approval outranks working: a blocked session needs the user's eye first.
-  const projectActivity = useMemo<SessionActivity | null>(() => {
+  const name = wsBasename(root);
+
+  // Derive any live activity in this workspace
+  const workspaceActivity = useMemo<SessionActivity | null>(() => {
     let working = false;
     for (const s of items) {
       const a = activity[s.ulid];
@@ -44,49 +141,54 @@ function WorkspaceRow({
     }
     return working ? "working" : null;
   }, [items, activity]);
+
   return (
-    <div className={`ws-row${active ? " active" : ""}`}>
+    <div className={`workspace-item${active ? " active-ws" : ""}`}>
       <div
-        className={`ws-head${projectActivity ? ` ${projectActivity}` : ""}`}
+        className={`workspace-header${workspaceActivity ? ` ws-${workspaceActivity}` : ""}`}
         role="button"
         tabIndex={0}
-        title={`${root}${active ? " · active" : " · click to make active"}`}
+        title={`${root}${active ? " (Active Workspace)" : ""}`}
         onClick={() => {
           onActivate(root);
           setOpen((o) => !o);
         }}
         onKeyDown={(e) => e.key === "Enter" && onActivate(root)}
       >
-        <span className={`ws-chevron${open ? " open" : ""}`}>
-          <ChevronRight size={10} />
+        <span className="workspace-chevron" aria-hidden="true">
+          {open ? <ChevronDown size={11} strokeWidth={2} /> : <ChevronRight size={11} strokeWidth={2} />}
         </span>
-        <Folder size={13} className="ws-icon" />
-        <span className="ws-name">{wsBasename(root)}</span>
-        <span className="ws-tail">
-          <span className="ws-count">{items.length || ""}</span>
+
+        <FolderGit2 size={13} className="workspace-folder-icon" strokeWidth={1.8} />
+        <span className="workspace-title">{name}</span>
+
+        <div className="workspace-actions">
+          {items.length > 0 && <span className="workspace-badge">{items.length}</span>}
           <button
-            className="del"
-            title="Delete workspace and all of its chats"
+            type="button"
+            className="workspace-del-btn"
+            title="Remove workspace"
             onClick={(e) => {
               e.stopPropagation();
               onRemove(root);
             }}
           >
-            <Trash2 size={11} />
+            <Trash2 size={11} strokeWidth={1.8} />
           </button>
-        </span>
+        </div>
       </div>
+
       {open && (
-        <div className="ws-sessions">
+        <div className="workspace-session-list">
           {items.length === 0 ? (
-            <div className="sess-empty">No chats yet.</div>
+            <div className="workspace-empty-hint">No chats in this workspace</div>
           ) : (
             items.map((s) => (
-              <SessionRow
+              <SessionTreeItem
                 key={s.path}
-                s={s}
+                session={s}
                 active={s.ulid === activeUlid}
-                state={activity[s.ulid] ?? null}
+                activityState={activity[s.ulid] ?? null}
                 onOpen={onOpen}
                 onDelete={onDelete}
               />
@@ -98,62 +200,8 @@ function WorkspaceRow({
   );
 }
 
-function SessionRow({
-  s,
-  active,
-  state,
-  onOpen,
-  onDelete,
-}: {
-  s: SessionEntry;
-  active: boolean;
-  state: SessionActivity | null;
-  onOpen: (path: string, projectRoot?: string | null) => void;
-  onDelete: (path: string) => void;
-}) {
-  const unread = !active && !state && (s.unreadOutcome === "completed" || s.unreadOutcome === "aborted")
-    ? s.unreadOutcome
-    : null;
-  const title = sessionLabel(s.firstUserMsg);
-  return (
-    <div
-      className={`session${active ? " active" : ""}${state ? ` ${state}` : ""}${unread ? ` unread unread-${unread}` : ""}`}
-      role="button"
-      tabIndex={0}
-      title={
-        state === "approval"
-          ? `Approval needed — ${title}`
-          : unread
-            ? `${unread === "aborted" ? "Aborted" : "Done"} — ${title}`
-            : title
-      }
-      onClick={(e) => {
-        e.stopPropagation();
-        onOpen(s.path, s.projectRoot);
-      }}
-      onKeyDown={(e) => e.key === "Enter" && onOpen(s.path, s.projectRoot)}
-    >
-      <MessageSquare size={13} className="sess-icon" />
-      <div className="sess-preview">{title}</div>
-      <span className="sess-tail">
-        {unread && <span className="sess-unread-dot" role="status" aria-label={`${unread} — unopened`} />}
-        <button
-          className="del"
-          title="Delete chat"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(s.path);
-          }}
-        >
-          <Trash2 size={11} />
-        </button>
-      </span>
-    </div>
-  );
-}
+/* ── Main Sidebar View ─────────────────────────────────────────────────── */
 
-/** Codex-shaped sessions sidebar: search, projects with nested chats,
- * then Recents for transcripts from unregistered folders. */
 export function Sidebar({
   sessions,
   workspaces,
@@ -179,48 +227,79 @@ export function Sidebar({
 }) {
   const [query, setQuery] = useState("");
   const [recentsOpen, setRecentsOpen] = useState(true);
+
   const filtered = useMemo(() => filterSessions(sessions, query), [sessions, query]);
-  const byWs = useMemo(() => {
-    const m = new Map<string, SessionEntry[]>();
-    for (const root of workspaces) m.set(root, []);
-    const other: SessionEntry[] = [];
+
+  // Split sessions by workspace and loose/recents
+  const { byWorkspace, otherSessions } = useMemo(() => {
+    const byWorkspace = new Map<string, SessionEntry[]>();
+    for (const root of workspaces) byWorkspace.set(root, []);
+    const otherSessions: SessionEntry[] = [];
+
     for (const s of filtered) {
       const hit = s.projectRoot
         ? workspaces.find((root) => sameWorkspacePath(s.projectRoot, root))
         : undefined;
-      if (hit) m.get(hit)!.push(s);
-      else other.push(s);
+      if (hit) byWorkspace.get(hit)!.push(s);
+      else otherSessions.push(s);
     }
-    return { m, other };
+    return { byWorkspace, otherSessions };
   }, [filtered, workspaces]);
 
   return (
-    <div className="sessions">
-      <div className="sess-search">
-        <Search size={12} />
+    <div className="sidebar-content-deck">
+      {/* Search Input */}
+      <div className="sidebar-search-box">
+        <Search size={12} className="sidebar-search-icon" strokeWidth={1.8} />
         <input
+          type="text"
           value={query}
           onChange={(e) => setQuery(e.currentTarget.value)}
           placeholder="Search chats…"
           spellCheck={false}
+          className="sidebar-search-input"
         />
+        {query && (
+          <button
+            type="button"
+            className="sidebar-search-clear"
+            title="Clear search"
+            onClick={() => setQuery("")}
+          >
+            <X size={11} strokeWidth={2} />
+          </button>
+        )}
       </div>
-      <div className="sess-list">
-        <div className="ws-section-head">
-          <span>Projects</span>
-          <button className="mini" title="Add workspace…" onClick={onAddWorkspace}>
-            <Plus size={12} />
+
+      {/* Projects & Workspaces Section */}
+      <div className="sidebar-scrollable-area">
+        <div className="sidebar-group-header">
+          <span className="group-title">Workspaces</span>
+          <button
+            type="button"
+            className="group-action-btn"
+            title="Add workspace folder…"
+            onClick={onAddWorkspace}
+          >
+            <Plus size={12} strokeWidth={2} />
           </button>
         </div>
+
         {workspaces.length === 0 && (
-          <div className="sess-empty">No projects — add a folder.</div>
+          <div className="sidebar-empty-state">
+            <span>No workspaces linked.</span>
+            <button type="button" className="empty-add-btn" onClick={onAddWorkspace}>
+              Add folder
+            </button>
+          </div>
         )}
+
         {workspaces.map((root) => (
-          <WorkspaceRow
+          <WorkspaceTreeItem
             key={root}
             root={root}
             active={sameWorkspacePath(activeWorkspace, root)}
-            sessions={byWs.m.get(root) ?? []}
+            sessions={byWorkspace.get(root) ?? []}
             activeUlid={activeUlid}
             activity={activity}
             onOpen={onOpen}
@@ -229,31 +308,39 @@ export function Sidebar({
             onRemove={onRemoveWorkspace}
           />
         ))}
-        {byWs.other.length > 0 && (
-          <>
+
+        {/* Loose / Recents Chats */}
+        {otherSessions.length > 0 && (
+          <div className="sidebar-group-section">
             <div
-              className="ws-section-head other"
+              className="sidebar-group-header clickable"
               role="button"
               tabIndex={0}
               onClick={() => setRecentsOpen((o) => !o)}
               onKeyDown={(e) => e.key === "Enter" && setRecentsOpen((o) => !o)}
             >
-              <span>Recents</span>
+              <span className="group-title">Other Chats</span>
+              <span className="workspace-badge">{otherSessions.length}</span>
             </div>
-            {recentsOpen &&
-              byWs.other.slice(0, 24).map((s) => (
-                <SessionRow
-                  key={s.path}
-                  s={s}
-                  active={s.ulid === activeUlid}
-                  state={activity[s.ulid] ?? null}
-                  onOpen={onOpen}
-                  onDelete={onDelete}
-                />
-              ))}
-          </>
+
+            {recentsOpen && (
+              <div className="loose-sessions-list">
+                {otherSessions.slice(0, 24).map((s) => (
+                  <SessionTreeItem
+                    key={s.path}
+                    session={s}
+                    active={s.ulid === activeUlid}
+                    activityState={activity[s.ulid] ?? null}
+                    onOpen={onOpen}
+                    onDelete={onDelete}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
   );
 }
+

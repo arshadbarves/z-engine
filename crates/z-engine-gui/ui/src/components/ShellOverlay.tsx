@@ -1,6 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { hideShell, shellStore } from "../lib/shellStore";
-import { X } from "lucide-react";
+import { X } from "../lib/icons";
 
 /** Quiet terminal panel for `!` passthrough — never enters the chat. */
 export function ShellOverlay() {

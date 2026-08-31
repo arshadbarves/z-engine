@@ -12,6 +12,37 @@
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65);
   overflow: hidden;
   animation: apple-sheet-up 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+.settings-page.is-closing {
+  animation: apple-sheet-down 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes apple-sheet-up {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.97);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+}
+
+@keyframes apple-sheet-down {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+    filter: blur(3px);
+  }
 }
 
 .settings-top-bar {
@@ -922,6 +953,18 @@ html.plat-mac .settings-top-bar {
 .settings-progress-bar.indeterminate {
   width: 40% !important;
   animation: indeterminate-sweep 1.2s infinite ease-in-out;
+}
+
+@keyframes indeterminate-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(50%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
 }
 
 .settings-bytes-counter {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, Copy } from "lucide-react";
+import { ChevronLeft, Copy } from "../lib/icons";
 import { inspectPrompt, type PromptInspect, type PromptPart, type PromptTool } from "../lib/commands";
 import { sessionStore } from "../lib/events";
 import { promptInsights } from "../lib/promptInsights";
