@@ -8,13 +8,12 @@
     CheckCircle2,
     Download,
     ExternalLink,
-    FileText,
     LoaderCircle,
     RefreshCw,
     Sparkles,
   } from "$lib/ui/icons";
   import LogoMark from "../chrome/LogoMark.svelte";
-  import Markdown from "../chat/Markdown.svelte";
+  import ChangelogViewer from "./ChangelogViewer.svelte";
 
   type Props = { cfg: HarnessConfig };
   let { cfg }: Props = $props();
@@ -31,7 +30,6 @@
 
   let changelog = $state<string | null>(null);
   let loadingChangelog = $state(false);
-  let showChangelog = $state(false);
 
   const displayVersion = $derived(cfg.version || info?.current || "1.4.1");
 
@@ -140,40 +138,15 @@
 
   <div class="about-section-divider"></div>
 
-  <!-- Changelog & Release Notes Section -->
-  <div class="about-changelog-card">
-    <div class="about-changelog-head">
-      <div class="about-changelog-title-wrap">
-        <Icon icon={FileText} size={15} class="about-changelog-icon" />
-        <div>
-          <h4 class="about-changelog-title">Release Notes & Changelog</h4>
-          <p class="form-note">View what's new and recent updates across versions</p>
-        </div>
-      </div>
-      <button
-        type="button"
-        class="btn-outline-small"
-        onclick={() => (showChangelog = !showChangelog)}
-      >
-        {showChangelog ? "Hide Changelog" : "View Changelog"}
-      </button>
+  <!-- Changelog & Release Notes -->
+  {#if loadingChangelog}
+    <div class="about-changelog-loading">
+      <Icon icon={LoaderCircle} size={14} class="spin" />
+      <span>Fetching latest release notes…</span>
     </div>
-
-    {#if showChangelog}
-      <div class="about-changelog-body">
-        {#if loadingChangelog}
-          <div class="about-changelog-loading">
-            <Icon icon={LoaderCircle} size={14} class="spin" />
-            <span>Fetching latest release notes…</span>
-          </div>
-        {:else if changelog}
-          <div class="about-changelog-content">
-            <Markdown text={changelog} />
-          </div>
-        {/if}
-      </div>
-    {/if}
-  </div>
+  {:else if changelog}
+    <ChangelogViewer markdown={changelog} currentVersion={displayVersion} />
+  {/if}
 
   <div class="about-section-divider"></div>
   <h4 class="about-paths-title">System Paths & Configuration</h4>
