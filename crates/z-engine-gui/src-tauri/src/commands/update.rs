@@ -5,7 +5,7 @@ use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_updater::UpdaterExt;
 
 const GITHUB_RELEASES: &str = "https://api.github.com/repos/arshadbarves/z-engine/releases/latest";
-const CACHE_TTL_SECS: u64 = 6 * 3600;
+const CACHE_TTL_SECS: u64 = 300; // 5 minutes
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -95,7 +95,7 @@ fn stale_info(current: &str) -> UpdateInfo {
 async fn fetch_latest(current: &str) -> UpdateInfo {
     let client = match reqwest::Client::builder()
         .user_agent(format!("z-engine-gui/{current}"))
-        .timeout(std::time::Duration::from_secs(15))
+        .timeout(std::time::Duration::from_secs(10))
         .build()
     {
         Ok(c) => c,
@@ -107,6 +107,16 @@ async fn fetch_latest(current: &str) -> UpdateInfo {
 
     let resp = match client.get(GITHUB_RELEASES).send().await {
         Ok(r) if r.status().is_success() => r,
+        Ok(r) if r.status() == reqwest::StatusCode::NOT_FOUND => {
+            tracing::info!("GitHub releases: no release found (404)");
+            return UpdateInfo {
+                available: false,
+                current: current.to_string(),
+                latest: None,
+                url: None,
+                release_notes: None,
+            };
+        }
         Ok(r) => {
             tracing::warn!(status = %r.status(), "GitHub releases fetch failed");
             return stale_info(current);

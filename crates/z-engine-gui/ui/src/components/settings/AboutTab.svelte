@@ -75,20 +75,32 @@
             <span class="ver-target">v{info.latest}</span>
           </div>
         </div>
-        <button
-          type="button"
-          class="settings-update-primary-btn"
-          disabled={installing}
-          onclick={() => void updateStore.install()}
-        >
-          {#if installing}
-            <Icon icon={LoaderCircle} size={13} class="spin" />
-            <span>{isInstalling && pct != null ? `Installing… ${pct}%` : "Installing…"}</span>
-          {:else}
-            <Icon icon={Download} size={13} />
-            <span>Update & Restart</span>
-          {/if}
-        </button>
+        <div class="settings-update-actions">
+          <button
+            type="button"
+            class="settings-update-secondary-btn"
+            title="Recheck latest release on GitHub"
+            disabled={checking || installing}
+            onclick={() => void updateStore.check(true)}
+          >
+            <Icon icon={RefreshCw} size={12} class={checking ? "spin" : undefined} />
+            <span>{checking ? "Checking…" : "Recheck"}</span>
+          </button>
+          <button
+            type="button"
+            class="settings-update-primary-btn"
+            disabled={installing}
+            onclick={() => void updateStore.install()}
+          >
+            {#if installing}
+              <Icon icon={LoaderCircle} size={13} class="spin" />
+              <span>{isInstalling && pct != null ? `Installing… ${pct}%` : "Installing…"}</span>
+            {:else}
+              <Icon icon={Download} size={13} />
+              <span>Update & Restart</span>
+            {/if}
+          </button>
+        </div>
       </div>
       {#if info.releaseNotes}
         <div class="settings-update-notes">
