@@ -16,6 +16,8 @@ cp "$BIN" "$APP/Contents/MacOS/zengine-gui"
 cp crates/z-engine-gui/src-tauri/icons/icon.icns "$APP/Contents/Resources/icon.icns"
 cp crates/z-engine-gui/src-tauri/icons/icon.png "$APP/Contents/Resources/icon.png"
 
+VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -27,7 +29,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleExecutable</key>        <string>zengine-gui</string>
     <key>CFBundleIconFile</key>          <string>icon</string>
     <key>CFBundlePackageType</key>       <string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>1.4.0</string>
+    <key>CFBundleShortVersionString</key><string>${VERSION}</string>
     <key>CFBundleVersion</key>           <string>1</string>
     <key>LSMinimumSystemVersion</key>    <string>10.15</string>
     <key>NSHighResolutionCapable</key>   <true/>

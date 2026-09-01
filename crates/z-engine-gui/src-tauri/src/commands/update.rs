@@ -257,3 +257,32 @@ pub(crate) async fn install_update(app: tauri::AppHandle) -> Result<(), String> 
     app.request_restart();
     Ok(())
 }
+
+const GITHUB_CHANGELOG: &str =
+    "https://raw.githubusercontent.com/arshadbarves/z-engine/release/CHANGELOG.md";
+const EMBEDDED_CHANGELOG: &str = include_str!("../../../../../CHANGELOG.md");
+
+/// Fetch full changelog markdown from GitHub (with offline embedded fallback).
+#[tauri::command]
+pub(crate) async fn get_changelog() -> Result<String, String> {
+    let client = match reqwest::Client::builder()
+        .user_agent("z-engine-gui")
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return Ok(EMBEDDED_CHANGELOG.to_string()),
+    };
+
+    if let Ok(resp) = client.get(GITHUB_CHANGELOG).send().await {
+        if resp.status().is_success() {
+            if let Ok(text) = resp.text().await {
+                if !text.trim().is_empty() {
+                    return Ok(text);
+                }
+            }
+        }
+    }
+
+    Ok(EMBEDDED_CHANGELOG.to_string())
+}

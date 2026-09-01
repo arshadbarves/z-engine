@@ -107,7 +107,8 @@ fn main() {
             commands::inspect_prompt,
             commands::check_for_update,
             commands::open_release_url,
-            commands::install_update
+            commands::install_update,
+            commands::get_changelog
         ])
         .setup(|app| {
             let _ = z_engine_core::config::ensure_user_config();

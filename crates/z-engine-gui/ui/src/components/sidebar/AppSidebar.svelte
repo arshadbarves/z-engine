@@ -74,7 +74,7 @@
         <Icon icon={Settings} size={13} strokeWidth={1.8} />
         <span class="footer-label">Settings</span>
       </button>
-      <span class="footer-version-tag">{version ? `v${version}` : "v1.4.0"}</span>
+      <span class="footer-version-tag">{version ? `v${version}` : ""}</span>
     </div>
   </aside>
 </div>

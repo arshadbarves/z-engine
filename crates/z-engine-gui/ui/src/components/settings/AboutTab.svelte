@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { HarnessConfig } from "$lib/commands";
+  import { onMount } from "svelte";
+  import { getChangelog, type HarnessConfig } from "$lib/commands";
   import { bindStore } from "$lib/svelte/bind.svelte";
   import { updateStore } from "$lib/updateStore";
   import Icon, {
@@ -7,11 +8,13 @@
     CheckCircle2,
     Download,
     ExternalLink,
+    FileText,
     LoaderCircle,
     RefreshCw,
     Sparkles,
   } from "$lib/ui/icons";
   import LogoMark from "../chrome/LogoMark.svelte";
+  import Markdown from "../chat/Markdown.svelte";
 
   type Props = { cfg: HarnessConfig };
   let { cfg }: Props = $props();
@@ -25,6 +28,28 @@
   const isInstalling = $derived(
     installing && (progress?.phase === "installing" || progress?.phase === "ready"),
   );
+
+  let changelog = $state<string | null>(null);
+  let loadingChangelog = $state(false);
+  let showChangelog = $state(false);
+
+  const displayVersion = $derived(cfg.version || info?.current || "1.4.1");
+
+  async function loadChangelog() {
+    if (changelog) return;
+    loadingChangelog = true;
+    try {
+      changelog = await getChangelog();
+    } catch {
+      changelog = "# Changelog\n\nUnable to load changelog at this time.";
+    } finally {
+      loadingChangelog = false;
+    }
+  }
+
+  onMount(() => {
+    void loadChangelog();
+  });
 </script>
 
 <div class="tab-body about-tab">
@@ -32,7 +57,7 @@
     <LogoMark size={44} />
     <div class="about-hero-text">
       <h3>Z Engine</h3>
-      <p class="form-note">The Autonomous AI Coding Engine · v{cfg.version ?? "1.3.0"}</p>
+      <p class="form-note">The Autonomous AI Coding Engine · v{displayVersion}</p>
     </div>
   </div>
 
@@ -86,7 +111,7 @@
         <Icon icon={CheckCircle2} size={16} class="uptodate-icon" />
         <div class="uptodate-text">
           <strong>Z Engine is up to date</strong>
-          <span>Version {cfg.version ?? "1.3.0"} is the latest version available.</span>
+          <span>Version {displayVersion} is the latest version available.</span>
         </div>
       </div>
       <button
@@ -100,6 +125,43 @@
       </button>
     </div>
   {/if}
+
+  <div class="about-section-divider"></div>
+
+  <!-- Changelog & Release Notes Section -->
+  <div class="about-changelog-card">
+    <div class="about-changelog-head">
+      <div class="about-changelog-title-wrap">
+        <Icon icon={FileText} size={15} class="about-changelog-icon" />
+        <div>
+          <h4 class="about-changelog-title">Release Notes & Changelog</h4>
+          <p class="form-note">View what's new and recent updates across versions</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        class="btn-outline-small"
+        onclick={() => (showChangelog = !showChangelog)}
+      >
+        {showChangelog ? "Hide Changelog" : "View Changelog"}
+      </button>
+    </div>
+
+    {#if showChangelog}
+      <div class="about-changelog-body">
+        {#if loadingChangelog}
+          <div class="about-changelog-loading">
+            <Icon icon={LoaderCircle} size={14} class="spin" />
+            <span>Fetching latest release notes…</span>
+          </div>
+        {:else if changelog}
+          <div class="about-changelog-content">
+            <Markdown text={changelog} />
+          </div>
+        {/if}
+      </div>
+    {/if}
+  </div>
 
   <div class="about-section-divider"></div>
   <h4 class="about-paths-title">System Paths & Configuration</h4>
