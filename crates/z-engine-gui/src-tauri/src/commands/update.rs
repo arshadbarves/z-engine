@@ -1,11 +1,8 @@
-use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_updater::UpdaterExt;
 
 const GITHUB_RELEASES: &str = "https://api.github.com/repos/arshadbarves/z-engine/releases/latest";
-const CACHE_TTL_SECS: u64 = 300; // 5 minutes
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,23 +28,6 @@ pub struct UpdateProgress {
     pub percentage: Option<f64>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-struct CachedUpdate {
-    checked_at: u64,
-    info: UpdateInfo,
-}
-
-fn cache_path() -> PathBuf {
-    z_engine_core::config::app_data_write_dir().join("update-check.json")
-}
-
-fn now_secs() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
-}
-
 fn strip_v(tag: &str) -> &str {
     tag.strip_prefix('v').unwrap_or(tag)
 }
@@ -62,46 +42,24 @@ fn is_newer(latest: &str, current: &str) -> bool {
     }
 }
 
-fn read_cache() -> Option<CachedUpdate> {
-    std::fs::read_to_string(cache_path())
-        .ok()
-        .and_then(|text| serde_json::from_str(&text).ok())
-}
-
-fn write_cache(info: &UpdateInfo) {
-    let cached = CachedUpdate {
-        checked_at: now_secs(),
-        info: info.clone(),
-    };
-    if let Ok(text) = serde_json::to_string(&cached) {
-        let path = cache_path();
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        let _ = std::fs::write(path, text);
-    }
-}
-
-fn stale_info(current: &str) -> UpdateInfo {
-    read_cache().map(|c| c.info).unwrap_or(UpdateInfo {
+async fn fetch_latest(current: &str) -> UpdateInfo {
+    let empty_info = UpdateInfo {
         available: false,
         current: current.to_string(),
         latest: None,
         url: None,
         release_notes: None,
-    })
-}
+    };
 
-async fn fetch_latest(current: &str) -> UpdateInfo {
     let client = match reqwest::Client::builder()
         .user_agent(format!("z-engine-gui/{current}"))
-        .timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(8))
         .build()
     {
         Ok(c) => c,
         Err(e) => {
             tracing::warn!(error = %e, "update check client build failed");
-            return stale_info(current);
+            return empty_info;
         }
     };
 
@@ -109,21 +67,15 @@ async fn fetch_latest(current: &str) -> UpdateInfo {
         Ok(r) if r.status().is_success() => r,
         Ok(r) if r.status() == reqwest::StatusCode::NOT_FOUND => {
             tracing::info!("GitHub releases: no release found (404)");
-            return UpdateInfo {
-                available: false,
-                current: current.to_string(),
-                latest: None,
-                url: None,
-                release_notes: None,
-            };
+            return empty_info;
         }
         Ok(r) => {
             tracing::warn!(status = %r.status(), "GitHub releases fetch failed");
-            return stale_info(current);
+            return empty_info;
         }
         Err(e) => {
             tracing::warn!(error = %e, "GitHub releases fetch failed");
-            return stale_info(current);
+            return empty_info;
         }
     };
 
@@ -131,7 +83,7 @@ async fn fetch_latest(current: &str) -> UpdateInfo {
         Ok(v) => v,
         Err(e) => {
             tracing::warn!(error = %e, "GitHub releases parse failed");
-            return stale_info(current);
+            return empty_info;
         }
     };
 
@@ -160,23 +112,11 @@ async fn fetch_latest(current: &str) -> UpdateInfo {
     }
 }
 
-/// Poll GitHub for the latest release and compare against the running build.
+/// Poll GitHub for the latest release in real-time and compare against the running build.
 #[tauri::command]
-pub(crate) async fn check_for_update(force: Option<bool>) -> Result<UpdateInfo, String> {
+pub(crate) async fn check_for_update(_force: Option<bool>) -> Result<UpdateInfo, String> {
     let current = env!("CARGO_PKG_VERSION").to_string();
-    if force != Some(true) {
-        if let Some(cached) = read_cache() {
-            let age = now_secs().saturating_sub(cached.checked_at);
-            // Ignore cache from a different binary version (e.g. after a
-            // manual install) so we never keep advertising a stale update.
-            if age < CACHE_TTL_SECS && cached.info.current == current {
-                return Ok(cached.info);
-            }
-        }
-    }
-
     let info = fetch_latest(&current).await;
-    write_cache(&info);
     Ok(info)
 }
 
