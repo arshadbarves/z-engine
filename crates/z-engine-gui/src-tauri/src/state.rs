@@ -100,6 +100,7 @@ pub(crate) fn build_loop_config(
         mcp_servers: cfg.mcp_servers.clone(),
         auto_allow_tools: vec![],
         initial_mode: z_engine_core::agent::PermissionMode::Normal,
+        shell_path: cfg.shell_path.clone(),
     }
 }
 

@@ -28,6 +28,9 @@ pub struct Config {
     /// Per-model pricing overrides (exact model id → pricing). Takes
     /// precedence over the built-in table in [`Self::pricing_for`].
     pub cost_overrides: BTreeMap<String, Pricing>,
+    /// Windows shell override (e.g., "C:\Program Files\Git\bin\bash.exe").
+    /// When set, bypasses auto-detection and uses this shell directly.
+    pub shell_path: Option<String>,
 }
 
 /// Allowlist rules. v0.1 semantics: entries are `bash` command-prefix rules
@@ -51,6 +54,7 @@ pub struct PartialConfig {
     pub mcp_servers: Option<Vec<crate::mcp::McpServerConfig>>,
     pub permissions_allow: Option<Vec<String>>,
     pub cost_overrides: Option<BTreeMap<String, Pricing>>,
+    pub shell_path: Option<String>,
 }
 
 /// CLI-provided overrides (`--model`, `--base-url`).
@@ -67,6 +71,8 @@ pub struct EnvVars {
     pub harness_base_url: Option<String>,
     /// Test / `ZENGINE_CONFIG` hook: redirect the global config file location.
     pub harness_config: Option<String>,
+    /// Windows shell override via environment variable.
+    pub harness_shell: Option<String>,
 }
 
 impl EnvVars {
@@ -75,6 +81,7 @@ impl EnvVars {
             harness_model: first_env(&["ZENGINE_MODEL"]),
             harness_base_url: first_env(&["ZENGINE_BASE_URL"]),
             harness_config: first_env(&["ZENGINE_CONFIG"]),
+            harness_shell: first_env(&["ZENGINE_SHELL"]),
         }
     }
 }
@@ -119,6 +126,7 @@ impl Default for Config {
             review_enabled: true,
             mcp_servers: Vec::new(),
             cost_overrides: BTreeMap::new(),
+            shell_path: None,
         }
     }
 }
@@ -147,6 +155,8 @@ pub(super) struct FileFormat {
     pub(super) permissions: Option<FilePermissions>,
     pub(super) mcp: Option<McpFileSection>,
     pub(super) cost: Option<CostFileSection>,
+    /// Windows shell override (e.g., "C:\Program Files\Git\bin\bash.exe").
+    pub(super) shell_path: Option<String>,
 }
 
 #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
@@ -195,5 +205,6 @@ pub(super) fn parse_partial(text: &str) -> Result<PartialConfig, toml::de::Error
                 })
                 .collect()
         }),
+        shell_path: f.shell_path,
     })
 }

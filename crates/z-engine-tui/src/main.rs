@@ -205,6 +205,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
         mcp_servers: config.mcp_servers.clone(),
         auto_allow_tools: vec![],
         initial_mode: parse_mode(args.permission_mode.as_deref()),
+        shell_path: config.shell_path.clone(),
     };
 
     if let Some(task) = args.headless_task {

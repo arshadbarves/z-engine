@@ -55,6 +55,7 @@ mod tests {
                 harness_model: None,
                 harness_base_url: Some("///".to_string()),
                 harness_config: None,
+                harness_shell: None,
             },
             &CliOverrides::default(),
         )

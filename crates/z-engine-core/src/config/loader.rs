@@ -113,6 +113,7 @@ impl Config {
             &PartialConfig {
                 model: env.harness_model.clone(),
                 base_url: env.harness_base_url.clone(),
+                shell_path: env.harness_shell.clone(),
                 ..PartialConfig::default()
             },
         );
@@ -186,6 +187,9 @@ fn apply(cfg: &mut Config, partial: &PartialConfig) {
             cfg.cost_overrides.insert(model.clone(), *pricing);
         }
     }
+    if let Some(v) = &partial.shell_path {
+        cfg.shell_path = Some(v.clone());
+    }
 }
 
 #[cfg(test)]
@@ -197,6 +201,7 @@ mod tests {
             harness_model: model.map(str::to_string),
             harness_base_url: base.map(str::to_string),
             harness_config: None,
+            harness_shell: None,
         }
     }
 

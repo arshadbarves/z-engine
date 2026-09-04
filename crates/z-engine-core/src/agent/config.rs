@@ -33,6 +33,8 @@ pub struct LoopConfig {
     pub auto_allow_tools: Vec<String>,
     /// Starting permission mode (spec section 9 v1.1 parity).
     pub initial_mode: crate::agent::events::PermissionMode,
+    /// Windows shell override (e.g., "C:\Program Files\Git\bin\bash.exe").
+    pub shell_path: Option<String>,
 }
 
 impl LoopConfig {
@@ -53,6 +55,7 @@ impl LoopConfig {
             mcp_servers: Vec::new(),
             auto_allow_tools: Vec::new(),
             initial_mode: crate::agent::events::PermissionMode::Normal,
+            shell_path: None,
         }
     }
 }

@@ -41,10 +41,22 @@ pub use context::{SubAgentFuture, SubAgentRunner, ToolCtx, ToolOutputChunk};
 pub(crate) use fsutil::atomic_write;
 pub use fsutil::{MAX_TOOL_OUTPUT_CHARS, truncate_with_tempfile, unified_diff};
 
+/// Initialize the shell resolver with an optional config override.
+/// Must be called once at startup before any shell operations.
+pub fn init_shell(config_shell_path: Option<&str>) {
+    shell::init(config_shell_path);
+}
+
 /// Spawn `sh -c` (or Windows `bash`/`cmd`) for a one-shot command line.
 pub(crate) fn shell_line(command: &str) -> tokio::process::Command {
     let mut c = tokio::process::Command::new(shell::program());
-    c.arg(shell::flag()).arg(command);
+    if shell::is_powershell() {
+        c.arg(shell::flag())
+            .arg(shell::powershell_command_flag())
+            .arg(command);
+    } else {
+        c.arg(shell::flag()).arg(command);
+    }
     c
 }
 

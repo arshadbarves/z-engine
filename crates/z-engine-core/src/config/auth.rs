@@ -122,6 +122,7 @@ mod tests {
             harness_model: None,
             harness_base_url: None,
             harness_config: Some(dir.join("config.toml").to_string_lossy().into_owned()),
+            harness_shell: None,
         }
     }
 

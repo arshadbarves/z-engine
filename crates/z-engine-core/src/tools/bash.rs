@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 
 use super::bash_script::{build_script, extract_marker};
 use super::proc_helpers::{drain, drain_with_callback, kill_tree};
-use super::shell::{extra_env_keys, flag, program};
+use super::shell::{extra_env_keys, flag, is_powershell, powershell_command_flag, program};
 use super::{Tool, ToolCtx, ToolError, ToolOutput, truncate_with_tempfile};
 
 /// Only these variables pass through to spawned shells (spec §7).
@@ -31,12 +31,12 @@ impl Tool for BashTool {
     }
 
     fn description(&self) -> &str {
-        "Run a shell command. Unix uses `sh -c`; Windows prefers Git Bash \
-         (`bash -lc`) and falls back to `cmd.exe /C`. The working directory \
-         persists across calls within the session. Output over ~16k chars is \
-         truncated head+tail; the full text is written to a temp file whose \
-         path is included. Requires approval unless the command matches an \
-         allowed prefix."
+        "Run a shell command. Unix uses `sh -c`; Windows uses PowerShell \
+         (`powershell -NoProfile -Command`) by default and falls back to \
+         `cmd.exe /C`. The working directory persists across calls within \
+         the session. Output over ~16k chars is truncated head+tail; the \
+         full text is written to a temp file whose path is included. \
+         Requires approval unless the command matches an allowed prefix."
     }
 
     fn parameters_schema(&self) -> Value {
@@ -92,9 +92,15 @@ impl Tool for BashTool {
 
         let script = build_script(&start_cwd, command);
         let mut cmd = tokio::process::Command::new(program());
-        cmd.arg(flag())
-            .arg(&script)
-            .current_dir(&ctx.project_root)
+        // PowerShell requires: powershell -NoProfile -Command "script"
+        // Unix/sh: sh -c "script"
+        // cmd.exe: cmd /C "script"
+        if is_powershell() {
+            cmd.arg(flag()).arg(powershell_command_flag()).arg(&script);
+        } else {
+            cmd.arg(flag()).arg(&script);
+        }
+        cmd.current_dir(&ctx.project_root)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

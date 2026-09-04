@@ -107,6 +107,7 @@ mod tests {
             review_enabled: true,
             mcp_servers: vec![],
             cost_overrides: Default::default(),
+            shell_path: None,
         };
         App::new(
             handle,

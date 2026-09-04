@@ -13,6 +13,7 @@ const MARKER_TAG: &str = "ZENGINE_CWD:";
 pub(super) fn build_script(start_cwd: &Path, command: &str) -> String {
     match flavor() {
         ShellFlavor::Cmd => build_cmd_script(start_cwd, command),
+        ShellFlavor::PowerShell => build_powershell_script(start_cwd, command),
         ShellFlavor::Posix => format!(
             "cd {} || true\n{}\nstatus=$?\nprintf '\\{}{}%s\\{}' \"$PWD\" >&2\nexit $status\n",
             shell_quote(&start_cwd.to_string_lossy()),
@@ -29,6 +30,23 @@ fn build_cmd_script(start_cwd: &Path, command: &str) -> String {
         "cd /d {} 2>nul\r\n{}\r\nset ZENGINE_STATUS=%ERRORLEVEL%\r\necho {MARKER}{MARKER_TAG}%CD%{MARKER} 1>&2\r\nexit /b %ZENGINE_STATUS%\r\n",
         cmd_quote(&start_cwd.to_string_lossy()),
         command,
+    )
+}
+
+fn build_powershell_script(start_cwd: &Path, command: &str) -> String {
+    // PowerShell script: set cwd, run command, capture exit code, emit cwd marker
+    format!(
+        "Set-Location -Path '{start_cwd}' -ErrorAction SilentlyContinue\n\
+         {command}\n\
+         $ZENGINE_STATUS = $LASTEXITCODE\n\
+         if ($null -eq $ZENGINE_STATUS) {{ $ZENGINE_STATUS = $Error.Count }}\n\
+         Write-Error '{marker}{marker_tag}{cwd}{marker}' 2>&1\n\
+         exit $ZENGINE_STATUS",
+        start_cwd = start_cwd.display(),
+        command = command,
+        marker = MARKER,
+        marker_tag = MARKER_TAG,
+        cwd = start_cwd.display(),
     )
 }
 

@@ -185,6 +185,7 @@ fn cfg_for(base_url: String, project_root: &std::path::Path) -> LoopConfig {
         mcp_servers: vec![],
         auto_allow_tools: vec![],
         initial_mode: z_engine_core::agent::PermissionMode::Normal,
+        shell_path: None,
     }
 }
 
@@ -788,6 +789,7 @@ async fn long_session_compaction_preserves_coherence() {
         mcp_servers: vec![],
         auto_allow_tools: vec![],
         initial_mode: z_engine_core::agent::PermissionMode::Normal,
+        shell_path: None,
     };
     let (handle, mut ev) = spawn(cfg);
     handle.submit("ingest big file");
@@ -998,6 +1000,7 @@ async fn repo_map_answers_where_defined_without_grep() {
         mcp_servers: vec![],
         auto_allow_tools: vec![],
         initial_mode: z_engine_core::agent::PermissionMode::Normal,
+        shell_path: None,
     };
     let (handle, mut ev) = spawn(cfg);
     handle.submit("where is zebra_fn defined?");
@@ -1060,6 +1063,7 @@ async fn repo_map_refreshes_after_edit() {
         mcp_servers: vec![],
         auto_allow_tools: vec![],
         initial_mode: z_engine_core::agent::PermissionMode::Normal,
+        shell_path: None,
     };
     cfg.initial_allow_rules.clear();
     let (handle, mut ev) = spawn(cfg);
@@ -1133,6 +1137,7 @@ async fn subagent_exploration_stays_out_of_parent_context() {
         mcp_servers: vec![],
         auto_allow_tools: vec![],
         initial_mode: z_engine_core::agent::PermissionMode::Normal,
+        shell_path: None,
     };
     let (handle, mut ev) = spawn(cfg);
     handle.submit("explore broadly");

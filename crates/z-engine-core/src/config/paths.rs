@@ -188,6 +188,7 @@ mod tests {
             harness_model: None,
             harness_base_url: None,
             harness_config: Some(cfg_path.to_string_lossy().into_owned()),
+            harness_shell: None,
         };
         let wrote = ensure_global_config(&env).unwrap();
         assert_eq!(wrote, cfg_path);

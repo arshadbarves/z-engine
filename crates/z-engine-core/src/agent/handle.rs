@@ -160,6 +160,9 @@ pub fn spawn_with_recorder(
 ) -> (AgentHandle, EventRx) {
     let abort_flag = Arc::new(AtomicBool::new(false));
 
+    // Initialize shell resolver with config override (must be done once at startup)
+    crate::tools::init_shell(cfg.shell_path.as_deref());
+
     // One client, cloned for the sub-agent runner so Settings key updates
     // apply to parent and delegated loops.
     let client = match Client::new(&cfg.base_url, cfg.api_key.clone()) {
