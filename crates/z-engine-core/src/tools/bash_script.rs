@@ -34,20 +34,26 @@ fn build_cmd_script(start_cwd: &Path, command: &str) -> String {
 }
 
 fn build_powershell_script(start_cwd: &Path, command: &str) -> String {
-    // PowerShell script: set cwd, run command, capture exit code, emit cwd marker
+    // PowerShell script: set cwd, run the command, capture the exit code,
+    // and report the *live* working directory on stderr via a clean
+    // `[Console]::Error` write (Write-Error would add noisy decorations).
     format!(
-        "Set-Location -Path '{start_cwd}' -ErrorAction SilentlyContinue\n\
+        "Set-Location -LiteralPath '{start_cwd}' -ErrorAction SilentlyContinue\n\
          {command}\n\
          $ZENGINE_STATUS = $LASTEXITCODE\n\
-         if ($null -eq $ZENGINE_STATUS) {{ $ZENGINE_STATUS = $Error.Count }}\n\
-         Write-Error '{marker}{marker_tag}{cwd}{marker}' 2>&1\n\
+         if ($null -eq $ZENGINE_STATUS) {{ $ZENGINE_STATUS = 0 }}\n\
+         [Console]::Error.WriteLine('{marker}{marker_tag}' + (Get-Location).Path + '{marker}')\n\
          exit $ZENGINE_STATUS",
-        start_cwd = start_cwd.display(),
+        start_cwd = ps_quote(&start_cwd.to_string_lossy()),
         command = command,
         marker = MARKER,
         marker_tag = MARKER_TAG,
-        cwd = start_cwd.display(),
     )
+}
+
+/// PowerShell single-quoted string escaping: double any single quotes.
+fn ps_quote(s: &str) -> String {
+    s.replace('\'', "''")
 }
 
 fn shell_quote(s: &str) -> String {
@@ -90,5 +96,19 @@ mod tests {
     fn shell_quote_escapes_single_quotes() {
         assert_eq!(shell_quote("/tmp/a b"), "'/tmp/a b'");
         assert_eq!(shell_quote("it's"), r"'it'\''s'");
+    }
+
+    #[test]
+    fn powershell_script_reports_live_cwd_and_defaults_exit_zero() {
+        let script = build_powershell_script(std::path::Path::new(r"C:\proj"), "cargo test");
+        assert!(script.contains("Set-Location -LiteralPath 'C:\\proj'"));
+        assert!(script.contains("(Get-Location).Path"));
+        assert!(script.contains("$ZENGINE_STATUS = 0"));
+        assert!(script.contains("Console]::Error.WriteLine"));
+    }
+
+    #[test]
+    fn ps_quote_doubles_single_quotes() {
+        assert_eq!(ps_quote("it's"), "it''s");
     }
 }

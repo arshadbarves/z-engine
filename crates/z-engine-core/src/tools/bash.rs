@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 
 use super::bash_script::{build_script, extract_marker};
 use super::proc_helpers::{drain, drain_with_callback, kill_tree};
-use super::shell::{extra_env_keys, flag, is_powershell, powershell_command_flag, program};
+use super::shell::{extra_env_keys, flag, is_powershell, powershell_command_flag, program_path};
 use super::{Tool, ToolCtx, ToolError, ToolOutput, truncate_with_tempfile};
 
 /// Only these variables pass through to spawned shells (spec §7).
@@ -91,7 +91,7 @@ impl Tool for BashTool {
             .unwrap_or_else(|_| ctx.project_root.clone());
 
         let script = build_script(&start_cwd, command);
-        let mut cmd = tokio::process::Command::new(program());
+        let mut cmd = tokio::process::Command::new(program_path());
         // PowerShell requires: powershell -NoProfile -Command "script"
         // Unix/sh: sh -c "script"
         // cmd.exe: cmd /C "script"
@@ -113,6 +113,10 @@ impl Tool for BashTool {
         // keep draining blocked until they exit naturally).
         #[cfg(unix)]
         cmd.process_group(0);
+        // Never pop a visible console window for agent commands on Windows
+        // (OpenCode's `windowsHide: true` equivalent).
+        #[cfg(windows)]
+        cmd.creation_flags(super::shell::CREATE_NO_WINDOW);
         for key in ENV_ALLOWLIST.iter().chain(extra_env_keys()) {
             if let Ok(val) = std::env::var(key) {
                 cmd.env(key, val);

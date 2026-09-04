@@ -29,6 +29,8 @@ mod fsutil;
 mod grep_backend;
 mod proc_helpers;
 mod shell;
+#[cfg(windows)]
+mod shell_detect;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -47,9 +49,9 @@ pub fn init_shell(config_shell_path: Option<&str>) {
     shell::init(config_shell_path);
 }
 
-/// Spawn `sh -c` (or Windows `bash`/`cmd`) for a one-shot command line.
+/// Spawn `sh -c` (or the resolved Windows shell) for a one-shot command line.
 pub(crate) fn shell_line(command: &str) -> tokio::process::Command {
-    let mut c = tokio::process::Command::new(shell::program());
+    let mut c = tokio::process::Command::new(shell::program_path());
     if shell::is_powershell() {
         c.arg(shell::flag())
             .arg(shell::powershell_command_flag())
@@ -57,6 +59,9 @@ pub(crate) fn shell_line(command: &str) -> tokio::process::Command {
     } else {
         c.arg(shell::flag()).arg(command);
     }
+    // Never pop a visible console window for hooks on Windows.
+    #[cfg(windows)]
+    c.creation_flags(shell::CREATE_NO_WINDOW);
     c
 }
 
