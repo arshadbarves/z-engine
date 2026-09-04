@@ -9,7 +9,7 @@
 //! `bash.exe` from being selected.
 
 #[cfg(windows)]
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ShellFlavor {
