@@ -1,36 +1,38 @@
-/* ── Z Engine · Linear violet-indigo dark theme ──────────────── */
+/* ── Z Engine · Apple dark theme (pro titanium & obsidian) ──── */
 
 :root {
   color-scheme: dark;
 
-  --bg: #1c1c1e;
-  --bg-sidebar: #171719;
-  --bg-elev: #202024;
-  --surface: #1e1e22;
-  --surface-2: #252529;
-  --surface-3: #2c2c32;
-  --border: rgba(255, 255, 255, 0.06);
-  --border-strong: rgba(255, 255, 255, 0.10);
-  --text: #e8e8ec;
-  --text-2: #8c8c92;
-  --text-3: #55555c;
-  --ok: #5e6ad2;
-  --accent: #5e6ad2;
-  --accent-dim: rgba(94, 106, 210, 0.10);
-  --accent-ring: rgba(94, 106, 210, 0.25);
-  --err: #d96568;
-  --warn: #f5a623;
+  --bg: #000000;
+  --bg-sidebar: #121214;
+  --bg-elev: #1c1c1e;
+  --surface: #161618;
+  --surface-2: #1c1c1e;
+  --surface-3: #2c2c2e;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --text: #f5f5f7;
+  --text-2: #86868b;
+  --text-3: #6e6e73;
+  --ok: #00d68f;
+  --accent: #ffffff;
+  --accent-blue: #2997ff;
+  --accent-dim: rgba(255, 255, 255, 0.12);
+  --accent-ring: rgba(255, 255, 255, 0.35);
+  --err: #ff453a;
+  --warn: #ff9f0a;
 
-  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Geist", "Inter",
-    "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, "SF Mono", "Geist Mono", "Cascadia Code", Menlo, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue",
+    Helvetica, Arial, sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
 
-  --radius-s: 6px;
-  --radius-m: 10px;
-  --radius-l: 14px;
+  --radius-s: 8px;
+  --radius-m: 14px;
+  --radius-l: 20px;
+  --radius-pill: 9999px;
 
-  --shadow-pop: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
-  --shadow-floating: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-pop: 0 4px 18px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-floating: 0 14px 36px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08);
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
@@ -193,23 +195,29 @@ kbd {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: #141416;
+  background: #000000;
   box-sizing: border-box;
   overflow: hidden;
 }
 
 .app-topbar {
   position: relative;
-  height: 40px;
+  height: 44px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 8px;
-  gap: 8px;
+  padding: 0 10px;
+  gap: 10px;
   -webkit-app-region: drag;
   user-select: none;
-  z-index: 20;
+  z-index: 30;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: none;
+  box-shadow: none;
+  transition: background var(--dur-fast) ease;
 }
 
 html.plat-mac .app-topbar {
@@ -220,26 +228,224 @@ html.plat-mac .app-topbar {
 .topbar-left {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   min-width: 0;
   flex-shrink: 0;
   z-index: 10;
+  -webkit-app-region: drag;
 }
 
 .topbar-brand {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 0 6px 0 2px;
+  padding: 0 4px 0 2px;
   font-size: 12.5px;
   font-weight: 600;
   color: var(--text);
   letter-spacing: -0.02em;
+  -webkit-app-region: drag;
 }
 
 .topbar-brand svg {
-  color: var(--ok);
+  color: #ffffff;
 }
+
+.brand-beta-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1.5px 6px;
+  border-radius: 9999px;
+  color: #00d68f;
+  background: rgba(0, 214, 143, 0.12);
+  border: 1px solid rgba(0, 214, 143, 0.28);
+  box-shadow: 0 0 8px rgba(0, 214, 143, 0.12);
+  user-select: none;
+  pointer-events: none;
+}
+
+/* ── Apple Micro-Tooltips with Keyboard Shortcuts ─────────────────────── */
+
+.topbar-item-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-app-region: no-drag;
+}
+
+.topbar-micro-tip {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-2px);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text);
+  background: rgba(22, 22, 24, 0.94);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 100;
+}
+
+.topbar-micro-tip kbd {
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--text-2);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  letter-spacing: -0.01em;
+}
+
+.topbar-item-wrap:hover .topbar-micro-tip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ── Apple Frosted-Glass Pill: New Chat ───────────────────────────────── */
+
+.topbar-new-chat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px 0 9px;
+  font-size: 11.5px;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  color: #f5f5f7;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 9999px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+.topbar-new-chat-btn:hover {
+  color: #000000;
+  background: #ffffff;
+  border-color: #ffffff;
+  transform: scale(1.02);
+  box-shadow: 0 2px 10px rgba(255, 255, 255, 0.22), 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.topbar-new-chat-btn:active {
+  transform: scale(0.97);
+  background: #e2e2e5;
+}
+
+.topbar-new-chat-btn svg {
+  color: var(--text-2);
+  transition: color 0.16s ease;
+}
+
+.topbar-new-chat-btn:hover svg {
+  color: #000000;
+}
+
+.topbar-new-chat-btn .new-chat-text {
+  line-height: 1;
+}
+
+.new-chat-kbd {
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 9999px;
+  color: var(--text-3);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  margin-left: 2px;
+  line-height: 1.1;
+  transition: all 0.16s ease;
+}
+
+.topbar-new-chat-btn:hover .new-chat-kbd {
+  color: #222224;
+  background: rgba(0, 0, 0, 0.09);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+/* ── Apple Spotlight Search Pill ───────────────────────────────────────── */
+
+.topbar-search-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 9999px;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+.topbar-search-pill:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--text);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.search-pill-icon {
+  color: var(--text-3);
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.topbar-search-pill:hover .search-pill-icon {
+  color: var(--text-2);
+}
+
+.search-pill-text {
+  font-size: 11.5px;
+  font-weight: 450;
+  letter-spacing: -0.01em;
+  color: var(--text-2);
+}
+
+.topbar-search-pill:hover .search-pill-text {
+  color: var(--text);
+}
+
+.topbar-search-kbd {
+  font-size: 9.5px;
+  font-weight: 550;
+  padding: 1px 4px;
+  border-radius: 4px;
+  color: var(--text-3);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin-left: 2px;
+}
+
+/* ── TopBar Center (Apple Minimalist Title Island) ─────────────────────── */
 
 .topbar-center {
   position: absolute;
@@ -250,7 +456,7 @@ html.plat-mac .app-topbar {
   align-items: center;
   justify-content: center;
   width: max-content;
-  max-width: min(620px, calc(100vw - 360px));
+  max-width: min(640px, calc(100vw - 420px));
   margin: 0;
   z-index: 5;
   pointer-events: auto;
@@ -265,11 +471,66 @@ html.plat-mac .app-topbar {
   font-size: 11.5px;
   color: var(--text-2);
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-s);
-  max-width: min(520px, 60vw);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 9999px;
+  max-width: min(580px, 60vw);
   user-select: none;
   -webkit-app-region: drag;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.topbar-session-info.is-working {
+  background: rgba(0, 214, 143, 0.08);
+  border-color: rgba(0, 214, 143, 0.28);
+  box-shadow: 0 0 14px rgba(0, 214, 143, 0.1);
+}
+
+.topbar-session-info.is-approval {
+  background: rgba(245, 158, 11, 0.09);
+  border-color: rgba(245, 158, 11, 0.3);
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.12);
+}
+
+.topbar-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.topbar-live-dot.working {
+  background: var(--ok);
+  box-shadow: 0 0 8px var(--ok);
+  animation: live-pulse 1.4s ease-in-out infinite;
+}
+
+.topbar-live-dot.approval {
+  background: #f59e0b;
+  box-shadow: 0 0 8px #f59e0b;
+  animation: live-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.85); }
+}
+
+.topbar-live-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.topbar-live-label.working {
+  color: var(--ok);
+}
+
+.topbar-live-label.approval {
+  color: #f59e0b;
 }
 
 .topbar-ws-tag {
@@ -282,7 +543,7 @@ html.plat-mac .app-topbar {
 }
 
 .topbar-ws-icon {
-  color: var(--ok);
+  color: var(--text-2);
   flex-shrink: 0;
 }
 
@@ -296,9 +557,10 @@ html.plat-mac .app-topbar {
 .topbar-crumb-sep {
   color: var(--text-3);
   font-weight: 400;
-  font-size: 11px;
+  font-size: 12px;
   user-select: none;
-  opacity: 0.6;
+  opacity: 0.45;
+  margin: 0 1px;
 }
 
 .topbar-chat-title {
@@ -310,7 +572,7 @@ html.plat-mac .app-topbar {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 280px;
+  max-width: 240px;
 }
 
 .topbar-chat-icon {
@@ -318,11 +580,15 @@ html.plat-mac .app-topbar {
   flex-shrink: 0;
 }
 
+/* ── TopBar Right ──────────────────────────────────────────────────────── */
+
 .topbar-right {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
+  z-index: 10;
+  -webkit-app-region: no-drag;
 }
 
 .app-body {
@@ -429,9 +695,11 @@ html.plat-mac .app-topbar {
   gap: 14px;
   padding: 12px;
   background: var(--bg-sidebar);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
   box-sizing: border-box;
   overflow: hidden;
   transition: transform var(--dur-med) var(--ease-out);
@@ -442,28 +710,49 @@ html.plat-mac .app-topbar {
   transform: translateX(-100%);
 }
 
-/* ── Premium Sidebar Layout & Components ──────────────────────────────── */
+/* ── Apple Sidebar Header & Brand ─────────────────────────────────────── */
 
-.sidebar-top-bar {
+.sidebar-header-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 2px 2px;
+  -webkit-app-region: no-drag;
+}
+
+.sidebar-brand-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 2px 4px;
 }
 
-.sidebar-brand-pill {
+.sidebar-brand {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   user-select: none;
 }
 
-.sidebar-brand-pill svg {
-  color: var(--ok);
+.sidebar-brand svg {
+  color: #ffffff;
   opacity: 0.95;
 }
 
-.sidebar-brand-text {
+.sidebar-brand-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  flex-shrink: 0;
+}
+
+.sidebar-brand-name {
   font-size: 13px;
   font-weight: 650;
   letter-spacing: -0.02em;
@@ -476,26 +765,31 @@ html.plat-mac .app-topbar {
   justify-content: space-between;
   width: 100%;
   height: 32px;
-  padding: 0 10px;
+  padding: 0 12px;
+  margin-bottom: 2px;
   font-size: 12px;
   font-weight: 550;
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-s);
+  color: #000000;
+  background: #ffffff;
+  border: 1px solid #ffffff;
+  border-radius: 9999px;
   cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
   transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
   -webkit-app-region: no-drag;
 }
 
 .sidebar-new-chat-btn:hover {
-  background: rgba(255, 255, 255, 0.09);
-  border-color: var(--border-strong);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  background: #e8e8ed;
+  border-color: #e8e8ed;
+  color: #000000;
+  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.15), 0 2px 6px rgba(0, 0, 0, 0.25);
+  transform: scale(1.01);
 }
 
 .sidebar-new-chat-btn:active {
   transform: scale(0.98);
+  background: #d2d2d7;
 }
 
 .sidebar-new-chat-btn .btn-left {
@@ -505,17 +799,22 @@ html.plat-mac .app-topbar {
 }
 
 .sidebar-new-chat-btn svg {
-  color: var(--text-2);
+  color: #000000;
 }
 
-.sidebar-kbd {
+.sidebar-new-chat-text {
+  line-height: 1;
+}
+
+.sidebar-new-chat-kbd {
   font-size: 9.5px;
   font-weight: 600;
   padding: 1px 5px;
-  border-radius: 4px;
-  color: var(--text-3);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: #333336;
+  background: rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  line-height: 1.1;
 }
 
 .sidebar-content-deck {
@@ -1116,45 +1415,9 @@ html.plat-mac .app-topbar {
 
 /* ── model picker catalog popover ──────────────────────────────────────── */
 
-.popover-wide {
-  width: 340px;
-}
-
 .popover-scroll {
-  max-height: 300px;
+  max-height: 280px;
   overflow-y: auto;
-  margin: 4px -4px;
-}
-
-.pop-search {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 6px 0;
-  padding: 5px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-s);
-  color: var(--text-3);
-}
-
-.pop-search input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  color: var(--text);
-  font-size: 12px;
-  outline: none;
-}
-
-.model-item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-}
-
-.model-name {
-  font-weight: 600;
 }
 
 /* ── pasted-image chips ────────────────────────────────────────────────── */
@@ -1302,7 +1565,7 @@ html.plat-mac .app-topbar {
 
 .diff-resize-handle:hover,
 .diff-panel.is-resizing .diff-resize-handle {
-  background: rgba(78, 189, 143, 0.45);
+  background: rgba(0, 214, 143, 0.45);
 }
 
 /* ── worktree side panel (overlays right side of chat) ───────────────── */
@@ -1362,7 +1625,7 @@ html.plat-mac .app-topbar {
   font-family: var(--mono);
   font-weight: 600;
   color: var(--accent);
-  background: rgba(78, 189, 143, 0.12);
+  background: rgba(0, 214, 143, 0.12);
   border-radius: 999px;
 }
 
@@ -1422,7 +1685,7 @@ html.plat-mac .app-topbar {
 
 .worktree-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(78, 189, 143, 0.2);
+  box-shadow: 0 0 0 2px rgba(0, 214, 143, 0.2);
 }
 
 .worktree-preview-box {
@@ -1506,8 +1769,8 @@ html.plat-mac .app-topbar {
 }
 
 .worktree-item.active {
-  background: rgba(78, 189, 143, 0.08);
-  border-color: rgba(78, 189, 143, 0.35);
+  background: rgba(0, 214, 143, 0.08);
+  border-color: rgba(0, 214, 143, 0.35);
 }
 
 .ws-item-icon {
@@ -1553,7 +1816,7 @@ html.plat-mac .app-topbar {
   font-size: 10px;
   font-family: var(--mono);
   color: var(--ok);
-  background: rgba(78, 189, 143, 0.15);
+  background: rgba(0, 214, 143, 0.15);
   border-radius: 999px;
 }
 
@@ -1873,7 +2136,7 @@ html.plat-mac .app-topbar {
 
 .diff-search-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(78, 189, 143, 0.15);
+  box-shadow: 0 0 0 2px rgba(0, 214, 143, 0.15);
 }
 
 .diff-clear-search {
@@ -2113,7 +2376,7 @@ html.plat-mac .app-topbar {
 
 .status-badge.added {
   color: var(--ok);
-  background: rgba(78, 189, 143, 0.14);
+  background: rgba(0, 214, 143, 0.14);
 }
 
 .status-badge.deleted {
@@ -2128,19 +2391,24 @@ html.plat-mac .app-topbar {
 
 .btn-load-more {
   margin: 6px 4px;
-  padding: 5px 8px;
+  padding: 5px 12px;
   font-size: 11px;
   font-weight: 550;
-  color: var(--accent);
-  background: rgba(78, 189, 143, 0.08);
-  border: 1px dashed rgba(78, 189, 143, 0.3);
-  border-radius: 4px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: all 0.14s ease;
 }
 
 .btn-load-more:hover {
-  background: rgba(78, 189, 143, 0.16);
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.btn-load-more:hover {
+  background: rgba(0, 214, 143, 0.16);
   border-color: var(--accent);
 }
 
@@ -2211,7 +2479,7 @@ html.plat-mac .app-topbar {
 
 .diff-copy-btn.copied {
   color: var(--ok);
-  border-color: rgba(78, 189, 143, 0.4);
+  border-color: rgba(0, 214, 143, 0.4);
 }
 
 .diff-rows-table {
@@ -2268,7 +2536,7 @@ html.plat-mac .app-topbar {
 }
 
 .diff-row-line.add {
-  background: rgba(78, 189, 143, 0.09);
+  background: rgba(0, 214, 143, 0.09);
 }
 
 .diff-row-line.add .diff-gutter-sign,
@@ -2303,32 +2571,36 @@ html.plat-mac .app-topbar {
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: 6px 12px;
+  padding: 6px 14px;
   font-size: 11.5px;
   font-weight: 550;
-  color: var(--accent);
-  background: rgba(78, 189, 143, 0.08);
-  border: 1px dashed rgba(78, 189, 143, 0.3);
-  border-radius: var(--radius-s);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
   cursor: pointer;
   transition: all 0.14s ease;
 }
 
 .btn-expand-diff:hover,
 .btn-load-more-diff:hover {
-  background: rgba(78, 189, 143, 0.16);
-  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
 }
 
 /* ── generic small modal (worktree prompt) ─────────────────────────────── */
 
 .modal {
   width: min(430px, 92vw);
-  padding: 16px 18px;
-  background: var(--bg-elev, #1b1b1f);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-m);
-  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.5);
+  padding: 18px 20px;
+  background: rgba(26, 26, 28, 0.88);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-l);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  animation: panel-in 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .modal-head {
@@ -2381,34 +2653,64 @@ html.plat-mac .app-topbar {
 }
 
 .btn-ghost,
-.btn-primary {
-  padding: 6px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: var(--radius-s);
+.btn-primary,
+.btn-accent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 16px;
+  font-size: 12.5px;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  border-radius: 9999px;
   cursor: pointer;
-  transition: filter 0.13s ease, opacity 0.13s ease;
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .btn-ghost {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text-2);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
-.btn-primary {
+.btn-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+
+.btn-primary,
+.btn-accent {
   background: #ffffff;
-  color: #111111;
+  color: #000000;
   border: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
-.btn-primary:disabled {
-  opacity: 0.45;
+.btn-primary:disabled,
+.btn-accent:disabled {
+  opacity: 0.35;
+  background: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.38);
+  box-shadow: none;
   cursor: default;
 }
 
-.btn-primary:not(:disabled):hover {
-  filter: brightness(0.9);
+.btn-primary:not(:disabled):hover,
+.btn-accent:not(:disabled):hover {
+  background: #e8e8ed;
+  color: #000000;
+  transform: scale(1.02);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.24);
+}
+
+.btn-primary:not(:disabled):active,
+.btn-accent:not(:disabled):active {
+  background: #d2d2d7;
+  transform: scale(0.97);
 }
 
 .session {
@@ -2577,10 +2879,12 @@ html.plat-mac .app-topbar {
   display: flex;
   flex-direction: column;
   position: relative;
-  background: var(--bg);
+  background: var(--surface);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
   overflow: hidden;
 }
 
@@ -2793,83 +3097,139 @@ html.plat-mac .app-topbar {
 }
 
 .transcript-stage {
+  position: relative;
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  gap: 2px;
+  width: 100%;
 }
 
 .transcript-inner {
   flex: 1;
   max-width: 720px;
   margin: 0 auto;
-  padding: 28px 24px 20px;
+  padding: 24px 20px 20px;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.chat-timeline {
+/* ── Apple Floating Scrubber Timeline Rail ────────────────────────────── */
+.chat-timeline-rail {
   position: sticky;
-  top: 20px;
-  flex: 0 0 28px;
+  top: 24px;
+  margin-left: 12px;
+  margin-right: 8px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 32px 0 20px;
-  z-index: 4;
+  z-index: 10;
+  opacity: 0.45;
+  transition: opacity 0.18s ease;
 }
 
-.chat-timeline-tick {
+.chat-timeline-rail:hover {
+  opacity: 1;
+}
+
+.chat-timeline-track {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 3px;
+  background: #0d0d10;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  box-shadow: none;
+}
+
+.chat-timeline-node {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 4px;
-  border: none;
+  justify-content: center;
+}
+
+.chat-timeline-pill {
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
-  color: var(--text-3);
-  cursor: pointer;
-  border-radius: 6px;
-}
-
-.chat-timeline-tick:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.chat-timeline-dot {
-  width: 6px;
-  height: 6px;
+  border: none;
   border-radius: 50%;
-  background: currentColor;
-  opacity: 0.7;
+  cursor: pointer;
+  transition: transform 0.12s ease;
 }
 
-.chat-timeline-n {
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
+.chat-timeline-core {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: none;
+  transition: all 0.15s ease;
 }
 
-/* ── Premium Start Hub (Empty Chat Initializer) ────────────────────────── */
+.chat-timeline-pill:hover .chat-timeline-core {
+  width: 5px;
+  height: 5px;
+  background: #00d68f;
+  box-shadow: none;
+}
 
+.chat-timeline-tip {
+  position: absolute;
+  right: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  background: #141418;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  box-shadow: none;
+  pointer-events: none;
+  white-space: nowrap;
+  animation: apple-inspector-fade 0.15s cubic-bezier(0.16, 1, 0.3, 1) both;
+  z-index: 30;
+}
+
+.chat-timeline-tip .tip-text {
+  font-size: 11px;
+  font-weight: 480;
+  color: #e4e4e7;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Apple Frosted-Glass Chat Home Screen ──────────────────────────────── */
+
+.home-screen-wrap,
 .start-hub {
   margin: auto;
-  max-width: 620px;
-  padding: 48px 20px 32px;
+  max-width: 660px;
+  padding: 40px 20px 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  animation: hub-spring-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: apple-home-in 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
   will-change: transform, opacity;
+  user-select: none;
 }
 
-@keyframes hub-spring-in {
+@keyframes apple-home-in {
   0% {
     opacity: 0;
-    transform: translateY(16px) scale(0.96);
-    filter: blur(4px);
+    transform: translateY(18px) scale(0.96);
+    filter: blur(6px);
   }
   100% {
     opacity: 1;
@@ -2878,107 +3238,168 @@ html.plat-mac .app-topbar {
   }
 }
 
+.home-hero,
 .start-hub-brand {
   display: flex;
   flex-direction: column;
   align-items: center;
   margin-bottom: 28px;
+  position: relative;
 }
 
+.home-icon-halo,
 .start-hub-icon-halo {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
-  background: radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
-  border: 1px solid var(--border-strong);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-  margin-bottom: 16px;
+  width: 68px;
+  height: 68px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  margin-bottom: 18px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.home-halo-glow {
+  position: absolute;
+  inset: -14px;
+  border-radius: 32px;
+  background: radial-gradient(circle at 50% 50%, rgba(0, 214, 143, 0.22), transparent 70%);
+  filter: blur(14px);
+  z-index: -1;
+  pointer-events: none;
+  animation: halo-pulse 3s ease-in-out infinite alternate;
+}
+
+@keyframes halo-pulse {
+  0% {
+    opacity: 0.6;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+.home-icon-halo svg,
 .start-hub-icon-halo svg {
-  color: var(--ok);
+  color: #ffffff;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.home-icon-halo:hover {
+  transform: translateY(-2px) scale(1.04);
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6), 0 0 24px rgba(0, 214, 143, 0.25);
+}
+
+.home-brand-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 8px 3px 7px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 9999px;
+  margin-bottom: 14px;
+}
+
+.home-brand-badge svg {
+  color: #ffffff;
+  opacity: 0.9;
+}
+
+.home-brand-name {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-2);
+}
+
+.home-title,
 .start-hub-title {
-  margin: 0 0 8px;
-  font-size: 24px;
+  margin: 0 0 10px;
+  font-size: 26px;
   font-weight: 650;
   letter-spacing: -0.03em;
-  background: linear-gradient(180deg, #ffffff 30%, #a1a1a6 100%);
+  background: linear-gradient(180deg, #ffffff 40%, rgba(255, 255, 255, 0.68) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
+.home-ws-capsule,
 .start-hub-ws-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 12px;
+  padding: 4px 14px;
   font-size: 11.5px;
   font-weight: 550;
   color: var(--ok);
-  background: rgba(94, 106, 210, 0.08);
-  border: 1px solid rgba(94, 106, 210, 0.24);
-  border-radius: 999px;
-  margin-top: 6px;
+  background: rgba(0, 214, 143, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 214, 143, 0.22);
+  border-radius: 9999px;
+  margin-top: 4px;
   animation: ws-pill-spring 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-@keyframes ws-pill-spring {
-  0% {
-    opacity: 0;
-    transform: scale(0.88);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
+.home-ws-capsule svg,
 .start-hub-ws-pill svg {
   color: var(--ok);
 }
 
+.home-subtitle,
 .start-hub-desc {
   margin: 0;
-  max-width: 460px;
+  max-width: 480px;
   font-size: 13px;
   line-height: 1.55;
-  color: var(--text-3);
+  color: #86868b;
+  font-weight: 450;
 }
 
+/* Bento Grid */
+.home-bento-grid,
 .start-hub-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  gap: 12px;
   width: 100%;
   margin-bottom: 24px;
 }
 
+.home-bento-card,
 .start-hub-card {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 12px 14px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-m);
+  gap: 13px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.035);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
   cursor: pointer;
   text-align: left;
-  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
-  animation: card-spring-in 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-delay: calc(var(--card-index, 0) * 45ms + 100ms);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: bento-card-in 0.36s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--card-index, 0) * 45ms + 80ms);
   -webkit-app-region: no-drag;
 }
 
-@keyframes card-spring-in {
+@keyframes bento-card-in {
   0% {
     opacity: 0;
-    transform: translateY(12px) scale(0.96);
+    transform: translateY(14px) scale(0.96);
   }
   100% {
     opacity: 1;
@@ -2986,37 +3407,43 @@ html.plat-mac .app-topbar {
   }
 }
 
+.home-bento-card:hover,
 .start-hub-card:hover {
-  background: var(--surface-3);
-  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.16);
   transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
+.home-bento-card:active,
 .start-hub-card:active {
   transform: scale(0.98);
 }
 
+.home-bento-icon-box,
 .card-icon-box {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border);
-  color: var(--text-2);
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #a1a1a6;
   flex-shrink: 0;
-  transition: all 0.16s ease;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.home-bento-card:hover .home-bento-icon-box,
 .start-hub-card:hover .card-icon-box {
-  color: var(--ok);
-  background: rgba(94, 106, 210, 0.08);
-  border-color: rgba(94, 106, 210, 0.25);
+  color: #ffffff;
+  background: rgba(0, 214, 143, 0.12);
+  border-color: rgba(0, 214, 143, 0.28);
+  transform: scale(1.05);
 }
 
+.home-bento-content,
 .card-text-col {
   display: flex;
   flex-direction: column;
@@ -3024,46 +3451,86 @@ html.plat-mac .app-topbar {
   min-width: 0;
 }
 
+.home-bento-title,
 .card-title {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--text);
+  color: #f5f5f7;
   letter-spacing: -0.01em;
 }
 
+.home-bento-desc,
 .card-desc {
-  font-size: 11px;
-  color: var(--text-3);
+  font-size: 11.5px;
+  color: #86868b;
   line-height: 1.45;
 }
 
+/* Shortcuts Deck */
+.home-shortcuts-deck,
 .start-hub-hints {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
   gap: 8px;
+  padding: 4px 10px;
 }
 
-.hint-pill {
+.home-shortcut-tag {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
-  font-size: 11px;
-  color: var(--text-3);
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #a1a1a6;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.14s ease;
 }
 
-.hint-pill kbd {
+.home-shortcut-tag:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: scale(1.03);
+}
+
+.home-shortcut-tag kbd {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ok);
+}
+
+.home-shortcut-divider {
+  width: 1px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 2px;
+}
+
+.home-shortcut-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #636366;
+}
+
+.home-shortcut-hint kbd {
   font-size: 9.5px;
   font-weight: 600;
-  padding: 1px 4px;
+  padding: 1px 5px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.06);
-  color: var(--text-2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #86868b;
 }
 
 /* ── User Message Bubble & Bottom Actions (No "You" Header) ────────────── */
@@ -3085,21 +3552,20 @@ html.plat-mac .app-topbar {
 }
 
 .user-message-bubble {
-  padding: 10px 14px;
-  background: var(--surface-2);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-m);
-  border-bottom-right-radius: 4px;
-  color: var(--text);
-  font-size: 13px;
+  padding: 10px 16px;
+  background: #17171a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px 18px 4px 18px;
+  color: #f5f5f7;
+  font-size: 13.5px;
   line-height: 1.55;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  box-shadow: none;
   word-break: break-word;
-  transition: border-color 0.15s ease;
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .user-message-bubble:hover {
-  border-color: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .user-prompt-text {
@@ -3123,8 +3589,8 @@ html.plat-mac .app-topbar {
   width: 54px;
   height: 54px;
   object-fit: cover;
-  border-radius: 6px;
-  border: 1px solid var(--border);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .user-expand-btn {
@@ -3132,9 +3598,9 @@ html.plat-mac .app-topbar {
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--ok);
+  color: #ffffff;
   font-size: 11.5px;
-  font-weight: 600;
+  font-weight: 550;
   cursor: pointer;
 }
 
@@ -3146,12 +3612,12 @@ html.plat-mac .app-topbar {
 .user-bubble-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 4px;
+  gap: 6px;
+  margin-top: 5px;
   padding-right: 2px;
   opacity: 0;
   pointer-events: none;
-  transform: translateY(-3px);
+  transform: translateY(-2px);
   transition: opacity 0.16s cubic-bezier(0.16, 1, 0.3, 1),
               transform 0.16s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -3166,34 +3632,42 @@ html.plat-mac .app-topbar {
 .bubble-action-icon-btn {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
+  gap: 4px;
+  height: 22px;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--text-3);
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-s);
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
   cursor: pointer;
-  transition: all 0.14s ease;
+  transition: all 0.14s cubic-bezier(0.16, 1, 0.3, 1);
   -webkit-app-region: no-drag;
 }
 
+.bubble-action-label {
+  font-size: 10px;
+  letter-spacing: -0.01em;
+}
+
 .bubble-action-icon-btn:hover:not(:disabled) {
-  color: var(--text);
-  background: var(--surface-3);
-  border-color: var(--border-strong);
-  transform: scale(1.05);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
+  transform: translateY(-1px);
 }
 
 .bubble-action-icon-btn:active:not(:disabled) {
-  transform: scale(0.95);
+  transform: translateY(0) scale(0.97);
 }
 
 .bubble-action-icon-btn.ok {
   color: var(--ok);
-  background: rgba(94, 106, 210, 0.08);
-  border-color: rgba(94, 106, 210, 0.3);
+  background: rgba(0, 214, 143, 0.1);
+  border-color: rgba(0, 214, 143, 0.28);
 }
 
 .bubble-action-icon-btn:disabled {
@@ -3234,31 +3708,81 @@ html.plat-mac .app-topbar {
 
 /* tool calls — quiet mono rows (see .tool-card below) */
 
-/* thinking */
+/* thinking / reasoning block */
 .msg.thinking {
-  font-size: 13px;
-  font-style: italic;
-  color: var(--text-3);
-  letter-spacing: 0.01em;
+  align-self: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 2px 0 4px;
 }
 
-.msg.thinking .thinking-head:hover {
+.thinking-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-3);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.thinking-head:hover {
+  background: rgba(255, 255, 255, 0.05);
   color: var(--text-2);
 }
 
-.msg.thinking.streaming {
-  animation: shimmer 1.6s linear infinite;
-  background: linear-gradient(90deg, var(--text-3) 40%, #c9c9d2 50%, var(--text-3) 60%);
-  background-size: 200% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+.thinking-icon {
+  color: #a78bfa;
 }
 
-@keyframes shimmer {
-  to {
-    background-position: -200% 0;
-  }
+.thinking-label {
+  color: var(--text-2);
+}
+
+.thinking-metric {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-3);
+  opacity: 0.8;
+}
+
+.reason-pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #a78bfa;
+  box-shadow: 0 0 8px rgba(167, 139, 250, 0.6);
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+.thinking-body {
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 2px solid rgba(167, 139, 250, 0.35);
+  border-radius: 0 8px 8px 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.55;
+  color: #a1a1a6;
+  max-height: 240px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  animation: apple-inspector-fade 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.working-dock {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 2px 0 6px;
 }
 
 /* notices + errors */
@@ -3407,36 +3931,41 @@ html.plat-mac .app-topbar {
 }
 
 .approval-actions button {
-  padding: 6px 13px;
+  padding: 6px 15px;
   font-size: 12.5px;
-  font-weight: 500;
-  border-radius: var(--radius-s);
-  border: 1px solid var(--border-strong);
-  background: transparent;
-  color: var(--text-2);
-  transition: all 0.13s ease;
+  font-weight: 550;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .approval-actions button:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 .approval-actions button.primary {
-  background: #f5f5f7;
-  border-color: #f5f5f7;
-  color: #111114;
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #000000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
 .approval-actions button.primary:hover {
-  background: #ffffff;
+  background: #e8e8ed;
   color: #000000;
+  transform: scale(1.02);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.24);
 }
 
 .approval-actions button.deny:hover {
   color: var(--err);
-  border-color: rgba(244, 113, 116, 0.4);
-  background: rgba(244, 113, 116, 0.08);
+  border-color: rgba(255, 69, 58, 0.4);
+  background: rgba(255, 69, 58, 0.12);
 }
 
 .hint {
@@ -3459,16 +3988,16 @@ html.plat-mac .app-topbar {
 .composer {
   max-width: 720px;
   margin: 0 auto;
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-l);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
-  transition: all 0.18s ease;
+  background: #141418;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .composer:focus-within {
-  border-color: rgba(255, 255, 255, 0.14);
-  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.35);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 /* ── terminal shell mode state ─────────────────────────────────────────── */
@@ -3597,29 +4126,30 @@ html.plat-mac .app-topbar {
 .mode {
   appearance: none;
   -webkit-appearance: none;
-  padding: 5px 26px 5px 11px;
+  height: 26px;
+  padding: 0 20px 0 10px;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 500;
   color: var(--text-2);
-  background-color: var(--surface-2);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6' viewBox='0 0 9 6'%3E%3Cpath d='M1 1l3.5 3.5L8 1' fill='none' stroke='%2366666f' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-color: rgba(255, 255, 255, 0.05);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6' viewBox='0 0 9 6'%3E%3Cpath d='M1 1l3.5 3.5L8 1' fill='none' stroke='%2386868b' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 9px center;
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  background-position: right 8px center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
   cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .mode:hover {
-  color: var(--text);
-  border-color: var(--border-strong);
-  background-color: var(--surface-3);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.18);
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 .mode option {
-  background: var(--surface-2);
+  background: #18181b;
   color: var(--text);
 }
 
@@ -3636,22 +4166,23 @@ html.plat-mac .app-topbar {
   gap: 5px;
   max-width: 170px;
   height: 26px;
-  padding: 0 20px 0 9px;
+  padding: 0 20px 0 10px;
   font-family: inherit;
   font-size: 11.5px;
   font-weight: 500;
-  color: #9499ad;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 8px;
+  color: var(--text-2);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
   cursor: pointer;
   position: relative;
-  transition: all 0.15s ease;
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .composer-icon-btn {
   padding: 0;
   width: 26px;
+  border-radius: 9999px;
   justify-content: center;
 }
 
@@ -3663,14 +4194,14 @@ html.plat-mac .app-topbar {
 
 .model-btn > svg:last-child {
   position: absolute;
-  right: 7px;
+  right: 8px;
 }
 
 .model-btn:hover,
 .composer-icon-btn:hover {
-  color: #f0f0f5;
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .popover-backdrop {
@@ -3681,17 +4212,25 @@ html.plat-mac .app-topbar {
 
 .popover {
   position: absolute;
-  bottom: calc(100% + 8px);
+  bottom: calc(100% + 10px);
   left: 0;
   z-index: 41;
-  width: 250px;
-  padding: 6px;
-  background: var(--surface-2);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-m);
-  box-shadow: var(--shadow-pop);
-  animation: rise 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  width: 270px;
+  padding: 8px;
+  background: rgba(18, 18, 22, 0.9);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  animation: apple-popover 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
   will-change: transform, opacity;
+}
+
+.popover-wide {
+  width: 400px;
+  max-width: calc(100vw - 32px);
+  padding: 12px;
 }
 
 @keyframes rise {
@@ -3726,91 +4265,378 @@ html.plat-mac .app-topbar {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-3);
+  color: #86868b;
 }
 
 .popover-current {
-  padding: 1px 9px 7px;
+  padding: 2px 9px 8px;
   font-family: var(--mono);
   font-size: 11px;
-  color: var(--text-2);
+  color: #a1a1a6;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 6px;
 }
 
 .popover-item {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
   width: 100%;
-  padding: 7px 9px;
+  padding: 8px 10px;
   text-align: left;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 550;
+  color: #f5f5f7;
   background: transparent;
-  border: none;
-  border-radius: var(--radius-s);
-  transition: background 0.12s ease;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.14s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .popover-item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .popover-sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: #86868b;
+}
+
+/* ── Apple macOS Model Picker Window ─────────────────────────────────── */
+
+.model-btn.is-open {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+}
+
+.model-sparkle-icon {
+  color: var(--ok);
+}
+
+.model-chevron-icon {
+  color: var(--text-3);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.model-btn.is-open .model-chevron-icon {
+  transform: rotate(180deg);
+}
+
+/* Window Header */
+.model-picker-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 4px;
+}
+
+.model-picker-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 0;
+}
+
+.model-picker-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #86868b;
+}
+
+.model-active-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(0, 214, 143, 0.1);
+  border: 1px solid rgba(0, 214, 143, 0.22);
+  max-width: 220px;
+}
+
+.model-active-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 6px var(--ok);
+  flex-shrink: 0;
+}
+
+.model-active-label {
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--ok);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Spotlight Search */
+.model-search-box {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+  transition: all 0.16s ease;
+}
+
+.model-search-box:focus-within {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.06);
+}
+
+.model-search-icon {
+  color: #86868b;
+  flex-shrink: 0;
+}
+
+.model-search-box input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: #f5f5f7;
+  font-size: 12px;
+  outline: none;
+}
+
+.model-search-box input::placeholder {
+  color: #636366;
+}
+
+.model-search-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #a1a1a6;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.model-search-clear:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+/* Model Scroll List */
+.model-picker-scroll {
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 4px 2px;
+  margin: 4px -2px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.model-empty-note {
+  padding: 18px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: #86868b;
+}
+
+.model-provider-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.model-provider-name {
+  padding: 6px 8px 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #86868b;
+}
+
+.model-picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.model-picker-row:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.model-picker-row.active {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.model-row-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.model-row-name-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.model-row-name {
+  font-size: 12.5px;
+  font-weight: 550;
+  color: #f5f5f7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-chip-reasoning {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #c084fc;
+  background: rgba(192, 132, 252, 0.12);
+  border: 1px solid rgba(192, 132, 252, 0.24);
+  flex-shrink: 0;
+}
+
+.model-row-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.model-row-id {
   font-family: var(--mono);
   font-size: 10.5px;
-  font-weight: 400;
-  color: var(--text-3);
+  color: #86868b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.popover-custom {
+.model-row-right {
   display: flex;
+  align-items: center;
   gap: 6px;
-  margin-top: 4px;
-  padding-top: 7px;
-  border-top: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
-.popover-custom input {
+.model-chip-spec {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: #86868b;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.model-active-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ok);
+}
+
+/* Footer Custom Input */
+.model-picker-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.model-custom-input-wrap {
   flex: 1;
   min-width: 0;
-  padding: 6px 9px;
+}
+
+.model-custom-input-wrap input {
+  width: 100%;
+  padding: 6px 10px;
   font-family: var(--mono);
-  font-size: 11.5px;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-s);
-}
-
-.popover-custom input:focus {
+  font-size: 11px;
+  color: #f5f5f7;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
   outline: none;
-  border-color: var(--border-strong);
+  transition: all 0.16s ease;
 }
 
-.popover-custom button {
-  padding: 6px 11px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #111114;
-  background: #f5f5f7;
-  border: none;
-  border-radius: var(--radius-s);
-  transition: background 0.13s ease, opacity 0.13s ease;
+.model-custom-input-wrap input:focus {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
-.popover-custom button:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.popover-custom button:not(:disabled):hover {
+.model-custom-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 14px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #000000;
   background: #ffffff;
+  border: 1px solid #ffffff;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.model-custom-btn:hover:not(:disabled) {
+  background: #e8e8ed;
+  border-color: #e8e8ed;
+  transform: scale(1.02);
+}
+
+.model-custom-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.model-custom-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 /* ── Dynamic TopBar Notification Capsule (Reused Sweet-Spot) ───────────── */
@@ -3950,30 +4776,53 @@ html.plat-mac .app-topbar {
   width: 30px;
   height: 30px;
   padding: 0;
-  border-radius: 9px;
+  border-radius: 9999px;
   border: none;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .send {
-  background: #5e6ad2;
-  color: #0b0c0e;
-  box-shadow: 0 2px 10px rgba(94, 106, 210, 0.3);
+  background: #ffffff;
+  color: #000000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
 .send:hover:not(:disabled) {
-  background: #5fd4a3;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(94, 106, 210, 0.45);
+  background: #e8e8ed;
+  color: #000000;
+  transform: scale(1.06);
+  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.12), 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.send:active:not(:disabled) {
+  background: #d2d2d7;
+  transform: scale(0.94);
 }
 
 .send:disabled {
-  background: rgba(255, 255, 255, 0.05);
-  color: #4e5264;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.25);
+  border: none;
   box-shadow: none;
   cursor: default;
+}
+
+.stop {
+  background: rgba(255, 69, 58, 0.15);
+  border: 1px solid rgba(255, 69, 58, 0.32);
+  color: #ff453a;
+  box-shadow: 0 2px 8px rgba(255, 69, 58, 0.15);
+}
+
+.stop:hover {
+  background: rgba(255, 69, 58, 0.25);
+  border-color: rgba(255, 69, 58, 0.5);
+  transform: scale(1.06);
+}
+
+.stop:active {
+  transform: scale(0.94);
 }
 
 .shell-send {
@@ -3981,25 +4830,32 @@ html.plat-mac .app-topbar {
   align-items: center;
   gap: 5px;
   width: auto !important;
-  height: 28px !important;
-  padding: 0 11px !important;
-  font-size: 11.5px !important;
-  font-weight: 600 !important;
-  background: #5e6ad2 !important;
-  color: #0b0c0e !important;
-  border-radius: 7px !important;
-  box-shadow: 0 2px 10px rgba(94, 106, 210, 0.3) !important;
+  height: 30px !important;
+  padding: 0 14px !important;
+  font-size: 12px !important;
+  font-weight: 550 !important;
+  background: #ffffff !important;
+  color: #000000 !important;
+  border-radius: 9999px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
 }
 
 .shell-send:hover:not(:disabled) {
-  background: #5fd4a3 !important;
-  box-shadow: 0 3px 14px rgba(94, 106, 210, 0.45) !important;
+  background: #e8e8ed !important;
+  color: #000000 !important;
+  transform: scale(1.02) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
+}
+
+.shell-send:active:not(:disabled) {
+  background: #d2d2d7 !important;
+  transform: scale(0.97) !important;
 }
 
 .stop {
-  background: rgba(235, 87, 87, 0.15);
-  border: 1px solid rgba(235, 87, 87, 0.35);
-  color: #eb5757;
+  background: rgba(255, 69, 58, 0.15);
+  border: 1px solid rgba(255, 69, 58, 0.35);
+  color: #ff453a;
 }
 
 .stop:hover {
@@ -4651,7 +5507,7 @@ html.plat-mac .app-topbar {
 }
 
 .cmd-pop-item.sel .cmd-icon-box {
-  background: rgba(78, 189, 143, 0.15);
+  background: rgba(0, 214, 143, 0.15);
   color: var(--accent);
 }
 
@@ -4825,7 +5681,7 @@ html.plat-mac .app-topbar {
 }
 
 .file-pop-item.sel .file-icon-badge {
-  background: rgba(78, 189, 143, 0.15);
+  background: rgba(0, 214, 143, 0.15);
   color: var(--accent);
 }
 
@@ -5638,23 +6494,88 @@ html.plat-mac .app-topbar {
   word-break: break-word;
 }
 
-/* ── in-chat working row (moved out of the header pill) ────────────────── */
+/* ── in-chat working pill & aborted status ────────────────────────────── */
 
-.msg.working {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-  font-size: 13px;
+.msg-working-pill {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 10px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-2);
+  user-select: none;
+  margin: 4px 0;
+  animation: rise 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.working-pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 8px rgba(0, 214, 143, 0.6);
+  animation: pulse-dot 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.working-text {
+  font-weight: 550;
+  color: var(--text);
+}
+
+.working-sec {
+  font-family: var(--mono);
+  font-size: 10.5px;
   color: var(--text-3);
-  padding: 2px 0;
 }
 
-.msg.working.done {
-  color: var(--ok);
+.working-hint {
+  font-size: 10.5px;
+  color: var(--text-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 4px;
 }
 
-.msg.working.aborted {
-  color: var(--err);
+.working-hint kbd {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-2);
+}
+
+.msg-status-aborted {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background: rgba(255, 69, 58, 0.08);
+  border: 1px solid rgba(255, 69, 58, 0.2);
+  font-size: 11px;
+  font-weight: 500;
+  color: #ff8585;
+  margin: 4px 0;
+}
+
+.aborted-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ff453a;
+  flex-shrink: 0;
 }
 
 .jump-latest {
@@ -5697,16 +6618,20 @@ html.plat-mac .app-topbar {
 }
 
 .jump-latest:hover .jump-latest-inner {
-  color: var(--text);
-  background: rgba(30, 30, 36, 0.96);
-  border-color: rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  color: #000000;
+  background: #ffffff;
+  border-color: #ffffff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   transform: translateY(-2px);
+}
+
+.jump-latest:hover .jump-latest-inner svg {
+  color: #000000;
 }
 
 .jump-latest:active .jump-latest-inner {
   transform: translateY(0) scale(0.96);
-  background: var(--surface-3);
+  background: #e8e8ed;
 }
 
 .jump-latest-icon {

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { sessionLabel } from "$lib/sessionList";
   import type { SessionActivity } from "$lib/types";
-  import { filterSessions, type SessionEntry } from "$lib/util";
+  import type { SessionEntry } from "$lib/util";
   import { sameWorkspacePath, wsBasename } from "$lib/workspaces";
   import {
     ChevronDown,
@@ -11,10 +11,8 @@
     LoaderCircle,
     MessageSquare,
     Plus,
-    Search,
     ShieldAlert,
     Trash2,
-    X,
   } from "$lib/ui/icons";
 
   type Props = {
@@ -43,18 +41,15 @@
     onActivateWorkspace,
   }: Props = $props();
 
-  let query = $state("");
   let recentsOpen = $state(true);
   let wsOpen = $state<Record<string, boolean>>({});
   let lastActive: string | null | undefined = undefined;
-
-  const filtered = $derived(filterSessions(sessions, query));
 
   const { byWorkspace, otherSessions } = $derived.by(() => {
     const byWorkspace = new Map<string, SessionEntry[]>();
     for (const root of workspaces) byWorkspace.set(root, []);
     const otherSessions: SessionEntry[] = [];
-    for (const s of filtered) {
+    for (const s of sessions) {
       const hit = s.projectRoot
         ? workspaces.find((root) => sameWorkspacePath(s.projectRoot, root))
         : undefined;
@@ -230,27 +225,6 @@
 {/snippet}
 
 <div class="sidebar-content-deck">
-  <div class="sidebar-search-box">
-    <Icon icon={Search} size={12} strokeWidth={1.8} class="sidebar-search-icon" />
-    <input
-      type="text"
-      bind:value={query}
-      placeholder="Search chats…"
-      spellcheck={false}
-      class="sidebar-search-input"
-    />
-    {#if query}
-      <button
-        type="button"
-        class="sidebar-search-clear"
-        title="Clear search"
-        onclick={() => (query = "")}
-      >
-        <Icon icon={X} size={11} strokeWidth={2} />
-      </button>
-    {/if}
-  </div>
-
   <div class="sidebar-scrollable-area">
     <div class="sidebar-group-header">
       <span class="group-title">Workspaces</span>

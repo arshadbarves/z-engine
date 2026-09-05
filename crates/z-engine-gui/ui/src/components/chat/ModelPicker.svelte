@@ -3,7 +3,7 @@
   import { setModel } from "$lib/commands";
   import { modelStore } from "$lib/runtime";
   import { bindStore } from "$lib/svelte/bind.svelte";
-  import Icon, { ChevronDown, Search, Sparkles } from "$lib/ui/icons";
+  import Icon, { Brain, Check, ChevronDown, Search, Sparkles, X } from "$lib/ui/icons";
   import { shortModel } from "$lib/util";
 
   const model = bindStore(modelStore);
@@ -39,7 +39,6 @@
     for (const [pid, prov] of Object.entries(filtered)) {
       const items = Object.entries(prov.models)
         .filter(([id, m]) => {
-          if (id === model.current) return false;
           if (!q) return true;
           return (
             id.toLowerCase().includes(q) ||
@@ -66,54 +65,102 @@
   {#if open}
     <div class="popover-backdrop" onclick={() => (open = false)}></div>
   {/if}
-  <button class="mode model-btn" onclick={() => (open = !open)} title="Switch model">
-    <Icon icon={Sparkles} size={11} />
+  <button
+    class={`mode model-btn${open ? " is-open" : ""}`}
+    onclick={() => (open = !open)}
+    title="Switch model"
+  >
+    <Icon icon={Sparkles} size={12} class="model-sparkle-icon" />
     <span>{shortModel(model.current) || "model"}</span>
-    <Icon icon={ChevronDown} size={9} strokeWidth={2.4} />
+    <Icon icon={ChevronDown} size={10} strokeWidth={2} class="model-chevron-icon" />
   </button>
   {#if open}
-    <div class="popover popover-wide" role="menu">
-      <div class="popover-head">Model</div>
-      <div class="popover-current">{model.current || "(default from config)"}</div>
-      <div class="pop-search">
-        <Icon icon={Search} size={11} />
-        <input
-          bind:value={query}
-          placeholder="Filter models…"
-          spellcheck={false}
-          autofocus
-          onkeydown={(e) => e.key === "Escape" && (open = false)}
-        />
+    <div class="popover popover-wide model-picker-window" role="menu">
+      <div class="model-picker-header">
+        <div class="model-picker-title-row">
+          <span class="model-picker-title">Model</span>
+          {#if model.current}
+            <div class="model-active-badge" title={`Active model: ${model.current}`}>
+              <span class="model-active-dot" aria-hidden="true"></span>
+              <span class="model-active-label">{shortModel(model.current)}</span>
+            </div>
+          {/if}
+        </div>
+        <div class="model-search-box">
+          <Icon icon={Search} size={12} class="model-search-icon" />
+          <input
+            bind:value={query}
+            placeholder="Search models or providers…"
+            spellcheck={false}
+            autofocus
+            onkeydown={(e) => e.key === "Escape" && (open = false)}
+          />
+          {#if query}
+            <button
+              type="button"
+              class="model-search-clear"
+              onclick={() => (query = "")}
+              aria-label="Clear filter"
+            >
+              <Icon icon={X} size={11} />
+            </button>
+          {/if}
+        </div>
       </div>
-      <div class="popover-scroll">
+      <div class="popover-scroll model-picker-scroll">
         {#if groups.length === 0 && !query}
-          <div class="pop-note">
+          <div class="model-empty-note">
             {catalog.current
               ? "No OpenRouter models — check Settings for your API key."
-              : "loading catalog…"}
+              : "Loading catalog…"}
+          </div>
+        {:else if groups.length === 0 && query}
+          <div class="model-empty-note">
+            No models matching "{query}"
           </div>
         {/if}
         {#each groups as g}
-          <div>
-            <div class="palette-group">{g.provider}</div>
+          <div class="model-provider-group">
+            <div class="model-provider-name">{g.provider}</div>
             {#each g.items as m}
               <button
-                class="popover-item model-item"
+                class={`model-picker-row${m.id === model.current ? " active" : ""}`}
                 role="menuitem"
                 onclick={() => void pick(m.id)}
               >
-                <span class="model-name">{m.name}</span>
-                <span class="popover-sub">
-                  {m.reasoning ? "reasoning · " : ""}
-                  {[fmtLimit(m.context), fmtLimit(m.output)].filter(Boolean).join(" / ") || m.id}
-                </span>
+                <div class="model-row-left">
+                  <div class="model-row-name-line">
+                    <span class="model-row-name">{m.name}</span>
+                    {#if m.reasoning}
+                      <span class="model-chip-reasoning">
+                        <Icon icon={Brain} size={9} />
+                        <span>Reasoning</span>
+                      </span>
+                    {/if}
+                  </div>
+                  <div class="model-row-sub">
+                    <span class="model-row-id">{m.id}</span>
+                  </div>
+                </div>
+                <div class="model-row-right">
+                  {#if m.context || m.output}
+                    <span class="model-chip-spec">
+                      {[fmtLimit(m.context), fmtLimit(m.output)].filter(Boolean).join(" / ")}
+                    </span>
+                  {/if}
+                  {#if m.id === model.current}
+                    <span class="model-active-check">
+                      <Icon icon={Check} size={12} strokeWidth={2.4} />
+                    </span>
+                  {/if}
+                </div>
               </button>
             {/each}
           </div>
         {/each}
       </div>
       <form
-        class="popover-custom"
+        class="model-picker-footer"
         onsubmit={(e) => {
           e.preventDefault();
           const id = custom.trim();
@@ -121,8 +168,20 @@
           custom = "";
         }}
       >
-        <input bind:value={custom} placeholder="Custom model id…" spellcheck={false} />
-        <button type="submit" disabled={!custom.trim()}>Set</button>
+        <div class="model-custom-input-wrap">
+          <input
+            bind:value={custom}
+            placeholder="Custom model ID (e.g. anthropic/claude-3.7-sonnet)…"
+            spellcheck={false}
+          />
+        </div>
+        <button
+          type="submit"
+          class="model-custom-btn"
+          disabled={!custom.trim()}
+        >
+          Set
+        </button>
       </form>
     </div>
   {/if}

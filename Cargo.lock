@@ -6085,7 +6085,7 @@ dependencies = [
 
 [[package]]
 name = "z-engine-core"
-version = "1.4.3"
+version = "1.4.4"
 dependencies = [
  "async-trait",
  "axum",
@@ -6112,7 +6112,7 @@ dependencies = [
 
 [[package]]
 name = "z-engine-gui"
-version = "1.4.3"
+version = "1.4.4"
 dependencies = [
  "dirs",
  "reqwest 0.12.28",
@@ -6134,7 +6134,7 @@ dependencies = [
 
 [[package]]
 name = "z-engine-provider"
-version = "1.4.3"
+version = "1.4.4"
 dependencies = [
  "futures",
  "reqwest 0.12.28",
@@ -6148,7 +6148,7 @@ dependencies = [
 
 [[package]]
 name = "z-engine-tui"
-version = "1.4.3"
+version = "1.4.4"
 dependencies = [
  "anyhow",
  "crossterm",

@@ -6,26 +6,21 @@ export interface ProviderPreset {
   keyUrl?: string;
   keyPlaceholder: string;
   desc: string;
+  tag: "API key" | "Local" | "Custom";
+  color: string;
 }
 
 export const PROVIDERS: ProviderPreset[] = [
   {
     id: "openrouter",
-    name: "OpenRouter (Recommended)",
+    name: "OpenRouter",
     baseUrl: "https://openrouter.ai/api/v1",
     defaultModel: "openrouter/auto",
     keyUrl: "https://openrouter.ai/keys",
     keyPlaceholder: "sk-or-v1-...",
     desc: "Universal gateway with access to 200+ top LLMs",
-  },
-  {
-    id: "openai",
-    name: "OpenAI",
-    baseUrl: "https://api.openai.com/v1",
-    defaultModel: "openai/gpt-4o",
-    keyUrl: "https://platform.openai.com/api-keys",
-    keyPlaceholder: "sk-proj-...",
-    desc: "Direct access to GPT-4o, o3-mini, and OpenAI models",
+    tag: "API key",
+    color: "#6366f1",
   },
   {
     id: "anthropic",
@@ -35,6 +30,19 @@ export const PROVIDERS: ProviderPreset[] = [
     keyUrl: "https://console.anthropic.com/settings/keys",
     keyPlaceholder: "sk-ant-...",
     desc: "Claude 3.7 Sonnet, Claude 3.5 Haiku, and Claude Opus",
+    tag: "API key",
+    color: "#d97706",
+  },
+  {
+    id: "openai",
+    name: "OpenAI",
+    baseUrl: "https://api.openai.com/v1",
+    defaultModel: "openai/gpt-4o",
+    keyUrl: "https://platform.openai.com/api-keys",
+    keyPlaceholder: "sk-proj-...",
+    desc: "Direct access to GPT-4o, o3-mini, and OpenAI models",
+    tag: "API key",
+    color: "#10a37f",
   },
   {
     id: "google",
@@ -44,6 +52,8 @@ export const PROVIDERS: ProviderPreset[] = [
     keyUrl: "https://aistudio.google.com/app/apikey",
     keyPlaceholder: "AIzaSy...",
     desc: "Google AI Studio Gemini 2.5 Pro and Flash models",
+    tag: "API key",
+    color: "#4285f4",
   },
   {
     id: "deepseek",
@@ -53,6 +63,8 @@ export const PROVIDERS: ProviderPreset[] = [
     keyUrl: "https://platform.deepseek.com/api_keys",
     keyPlaceholder: "sk-...",
     desc: "DeepSeek-V3 and DeepSeek-R1 reasoning models",
+    tag: "API key",
+    color: "#0284c7",
   },
   {
     id: "groq",
@@ -62,6 +74,8 @@ export const PROVIDERS: ProviderPreset[] = [
     keyUrl: "https://console.groq.com/keys",
     keyPlaceholder: "gsk_...",
     desc: "Ultra-low latency inference for Llama 3.3 and DeepSeek",
+    tag: "API key",
+    color: "#f97316",
   },
   {
     id: "mistral",
@@ -71,6 +85,8 @@ export const PROVIDERS: ProviderPreset[] = [
     keyUrl: "https://console.mistral.ai/api-keys",
     keyPlaceholder: "...",
     desc: "Mistral Large, Mistral Small, and Codestral",
+    tag: "API key",
+    color: "#ea580c",
   },
   {
     id: "ollama",
@@ -79,6 +95,8 @@ export const PROVIDERS: ProviderPreset[] = [
     defaultModel: "ollama/llama3.3",
     keyPlaceholder: "ollama (no key required)",
     desc: "Run open-source LLMs locally offline on your own machine",
+    tag: "Local",
+    color: "#94a3b8",
   },
   {
     id: "custom",
@@ -87,6 +105,8 @@ export const PROVIDERS: ProviderPreset[] = [
     defaultModel: "",
     keyPlaceholder: "API key or bearer token",
     desc: "Connect to any custom OpenAI-compatible server or proxy",
+    tag: "Custom",
+    color: "#a855f7",
   },
 ];
 

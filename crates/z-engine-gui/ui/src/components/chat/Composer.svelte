@@ -18,13 +18,10 @@
   import { hideShell, shellStore, showShell } from "$lib/shellStore";
   import { filterSlash } from "$lib/slash";
   import { bindStore } from "$lib/svelte/bind.svelte";
-  import Icon, { ArrowUp, CornerDownLeft, Paperclip, Square, Terminal } from "$lib/ui/icons";
   import ShellOverlay from "../overlays/ShellOverlay.svelte";
   import ComposerAttachments from "./ComposerAttachments.svelte";
+  import ComposerBar from "./ComposerBar.svelte";
   import ComposerPopovers from "./ComposerPopovers.svelte";
-  import EffortSelector from "./EffortSelector.svelte";
-  import ModePicker from "./ModePicker.svelte";
-  import ModelPicker from "./ModelPicker.svelte";
 
   const input = bindStore(draftStore);
   const attachments = bindStore(attachmentStore);
@@ -174,53 +171,30 @@
     }
   }
 
+  function handleNav(
+    e: KeyboardEvent,
+    len: number,
+    getSel: () => number,
+    setSel: (n: number) => void,
+    onPick: (idx: number) => void,
+  ): boolean {
+    if (len === 0) return false;
+    if (e.key === "ArrowDown") { e.preventDefault(); setSel((getSel() + 1) % len); return true; }
+    if (e.key === "ArrowUp") { e.preventDefault(); setSel((getSel() - 1 + len) % len); return true; }
+    if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); onPick(Math.min(getSel(), len - 1)); return true; }
+    if (e.key === "Escape") { e.preventDefault(); dismissed = true; return true; }
+    return false;
+  }
+
   function onKeyDown(e: KeyboardEvent) {
     syncCaret();
     if (showSlash && slashMatches && slashMatches.length > 0) {
-      const n = slashMatches.length;
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        slashSel = (slashSel + 1) % n;
+      if (handleNav(e, slashMatches.length, () => slashSel, (n) => (slashSel = n), (i) => runCommand(slashMatches[i].name)))
         return;
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        slashSel = (slashSel - 1 + n) % n;
-        return;
-      }
-      if (e.key === "Enter" || e.key === "Tab") {
-        e.preventDefault();
-        runCommand(slashMatches[Math.min(slashSel, n - 1)].name);
-        return;
-      }
-      if (e.key === "Escape") {
-        e.preventDefault();
-        dismissed = true;
-        return;
-      }
     }
     if (showFiles && files && files.length > 0) {
-      const fn = files.length;
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        fileSel = (fileSel + 1) % fn;
+      if (handleNav(e, files.length, () => fileSel, (n) => (fileSel = n), (i) => insertFile(files[i])))
         return;
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        fileSel = (fileSel - 1 + fn) % fn;
-        return;
-      }
-      if (e.key === "Enter" || e.key === "Tab") {
-        e.preventDefault();
-        insertFile(files[Math.min(fileSel, fn - 1)]);
-        return;
-      }
-      if (e.key === "Escape") {
-        e.preventDefault();
-        dismissed = true;
-        return;
-      }
     }
     if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !input.current.includes("\n")) {
       e.preventDefault();
@@ -229,17 +203,10 @@
       return;
     }
     if (e.key === "Escape") {
-      if (busyNow.current) {
-        e.preventDefault();
-        void abort();
-      } else if (shell.current.visible) {
-        e.preventDefault();
-        hideShell();
-      } else if (input.current) {
-        e.preventDefault();
-        draftStore.set("");
-        caret = 0;
-      }
+      e.preventDefault();
+      if (busyNow.current) void abort();
+      else if (shell.current.visible) hideShell();
+      else if (input.current) { draftStore.set(""); caret = 0; }
       return;
     }
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
@@ -276,10 +243,10 @@
         rows={2}
         class={shellMode ? "shell-textarea" : ""}
         placeholder={busyNow.current
-          ? "Working… press Stop or Esc to abort."
+          ? "Agent is working… press Esc to abort"
           : shellMode
-            ? "Enter shell command… (e.g. !git status, !cargo test)"
-            : "Ask a question, describe a task, @ files, / commands…"}
+            ? "Enter shell command… (e.g. !git status)"
+            : "Ask anything, @ for files, / for commands, ! for bash…"}
         value={input.current}
         oninput={(e) =>
           onInputChanged(e.currentTarget.value, e.currentTarget.selectionStart)}
@@ -290,83 +257,24 @@
         onpaste={(e) => void onPaste(e)}
       ></textarea>
     </div>
-    <div class="composer-bar">
-      <input
-        type="file"
-        bind:this={fileInput}
-        multiple
-        style="display: none"
-        onchange={(e) => void onFileInputChanged(e)}
-      />
-      {#if shellMode}
-        <div class="shell-bar-left">
-          <span class="shell-mode-pill">
-            <Icon icon={Terminal} size={11} />
-            <span>Bash Mode</span>
-          </span>
-          <span class="shell-hint-inline"><kbd>Esc</kbd> to return</span>
-        </div>
-      {:else}
-        <div class="composer-controls-left">
-          <ModePicker />
-          <ModelPicker />
-          <EffortSelector catalog={catalog.current} />
-          <button
-            type="button"
-            class="composer-icon-btn"
-            title="Attach file or image"
-            onclick={() => fileInput?.click()}
-          >
-            <Icon icon={Paperclip} size={13} />
-          </button>
-          {#if !shell.current.visible && shell.current.entries.length > 0}
-            <button
-              type="button"
-              class="composer-icon-btn"
-              title="Show terminal drawer"
-              onclick={showShell}
-            >
-              <Icon icon={Terminal} size={13} />
-            </button>
-          {/if}
-        </div>
-      {/if}
-
-      <div class="composer-actions-right">
-        {#if !shellMode}
-          <div class="composer-hints-deck">
-            <span class="c-hint"><kbd>@</kbd> files</span>
-            <span class="c-hint"><kbd>/</kbd> cmds</span>
-            <span class="c-hint"><kbd>!</kbd> bash</span>
-          </div>
-        {/if}
-        {#if busyNow.current}
-          <button class="stop" title="Stop (Esc)" onclick={() => void abort()} type="button">
-            <Icon icon={Square} size={11} />
-          </button>
-        {:else if shellMode}
-          <button
-            class="send shell-send"
-            title="Run shell command (Enter)"
-            onclick={() => void send()}
-            disabled={!input.current.slice(1).trim()}
-            type="button"
-          >
-            <Icon icon={CornerDownLeft} size={12} />
-            <span>Run</span>
-          </button>
-        {:else}
-          <button
-            class="send"
-            title="Send (Enter)"
-            onclick={() => void send()}
-            disabled={!input.current.trim() && attachments.current.length === 0}
-            type="button"
-          >
-            <Icon icon={ArrowUp} size={15} strokeWidth={2.4} />
-          </button>
-        {/if}
-      </div>
-    </div>
+    <input
+      type="file"
+      bind:this={fileInput}
+      multiple
+      style="display: none"
+      onchange={(e) => void onFileInputChanged(e)}
+    />
+    <ComposerBar
+      {shellMode}
+      busy={busyNow.current}
+      canSend={Boolean(input.current.trim() || attachments.current.length > 0 || images.length > 0)}
+      canSendShell={Boolean(input.current.slice(1).trim())}
+      catalog={catalog.current}
+      showTerminalBtn={!shell.current.visible && shell.current.entries.length > 0}
+      onAttachClick={() => fileInput?.click()}
+      onShowShell={showShell}
+      onSend={() => void send()}
+      onAbort={() => void abort()}
+    />
   </div>
 </div>

@@ -1,11 +1,9 @@
 <script lang="ts">
-  import { groupTranscript } from "$lib/activity";
-  import { HERO_STARTERS } from "$lib/constants";
-  import { draftStore, hydrateStore } from "$lib/runtime";
+  import { groupTurns } from "$lib/activity";
+  import { hydrateStore } from "$lib/runtime";
   import { bindStore } from "$lib/svelte/bind.svelte";
   import type { Msg } from "$lib/types";
-  import Icon, { FolderGit2, Search, Sparkles, Workflow, Wrench } from "$lib/ui/icons";
-  import LogoMark from "../chrome/LogoMark.svelte";
+  import HomeScreen from "../home/HomeScreen.svelte";
   import ActivityStrip from "./ActivityStrip.svelte";
   import ApprovalCard from "./ApprovalCard.svelte";
   import ChatTimeline from "./ChatTimeline.svelte";
@@ -23,20 +21,13 @@
   let { messages, busy, projectName, onApprove, onDeny }: Props = $props();
 
   const hydrating = bindStore(hydrateStore);
-  const blocks = $derived(groupTranscript(messages));
+  const turns = $derived(groupTurns(messages));
   const streaming = $derived(
     messages.some(
       (m) => m.streaming && (m.kind === "assistant" || m.kind === "thinking" || m.kind === "tool"),
     ),
   );
   const showWorking = $derived(busy && !streaming && !hydrating.current);
-
-  const starterIcon = {
-    Search,
-    Sparkles,
-    Wrench,
-    Workflow,
-  } as const;
 
   let secs = $state(0);
   $effect(() => {
@@ -52,84 +43,50 @@
 </script>
 
 <div class="transcript-stage">
-  <ChatTimeline {messages} />
   <div class="transcript-inner">
     {#if messages.length === 0 && !hydrating.current}
-      <div class="start-hub">
-        <div class="start-hub-brand">
-          <div class="start-hub-icon-halo">
-            <LogoMark size={28} />
-          </div>
-          <h1 class="start-hub-title">What should we build today?</h1>
-          {#if projectName}
-            <div class="start-hub-ws-pill">
-              <Icon icon={FolderGit2} size={12} strokeWidth={1.8} />
-              <span>{projectName}</span>
-            </div>
-          {:else}
-            <p class="start-hub-desc">
-              Autonomous coding agent with full codebase awareness, tool execution, and live verification.
-            </p>
-          {/if}
-        </div>
-        <div class="start-hub-grid">
-          {#each HERO_STARTERS as card, index}
-            <button
-              type="button"
-              class="start-hub-card"
-              style={`--card-index: ${index}`}
-              onclick={() => draftStore.set(card.prompt)}
-            >
-              <div class="card-icon-box">
-                <Icon
-                  icon={starterIcon[card.iconName as keyof typeof starterIcon] ?? Sparkles}
-                  size={14}
-                  strokeWidth={1.8}
-                />
-              </div>
-              <div class="card-text-col">
-                <span class="card-title">{card.title}</span>
-                <span class="card-desc">{card.desc}</span>
-              </div>
-            </button>
-          {/each}
-        </div>
-        <div class="start-hub-hints">
-          <span class="hint-pill"><kbd>@</kbd> Reference files</span>
-          <span class="hint-pill"><kbd>/</kbd> Slash commands</span>
-          <span class="hint-pill"><kbd>!</kbd> Bash mode</span>
-        </div>
-      </div>
+      <HomeScreen {projectName} />
     {/if}
 
-    {#each blocks as b (b.type === "work" ? b.items[0].id : b.msg.id)}
-      {#if b.type === "work"}
-        <ActivityStrip items={b.items} />
-      {:else if b.msg.kind === "approval"}
+    {#each turns as b (b.type === "work" ? b.items[0].id : b.msg.id)}
+      {#if b.type === "user"}
+        <UserCard m={b.msg} />
+      {:else if b.type === "approval"}
         <ApprovalCard
           m={b.msg}
           onApprove={(d) => onApprove(b.msg, d)}
           onDeny={() => onDeny(b.msg)}
         />
-      {:else if b.msg.kind === "user"}
-        <UserCard m={b.msg} />
-      {:else if b.msg.kind === "assistant"}
-        <div class={`msg assistant${b.msg.streaming ? " streaming" : ""}`}>
-          <Markdown text={b.msg.text} />
+      {:else if b.type === "assistant"}
+        <div class="assistant-turn">
+          {#if b.workItems && b.workItems.length > 0}
+            <ActivityStrip items={b.workItems} />
+          {/if}
+          {#if b.msg.text.trim().length > 0 || b.msg.streaming}
+            <div class={`msg assistant${b.msg.streaming ? " streaming" : ""}`}>
+              <Markdown text={b.msg.text} />
+            </div>
+          {/if}
         </div>
-      {:else if b.msg.kind === "error"}
+      {:else if b.type === "work"}
+        <div class="assistant-turn">
+          <ActivityStrip items={b.items} />
+        </div>
+      {:else if b.type === "error"}
         <div class="msg error">{b.msg.text}</div>
-      {:else if b.msg.kind === "status"}
-        <div class={`msg working${b.msg.ok === false ? " aborted" : " done"}`}>{b.msg.text}</div>
       {/if}
     {/each}
 
     {#if showWorking}
-      <div class="msg working" aria-live="polite">
-        <span class="working-glyph">✻</span> working…
-        <span class="working-sec">{secs}s</span>
-        <span class="working-hint">Esc aborts</span>
+      <div class="working-dock" aria-live="polite">
+        <div class="msg-working-pill">
+          <span class="working-pulse-dot" aria-hidden="true"></span>
+          <span class="working-text">Thinking…</span>
+          <span class="working-sec">{secs}s</span>
+          <span class="working-hint"><kbd>Esc</kbd> aborts</span>
+        </div>
       </div>
     {/if}
   </div>
+  <ChatTimeline {messages} />
 </div>

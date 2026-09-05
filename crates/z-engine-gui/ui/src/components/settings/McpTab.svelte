@@ -6,6 +6,15 @@
     testMcpServer,
     type McpServerInfo,
   } from "$lib/commands";
+  import Icon, {
+    AlertTriangle,
+    CheckCircle2,
+    LoaderCircle,
+    Plus,
+    RefreshCw,
+    Server,
+    Trash2,
+  } from "$lib/ui/icons";
 
   function splitArgs(raw: string): string[] {
     return raw.trim().split(/\s+/).filter(Boolean);
@@ -13,10 +22,11 @@
 
   let servers = $state<McpServerInfo[]>([]);
   let testing = $state<string | null>(null);
-  let result = $state<Record<string, string>>({});
+  let result = $state<Record<string, { ok: boolean; message: string }>>({});
   let name = $state("");
   let command = $state("");
   let args = $state("");
+  let saving = $state(false);
 
   async function refresh() {
     try {
@@ -44,11 +54,16 @@
     const n = name.trim();
     const cmd = command.trim();
     if (!n || !cmd) return;
-    await saveMcpServer(n, cmd, splitArgs(args));
-    name = "";
-    command = "";
-    args = "";
-    await refresh();
+    saving = true;
+    try {
+      await saveMcpServer(n, cmd, splitArgs(args));
+      name = "";
+      command = "";
+      args = "";
+      await refresh();
+    } finally {
+      saving = false;
+    }
   }
 
   async function remove(n: string) {
@@ -65,73 +80,167 @@
       const tools = await testMcpServer(n);
       result = {
         ...result,
-        [n]: `${tools.length} tool${tools.length === 1 ? "" : "s"}: ${tools.join(", ") || "(none)"}`,
+        [n]: {
+          ok: true,
+          message: `${tools.length} tool${tools.length === 1 ? "" : "s"} detected: ${tools.join(", ") || "(none)"}`,
+        },
       };
     } catch (e) {
-      result = { ...result, [n]: `failed: ${String(e)}` };
+      result = {
+        ...result,
+        [n]: {
+          ok: false,
+          message: String(e),
+        },
+      };
     } finally {
       testing = null;
     }
   }
 </script>
 
-<div class="tab-body">
+<div class="tab-body mcp-tab">
+  <!-- MCP Header Overview -->
   <section class="settings-group">
-    <h3>Servers</h3>
-    <p class="form-note">
-      Stdio MCP servers for this project. Test spawns the server and lists tools. New chats pick them up.
-    </p>
-    {#if servers.length === 0}
-      <p class="none">No MCP servers yet.</p>
-    {/if}
-    {#each servers as s}
-      <div class="mcp-row">
-        <div class="mcp-head">
-          <strong>{s.name}</strong>
-          <code class="mcp-cmd">{[s.command, ...s.args].join(" ")}</code>
-          <button disabled={testing === s.name} onclick={() => void test(s.name)} type="button">
-            {testing === s.name ? "Testing…" : "Test"}
-          </button>
-          <button class="mini" title={`Remove ${s.name}`} onclick={() => void remove(s.name)} type="button">
-            ✕
-          </button>
-        </div>
-        {#if result[s.name]}
-          <code class="mcp-result">{result[s.name]}</code>
-        {/if}
+    <div class="settings-group-header">
+      <h3>Tool Integrations (MCP)</h3>
+      <span class="settings-group-sub">
+        Connect external servers to provide the assistant with custom tools, databases, and APIs
+      </span>
+    </div>
+
+    <div class="settings-card permission-status-card">
+      <div class="permission-status-icon mcp-brand-icon">
+        <Icon icon={Server} size={20} />
       </div>
-    {/each}
+      <div class="permission-status-copy">
+        <span class="permission-status-title">Model Context Protocol Enabled</span>
+        <p class="permission-status-desc">
+          Z Engine speaks stdio MCP to communicate with local servers. New chat sessions
+          automatically load the tools provided by these integrations.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Configured Servers List -->
+  <section class="settings-group">
+    <div class="settings-group-header">
+      <h3>Configured Integrations ({servers.length})</h3>
+      <span class="settings-group-sub">
+        Active tool servers available across your workspaces
+      </span>
+    </div>
+
+    <div class="settings-card">
+      {#if servers.length === 0}
+        <div class="permission-empty-card">
+          <Icon icon={Server} size={22} class="permission-empty-icon" />
+          <div class="permission-empty-text">
+            <strong>No MCP servers connected</strong>
+            <p>Add a server integration below using npx, uvx, or a local executable.</p>
+          </div>
+        </div>
+      {:else}
+        <div class="mcp-servers-list">
+          {#each servers as s}
+            {@const res = result[s.name]}
+            <div class="mcp-server-item">
+              <div class="mcp-server-main">
+                <div class="mcp-server-info">
+                  <div class="mcp-title-row">
+                    <span class="mcp-server-badge">
+                      <Icon icon={Server} size={12} />
+                    </span>
+                    <strong class="mcp-server-name">{s.name}</strong>
+                  </div>
+                  <code class="mcp-server-cmd">{[s.command, ...s.args].join(" ")}</code>
+                </div>
+
+                <div class="mcp-server-actions">
+                  <button
+                    type="button"
+                    class="mcp-test-btn"
+                    disabled={testing === s.name}
+                    onclick={() => void test(s.name)}
+                    title={`Test connection to ${s.name}`}
+                  >
+                    <Icon
+                      icon={testing === s.name ? LoaderCircle : RefreshCw}
+                      size={12}
+                      class={testing === s.name ? "spin" : undefined}
+                    />
+                    <span>{testing === s.name ? "Testing…" : "Test"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="permission-delete-btn"
+                    title={`Remove ${s.name}`}
+                    onclick={() => void remove(s.name)}
+                    aria-label={`Remove server ${s.name}`}
+                  >
+                    <Icon icon={Trash2} size={13} />
+                  </button>
+                </div>
+              </div>
+
+              {#if res}
+                <div class={`mcp-result-banner${res.ok ? " ok" : " err"}`}>
+                  <Icon icon={res.ok ? CheckCircle2 : AlertTriangle} size={13} />
+                  <span>{res.message}</span>
+                </div>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  </section>
+
+  <!-- Add Server Form -->
+  <section class="settings-group">
+    <div class="settings-group-header">
+      <h3>Add New Tool Integration</h3>
+      <span class="settings-group-sub">Configure an executable that communicates via stdio MCP</span>
+    </div>
+
     <form
-      class="mcp-add"
+      class="settings-card mcp-form-card"
       onsubmit={(e) => {
         e.preventDefault();
         void add();
       }}
     >
-      <div class="settings-card">
-        <label class="form-row">
-          <span class="form-label-title">Name</span>
-          <span class="form-label-desc">Short id used in config, e.g. filesystem</span>
-          <input bind:value={name} spellcheck={false} placeholder="filesystem" />
-        </label>
-        <label class="form-row">
-          <span class="form-label-title">Command</span>
-          <span class="form-label-desc">Executable that speaks MCP over stdio</span>
-          <input bind:value={command} spellcheck={false} placeholder="npx" />
-        </label>
-        <label class="form-row">
-          <span class="form-label-title">Args</span>
-          <span class="form-label-desc">Space-separated arguments</span>
-          <input
-            bind:value={args}
-            spellcheck={false}
-            placeholder="-y @modelcontextprotocol/server-filesystem ."
-          />
-        </label>
-      </div>
-      <div class="tab-actions">
-        <button class="primary" type="submit" disabled={!name.trim() || !command.trim()}>
-          Add server
+      <label class="form-row">
+        <span class="form-label-title">Integration Name</span>
+        <span class="form-label-desc">Unique identifier for this tool server (e.g. filesystem, github, postgres)</span>
+        <input bind:value={name} spellcheck={false} placeholder="filesystem" />
+      </label>
+
+      <label class="form-row">
+        <span class="form-label-title">Command</span>
+        <span class="form-label-desc">Executable command or binary path (e.g. npx, uvx, or /usr/local/bin/...)</span>
+        <input bind:value={command} spellcheck={false} placeholder="npx" />
+      </label>
+
+      <label class="form-row">
+        <span class="form-label-title">Arguments</span>
+        <span class="form-label-desc">Space-separated arguments and flags passed to the command</span>
+        <input
+          bind:value={args}
+          spellcheck={false}
+          placeholder="-y @modelcontextprotocol/server-filesystem ."
+        />
+      </label>
+
+      <div class="mcp-card-footer">
+        <button
+          class="primary mcp-submit-btn"
+          type="submit"
+          disabled={!name.trim() || !command.trim() || saving}
+        >
+          <Icon icon={Plus} size={13} />
+          <span>Add Tool Integration</span>
         </button>
       </div>
     </form>

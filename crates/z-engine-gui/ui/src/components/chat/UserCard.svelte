@@ -68,6 +68,7 @@
         </button>
       {/if}
     </div>
+
     <div class="user-bubble-actions">
       <button
         type="button"
@@ -77,11 +78,14 @@
         aria-label="Copy prompt"
       >
         {#if copied}
-          <Icon icon={Check} size={12} strokeWidth={2} class="copy-ok" />
+          <Icon icon={Check} size={11} strokeWidth={2.2} class="copy-ok" />
+          <span class="bubble-action-label">Copied</span>
         {:else}
-          <Icon icon={Copy} size={12} strokeWidth={1.8} />
+          <Icon icon={Copy} size={11} strokeWidth={1.8} />
+          <span class="bubble-action-label">Copy</span>
         {/if}
       </button>
+
       {#if canRevert}
         <button
           type="button"
@@ -91,7 +95,8 @@
           onclick={() => void revert()}
           aria-label="Revert & edit prompt"
         >
-          <Icon icon={Undo2} size={12} strokeWidth={1.8} />
+          <Icon icon={Undo2} size={11} strokeWidth={1.8} />
+          <span class="bubble-action-label">Edit</span>
         </button>
       {/if}
     </div>

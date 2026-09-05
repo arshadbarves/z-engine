@@ -5,6 +5,54 @@ export type InspectRow =
   | { key: string; kind: "msg"; part: PromptPart }
   | { key: string; kind: "tool"; tool: PromptTool };
 
+export type ContextCategory = "instructions" | "project" | "conversation" | "capabilities";
+
+export function categorizeRow(row: InspectRow): ContextCategory {
+  if (row.kind === "tool") return "capabilities";
+  const label = row.part.label.toLowerCase();
+  const role = row.part.role.toLowerCase();
+  if (
+    label.includes("repo") ||
+    label.includes("agents") ||
+    label.includes("map") ||
+    label.includes("context") ||
+    label.includes("note")
+  ) {
+    return "project";
+  }
+  if (role === "system") return "instructions";
+  return "conversation";
+}
+
+export function categoryMeta(cat: ContextCategory): { label: string; desc: string; color: string } {
+  switch (cat) {
+    case "instructions":
+      return {
+        label: "Instructions",
+        desc: "Core operating rules and behavioral guidelines given to the assistant.",
+        color: "#38bdf8",
+      };
+    case "project":
+      return {
+        label: "Project Knowledge",
+        desc: "Workspace structure, repository map, and custom AGENTS.md rules.",
+        color: "#00d68f",
+      };
+    case "conversation":
+      return {
+        label: "Conversation",
+        desc: "Recent messages and tool results exchanged in this session.",
+        color: "#a78bfa",
+      };
+    case "capabilities":
+      return {
+        label: "Capabilities",
+        desc: "Tools the assistant is authorized to execute (files, terminal, search).",
+        color: "#f5a623",
+      };
+  }
+}
+
 export function inspectRows(snap: PromptInspect): InspectRow[] {
   return [
     ...snap.messages.map((part, i) => ({ key: `m-${i}`, kind: "msg" as const, part })),

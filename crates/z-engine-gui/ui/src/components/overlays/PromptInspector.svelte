@@ -1,11 +1,11 @@
 <script lang="ts">
   import { inspectPrompt, type PromptInspect } from "$lib/commands";
-  import { promptInsights } from "$lib/promptInsights";
   import {
+    categorizeRow,
     inspectBody,
     inspectCopyText,
     inspectRows,
-    pct,
+    type ContextCategory,
   } from "$lib/promptInspectView";
   import { sessionStore } from "$lib/runtime";
   import Icon, {
@@ -14,14 +14,10 @@
     Check,
     ChevronLeft,
     Copy,
-    Sparkles,
-    Target,
-    Zap,
   } from "$lib/ui/icons";
   import { fmtTokens } from "$lib/util";
   import LogoMark from "../chrome/LogoMark.svelte";
   import WindowControlsMaybe from "../chrome/WindowControlsMaybe.svelte";
-  import PromptInspectChart from "./PromptInspectChart.svelte";
   import PromptInspectContent from "./PromptInspectContent.svelte";
   import PromptInspectSidebar from "./PromptInspectSidebar.svelte";
   import "../../settings.css";
@@ -35,18 +31,43 @@
   let loading = $state(true);
   let sel = $state(0);
   let copied = $state(false);
+  let activeCategory = $state<ContextCategory | "all">("all");
 
   const rows = $derived(snap ? inspectRows(snap) : []);
-  const ins = $derived(snap ? promptInsights(snap) : null);
   const activeRow = $derived(rows[sel] ?? rows[0]);
-  const activeLayer = $derived(ins?.layers[sel] ?? ins?.layers[0]);
-  const activeLabel = $derived(
-    activeRow
-      ? activeRow.kind === "msg"
-        ? activeRow.part.label
-        : activeRow.tool.name
-      : "Prompt part",
+
+  // Context category token distribution
+  const categoryStats = $derived.by(() => {
+    const stats = {
+      instructions: 0,
+      project: 0,
+      conversation: 0,
+      capabilities: 0,
+      total: snap?.totalTokens ?? 0,
+    };
+    if (!snap) return stats;
+    for (const r of rows) {
+      const cat = categorizeRow(r);
+      const tok = r.kind === "msg" ? r.part.tokens : r.tool.tokens;
+      stats[cat] += tok;
+    }
+    return stats;
+  });
+
+  // Estimated max context window for the active model (200,000 standard)
+  const maxContext = 200_000;
+  const memoryPct = $derived(
+    categoryStats.total > 0
+      ? Math.min(100, Math.round((categoryStats.total / maxContext) * 100))
+      : 0,
   );
+
+  const memoryStatus = $derived.by(() => {
+    if (memoryPct < 40) return { text: "Plenty of room", color: "#00d68f" };
+    if (memoryPct < 75) return { text: "Normal usage", color: "#38bdf8" };
+    if (memoryPct < 90) return { text: "Getting full", color: "#f5a623" };
+    return { text: "Near limit", color: "#ff453a" };
+  });
 
   $effect(() => {
     loading = true;
@@ -80,9 +101,7 @@
     try {
       await navigator.clipboard.writeText(inspectCopyText(snap));
       copied = true;
-      window.setTimeout(() => {
-        copied = false;
-      }, 1200);
+      setTimeout(() => (copied = false), 1400);
     } catch (e) {
       console.error(e);
     }
@@ -94,7 +113,7 @@
     class={`settings-page prompt-inspect-page${isClosing ? " is-closing" : ""}`}
     role="dialog"
     tabindex="-1"
-    aria-label="Prompt inspector"
+    aria-label="Context and memory inspector"
   >
     <header class="app-topbar settings-topbar" data-tauri-drag-region>
       <div class="topbar-left" data-tauri-drag-region>
@@ -108,35 +127,32 @@
           <Icon icon={ChevronLeft} size={15} strokeWidth={1.8} />
         </button>
         <div class="settings-breadcrumb">
-          <span class="settings-breadcrumb-root">Prompt Inspector</span>
-          <span class="settings-breadcrumb-sep">/</span>
-          <span class="settings-breadcrumb-leaf">{snap ? activeLabel : "Assembly"}</span>
+          <span class="settings-breadcrumb-root">Context & Memory</span>
+          {#if snap?.model}
+            <span class="settings-breadcrumb-sep">/</span>
+            <span class="prompt-model-badge" title={snap.model}>{snap.model}</span>
+          {/if}
         </div>
       </div>
 
       <div class="topbar-center" data-tauri-drag-region>
         <div class="settings-topbar-pill">
           <LogoMark size={14} />
-          <span>Prompt Assembly Profiler</span>
+          <span>Active Context Inspector</span>
         </div>
       </div>
 
       <div class="topbar-right" data-tauri-drag-region>
-        {#if snap}
-          <span class="prompt-topbar-stat">
-            ~{fmtTokens(snap.totalTokens)} tok
-          </span>
-        {/if}
         <button
           type="button"
           class="settings-copy-btn"
           onclick={() => void onCopyAll()}
           disabled={!snap}
-          aria-label="Copy prompt assembly"
-          title="Copy full wire transcript and schemas to clipboard"
+          aria-label="Copy all context"
+          title="Copy entire context and instructions to clipboard"
         >
           <Icon icon={copied ? Check : Copy} size={13} />
-          <span>{copied ? "Assembly Copied" : "Copy Full Assembly"}</span>
+          <span>{copied ? "Context Copied" : "Copy All Context"}</span>
         </button>
         <WindowControlsMaybe />
       </div>
@@ -145,10 +161,10 @@
     <div class="app-body settings-body prompt-inspect-body">
       <PromptInspectSidebar
         {rows}
-        layers={ins?.layers ?? []}
         selected={sel}
         onSelect={(idx) => (sel = idx)}
-        totalTokens={snap?.totalTokens ?? 0}
+        {activeCategory}
+        onSelectCategory={(cat) => (activeCategory = cat)}
         {loading}
         {err}
       />
@@ -160,86 +176,105 @@
               <div class="prompt-inspect-err" role="alert">
                 <Icon icon={AlertTriangle} size={18} />
                 <div>
-                  <strong>Assembly Unavailable</strong>
+                  <strong>Context Unavailable</strong>
                   <p>{err}</p>
                 </div>
               </div>
-            {:else if !snap || !ins}
+            {:else if !snap}
               <div class="settings-loading">
                 <Icon icon={Brain} size={24} />
-                <span>Profiling prompt context and wire token distribution…</span>
+                <span>Reading assistant context and active memory…</span>
               </div>
             {:else}
-              <!-- Executive Profiler Stat Cards -->
-              <div class="prompt-kpi-grid">
-                <div class="prompt-kpi-card">
-                  <div class="kpi-icon-wrap model-icon">
-                    <Icon icon={Brain} size={16} />
-                  </div>
-                  <div class="kpi-body">
-                    <span class="kpi-label">Active Model</span>
-                    <strong class="kpi-value" title={snap.model}>{snap.model}</strong>
-                  </div>
-                </div>
-
-                <div class="prompt-kpi-card">
-                  <div class="kpi-icon-wrap footprint-icon">
-                    <Icon icon={Sparkles} size={16} />
-                  </div>
-                  <div class="kpi-body">
-                    <span class="kpi-label">Total Prompt Footprint</span>
-                    <strong class="kpi-value">~{fmtTokens(snap.totalTokens)} tok</strong>
-                    <small class="kpi-sub">{snap.messages.length} msgs · {snap.tools.length} tools</small>
+              <!-- Unified Apple Memory Health Meter (Zero Duplicates) -->
+              <div class="prompt-memory-card">
+                <div class="memory-card-header">
+                  <div class="memory-title-wrap">
+                    <span class="memory-card-title">Memory Capacity</span>
+                    <span class="memory-card-sub">
+                      ~{fmtTokens(categoryStats.total)} tokens used ({memoryPct}% capacity) · 
+                      <span style={`color: ${memoryStatus.color}; font-weight: 550;`}>{memoryStatus.text}</span>
+                    </span>
                   </div>
                 </div>
 
-                <div class="prompt-kpi-card">
-                  <div class="kpi-icon-wrap cache-icon">
-                    <Icon icon={Zap} size={16} />
-                  </div>
-                  <div class="kpi-body">
-                    <span class="kpi-label">Cache Efficiency</span>
-                    <strong class="kpi-value">{pct(ins.cacheableTokens / Math.max(1, snap.totalTokens))}</strong>
-                    <small class="kpi-sub">~{fmtTokens(ins.cacheableTokens)} static prefix</small>
-                  </div>
+                <!-- Multi-Segmented Proportional Memory Track -->
+                <div class="memory-track" aria-label="Context memory breakdown">
+                  {#if categoryStats.instructions > 0}
+                    <div
+                      class="memory-segment seg-instructions"
+                      style={`width: ${(categoryStats.instructions / Math.max(1, categoryStats.total)) * 100}%;`}
+                      title={`Instructions: ~${fmtTokens(categoryStats.instructions)} tokens`}
+                    ></div>
+                  {/if}
+                  {#if categoryStats.project > 0}
+                    <div
+                      class="memory-segment seg-project"
+                      style={`width: ${(categoryStats.project / Math.max(1, categoryStats.total)) * 100}%;`}
+                      title={`Project Knowledge: ~${fmtTokens(categoryStats.project)} tokens`}
+                    ></div>
+                  {/if}
+                  {#if categoryStats.conversation > 0}
+                    <div
+                      class="memory-segment seg-conversation"
+                      style={`width: ${(categoryStats.conversation / Math.max(1, categoryStats.total)) * 100}%;`}
+                      title={`Conversation: ~${fmtTokens(categoryStats.conversation)} tokens`}
+                    ></div>
+                  {/if}
+                  {#if categoryStats.capabilities > 0}
+                    <div
+                      class="memory-segment seg-capabilities"
+                      style={`width: ${(categoryStats.capabilities / Math.max(1, categoryStats.total)) * 100}%;`}
+                      title={`Capabilities: ~${fmtTokens(categoryStats.capabilities)} tokens`}
+                    ></div>
+                  {/if}
                 </div>
 
-                <div class="prompt-kpi-card">
-                  <div class="kpi-icon-wrap sink-icon">
-                    <Icon icon={Target} size={16} />
-                  </div>
-                  <div class="kpi-body">
-                    <span class="kpi-label">Primary Token Sink</span>
-                    <strong class="kpi-value" title={ins.largest.name}>{ins.largest.name}</strong>
-                    <small class="kpi-sub">{pct(ins.largest.share)} of total context</small>
-                  </div>
+                <!-- Interactive Category Pills -->
+                <div class="memory-pills-row">
+                  <button
+                    type="button"
+                    class={`memory-pill pill-instructions${activeCategory === "instructions" ? " active" : ""}`}
+                    onclick={() => (activeCategory = activeCategory === "instructions" ? "all" : "instructions")}
+                  >
+                    <span class="pill-dot seg-instructions"></span>
+                    <span class="pill-label">Instructions</span>
+                    <span class="pill-stat">~{fmtTokens(categoryStats.instructions)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class={`memory-pill pill-project${activeCategory === "project" ? " active" : ""}`}
+                    onclick={() => (activeCategory = activeCategory === "project" ? "all" : "project")}
+                  >
+                    <span class="pill-dot seg-project"></span>
+                    <span class="pill-label">Project</span>
+                    <span class="pill-stat">~{fmtTokens(categoryStats.project)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class={`memory-pill pill-conversation${activeCategory === "conversation" ? " active" : ""}`}
+                    onclick={() => (activeCategory = activeCategory === "conversation" ? "all" : "conversation")}
+                  >
+                    <span class="pill-dot seg-conversation"></span>
+                    <span class="pill-label">Chat</span>
+                    <span class="pill-stat">~{fmtTokens(categoryStats.conversation)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class={`memory-pill pill-capabilities${activeCategory === "capabilities" ? " active" : ""}`}
+                    onclick={() => (activeCategory = activeCategory === "capabilities" ? "all" : "capabilities")}
+                  >
+                    <span class="pill-dot seg-capabilities"></span>
+                    <span class="pill-label">Tools</span>
+                    <span class="pill-stat">~{fmtTokens(categoryStats.capabilities)}</span>
+                  </button>
                 </div>
               </div>
 
-              <!-- Interactive Stack Distribution Bar & Legend -->
-              <PromptInspectChart {ins} />
-
-              <!-- Actionable Optimization Hints & Advisories -->
-              {#if ins.hints.length > 0}
-                <div class="prompt-advisory-box">
-                  <div class="advisory-head">
-                    <Icon icon={AlertTriangle} size={14} />
-                    <span>Optimization Opportunities ({ins.hints.length})</span>
-                  </div>
-                  <ul class="prompt-advisory-list">
-                    {#each ins.hints as h}
-                      <li>{h}</li>
-                    {/each}
-                  </ul>
-                </div>
-              {/if}
-
-              <!-- Deep Layer Content Inspector & Code Viewer -->
+              <!-- Apple Reader Section Viewer -->
               <PromptInspectContent
                 {activeRow}
-                {activeLayer}
                 rawContent={activeRow ? inspectBody(activeRow) : ""}
-                totalTokens={snap.totalTokens}
               />
             {/if}
           </div>
@@ -248,5 +283,6 @@
     </div>
   </div>
 </div>
+
 
 

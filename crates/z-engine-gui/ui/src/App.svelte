@@ -147,16 +147,11 @@
     function onKey(e: KeyboardEvent) {
       if (!(e.metaKey || e.ctrlKey)) return;
       const k = e.key.toLowerCase();
-      if (k === "k") {
-        e.preventDefault();
-        paletteOpen = !paletteOpen;
-      } else if (k === "n") {
-        e.preventDefault();
-        void startNew();
-      } else if (k === "b") {
-        e.preventDefault();
-        sidebarOpen = !sidebarOpen;
-      }
+      if (k === "k") { e.preventDefault(); paletteOpen = !paletteOpen; }
+      else if (k === "n") { e.preventDefault(); void startNew(); }
+      else if (k === "b") { e.preventDefault(); sidebarOpen = !sidebarOpen; }
+      else if (k === "d") { e.preventDefault(); diffOpen = !diffOpen; }
+      else if (e.key === ",") { e.preventDefault(); settingsOpen = !settingsOpen; }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -188,15 +183,17 @@
     chatTitle={activeChatTitle}
     titleHint={workspaces.current.active
       ? `workspace ${workspaces.current.active}${sessionId.current ? ` · session ${sessionId.current}` : ""}`
-      : sessionId.current
-        ? `session ${sessionId.current}`
-        : undefined}
+      : sessionId.current ? `session ${sessionId.current}` : undefined}
     {diffOpen}
     {sidebarOpen}
+    isWorking={busy.current}
+    isApproval={Boolean(awaitingApproval.current)}
     onToggleSidebar={() => (sidebarOpen = !sidebarOpen)}
     onPalette={() => (paletteOpen = true)}
     onToggleDiff={() => (diffOpen = !diffOpen)}
     onInspectPrompt={() => (inspectOpen = true)}
+    onNewChat={() => void startNew()}
+    onSettings={() => (settingsOpen = true)}
   />
 
   <div class="app-body">
@@ -207,14 +204,12 @@
       activeUlid={sessionId.current}
       activity={sessionActivity.current}
       version={config.current?.version}
-      onNewChat={() => void startNew()}
       onOpen={(p, root) => void openSession(p, root, refresh)}
       onDelete={(p) => void delSession(p, setList, startNew, refresh)}
       onAddWorkspace={() => void addWorkspace()}
-      onRemoveWorkspace={(root) =>
-        void removeWorkspace(root, sessionsList, setList, startNew, refresh)}
+      onRemoveWorkspace={(root) => void removeWorkspace(root, sessionsList, setList, startNew, refresh)}
       onActivateWorkspace={(root) => workspaceStore.setActive(root)}
-      onSettings={() => (settingsOpen = true)}
+      onNewChat={() => void startNew()}
     />
 
     <section class="workstation-stage">

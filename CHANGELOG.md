@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.4] - 2026-09-05
+
+### Added
+- **Minimal Premium Chat Redesign**: Collapsed noisy auxiliary tool activity into subtle, single-line process strips with in-place Apple segmented inspector (All, Files, Searches, Terminal, Reasoning).
+- **Floating Scrubber Timeline**: Unobtrusive right-rail conversation scrubber with clean prompt tooltips, zero turn numbers, and razor-sharp hairline borders.
+- **Apple Frosted User Bubbles**: High-contrast dark bubbles with smooth hover-reveal micro-actions (copy, edit/revert) and image attachment previews.
+- **Floating Composer Dock**: Unified toolbar controls with circular send/stop button and modular architecture meeting the file budget.
+- **Settings Redesign**: Clean Apple preferences layout with dedicated Providers directory, connection modals, and permission safety controls.
+- **Prompt Inspector**: Consolidated context meter eliminating duplicate token counters.
+
+---
+
 ## [1.4.1] - 2026-09-01
 
 ### Fixed
