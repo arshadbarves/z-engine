@@ -76,6 +76,20 @@ pub(super) async fn settle_completion(
     let manifest = &verification.manifest;
     let verdict = manifest.verdict();
 
+    // What was proved, and about which workspace — recorded before the
+    // verdict is acted on, so a blocked run leaves the same account a
+    // completed one does.
+    if let Some(run) = &ctx.run_recorder {
+        run.record_completion(
+            &crate::replay::manifest_fingerprint(manifest),
+            crate::replay::diff_fingerprint(&plan),
+            match &verdict {
+                Verdict::Complete => "complete",
+                Verdict::Blocked(_) => "blocked",
+            },
+        );
+    }
+
     // Settle before returning, on every path out of here. A turn that
     // verified hands the next one the workspace its checks produced; a
     // turn that did not keeps owing what it changed, and only the

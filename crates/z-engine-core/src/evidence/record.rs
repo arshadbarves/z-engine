@@ -47,8 +47,35 @@ impl EvidenceRecord {
         method: impl Into<String>,
         revision: impl Into<String>,
     ) -> Self {
+        Self::with_id(
+            ulid::Ulid::new().to_string(),
+            path,
+            line_range,
+            file_hash,
+            blob,
+            method,
+            revision,
+        )
+    }
+
+    /// Construct a record with a caller-supplied identifier.
+    ///
+    /// The id is the only arbitrary part of a record, and it reaches the
+    /// model inside every read result, so a replayed run takes it from
+    /// the run it is reproducing rather than minting a new one — the
+    /// requests would otherwise differ for no reason but the clock.
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_id(
+        id: impl Into<String>,
+        path: impl Into<String>,
+        line_range: Option<(u32, u32)>,
+        file_hash: impl Into<String>,
+        blob: BlobHandle,
+        method: impl Into<String>,
+        revision: impl Into<String>,
+    ) -> Self {
         Self {
-            id: ulid::Ulid::new().to_string(),
+            id: id.into(),
             path: path.into(),
             line_range,
             file_hash: file_hash.into(),

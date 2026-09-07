@@ -47,6 +47,12 @@ pub enum ProviderError {
     Connect { attempts: u32, cause: String },
     #[error("stream interrupted: {0}")]
     StreamInterrupted(String),
+    /// A non-network transport (a recorded cassette) refused the request:
+    /// it is not what was recorded at this point in the sequence. Never
+    /// retried and never resolved over the wire — a replay that reached
+    /// for the network would stop being a replay.
+    #[error("replay refused request #{sequence}: {detail}")]
+    Replay { sequence: u64, detail: String },
 }
 
 #[derive(Clone)]

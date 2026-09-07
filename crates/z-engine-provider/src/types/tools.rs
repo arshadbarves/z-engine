@@ -15,7 +15,7 @@ pub struct FunctionCall {
 }
 
 /// Tool definition advertised to the model.
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ToolDef {
     #[serde(rename = "type")]
     pub kind: String,
@@ -39,7 +39,7 @@ impl ToolDef {
     }
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ToolFunctionDef {
     pub name: String,
     pub description: String,

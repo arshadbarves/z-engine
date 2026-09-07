@@ -49,6 +49,11 @@ pub struct ToolCtx {
     /// `None` means this run declares no scope, so `set_work_order` fails
     /// closed and no order digest ever reaches the prompt.
     pub work_orders: Option<Arc<crate::governance::WorkOrderStore>>,
+    /// Optional cassette recorder (Task 7). `None` means the run is not
+    /// being taped and behaves exactly as it did before replay existed;
+    /// when set it both records what happens and, on a replayed run,
+    /// supplies the evidence ids the recorded run minted.
+    pub run_recorder: Option<Arc<crate::replay::RunRecorder>>,
 }
 
 /// A chunk of live tool output emitted while a tool is running.
@@ -85,6 +90,7 @@ impl ToolCtx {
             output_tx: Arc::new(tokio::sync::mpsc::unbounded_channel().0),
             evidence: None,
             work_orders: None,
+            run_recorder: None,
         }
     }
 
@@ -124,6 +130,45 @@ impl ToolCtx {
     pub fn with_task_runner(mut self, runner: SubAgentRunner) -> Self {
         self.task_runner = Some(runner);
         self
+    }
+
+    /// Tape this run onto `recorder` (builder style).
+    pub fn with_run_recorder(mut self, recorder: Arc<crate::replay::RunRecorder>) -> Self {
+        self.run_recorder = Some(recorder);
+        self
+    }
+
+    /// Tape one tool result. Recorded by content, since the transcript
+    /// text is what the next request is built from.
+    pub(crate) fn record_tool_outcome(&self, name: &str, ok: bool, result: &str) {
+        if let Some(run) = &self.run_recorder {
+            run.record_tool(name, ok, result);
+        }
+    }
+
+    /// Tape the prompt prefix framing one request (L0, repo map, notes,
+    /// order digest) — the part the harness assembles rather than the
+    /// conversation.
+    pub(crate) fn record_prompt_prefix(&self, prefix: &[z_engine_provider::ChatMessage]) {
+        if let Some(run) = &self.run_recorder {
+            run.record_prompt(prefix);
+        }
+    }
+
+    /// Tape one gate ruling, with the refusal verbatim when it refused.
+    pub(crate) fn record_gate_decision(
+        &self,
+        kind: crate::replay::GateKind,
+        target: &str,
+        verdict: &Result<(), crate::governance::GateFailure>,
+    ) {
+        if let Some(run) = &self.run_recorder {
+            let (allowed, reason) = match verdict {
+                Ok(()) => (true, None),
+                Err(failure) => (false, Some(failure.to_string())),
+            };
+            run.record_gate(kind, target, allowed, reason);
+        }
     }
 
     /// Canonicalized best-effort containment check: does `p` (relative to

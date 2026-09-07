@@ -45,6 +45,9 @@ impl ToolCtx {
         }
         let order = self.active_work_order();
         let identity = self.repo_relative_identity(path);
+        let target = identity
+            .clone()
+            .unwrap_or_else(|| path.display().to_string());
         let request = MutationRequest {
             path,
             identity: identity.as_deref(),
@@ -54,13 +57,16 @@ impl ToolCtx {
             rust: is_rust(path),
         };
         let prescreen = GateEngine::prescreen(&request);
-        if !prescreen.is_pass() || !request.rust {
-            return prescreen.into_result();
-        }
-        // Semantics are gathered only for a change that is otherwise
-        // authorized, and are the only thing that can localize it.
-        let facts = self.rust_facts(path, current).await;
-        GateEngine::authorize(&request, Some(&facts)).into_result()
+        let verdict = if !prescreen.is_pass() || !request.rust {
+            prescreen.into_result()
+        } else {
+            // Semantics are gathered only for a change that is otherwise
+            // authorized, and are the only thing that can localize it.
+            let facts = self.rust_facts(path, current).await;
+            GateEngine::authorize(&request, Some(&facts)).into_result()
+        };
+        self.record_gate_decision(crate::replay::GateKind::Mutation, &target, &verdict);
+        verdict
     }
 
     /// Authorize one shell command. Guarded runs only run commands whose
@@ -70,8 +76,11 @@ impl ToolCtx {
         if self.work_orders.is_none() {
             return Ok(());
         }
-        GateEngine::authorize_command(command, PolicyEngine::is_provably_read_only(command))
-            .into_result()
+        let verdict =
+            GateEngine::authorize_command(command, PolicyEngine::is_provably_read_only(command))
+                .into_result();
+        self.record_gate_decision(crate::replay::GateKind::Command, command, &verdict);
+        verdict
     }
 
     /// Compare the run's latest read of `path` against the bytes about to

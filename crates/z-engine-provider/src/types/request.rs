@@ -1,13 +1,17 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::tools::{ToolCall, ToolDef};
 
 /// A chat completion request. Always sent with `stream: true`.
-#[derive(Debug, Clone, Serialize)]
+///
+/// `Deserialize` is the record/replay seam: a recorded request must come
+/// back byte-identical from a cassette, so every optional field that is
+/// skipped on the wire carries `default` here.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ChatRequest {
     pub model: String,
     pub messages: Vec<ChatMessage>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tools: Vec<ToolDef>,
     pub stream: bool,
     pub stream_options: StreamOptions,
@@ -15,17 +19,17 @@ pub struct ChatRequest {
     /// the model maximum (e.g. 65536) and pre-validate credits against
     /// prompt + max_tokens — failing near-zero balances even for tiny
     /// prompts ("can only afford N tokens").
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_tokens: Option<u32>,
     /// Unified reasoning control (`{"effort": "low|medium|high|xhigh"}`).
     /// Only sent when the user explicitly picks an effort; omitted
     /// otherwise so non-reasoning models never see the parameter.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<ReasoningParam>,
 }
 
 /// Wire shape of the unified `reasoning` parameter.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReasoningParam {
     pub effort: String,
 }
@@ -63,7 +67,7 @@ impl ChatRequest {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StreamOptions {
     include_usage: bool,
 }
@@ -97,17 +101,80 @@ pub enum ChatMessage {
 }
 
 /// One content part of a multimodal user message.
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentPart {
     Text { text: String },
     ImageUrl { image_url: ImageUrlBody },
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ImageUrlBody {
     /// Data URL (`data:image/png;base64,...`) or remote https URL.
     pub url: String,
+}
+
+/// Hand-written because `User` and `UserMulti` share the `user` role: a
+/// derived internally-tagged `Deserialize` maps a tag to exactly one
+/// variant, so a multimodal turn would be rejected on the way back out
+/// of a recorded cassette instead of round-tripping.
+impl<'de> Deserialize<'de> for ChatMessage {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum UserContent {
+            Text(String),
+            Parts(Vec<ContentPart>),
+        }
+
+        #[derive(Deserialize)]
+        #[serde(tag = "role", rename_all = "lowercase")]
+        enum Wire {
+            System {
+                content: String,
+            },
+            User {
+                content: UserContent,
+            },
+            Assistant {
+                #[serde(default)]
+                content: Option<String>,
+                #[serde(default)]
+                tool_calls: Vec<ToolCall>,
+            },
+            Tool {
+                tool_call_id: String,
+                content: String,
+            },
+        }
+
+        Ok(match Wire::deserialize(deserializer)? {
+            Wire::System { content } => ChatMessage::System { content },
+            Wire::User {
+                content: UserContent::Text(content),
+            } => ChatMessage::User { content },
+            Wire::User {
+                content: UserContent::Parts(content),
+            } => ChatMessage::UserMulti { content },
+            Wire::Assistant {
+                content,
+                tool_calls,
+            } => ChatMessage::Assistant {
+                content,
+                tool_calls,
+            },
+            Wire::Tool {
+                tool_call_id,
+                content,
+            } => ChatMessage::Tool {
+                tool_call_id,
+                content,
+            },
+        })
+    }
 }
 
 impl ChatMessage {
@@ -189,5 +256,45 @@ mod tests {
         let json = serde_json::to_string(&req).unwrap();
         assert!(json.contains(r#""max_tokens":4096"#));
         assert!(json.contains(r#""reasoning":{"effort":"medium"}"#));
+    }
+
+    /// Record/replay rests on this: a request read back from a cassette
+    /// has to be the request that was sent, every message shape included.
+    #[test]
+    fn a_request_round_trips_through_json_unchanged() {
+        let req = ChatRequest::new(
+            "m",
+            vec![
+                ChatMessage::system("be terse"),
+                ChatMessage::user("hi"),
+                ChatMessage::user_with_images(
+                    "what is this?",
+                    &["data:image/png;base64,AA".into()],
+                ),
+                ChatMessage::Assistant {
+                    content: Some("thinking".into()),
+                    tool_calls: vec![super::super::tools::ToolCall {
+                        id: "call_1".into(),
+                        function: super::super::tools::FunctionCall {
+                            name: "bash".into(),
+                            arguments: "{}".into(),
+                        },
+                    }],
+                },
+                ChatMessage::tool_result("call_1", "ok"),
+            ],
+        )
+        .with_tools(vec![super::super::tools::ToolDef::function(
+            "bash",
+            "run a command",
+            serde_json::json!({"type": "object"}),
+        )])
+        .with_max_tokens(4096)
+        .with_reasoning_effort("high");
+
+        let text = serde_json::to_string(&req).unwrap();
+        let back: ChatRequest = serde_json::from_str(&text).unwrap();
+        assert_eq!(back, req);
+        assert_eq!(serde_json::to_string(&back).unwrap(), text);
     }
 }

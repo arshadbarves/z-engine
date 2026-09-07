@@ -176,6 +176,24 @@ pub fn spawn_with_provider(
     resume: Option<ResumeState>,
     recorder: Option<SessionWriter>,
 ) -> (AgentHandle, EventRx) {
+    spawn_with_run_recorder(cfg, client, resume, recorder, None)
+}
+
+/// Spawn against an injected provider, taping the whole run — requests,
+/// tool outcomes, gate rulings, evidence ids, verdicts, metrics — onto
+/// `run` (Task 7).
+///
+/// The recorder is a witness, not a participant: every gate still runs,
+/// and a replayed run re-proves its own completion. Wrap `client` in a
+/// [`crate::replay::RecordingProvider`] sharing the same recorder to
+/// capture the provider side as well.
+pub fn spawn_with_run_recorder(
+    cfg: LoopConfig,
+    client: Arc<dyn ChatProvider>,
+    resume: Option<ResumeState>,
+    recorder: Option<SessionWriter>,
+    run: Option<Arc<crate::replay::RunRecorder>>,
+) -> (AgentHandle, EventRx) {
     let abort_flag = Arc::new(AtomicBool::new(false));
 
     // One provider handle, cloned for the sub-agent runner so Settings
@@ -225,6 +243,7 @@ pub fn spawn_with_provider(
         runner,
         abort_flag,
         Arc::clone(&last_prompt),
+        run,
     ));
     (
         AgentHandle {

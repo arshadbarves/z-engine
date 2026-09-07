@@ -51,6 +51,19 @@ pub(super) enum TurnOutcome {
     },
 }
 
+impl TurnOutcome {
+    /// How the turn ended, in the vocabulary the session transcript
+    /// already uses, so a cassette and a transcript agree.
+    pub(super) fn label(&self) -> String {
+        match self {
+            Self::Completed => "completed".into(),
+            Self::Aborted => "aborted".into(),
+            Self::Failed(_) => "failed".into(),
+            Self::Blocked { gate, .. } => format!("blocked:{gate}"),
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn run_turn(
     cfg: &LoopConfig,
@@ -127,6 +140,9 @@ pub(super) async fn run_turn(
         if let Some(digest) = state.work_order_digest() {
             request_messages.push(ChatMessage::system(digest));
         }
+        // Everything above the conversation is the harness's own doing;
+        // its hash is what a replay compares prompts on.
+        let prefix_len = request_messages.len();
         request_messages.extend(state.working.iter().cloned());
 
         let mut request =
@@ -145,6 +161,7 @@ pub(super) async fn run_turn(
                 ),
             );
         }
+        ctx.record_prompt_prefix(&request.messages[..prefix_len]);
         let mut stream = client.stream_chat(&request, Arc::clone(abort_flag));
 
         // ---- consume the stream --------------------------------------

@@ -21,5 +21,6 @@ pub mod lsp;
 pub mod mcp;
 pub mod perms;
 pub mod prompts;
+pub mod replay;
 pub mod session;
 pub mod tools;

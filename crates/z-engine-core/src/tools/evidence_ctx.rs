@@ -150,14 +150,29 @@ impl ToolCtx {
             .blobs
             .put(range_bytes)
             .map_err(|e| super::ToolError::Failed(format!("recording read evidence: {e}")))?;
-        let record = EvidenceRecord::new(
-            rel_path,
-            line_range,
-            file_hash,
-            blob,
-            "read_file",
-            git_head_or_working_tree(&self.project_root),
-        );
+        let revision = git_head_or_working_tree(&self.project_root);
+        // A taped run takes the id from the tape: ids reach the model
+        // inside the read result, so a replay that minted its own would
+        // diverge from the run it is reproducing on the very next request.
+        let record = match &self.run_recorder {
+            Some(run) => {
+                let id = run.evidence_id(&rel_path, line_range).map_err(|e| {
+                    super::ToolError::Failed(format!("recording read evidence: {e}"))
+                })?;
+                EvidenceRecord::with_id(
+                    id,
+                    rel_path,
+                    line_range,
+                    file_hash,
+                    blob,
+                    "read_file",
+                    revision,
+                )
+            }
+            None => {
+                EvidenceRecord::new(rel_path, line_range, file_hash, blob, "read_file", revision)
+            }
+        };
         store
             .ledger
             .append(&record)

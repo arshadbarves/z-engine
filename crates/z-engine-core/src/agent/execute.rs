@@ -272,6 +272,7 @@ async fn run_one(
     });
 
     if ctx.aborted() {
+        ctx.record_tool_outcome(&name, false, "[aborted]");
         return "[aborted]".to_string();
     }
     let input_hook = input.clone();
@@ -285,13 +286,15 @@ async fn run_one(
     let mut out = match result {
         Ok(out) => out,
         Err(e) => {
+            let text = format!("ERROR: {e}");
+            ctx.record_tool_outcome(&name, false, &text);
             let _ = ev_tx.send(Event::ToolCallFinished {
                 name,
                 ok: false,
                 duration_ms,
                 summary: e.to_string(),
             });
-            return format!("ERROR: {e}");
+            return text;
         }
     };
 
@@ -306,6 +309,7 @@ async fn run_one(
     )
     .await;
 
+    ctx.record_tool_outcome(&name, out.ok, &out.result);
     let _ = ev_tx.send(Event::ToolCallFinished {
         name,
         ok: out.ok,

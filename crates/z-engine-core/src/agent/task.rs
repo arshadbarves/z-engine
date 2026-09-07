@@ -43,6 +43,7 @@ pub(super) async fn agent_task(
     runner: crate::tools::SubAgentRunner,
     abort_flag: Arc<AtomicBool>,
     last_prompt: Arc<Mutex<Option<PromptInspect>>>,
+    run: Option<Arc<crate::replay::RunRecorder>>,
 ) {
     let mut registry = registry;
     mcp_setup::register_servers(&cfg, &mut registry, &ev_tx).await;
@@ -76,6 +77,7 @@ pub(super) async fn agent_task(
     }
     ctx.output_tx = Arc::new(output_tx);
     ctx.notes = Arc::clone(&notes);
+    ctx.run_recorder = run;
 
     // Forward live tool output to the UI.
     {
@@ -207,6 +209,10 @@ pub(super) async fn agent_task(
                 )
                 .await;
 
+                if let Some(run) = &ctx.run_recorder {
+                    run.settle().await; // the tape owes this turn its last exchange
+                    run.record_turn(&outcome.label());
+                }
                 match outcome {
                     TurnOutcome::Completed => {
                         if let Some(w) = recorder.as_mut() {
