@@ -192,6 +192,32 @@ export function dispatchEvent(ev: EventPayload) {
       bumpSessionsTick();
       emitChange(parked());
       break;
+    // A gate refused to accept the turn as finished (e.g. guarded
+    // completion verification failed). The session survives it, so this
+    // is an error row rather than a terminal verdict — but it must never
+    // read like a completed turn.
+    case "turnBlocked":
+      closeThinking();
+      endAssistant();
+      rt.busy = false;
+      push("error", `${ev.gate ?? "gate"} blocked the turn — ${ev.reason}`);
+      if (ev.manifestPath) push("notice", `Evidence: ${ev.manifestPath}`);
+      pushToast("Turn blocked", "warn");
+      rt.turnStartedAt = 0;
+      bumpSessionsTick();
+      emitChange(parked());
+      break;
+    // Terminal refusal (e.g. guarded mode could not be established). The
+    // preceding `error` carries the detail; this states the verdict so a
+    // blocked run never looks like one that simply ended.
+    case "runBlocked":
+      closeThinking();
+      endAssistant();
+      rt.busy = false;
+      push("notice", `Run blocked — ${ev.reason}`);
+      pushToast("Run blocked", "warn");
+      emitChange(parked());
+      break;
     case "sessionChanged":
       activateSession(String(ev.ulid ?? ""));
       break;
