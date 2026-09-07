@@ -71,7 +71,7 @@ zengine --guarded --headless "make word_count count words" \
         --record-run ~/tapes/run.jsonl --metrics-out ~/tapes/metrics.json
 
 # re-run it from the tape: no provider, no credential
-zengine --headless "make word_count count words" \
+zengine --guarded --headless "make word_count count words" \
         --replay-run ~/tapes/run.jsonl
 ```
 
