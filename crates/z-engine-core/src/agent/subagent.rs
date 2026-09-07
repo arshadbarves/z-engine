@@ -1,13 +1,18 @@
 //! Isolated sub-agent loop: read-only toolset, own transcript, bounded
 //! rounds; returns the final assistant text only.
+//!
+//! Sub-agents run concurrently with the turn that delegated to them and
+//! with each other, so each speaks to the provider on its own lane
+//! ([`super::lanes::subagent`]) rather than racing into the turn's
+//! request sequence.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use z_engine_provider::{
-    AccumulatedToolCall, ChatMessage, ChatProvider, ChatRequest, StreamEvent, ToolCall,
-    ToolCallAccumulator,
+    AccumulatedToolCall, ChatMessage, ChatProvider, ChatRequest, RequestLane, StreamEvent,
+    ToolCall, ToolCallAccumulator,
 };
 
 use crate::perms::PolicyEngine;
@@ -24,6 +29,7 @@ pub(super) async fn run_isolated(
     project_root: PathBuf,
     tmp_dir: PathBuf,
     abort: Arc<AtomicBool>,
+    lane: RequestLane,
     prompt: &str,
     max_rounds: u32,
     max_output_tokens: u32,
@@ -46,7 +52,7 @@ pub(super) async fn run_isolated(
         let request = ChatRequest::new(model.clone(), messages.clone())
             .with_tools(registry.defs())
             .with_max_tokens(max_output_tokens);
-        let mut stream = client.stream_chat(&request, Arc::clone(&abort));
+        let mut stream = client.stream_chat_on(&lane, &request, Arc::clone(&abort));
 
         let mut text = String::new();
         let mut acc = ToolCallAccumulator::default();

@@ -1,5 +1,6 @@
 //! Client-side handles: command sender, event receiver, and task spawning.
 
+use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
@@ -9,6 +10,7 @@ use z_engine_provider::{ChatMessage, ChatProvider, Client};
 
 use super::LoopConfig;
 use super::events::{Command, Event};
+use super::lanes;
 use super::prompt_inspect::PromptInspect;
 use super::subagent::run_isolated;
 use super::task::agent_task;
@@ -204,15 +206,27 @@ pub fn spawn_with_run_recorder(
     let tmp_dir = cfg.tmp_dir.clone();
     let max_output = cfg.max_output_tokens;
     let sub_abort = Arc::clone(&abort_flag);
+    // Delegations are named by what was asked plus which delegation of
+    // that ask this is, so a replay finds the same lanes without relying
+    // on sub-agents starting in the order they did last time.
+    let sub_ordinals: Arc<Mutex<HashMap<String, u64>>> = Arc::default();
     let runner: crate::tools::SubAgentRunner = Arc::new(move |prompt: String, max_rounds: u32| {
         let client = Arc::clone(&sub_client);
         let model = model.clone();
         let root = project_root.clone();
         let tmp = tmp_dir.clone();
         let abort = Arc::clone(&sub_abort);
+        let ordinal = {
+            let mut claimed = sub_ordinals.lock().unwrap_or_else(|e| e.into_inner());
+            let slot = claimed.entry(prompt.clone()).or_insert(0);
+            let n = *slot;
+            *slot += 1;
+            n
+        };
+        let lane = lanes::subagent(&prompt, ordinal);
         Box::pin(async move {
             run_isolated(
-                client, model, root, tmp, abort, &prompt, max_rounds, max_output,
+                client, model, root, tmp, abort, lane, &prompt, max_rounds, max_output,
             )
             .await
         })

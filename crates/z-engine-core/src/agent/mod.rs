@@ -16,9 +16,12 @@ pub mod events;
 
 mod completion;
 mod config;
+mod decide;
 mod execute;
 mod guarded;
 mod handle;
+mod lanes;
+mod local_commands;
 mod mcp_setup;
 mod prompt_inspect;
 mod revert;

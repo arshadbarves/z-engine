@@ -205,12 +205,20 @@ pub(super) async fn run_turn(
                 } => {
                     tracing::warn!(tool = ?name, %reason, "malformed tool arguments");
                     let raw_short: String = raw_arguments.chars().take(200).collect();
-                    synthetic_errors.push((
-                        id.clone(),
-                        format!(
-                            "ERROR: arguments were not valid JSON ({reason}). You sent: {raw_short}"
-                        ),
-                    ));
+                    let text = format!(
+                        "ERROR: arguments were not valid JSON ({reason}). You sent: {raw_short}"
+                    );
+                    // The model asked for this call and reads the error;
+                    // a tape that omitted it would show a round the
+                    // model never had.
+                    ctx.record_tool_outcome(
+                        ctx.claim_tool_sequence(),
+                        name.as_deref().unwrap_or("<unnamed>"),
+                        crate::replay::ToolDisposition::Malformed,
+                        false,
+                        &text,
+                    );
+                    synthetic_errors.push((id.clone(), text));
                     wire_only_calls.push(ToolCall {
                         id,
                         function: z_engine_provider::FunctionCall {

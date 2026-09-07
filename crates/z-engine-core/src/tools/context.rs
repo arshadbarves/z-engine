@@ -138,11 +138,30 @@ impl ToolCtx {
         self
     }
 
-    /// Tape one tool result. Recorded by content, since the transcript
-    /// text is what the next request is built from.
-    pub(crate) fn record_tool_outcome(&self, name: &str, ok: bool, result: &str) {
-        if let Some(run) = &self.run_recorder {
-            run.record_tool(name, ok, result);
+    /// Claim the next tool position, in the order this round's calls
+    /// were *decided*. Returns `None` when nothing is being recorded.
+    ///
+    /// Claiming at decision time rather than at completion is what keeps
+    /// the tape in the run's order: concurrency-safe tools finish in
+    /// whatever order the scheduler picks, and a refused call never
+    /// finishes at all.
+    pub(crate) fn claim_tool_sequence(&self) -> Option<u64> {
+        self.run_recorder.as_ref().map(|run| run.begin_tool())
+    }
+
+    /// Tape what became of one tool call. Recorded by content, since the
+    /// transcript text is what the next request is built from — and a
+    /// refusal is transcript text just as much as a result is.
+    pub(crate) fn record_tool_outcome(
+        &self,
+        sequence: Option<u64>,
+        name: &str,
+        disposition: crate::replay::ToolDisposition,
+        ok: bool,
+        result: &str,
+    ) {
+        if let (Some(run), Some(sequence)) = (&self.run_recorder, sequence) {
+            run.record_tool(sequence, name, disposition, ok, result);
         }
     }
 

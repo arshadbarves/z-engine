@@ -1,20 +1,20 @@
-//! Permission gating and execution: decide every call up front (mode
-//! enforcement, policy engine, approvals), run safe tools concurrently,
-//! and map results/errors into transcript entries.
+//! Execution: run the calls [`super::decide`] cleared — safe tools
+//! concurrently, unsafe ones serially — and map results and errors into
+//! transcript entries in the model's original call order.
 
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use z_engine_provider::ToolCall;
 
-use crate::perms::{Decision, PolicyEngine};
+use crate::replay::ToolDisposition;
 use crate::tools::{ToolCtx, ToolError, ToolOutput, ToolRegistry};
 
+use super::decide::{Decided, Decisions, REFUSAL, Verdict, decide_calls};
 use super::events::{Command, Event};
 use super::state::LoopState;
 
@@ -24,11 +24,6 @@ pub(super) enum ExecutionsOutcome {
     /// `(tool_call_id, transcript content)` in original call order.
     Ran(Vec<(String, String)>),
     Aborted,
-}
-
-enum Verdict {
-    Run,
-    Denied,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -42,135 +37,21 @@ pub(super) async fn execute_calls(
     abort_flag: &Arc<AtomicBool>,
     mode: &crate::agent::events::PermissionMode,
 ) -> ExecutionsOutcome {
-    // Phase 1 â decide every call up front (approvals surface sequentially).
-    let mut verdicts: Vec<Verdict> = Vec::with_capacity(calls.len());
-    for call in &calls {
-        let input = parse_input(&call.function.arguments);
-        let decision = ctx
-            .perms
-            .lock()
-            .map(|p| p.decide(&call.function.name, &input))
-            .unwrap_or(Decision::Gate);
+    // Phase 1 — decide every call up front (approvals surface sequentially).
+    let decided = match decide_calls(
+        &calls, registry, ctx, cmd_rx, ev_tx, state, abort_flag, mode,
+    )
+    .await
+    {
+        Decisions::Made(decided) => decided,
+        Decisions::Aborted => return ExecutionsOutcome::Aborted,
+    };
 
-        // Mode enforcement precedes everything else.
-        let mutating = matches!(
-            call.function.name.as_str(),
-            "bash" | "write_file" | "edit_file"
-        );
-        if *mode == crate::agent::events::PermissionMode::Plan && mutating {
-            let _ = ev_tx.send(Event::StatusNote(format!(
-                "plan mode blocked {} — switch modes to apply changes",
-                call.function.name
-            )));
-            verdicts.push(Verdict::Denied);
-            continue;
-        }
-
-        verdicts.push(match decision {
-            Decision::Allow => Verdict::Run,
-            Decision::Gate => {
-                // Auto-accept edits mode: file edits — and the common
-                // filesystem bash set (mkdir/touch/mv/cp/rm/sed, Claude
-                // Code acceptEdits parity) — skip the prompt.
-                if *mode == crate::agent::events::PermissionMode::AutoAcceptEdits
-                    && matches!(call.function.name.as_str(), "write_file" | "edit_file")
-                {
-                    let _ = ev_tx.send(Event::StatusNote(format!(
-                        "auto-accepted edit to {}",
-                        input.get("path").and_then(|v| v.as_str()).unwrap_or("?")
-                    )));
-                    verdicts.push(Verdict::Run);
-                    continue;
-                }
-                if *mode == crate::agent::events::PermissionMode::AutoAcceptEdits
-                    && call.function.name == "bash"
-                    && input
-                        .get("command")
-                        .and_then(|v| v.as_str())
-                        .is_some_and(PolicyEngine::is_common_fs_command)
-                {
-                    let _ = ev_tx.send(Event::StatusNote(format!(
-                        "auto-accepted fs command: {}",
-                        input.get("command").and_then(|v| v.as_str()).unwrap_or("?")
-                    )));
-                    verdicts.push(Verdict::Run);
-                    continue;
-                }
-                let suggested_rule = (call.function.name == "bash").then(|| {
-                    PolicyEngine::suggested_rule(
-                        input.get("command").and_then(|v| v.as_str()).unwrap_or(""),
-                    )
-                });
-                // Outside the project root? Then "persist" is disabled
-                // (spec section 5) and the call always gates on future runs.
-                let target_outside = input
-                    .get("path")
-                    .and_then(|v| v.as_str())
-                    .map(|p| ctx.is_outside_root(Path::new(p)))
-                    .unwrap_or(false);
-                state.approval_counter += 1;
-                let id = state.approval_counter;
-                let detail = registry
-                    .get(&call.function.name)
-                    .and_then(|t| t.approval_preview(&input, ctx));
-                let _ = ev_tx.send(Event::ApprovalRequired {
-                    id,
-                    tool: call.function.name.clone(),
-                    input_preview: input_preview(&input),
-                    suggested_rule: suggested_rule.clone(),
-                    detail_preview: detail,
-                    can_persist: !target_outside && call.function.name == "bash",
-                    bash_command: (call.function.name == "bash")
-                        .then(|| {
-                            input
-                                .get("command")
-                                .and_then(|v| v.as_str())
-                                .map(str::to_string)
-                        })
-                        .flatten(),
-                });
-
-                match wait_for_approval(id, cmd_rx, abort_flag).await {
-                    ApprovalResolution::Granted(decision) => match decision {
-                        crate::agent::events::ApprovalDecision::Once => Verdict::Run,
-                        crate::agent::events::ApprovalDecision::AlwaysSession { rule } => {
-                            if let Ok(mut p) = ctx.perms.lock() {
-                                p.add_session_rule(rule);
-                            }
-                            Verdict::Run
-                        }
-                        crate::agent::events::ApprovalDecision::AlwaysPersist { rule } => {
-                            match crate::config::persist_bash_rule(&ctx.project_root, &rule) {
-                                Err(e) => {
-                                    tracing::warn!(error = %e, "failed persisting rule");
-                                    let _ = ev_tx.send(Event::StatusNote(format!(
-                                        "could not persist rule: {e}"
-                                    )));
-                                }
-                                Ok(_) => {
-                                    let _ = ev_tx.send(Event::StatusNote(format!(
-                                        "rule \"{rule}\" persisted to .z-engine/config.toml"
-                                    )));
-                                }
-                            }
-                            if let Ok(mut p) = ctx.perms.lock() {
-                                p.add_session_rule(rule);
-                            }
-                            Verdict::Run
-                        }
-                    },
-                    ApprovalResolution::Denied => Verdict::Denied,
-                    ApprovalResolution::AbortTurn => return ExecutionsOutcome::Aborted,
-                }
-            }
-        });
-    }
-
-    // Phase 2 â run: concurrency-safe tools together, unsafe ones serially.
+    // Phase 2 — run: concurrency-safe tools together, unsafe ones serially.
     let mut outcomes: HashMap<usize, String> = HashMap::new();
     let mut safe_batch: Vec<(usize, ToolCall)> = Vec::new();
     for (idx, call) in calls.iter().enumerate() {
-        if !matches!(verdicts[idx], Verdict::Run) {
+        if !matches!(decided[idx].verdict, Verdict::Run) {
             continue;
         }
         let safe = registry
@@ -183,11 +64,12 @@ pub(super) async fn execute_calls(
     }
 
     if !safe_batch.is_empty() {
-        let futs = safe_batch.iter().map(|(_, call)| {
+        let futs = safe_batch.iter().map(|(idx, call)| {
             let call = call.clone();
+            let sequence = decided[*idx].sequence;
             let ctx = ctx.clone();
             let ev_tx = ev_tx.clone();
-            async move { run_one(call, &ctx, registry, &ev_tx).await }
+            async move { run_one(call, sequence, &ctx, registry, &ev_tx).await }
         });
         let done = futures::future::join_all(futs).await;
         for ((idx, _), content) in safe_batch.iter().zip(done) {
@@ -196,58 +78,34 @@ pub(super) async fn execute_calls(
     }
 
     for (idx, call) in calls.iter().enumerate() {
-        if outcomes.contains_key(&idx) || !matches!(verdicts[idx], Verdict::Run) {
+        if outcomes.contains_key(&idx) || !matches!(decided[idx].verdict, Verdict::Run) {
             continue;
         }
-        outcomes.insert(idx, run_one(call.clone(), ctx, registry, ev_tx).await);
+        let content = run_one(call.clone(), decided[idx].sequence, ctx, registry, ev_tx).await;
+        outcomes.insert(idx, content);
     }
 
-    // Phase 3 â transcript entries in original order; denials become polite
-    // refusals addressed to the same tool_call_id (spec Â§5).
-    let refusal = "The user declined permission for this action. Do not retry it \
-                   unchanged; adjust your approach or explain what you need.";
-    let ordered = calls
+    // Phase 3 — transcript entries in original order; refusals become polite
+    // declines addressed to the same tool_call_id (spec §5).
+    ExecutionsOutcome::Ran(transcript(&calls, &decided, &mut outcomes))
+}
+
+fn transcript(
+    calls: &[ToolCall],
+    decided: &[Decided],
+    outcomes: &mut HashMap<usize, String>,
+) -> Vec<(String, String)> {
+    calls
         .iter()
         .enumerate()
         .map(|(idx, call)| {
-            let content = outcomes
-                .get(&idx)
-                .cloned()
-                .unwrap_or_else(|| refusal.to_string());
+            let content = outcomes.remove(&idx).unwrap_or_else(|| {
+                debug_assert!(matches!(decided[idx].verdict, Verdict::Refused));
+                REFUSAL.to_string()
+            });
             (call.id.clone(), content)
         })
-        .collect();
-    ExecutionsOutcome::Ran(ordered)
-}
-
-enum ApprovalResolution {
-    Granted(crate::agent::events::ApprovalDecision),
-    Denied,
-    AbortTurn,
-}
-
-async fn wait_for_approval(
-    id: u64,
-    cmd_rx: &mut UnboundedReceiver<Command>,
-    abort_flag: &Arc<AtomicBool>,
-) -> ApprovalResolution {
-    loop {
-        match cmd_rx.recv().await {
-            None => {
-                abort_flag.store(true, Ordering::Relaxed);
-                return ApprovalResolution::AbortTurn;
-            }
-            Some(Command::Approve { id: got, decision }) if got == id => {
-                return ApprovalResolution::Granted(decision);
-            }
-            Some(Command::Deny { id: got }) if got == id => return ApprovalResolution::Denied,
-            Some(Command::Abort) | Some(Command::Shutdown) => {
-                abort_flag.store(true, Ordering::Relaxed);
-                return ApprovalResolution::AbortTurn;
-            }
-            Some(_) => {} // mismatched ids / stray submits ignored
-        }
-    }
+        .collect()
 }
 
 pub(super) fn parse_input(arguments: &str) -> serde_json::Value {
@@ -255,9 +113,10 @@ pub(super) fn parse_input(arguments: &str) -> serde_json::Value {
 }
 
 /// Execute one allowed/approved call: events + timing + error mapping.
-/// Errors become `"ERROR: â¦"` transcript text (self-correction path).
+/// Errors become `"ERROR: …"` transcript text (self-correction path).
 async fn run_one(
     call: ToolCall,
+    sequence: Option<u64>,
     ctx: &ToolCtx,
     registry: &ToolRegistry,
     ev_tx: &UnboundedSender<Event>,
@@ -272,7 +131,13 @@ async fn run_one(
     });
 
     if ctx.aborted() {
-        ctx.record_tool_outcome(&name, false, "[aborted]");
+        ctx.record_tool_outcome(
+            sequence,
+            &name,
+            ToolDisposition::Abandoned,
+            false,
+            "[aborted]",
+        );
         return "[aborted]".to_string();
     }
     let input_hook = input.clone();
@@ -287,7 +152,7 @@ async fn run_one(
         Ok(out) => out,
         Err(e) => {
             let text = format!("ERROR: {e}");
-            ctx.record_tool_outcome(&name, false, &text);
+            ctx.record_tool_outcome(sequence, &name, ToolDisposition::Executed, false, &text);
             let _ = ev_tx.send(Event::ToolCallFinished {
                 name,
                 ok: false,
@@ -309,7 +174,13 @@ async fn run_one(
     )
     .await;
 
-    ctx.record_tool_outcome(&name, out.ok, &out.result);
+    ctx.record_tool_outcome(
+        sequence,
+        &name,
+        ToolDisposition::Executed,
+        out.ok,
+        &out.result,
+    );
     let _ = ev_tx.send(Event::ToolCallFinished {
         name,
         ok: out.ok,
@@ -319,7 +190,7 @@ async fn run_one(
     out.result
 }
 
-fn input_preview(input: &serde_json::Value) -> String {
+pub(super) fn input_preview(input: &serde_json::Value) -> String {
     let s = serde_json::to_string(input).unwrap_or_else(|_| "<unserializable>".into());
     let mut s: String = s.chars().take(INPUT_PREVIEW_CHARS).collect();
     if s.chars().count() == INPUT_PREVIEW_CHARS {

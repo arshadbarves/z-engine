@@ -3,12 +3,14 @@
 
 pub mod accumulate;
 pub mod client;
+pub mod lane;
 pub mod sse;
 pub mod transport;
 pub mod types;
 
 pub use accumulate::{AccumulatedToolCall, ToolCallAccumulator};
 pub use client::{Client, ProviderError};
+pub use lane::RequestLane;
 pub use transport::{ChatProvider, EventStream};
 pub use types::{
     ChatMessage, ChatRequest, ContentPart, FinishReason, FunctionCall, StreamEvent, ToolCall,

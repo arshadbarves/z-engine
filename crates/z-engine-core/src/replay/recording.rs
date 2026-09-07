@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use tokio::sync::mpsc;
-use z_engine_provider::{ChatProvider, ChatRequest, EventStream, StreamEvent};
+use z_engine_provider::{ChatProvider, ChatRequest, EventStream, RequestLane, StreamEvent};
 
 use super::entry::canonical_request;
 use super::recorder::RunRecorder;
@@ -38,22 +38,30 @@ impl RecordingProvider {
 }
 
 impl ChatProvider for RecordingProvider {
-    fn stream_chat(&self, request: &ChatRequest, abort: Arc<AtomicBool>) -> EventStream {
-        let sequence = self.recorder.begin_exchange();
+    fn stream_chat_on(
+        &self,
+        lane: &RequestLane,
+        request: &ChatRequest,
+        abort: Arc<AtomicBool>,
+    ) -> EventStream {
+        let sequence = self.recorder.begin_exchange(lane);
         let hash = match canonical_request(request) {
             Ok((_, hash)) => hash,
             Err(err) => {
                 // A request that cannot be serialized cannot be matched
-                // later either; tape it as unmatchable rather than
-                // silently taping a lie.
-                tracing::error!(%err, "cassette: request could not be hashed");
+                // later either, so the tape is already not the run.
+                self.recorder.note_fault(
+                    "exchange",
+                    format!("request could not be hashed for matching: {err}"),
+                );
                 String::new()
             }
         };
-        let mut upstream = self.inner.stream_chat(request, abort);
+        let mut upstream = self.inner.stream_chat_on(lane, request, abort);
         let (tx, rx) = mpsc::channel(64);
         let recorder = Arc::clone(&self.recorder);
         let request = request.clone();
+        let lane = lane.clone();
         let handle = tokio::spawn(async move {
             let mut events: Vec<StreamEvent> = Vec::new();
             let mut error = None;
@@ -68,7 +76,7 @@ impl ChatProvider for RecordingProvider {
                     break;
                 }
             }
-            recorder.finish_exchange(sequence, &request, &hash, &events, error);
+            recorder.finish_exchange(&lane, sequence, &request, &hash, &events, error);
         });
         // The exchange lands when the stream *ends*, which is after the
         // consumer stops reading at the finish event. Hand the task to
@@ -95,7 +103,12 @@ mod tests {
     }
 
     impl ChatProvider for Canned {
-        fn stream_chat(&self, request: &ChatRequest, _abort: Arc<AtomicBool>) -> EventStream {
+        fn stream_chat_on(
+            &self,
+            _lane: &RequestLane,
+            request: &ChatRequest,
+            _abort: Arc<AtomicBool>,
+        ) -> EventStream {
             self.seen.lock().unwrap().push(request.clone());
             let (tx, rx) = mpsc::channel(16);
             for event in &self.events {
@@ -161,7 +174,12 @@ mod tests {
     struct Trailing;
 
     impl ChatProvider for Trailing {
-        fn stream_chat(&self, _request: &ChatRequest, _abort: Arc<AtomicBool>) -> EventStream {
+        fn stream_chat_on(
+            &self,
+            _lane: &RequestLane,
+            _request: &ChatRequest,
+            _abort: Arc<AtomicBool>,
+        ) -> EventStream {
             let (tx, rx) = mpsc::channel(16);
             tokio::spawn(async move {
                 let usage = Usage {

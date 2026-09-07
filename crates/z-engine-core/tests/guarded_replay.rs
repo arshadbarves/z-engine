@@ -80,10 +80,10 @@ fn guarded_script(content: &str) -> Script {
 
 /// Drive one guarded turn through `provider`, recording into `run`.
 ///
-/// A resume state (empty) is passed deliberately: it suppresses the
-/// session-title side request, whose interleaving with the turn's own
-/// request is scheduler-dependent and therefore not replayable in
-/// sequence.
+/// An empty resume state is passed so this scenario is only about the
+/// turn: it suppresses the session titler, which
+/// [`a_fresh_run_replays_even_though_the_titler_runs_beside_the_turn`]
+/// covers on its own terms.
 async fn guarded_turn(
     repo: &Path,
     base: &str,
@@ -156,7 +156,7 @@ async fn a_guarded_run_replays_from_its_cassette_without_touching_the_network() 
     // ---- replay: the cassette is the only transport -------------------
     let recorded = RunCassette::load(&recorded_path).unwrap();
     let replayed_path = vault.path().join("replayed.jsonl");
-    let replaying = Arc::new(ReplayProvider::new(&recorded));
+    let replaying = Arc::new(ReplayProvider::new(&recorded).unwrap());
     let replay_recorder = RunRecorder::replaying(&replayed_path, &recorded).unwrap();
     let taping = Arc::new(RecordingProvider::new(
         Arc::clone(&replaying) as Arc<dyn ChatProvider>,
@@ -277,7 +277,7 @@ async fn a_diverging_replay_fails_at_the_first_mismatch_with_its_sequence() {
         1,
         "an empty tape would make the mismatch below meaningless"
     );
-    let replaying = Arc::new(ReplayProvider::new(&recorded));
+    let replaying = Arc::new(ReplayProvider::new(&recorded).unwrap());
     let (handle, mut ev) = spawn_with_run_recorder(
         cfg_for(base, repo.path()),
         Arc::clone(&replaying) as Arc<dyn ChatProvider>,

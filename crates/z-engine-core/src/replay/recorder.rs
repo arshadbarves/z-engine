@@ -3,70 +3,55 @@
 //!
 //! The agent loop, the tools, and the gates each hand it a fact as it
 //! happens; the recorder allocates the sequence numbers, keeps the
-//! running metrics, and appends. In replay mode it also *serves* the one
+//! running tally, and appends. In replay mode it also *serves* the one
 //! arbitrary thing a guarded run mints — evidence ids — so a replayed
 //! run produces the same request bytes as the run it is reproducing.
+//!
+//! Every append can fail, and a failed append means the tape no longer
+//! describes the run. Rather than teach every caller to handle that,
+//! the first failure is kept here ([`RunRecorder::fault`]), persisted
+//! beside the cassette, and read once by the loop — which then refuses
+//! to call the turn complete.
 
 use std::path::Path;
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::sync::Arc;
+use std::time::Instant;
 
 use tokio::task::JoinHandle;
 
-use z_engine_provider::{ChatMessage, ChatRequest, StreamEvent};
+use z_engine_provider::{ChatMessage, ChatRequest, RequestLane, StreamEvent};
 
+use super::counters::Sequences;
 use super::entry::{
     CassetteEntry, CompletionRecord, EvidenceMint, GateDecision, GateKind, PromptHash,
-    ProviderExchange, RunMetrics, ToolOutcome, content_hash, prompt_hash,
+    ProviderExchange, ToolDisposition, ToolOutcome, content_hash, prompt_hash,
 };
 use super::error::ReplayError;
+use super::fault::{FaultLog, RecordingFault};
 use super::ids::IdSource;
-use super::tape::{CassetteWriter, RunCassette};
-
-/// Where the run's evidence ids come from.
-/// Per-kind positions. Kept separate so "the third request" and "the
-/// third tool call" each mean what they say, and so a mismatch reports
-/// the request number rather than a line number.
-#[derive(Default)]
-struct Counters {
-    exchanges: u64,
-    prompts: u64,
-    tools: u64,
-    gates: u64,
-    evidence: u64,
-    completions: u64,
-}
-
-#[derive(Default)]
-struct MetricsState {
-    model_id: String,
-    input_tokens: u64,
-    output_tokens: u64,
-    turns: u64,
-    tool_calls: u64,
-    outcome: String,
-}
+use super::settle::InFlight;
+use super::sink::{CassetteWriter, EntrySink};
+use super::tally::SharedTally;
+use super::tape::RunCassette;
 
 /// Records one run onto one cassette.
 pub struct RunRecorder {
-    writer: CassetteWriter,
+    sink: Box<dyn EntrySink>,
     ids: IdSource,
-    counters: Mutex<Counters>,
-    metrics: Mutex<MetricsState>,
+    sequences: Sequences,
+    tally: SharedTally,
+    /// The first entry this run failed to record, if any.
+    faults: FaultLog,
     /// Forwarding tasks that still owe the tape an exchange.
-    inflight: Mutex<Vec<JoinHandle<()>>>,
+    inflight: InFlight,
     started: Instant,
 }
-
-/// How long [`RunRecorder::settle`] waits for one stream to finish
-/// reporting before recording that it did not. Bounded so a wedged
-/// provider costs the run a known gap in its tape rather than the turn.
-const SETTLE_TIMEOUT: Duration = Duration::from_secs(10);
 
 impl std::fmt::Debug for RunRecorder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RunRecorder")
             .field("replaying", &self.ids.is_replaying())
+            .field("fault", &self.fault())
             .finish()
     }
 }
@@ -74,7 +59,12 @@ impl std::fmt::Debug for RunRecorder {
 impl RunRecorder {
     /// Record a live run onto a new cassette at `path`.
     pub fn recording(path: impl AsRef<Path>) -> Result<Arc<Self>, ReplayError> {
-        Ok(Arc::new(Self::open(path.as_ref(), IdSource::Fresh)?))
+        let path = path.as_ref();
+        Ok(Arc::new(Self::new(
+            path,
+            Box::new(CassetteWriter::create(path)?),
+            IdSource::Fresh,
+        )))
     }
 
     /// Record a replayed run onto a new cassette at `path`, taking the
@@ -83,19 +73,33 @@ impl RunRecorder {
         path: impl AsRef<Path>,
         source: &RunCassette,
     ) -> Result<Arc<Self>, ReplayError> {
-        let ids = IdSource::from_cassette(source);
-        Ok(Arc::new(Self::open(path.as_ref(), ids)?))
+        let path = path.as_ref();
+        Ok(Arc::new(Self::new(
+            path,
+            Box::new(CassetteWriter::create(path)?),
+            IdSource::from_cassette(source),
+        )))
     }
 
-    fn open(path: &Path, ids: IdSource) -> Result<Self, ReplayError> {
-        Ok(Self {
-            writer: CassetteWriter::create(path)?,
+    /// Record onto an arbitrary sink, marking `path` if it fails.
+    ///
+    /// The seam exists so a recorder can be *shown* a write failure:
+    /// fail-closed behaviour that is never exercised is a claim rather
+    /// than a property.
+    pub fn onto(path: impl AsRef<Path>, sink: Box<dyn EntrySink>) -> Arc<Self> {
+        Arc::new(Self::new(path.as_ref(), sink, IdSource::Fresh))
+    }
+
+    fn new(path: &Path, sink: Box<dyn EntrySink>, ids: IdSource) -> Self {
+        Self {
+            sink,
             ids,
-            counters: Mutex::new(Counters::default()),
-            metrics: Mutex::new(MetricsState::default()),
-            inflight: Mutex::new(Vec::new()),
+            sequences: Sequences::default(),
+            tally: SharedTally::default(),
+            faults: FaultLog::beside(path),
+            inflight: InFlight::default(),
             started: Instant::now(),
-        })
+        }
     }
 
     /// True when this run's arbitrary values come from a recorded run.
@@ -103,38 +107,37 @@ impl RunRecorder {
         self.ids.is_replaying()
     }
 
-    /// Claim the next request position. Called when a request is *sent*,
-    /// so the cassette preserves issue order even if streams finish out
-    /// of order.
-    pub fn begin_exchange(&self) -> u64 {
-        let mut counters = self.counters.lock().expect("recorder counters");
-        let seq = counters.exchanges;
-        counters.exchanges += 1;
-        seq
+    /// The first entry this run failed to record, if any. `Some` means
+    /// the cassette is not the run, and the run may not claim otherwise.
+    pub fn fault(&self) -> Option<RecordingFault> {
+        self.faults.get()
     }
 
-    /// Append a finished exchange and fold its usage into the metrics.
+    /// Claim the next request position *on `lane`*. Called when a
+    /// request is sent, so the cassette preserves issue order even if
+    /// streams finish out of order.
+    pub fn begin_exchange(&self, lane: &RequestLane) -> u64 {
+        self.sequences.exchange(lane)
+    }
+
+    /// Append a finished exchange and fold its usage into the tally.
     pub fn finish_exchange(
         &self,
+        lane: &RequestLane,
         sequence: u64,
         request: &ChatRequest,
         request_hash: &str,
         events: &[StreamEvent],
         error: Option<String>,
     ) {
-        {
-            let mut metrics = self.metrics.lock().expect("recorder metrics");
-            if metrics.model_id.is_empty() {
-                metrics.model_id = request.model.clone();
-            }
-            for event in events {
-                if let StreamEvent::Usage(usage) = event {
-                    metrics.input_tokens += usage.prompt_tokens;
-                    metrics.output_tokens += usage.completion_tokens;
-                }
+        for event in events {
+            if let StreamEvent::Usage(usage) = event {
+                self.tally
+                    .add_usage(&request.model, usage.prompt_tokens, usage.completion_tokens);
             }
         }
         self.append(CassetteEntry::Exchange(ProviderExchange {
+            lane: lane.clone(),
             sequence,
             request_hash: request_hash.to_string(),
             request: request.clone(),
@@ -147,22 +150,35 @@ impl RunRecorder {
     pub fn record_prompt(&self, prefix: &[ChatMessage]) {
         let hash = match prompt_hash(prefix) {
             Ok(hash) => hash,
-            Err(err) => {
-                tracing::error!(%err, "cassette: prompt prefix could not be hashed");
-                return;
-            }
+            Err(err) => return self.note_fault("prompt", err.to_string()),
         };
-        let sequence = self.next(|c| &mut c.prompts);
+        let sequence = self.sequences.prompt();
         self.append(CassetteEntry::Prompt(PromptHash { sequence, hash }));
     }
 
-    /// Record what a tool returned.
-    pub fn record_tool(&self, name: &str, ok: bool, result: &str) {
-        self.metrics.lock().expect("recorder metrics").tool_calls += 1;
-        let sequence = self.next(|c| &mut c.tools);
+    /// Claim the next tool position, in the order the round's calls were
+    /// *decided*. Concurrency-safe tools finish in whatever order the
+    /// scheduler picks, and that order is not the run's.
+    pub fn begin_tool(&self) -> u64 {
+        self.sequences.tool()
+    }
+
+    /// Record what became of one tool call: the result it returned, or
+    /// the refusal that stood in for it. A refused call shapes the next
+    /// request exactly as much as one that ran.
+    pub fn record_tool(
+        &self,
+        sequence: u64,
+        name: &str,
+        disposition: ToolDisposition,
+        ok: bool,
+        result: &str,
+    ) {
+        self.tally.add_tool_call();
         self.append(CassetteEntry::Tool(ToolOutcome {
             sequence,
             name: name.to_string(),
+            disposition,
             ok,
             result_hash: content_hash(result.as_bytes()),
         }));
@@ -170,7 +186,7 @@ impl RunRecorder {
 
     /// Record one gate ruling.
     pub fn record_gate(&self, kind: GateKind, target: &str, allowed: bool, reason: Option<String>) {
-        let sequence = self.next(|c| &mut c.gates);
+        let sequence = self.sequences.gate();
         self.append(CassetteEntry::Gate(GateDecision {
             sequence,
             kind,
@@ -191,7 +207,7 @@ impl RunRecorder {
         range: Option<(u32, u32)>,
     ) -> Result<String, ReplayError> {
         let id = self.ids.claim(path, range)?;
-        let sequence = self.next(|c| &mut c.evidence);
+        let sequence = self.sequences.evidence();
         self.append(CassetteEntry::Evidence(EvidenceMint {
             sequence,
             path: path.to_string(),
@@ -203,37 +219,20 @@ impl RunRecorder {
 
     /// Register a forwarding task that owes the tape an exchange.
     pub fn track(&self, handle: JoinHandle<()>) {
-        self.inflight
-            .lock()
-            .expect("recorder inflight")
-            .push(handle);
+        self.inflight.track(handle);
     }
 
-    /// Wait until every exchange in flight has reached the tape.
-    ///
-    /// An exchange is appended when its stream *ends*, which can be
-    /// after the turn that issued it has moved on — the consumer stops
-    /// reading at the finish event, not at channel close. Without this
-    /// barrier a run's own last request can be missing from its record,
-    /// and the metrics can be snapshotted before its tokens are counted:
-    /// a tape that is quietly short is worse than no tape at all.
+    /// Wait until every exchange in flight has reached the tape. An
+    /// exchange that never arrives is a lost entry, not a slow one.
     pub async fn settle(&self) {
-        let handles: Vec<JoinHandle<()>> =
-            std::mem::take(&mut *self.inflight.lock().expect("recorder inflight"));
-        for handle in handles {
-            match tokio::time::timeout(SETTLE_TIMEOUT, handle).await {
-                Ok(Ok(())) => {}
-                Ok(Err(err)) => tracing::error!(%err, "cassette: a recording task failed"),
-                Err(_) => tracing::error!(
-                    "cassette: a recording task did not finish in time; its exchange is missing"
-                ),
-            }
+        if let Some(fault) = self.inflight.settle().await {
+            self.fail(fault);
         }
     }
 
     /// Record what the completion gate proved.
     pub fn record_completion(&self, manifest_hash: &str, diff_hash: Option<String>, verdict: &str) {
-        let sequence = self.next(|c| &mut c.completions);
+        let sequence = self.sequences.completion();
         self.append(CassetteEntry::Completion(CompletionRecord {
             sequence,
             manifest_hash: manifest_hash.to_string(),
@@ -245,37 +244,39 @@ impl RunRecorder {
     /// Close out a turn: metrics are appended per turn, so a run that is
     /// killed mid-flight still leaves the tape it earned.
     pub fn record_turn(&self, outcome: &str) {
-        let snapshot = {
-            let mut metrics = self.metrics.lock().expect("recorder metrics");
-            metrics.turns += 1;
-            metrics.outcome = outcome.to_string();
-            RunMetrics {
-                model_id: metrics.model_id.clone(),
-                input_tokens: metrics.input_tokens,
-                output_tokens: metrics.output_tokens,
-                turns: metrics.turns,
-                tool_calls: metrics.tool_calls,
-                wall_time_ms: self.started.elapsed().as_millis() as u64,
-                outcome: metrics.outcome.clone(),
-            }
-        };
+        let snapshot = self
+            .tally
+            .close_turn(outcome, self.started.elapsed().as_millis() as u64);
         self.append(CassetteEntry::Metrics(snapshot));
     }
 
-    fn next(&self, field: impl Fn(&mut Counters) -> &mut u64) -> u64 {
-        let mut counters = self.counters.lock().expect("recorder counters");
-        let slot = field(&mut counters);
-        let seq = *slot;
-        *slot += 1;
-        seq
+    /// Report a fact that could not be recorded, from somewhere other
+    /// than an append — a request that would not serialize, a stream
+    /// that never reported back.
+    pub fn note_fault(&self, entry: &str, detail: String) {
+        self.fail(RecordingFault {
+            kind: entry.to_string(),
+            detail,
+        });
     }
 
-    /// A failed append leaves an incomplete tape, which replay will later
-    /// refuse — loudly, and in the safe direction — so recording never
-    /// takes the run down with it.
+    /// Append one entry, or remember that the tape is no longer whole.
     fn append(&self, entry: CassetteEntry) {
-        if let Err(err) = self.writer.append(&entry) {
-            tracing::error!(%err, "cassette: entry could not be appended");
+        if let Err(err) = self.sink.append(&entry) {
+            self.fail(RecordingFault {
+                kind: entry.kind().to_string(),
+                detail: err.to_string(),
+            });
+        }
+    }
+
+    /// Condemn the recording, and put a copy of the reason on the tape
+    /// for a reader holding only the file.
+    fn fail(&self, fault: RecordingFault) {
+        if let Some(fault) = self.faults.condemn(fault)
+            && let Err(err) = self.sink.append(&CassetteEntry::Fault(fault))
+        {
+            tracing::debug!(%err, "cassette: the fault could not be taped");
         }
     }
 }
@@ -283,6 +284,8 @@ impl RunRecorder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::replay::fault::marker_path;
+    use crate::replay::sink::BrokenSink;
     use z_engine_provider::Usage;
 
     fn request(model: &str) -> ChatRequest {
@@ -296,8 +299,9 @@ mod tests {
         let recorder = RunRecorder::recording(&path).unwrap();
 
         for tokens in [(10, 5), (20, 5)] {
-            let seq = recorder.begin_exchange();
+            let seq = recorder.begin_exchange(&RequestLane::MAIN);
             recorder.finish_exchange(
+                &RequestLane::MAIN,
                 seq,
                 &request("test-model"),
                 "hash",
@@ -308,24 +312,86 @@ mod tests {
                 None,
             );
         }
-        recorder.record_tool("read_file", true, "body");
+        let seq = recorder.begin_tool();
+        recorder.record_tool(seq, "read_file", ToolDisposition::Executed, true, "body");
         recorder.record_turn("completed");
 
-        let metrics = RunCassette::load(&path).unwrap().metrics().unwrap();
+        let cassette = RunCassette::load(&path).unwrap();
+        let metrics = cassette.metrics().unwrap();
         assert_eq!(metrics.model_id, "test-model");
         assert_eq!(metrics.input_tokens, 30);
         assert_eq!(metrics.output_tokens, 10);
         assert_eq!(metrics.turns, 1);
         assert_eq!(metrics.tool_calls, 1);
         assert_eq!(metrics.outcome, "completed");
+        assert!(recorder.fault().is_none());
     }
 
+    /// Refusals are part of the trajectory, so they are counted with
+    /// everything else: the tally and the tape must not disagree about
+    /// how many calls the model made.
     #[test]
-    fn exchange_sequences_are_claimed_in_issue_order() {
+    fn the_tool_counter_matches_the_calls_on_the_tape() {
         let dir = tempfile::tempdir().unwrap();
-        let recorder = RunRecorder::recording(dir.path().join("run.jsonl")).unwrap();
-        assert_eq!(recorder.begin_exchange(), 0);
-        assert_eq!(recorder.begin_exchange(), 1);
-        assert_eq!(recorder.begin_exchange(), 2);
+        let path = dir.path().join("run.jsonl");
+        let recorder = RunRecorder::recording(&path).unwrap();
+
+        for (name, disposition, ok) in [
+            ("read_file", ToolDisposition::Executed, true),
+            ("bash", ToolDisposition::PlanRefused, false),
+            ("write_file", ToolDisposition::UserDenied, false),
+            ("edit_file", ToolDisposition::Abandoned, false),
+        ] {
+            let seq = recorder.begin_tool();
+            recorder.record_tool(seq, name, disposition, ok, "text");
+        }
+        recorder.record_turn("blocked:completion");
+
+        let cassette = RunCassette::load(&path).unwrap();
+        let outcomes = cassette.tool_outcomes();
+        assert_eq!(
+            cassette.metrics().unwrap().tool_calls as usize,
+            outcomes.len()
+        );
+        assert_eq!(outcomes.len(), 4);
+        assert_eq!(
+            outcomes.iter().filter(|o| o.disposition.ran()).count(),
+            1,
+            "only one of these reached a tool"
+        );
+        assert_eq!(
+            outcomes.iter().map(|o| o.sequence).collect::<Vec<_>>(),
+            [0, 1, 2, 3],
+            "sequences follow decision order"
+        );
+    }
+
+    /// A write that fails must leave a run that cannot pass for
+    /// recorded: the fault is remembered, persisted beside the tape, and
+    /// the tape refuses to load.
+    #[test]
+    fn a_failed_append_condemns_the_recording_instead_of_being_logged() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("run.jsonl");
+        let recorder = RunRecorder::onto(&path, Box::new(BrokenSink));
+
+        let seq = recorder.begin_tool();
+        recorder.record_tool(seq, "write_file", ToolDisposition::Executed, true, "done");
+
+        let fault = recorder.fault().expect("a lost entry is a fault");
+        assert_eq!(fault.kind, "tool");
+        assert!(fault.detail.contains("no space left"), "{fault}");
+        assert!(marker_path(&path).exists(), "the marker must be persisted");
+    }
+
+    /// Only the first loss is kept: later ones are downstream of it and
+    /// would bury the cause.
+    #[test]
+    fn the_first_lost_entry_is_the_one_reported() {
+        let dir = tempfile::tempdir().unwrap();
+        let recorder = RunRecorder::onto(dir.path().join("run.jsonl"), Box::new(BrokenSink));
+        recorder.record_prompt(&[ChatMessage::system("L0")]);
+        recorder.record_turn("completed");
+        assert_eq!(recorder.fault().unwrap().kind, "prompt");
     }
 }

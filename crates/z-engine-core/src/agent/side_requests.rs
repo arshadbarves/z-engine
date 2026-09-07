@@ -1,5 +1,9 @@
 //! Side requests: model calls outside the main loop (post-edit reviewer,
-//! compaction summarizer). Failures never block the turn.
+//! compaction summarizer, session titler). Failures never block the turn.
+//!
+//! Each runs on its own lane ([`super::lanes`]): they share the turn's
+//! provider handle but not its request sequence, and the titler does not
+//! even share its turn.
 
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -7,6 +11,7 @@ use std::sync::atomic::AtomicBool;
 use z_engine_provider::{ChatMessage, ChatProvider, ChatRequest, StreamEvent};
 
 use super::LoopConfig;
+use super::lanes;
 
 /// Post-edit reviewer (spec section 9 v0.9): a side-request that audits
 /// this round's diffs against the original task. Returns findings text, or
@@ -34,7 +39,7 @@ pub(super) async fn run_review(
         ],
     );
     let abort = Arc::new(AtomicBool::new(false));
-    let mut rx = client.stream_chat(&req, abort);
+    let mut rx = client.stream_chat_on(&lanes::review(), &req, abort);
     let mut out = String::new();
     while let Some(item) = rx.recv().await {
         match item {
@@ -70,7 +75,7 @@ pub(super) async fn summarize_segment(
         ],
     );
     let abort = Arc::new(AtomicBool::new(false));
-    let mut rx = client.stream_chat(&req, abort);
+    let mut rx = client.stream_chat_on(&lanes::compact(), &req, abort);
     let mut out = String::new();
     while let Some(item) = rx.recv().await {
         match item {
@@ -102,7 +107,7 @@ pub(super) async fn generate_session_title(
         ],
     );
     let abort = Arc::new(AtomicBool::new(false));
-    let mut rx = client.stream_chat(&req, abort);
+    let mut rx = client.stream_chat_on(&lanes::title(), &req, abort);
     let mut out = String::new();
     while let Some(item) = rx.recv().await {
         match item {

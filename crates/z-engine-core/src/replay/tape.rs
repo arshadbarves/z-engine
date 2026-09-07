@@ -1,74 +1,19 @@
 //! The tape itself: an append-only JSONL file of [`CassetteEntry`]
 //! lines, and the loaded run it reads back as.
 //!
-//! Same shape as the evidence ledger — one flushed JSON object per line,
-//! never rewritten — for the same reason: a record that can be edited
-//! after the fact proves nothing. Reading is strict in both directions:
-//! a malformed line fails the load rather than being skipped, and
-//! creating a cassette over an existing one is refused, because a tape
-//! holding two runs replays as neither.
+//! Reading is strict in every direction. A malformed line fails the load
+//! rather than being skipped; a cassette whose recorder lost an entry
+//! fails the load rather than passing for whole (see [`super::fault`]).
+//! A tape that can be half-read is a tape that replays as a run that
+//! never happened.
 
-use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
-use super::entry::{
-    CassetteEntry, CompletionRecord, EvidenceMint, GateDecision, PromptHash, ProviderExchange,
-    RunMetrics, ToolOutcome,
-};
+use super::entry::CassetteEntry;
 use super::error::ReplayError;
-
-/// Append-only writer onto one run's cassette.
-#[derive(Debug)]
-pub(crate) struct CassetteWriter {
-    file: File,
-    path: PathBuf,
-}
-
-impl CassetteWriter {
-    /// Create `path` for a new run. An existing file is refused rather
-    /// than appended to or truncated: a cassette is exactly one run, and
-    /// a tape holding two would replay as neither.
-    pub(crate) fn create(path: &Path) -> Result<Self, ReplayError> {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|source| ReplayError::Io {
-                path: parent.to_path_buf(),
-                source,
-            })?;
-        }
-        let file = OpenOptions::new()
-            .create_new(true)
-            .append(true)
-            .open(path)
-            .map_err(|source| match source.kind() {
-                std::io::ErrorKind::AlreadyExists => ReplayError::Exists {
-                    path: path.to_path_buf(),
-                },
-                _ => ReplayError::Io {
-                    path: path.to_path_buf(),
-                    source,
-                },
-            })?;
-        Ok(Self {
-            file,
-            path: path.to_path_buf(),
-        })
-    }
-
-    /// Append one entry as a single flushed line.
-    pub(crate) fn append(&self, entry: &CassetteEntry) -> Result<(), ReplayError> {
-        let mut line =
-            serde_json::to_string(entry).map_err(|source| ReplayError::Serialize { source })?;
-        line.push('\n');
-        let mut file = &self.file;
-        file.write_all(line.as_bytes())
-            .and_then(|()| file.flush())
-            .map_err(|source| ReplayError::Io {
-                path: self.path.clone(),
-                source,
-            })
-    }
-}
+use super::fault::{RecordingFault, read_marker};
 
 /// One recorded run, loaded whole.
 #[derive(Debug, Clone)]
@@ -78,11 +23,21 @@ pub struct RunCassette {
 }
 
 impl RunCassette {
-    /// Read every entry. A malformed line fails the load rather than
-    /// being skipped: a tape with a hole in it would replay as a
-    /// different run while looking like the same one.
+    /// Read every entry.
+    ///
+    /// Refuses a cassette its recorder marked incomplete, and refuses a
+    /// malformed line rather than skipping it: either way the tape would
+    /// otherwise replay as a different run while looking like the same
+    /// one.
     pub fn load(path: impl AsRef<Path>) -> Result<Self, ReplayError> {
         let path = path.as_ref().to_path_buf();
+        if let Some(fault) = read_marker(&path) {
+            return Err(ReplayError::Incomplete {
+                path,
+                entry: fault.kind,
+                detail: fault.detail,
+            });
+        }
         let file = File::open(&path).map_err(|source| ReplayError::Io {
             path: path.clone(),
             source,
@@ -104,7 +59,17 @@ impl RunCassette {
                 })?,
             );
         }
-        Ok(Self { path, entries })
+        let loaded = Self { path, entries };
+        // A recorder that managed to append its own fault condemns the
+        // tape just as loudly as the marker beside it does.
+        match loaded.fault() {
+            Some(fault) => Err(ReplayError::Incomplete {
+                path: loaded.path,
+                entry: fault.kind,
+                detail: fault.detail,
+            }),
+            None => Ok(loaded),
+        }
     }
 
     pub fn path(&self) -> &Path {
@@ -115,122 +80,32 @@ impl RunCassette {
         &self.entries
     }
 
-    /// Recorded exchanges in request order. Entries land when a stream
-    /// *ends*, so append order is not request order; the sequence
-    /// allocated when the request was issued is.
-    pub fn exchanges(&self) -> Vec<ProviderExchange> {
-        let mut out: Vec<ProviderExchange> = self
-            .entries
-            .iter()
-            .filter_map(|e| match e {
-                CassetteEntry::Exchange(x) => Some(x.clone()),
-                _ => None,
-            })
-            .collect();
-        out.sort_by_key(|x| x.sequence);
-        out
-    }
-
-    pub fn request_hashes(&self) -> Vec<String> {
-        self.exchanges()
-            .into_iter()
-            .map(|x| x.request_hash)
-            .collect()
-    }
-
-    pub fn prompt_hashes(&self) -> Vec<String> {
-        let mut out: Vec<PromptHash> = self
-            .entries
-            .iter()
-            .filter_map(|e| match e {
-                CassetteEntry::Prompt(p) => Some(p.clone()),
-                _ => None,
-            })
-            .collect();
-        out.sort_by_key(|p| p.sequence);
-        out.into_iter().map(|p| p.hash).collect()
-    }
-
-    pub fn tool_outcomes(&self) -> Vec<ToolOutcome> {
-        let mut out: Vec<ToolOutcome> = self
-            .entries
-            .iter()
-            .filter_map(|e| match e {
-                CassetteEntry::Tool(t) => Some(t.clone()),
-                _ => None,
-            })
-            .collect();
-        out.sort_by_key(|t| t.sequence);
-        out
-    }
-
-    pub fn gate_decisions(&self) -> Vec<GateDecision> {
-        let mut out: Vec<GateDecision> = self
-            .entries
-            .iter()
-            .filter_map(|e| match e {
-                CassetteEntry::Gate(g) => Some(g.clone()),
-                _ => None,
-            })
-            .collect();
-        out.sort_by_key(|g| g.sequence);
-        out
-    }
-
-    pub fn evidence_ids(&self) -> Vec<EvidenceMint> {
-        let mut out: Vec<EvidenceMint> = self
-            .entries
-            .iter()
-            .filter_map(|e| match e {
-                CassetteEntry::Evidence(m) => Some(m.clone()),
-                _ => None,
-            })
-            .collect();
-        out.sort_by_key(|m| m.sequence);
-        out
-    }
-
-    /// The last completion recorded — a run is judged on where it ended.
-    pub fn completion(&self) -> Option<CompletionRecord> {
-        self.entries
-            .iter()
-            .filter_map(|e| match e {
-                CassetteEntry::Completion(c) => Some(c.clone()),
-                _ => None,
-            })
-            .max_by_key(|c| c.sequence)
-    }
-
-    pub fn manifest_hash(&self) -> Option<String> {
-        self.completion().map(|c| c.manifest_hash)
-    }
-
-    pub fn diff_hash(&self) -> Option<String> {
-        self.completion().and_then(|c| c.diff_hash)
-    }
-
-    /// Metrics are appended once per turn; the last line is the run's.
-    pub fn metrics(&self) -> Option<RunMetrics> {
-        self.entries
-            .iter()
-            .filter_map(|e| match e {
-                CassetteEntry::Metrics(m) => Some(m.clone()),
-                _ => None,
-            })
-            .next_back()
+    /// The first recording failure the run taped, if it taped one.
+    pub fn fault(&self) -> Option<RecordingFault> {
+        self.entries.iter().find_map(|e| match e {
+            CassetteEntry::Fault(f) => Some(f.clone()),
+            _ => None,
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::replay::entry::{GateKind, canonical_request, content_hash};
-    use z_engine_provider::{ChatMessage, ChatRequest, StreamEvent};
+    use crate::replay::entry::{
+        CompletionRecord, EvidenceMint, GateDecision, GateKind, PromptHash, ProviderExchange,
+        RunMetrics, ToolDisposition, ToolOutcome, canonical_request, content_hash,
+    };
+    use crate::replay::fault::mark_incomplete;
+    use crate::replay::sink::{CassetteWriter, EntrySink};
+    use std::io::Write;
+    use z_engine_provider::{ChatMessage, ChatRequest, RequestLane, StreamEvent};
 
-    fn exchange(sequence: u64, model: &str) -> CassetteEntry {
+    fn exchange(lane: RequestLane, sequence: u64, model: &str) -> CassetteEntry {
         let request = ChatRequest::new(model, vec![ChatMessage::user("hi")]);
         let (_, hash) = canonical_request(&request).unwrap();
         CassetteEntry::Exchange(ProviderExchange {
+            lane,
             sequence,
             request_hash: hash,
             request,
@@ -245,7 +120,7 @@ mod tests {
         let path = dir.path().join("run.jsonl");
         let writer = CassetteWriter::create(&path).unwrap();
         let entries = vec![
-            exchange(0, "m"),
+            exchange(RequestLane::MAIN, 0, "m"),
             CassetteEntry::Prompt(PromptHash {
                 sequence: 0,
                 hash: content_hash(b"prefix"),
@@ -253,6 +128,7 @@ mod tests {
             CassetteEntry::Tool(ToolOutcome {
                 sequence: 0,
                 name: "read_file".into(),
+                disposition: ToolDisposition::Executed,
                 ok: true,
                 result_hash: content_hash(b"body"),
             }),
@@ -297,25 +173,7 @@ mod tests {
         assert_eq!(cassette.evidence_ids()[0].id, "01ABC");
         assert_eq!(cassette.diff_hash(), Some(content_hash(b"diff")));
         assert_eq!(cassette.metrics().unwrap().turns, 1);
-    }
-
-    /// Streams finish out of order under concurrency; request order is
-    /// the order the requests were *issued* in.
-    #[test]
-    fn exchanges_replay_in_issue_order_not_append_order() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("run.jsonl");
-        let writer = CassetteWriter::create(&path).unwrap();
-        writer.append(&exchange(1, "second")).unwrap();
-        writer.append(&exchange(0, "first")).unwrap();
-
-        let cassette = RunCassette::load(&path).unwrap();
-        let models: Vec<String> = cassette
-            .exchanges()
-            .into_iter()
-            .map(|x| x.request.model)
-            .collect();
-        assert_eq!(models, ["first", "second"]);
+        assert!(cassette.fault().is_none());
     }
 
     #[test]
@@ -323,21 +181,62 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("run.jsonl");
         let writer = CassetteWriter::create(&path).unwrap();
-        writer.append(&exchange(0, "m")).unwrap();
+        writer.append(&exchange(RequestLane::MAIN, 0, "m")).unwrap();
         drop(writer);
-        let mut raw = OpenOptions::new().append(true).open(&path).unwrap();
+        let mut raw = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap();
         raw.write_all(b"{not json\n").unwrap();
 
         let err = RunCassette::load(&path).unwrap_err();
         assert!(matches!(err, ReplayError::Corrupt { line: 2, .. }), "{err}");
     }
 
+    /// A tape whose recorder lost an entry is short of the run it claims
+    /// to be, so it does not get to be loaded at all.
     #[test]
-    fn a_cassette_records_exactly_one_run() {
+    fn a_cassette_marked_incomplete_is_refused_rather_than_read() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("run.jsonl");
-        CassetteWriter::create(&path).unwrap();
-        let err = CassetteWriter::create(&path).unwrap_err();
-        assert!(matches!(err, ReplayError::Exists { .. }), "{err}");
+        let writer = CassetteWriter::create(&path).unwrap();
+        writer.append(&exchange(RequestLane::MAIN, 0, "m")).unwrap();
+        RunCassette::load(&path).expect("whole until marked");
+
+        mark_incomplete(
+            &path,
+            &RecordingFault {
+                kind: "tool".into(),
+                detail: "disk full".into(),
+            },
+        )
+        .unwrap();
+        let err = RunCassette::load(&path).unwrap_err();
+        assert!(
+            matches!(&err, ReplayError::Incomplete { entry, .. } if entry == "tool"),
+            "{err}"
+        );
+    }
+
+    /// The marker can be lost along with the entry; a fault the recorder
+    /// did manage to append has to condemn the tape on its own.
+    #[test]
+    fn a_taped_fault_alone_is_enough_to_refuse_the_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("run.jsonl");
+        let writer = CassetteWriter::create(&path).unwrap();
+        writer.append(&exchange(RequestLane::MAIN, 0, "m")).unwrap();
+        writer
+            .append(&CassetteEntry::Fault(RecordingFault {
+                kind: "exchange".into(),
+                detail: "disk full".into(),
+            }))
+            .unwrap();
+
+        let err = RunCassette::load(&path).unwrap_err();
+        assert!(
+            matches!(&err, ReplayError::Incomplete { entry, .. } if entry == "exchange"),
+            "{err}"
+        );
     }
 }

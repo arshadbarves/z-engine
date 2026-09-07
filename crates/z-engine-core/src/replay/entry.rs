@@ -15,11 +15,12 @@
 
 use serde::{Deserialize, Serialize};
 
-use z_engine_provider::{ChatMessage, ChatRequest, StreamEvent};
+use z_engine_provider::{ChatMessage, ChatRequest, RequestLane, StreamEvent};
 
 use crate::evidence::BlobHandle;
 
 use super::error::ReplayError;
+use super::fault::RecordingFault;
 
 /// SHA-256 hex of `bytes`, reusing the evidence module's content hash.
 pub fn content_hash(bytes: &[u8]) -> String {
@@ -48,7 +49,14 @@ pub fn prompt_hash(prefix: &[ChatMessage]) -> Result<String, ReplayError> {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderExchange {
-    /// Position in this run's request sequence, allocated when the
+    /// Which logical stream this request belongs to. Requests are
+    /// ordered *within* a lane; the turn loop, a session title and a
+    /// sub-agent share one provider handle and have no order relative to
+    /// each other, so a single global sequence would record the
+    /// scheduler rather than the run.
+    #[serde(default)]
+    pub lane: RequestLane,
+    /// Position in this lane's request sequence, allocated when the
     /// request was issued (not when the stream finished).
     pub sequence: u64,
     /// Hash of the exact serialized request, as it was sent.
@@ -69,15 +77,57 @@ pub struct PromptHash {
     pub hash: String,
 }
 
+/// What became of one tool call the model asked for.
+///
+/// A call the harness refused shapes the next request exactly as much as
+/// one it ran — the model is handed a refusal instead of a result and
+/// carries on from there — so refusals are facts about the run, not
+/// absences.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ToolDisposition {
+    /// Dispatched to the registry. `ok` then says whether it worked;
+    /// an unknown tool name is an executed call that failed.
+    Executed,
+    /// The user answered the approval prompt with "no".
+    UserDenied,
+    /// Plan mode refuses mutating tools before they are ever offered.
+    PlanRefused,
+    /// The round was abandoned (abort or shutdown) before this call ran.
+    Abandoned,
+    /// The model's arguments never parsed, so nothing was dispatched.
+    Malformed,
+}
+
+impl ToolDisposition {
+    /// True when the call reached a tool.
+    pub fn ran(&self) -> bool {
+        matches!(self, ToolDisposition::Executed)
+    }
+}
+
 /// What one tool call returned, by content rather than by transcript
 /// text, so a cassette stays small and comparisons stay exact.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolOutcome {
+    /// Position in the round's call order, claimed when the call was
+    /// *decided* — concurrency-safe tools finish in whatever order the
+    /// scheduler picks, and that order is not the run's.
     pub sequence: u64,
     pub name: String,
+    /// What the harness did with the call. Older tapes predate the
+    /// field and only ever held executed calls.
+    #[serde(default = "executed")]
+    pub disposition: ToolDisposition,
     pub ok: bool,
+    /// Hash of the text handed back to the model — the tool's result,
+    /// or the refusal that stood in for it.
     pub result_hash: String,
+}
+
+fn executed() -> ToolDisposition {
+    ToolDisposition::Executed
 }
 
 /// Which gate ruled.
@@ -144,43 +194,8 @@ pub struct CompletionRecord {
     pub verdict: String,
 }
 
-/// What the run cost and how it ended.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RunMetrics {
-    pub model_id: String,
-    pub input_tokens: u64,
-    pub output_tokens: u64,
-    pub turns: u64,
-    pub tool_calls: u64,
-    pub wall_time_ms: u64,
-    pub outcome: String,
-}
-
-/// The part of [`RunMetrics`] two runs of the same work must agree on.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MetricsFingerprint {
-    pub model_id: String,
-    pub input_tokens: u64,
-    pub output_tokens: u64,
-    pub turns: u64,
-    pub tool_calls: u64,
-    pub outcome: String,
-}
-
-impl RunMetrics {
-    /// Everything except the clock.
-    pub fn deterministic(&self) -> MetricsFingerprint {
-        MetricsFingerprint {
-            model_id: self.model_id.clone(),
-            input_tokens: self.input_tokens,
-            output_tokens: self.output_tokens,
-            turns: self.turns,
-            tool_calls: self.tool_calls,
-            outcome: self.outcome.clone(),
-        }
-    }
-}
+/// What the run cost and how it ended: see [`super::tally`].
+pub use super::tally::{MetricsFingerprint, RunMetrics};
 
 /// One line of a cassette.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -193,6 +208,27 @@ pub enum CassetteEntry {
     Evidence(EvidenceMint),
     Completion(CompletionRecord),
     Metrics(RunMetrics),
+    /// The recorder could not write something down. Appended
+    /// best-effort — the same failure that lost the entry usually loses
+    /// this too, which is why it is also persisted beside the tape (see
+    /// [`super::fault`]).
+    Fault(RecordingFault),
+}
+
+impl CassetteEntry {
+    /// Which kind of fact this is, for reporting what went unrecorded.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Exchange(_) => "exchange",
+            Self::Prompt(_) => "prompt",
+            Self::Tool(_) => "tool",
+            Self::Gate(_) => "gate",
+            Self::Evidence(_) => "evidence",
+            Self::Completion(_) => "completion",
+            Self::Metrics(_) => "metrics",
+            Self::Fault(_) => "fault",
+        }
+    }
 }
 
 #[cfg(test)]
@@ -218,25 +254,59 @@ mod tests {
         );
     }
 
-    /// The clock is the one thing two runs of the same work may disagree
-    /// about, so it is the one thing the comparison leaves out.
+    /// Tapes written before lanes and dispositions existed described a
+    /// single-lane run of executed calls; they must still read as that
+    /// rather than failing the load.
     #[test]
-    fn metrics_compare_on_everything_but_the_clock() {
-        let metrics = RunMetrics {
-            model_id: "m".into(),
-            input_tokens: 100,
-            output_tokens: 20,
-            turns: 1,
-            tool_calls: 3,
-            wall_time_ms: 42,
-            outcome: "completed".into(),
-        };
-        let mut slower = metrics.clone();
-        slower.wall_time_ms = 9_999;
-        assert_eq!(slower.deterministic(), metrics.deterministic());
+    fn an_older_entry_reads_as_the_main_lane_and_an_executed_call() {
+        let exchange: ProviderExchange = serde_json::from_str(
+            r#"{"sequence":0,"requestHash":"h","request":{"model":"m","messages":[],"stream":true,"stream_options":{"include_usage":true}},"events":[]}"#,
+        )
+        .unwrap();
+        assert_eq!(exchange.lane, RequestLane::MAIN);
 
-        let mut pricier = metrics.clone();
-        pricier.output_tokens = 21;
-        assert_ne!(pricier.deterministic(), metrics.deterministic());
+        let tool: ToolOutcome =
+            serde_json::from_str(r#"{"sequence":0,"name":"read_file","ok":true,"resultHash":"h"}"#)
+                .unwrap();
+        assert_eq!(tool.disposition, ToolDisposition::Executed);
+        assert!(tool.disposition.ran());
+    }
+
+    #[test]
+    fn a_refused_call_is_a_recorded_fact_of_its_own_kind() {
+        assert!(!ToolDisposition::UserDenied.ran());
+        assert!(!ToolDisposition::PlanRefused.ran());
+        assert!(!ToolDisposition::Abandoned.ran());
+        assert!(!ToolDisposition::Malformed.ran());
+        let entry = CassetteEntry::Tool(ToolOutcome {
+            sequence: 0,
+            name: "bash".into(),
+            disposition: ToolDisposition::PlanRefused,
+            ok: false,
+            result_hash: content_hash(b"refused"),
+        });
+        assert_eq!(entry.kind(), "tool");
+        let json = serde_json::to_string(&entry).unwrap();
+        assert!(json.contains("\"planRefused\""), "{json}");
+    }
+
+    #[test]
+    fn every_entry_can_name_its_own_kind() {
+        assert_eq!(
+            CassetteEntry::Fault(RecordingFault {
+                kind: "exchange".into(),
+                detail: "disk full".into(),
+            })
+            .kind(),
+            "fault"
+        );
+        assert_eq!(
+            CassetteEntry::Prompt(PromptHash {
+                sequence: 0,
+                hash: content_hash(b"p"),
+            })
+            .kind(),
+            "prompt"
+        );
     }
 }

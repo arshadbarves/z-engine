@@ -34,4 +34,22 @@ pub enum ReplayError {
          something the recorded run did not"
     )]
     EvidenceExhausted { path: String, ordinal: usize },
+    #[error(
+        "cassette {path} is not a whole run: its {entry} entry was lost while recording ({detail})"
+    )]
+    Incomplete {
+        path: PathBuf,
+        entry: String,
+        detail: String,
+    },
+    #[error(
+        "cassette {path} lane {lane} jumps from request #{expected} to #{found}: a tape with a \
+         hole in it replays as a run that never happened"
+    )]
+    SequenceGap {
+        path: PathBuf,
+        lane: String,
+        expected: u64,
+        found: u64,
+    },
 }

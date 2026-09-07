@@ -51,8 +51,15 @@ pub enum ProviderError {
     /// it is not what was recorded at this point in the sequence. Never
     /// retried and never resolved over the wire — a replay that reached
     /// for the network would stop being a replay.
-    #[error("replay refused request #{sequence}: {detail}")]
-    Replay { sequence: u64, detail: String },
+    ///
+    /// `sequence` counts within `lane`, because two logical streams
+    /// sharing one provider have no order relative to each other.
+    #[error("replay refused request #{sequence} on lane {lane}: {detail}")]
+    Replay {
+        lane: String,
+        sequence: u64,
+        detail: String,
+    },
 }
 
 #[derive(Clone)]
@@ -251,8 +258,11 @@ impl Client {
 }
 
 impl ChatProvider for Client {
-    fn stream_chat(
+    /// The wire has no lanes: an HTTP client serves every logical stream
+    /// the same way, so the label is carried past it untouched.
+    fn stream_chat_on(
         &self,
+        _lane: &crate::lane::RequestLane,
         request: &ChatRequest,
         abort: Arc<std::sync::atomic::AtomicBool>,
     ) -> EventStream {
