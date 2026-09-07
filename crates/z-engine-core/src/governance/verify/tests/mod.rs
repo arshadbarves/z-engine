@@ -9,7 +9,9 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use super::*;
+use crate::evidence::BlobHandle;
 use crate::governance::manifest::Verdict;
+use crate::governance::plan::{MutationRecord, ReadWitness};
 
 const LIB: &str = "pub fn parse(s: &str) -> usize {\n    s.len()\n}\n";
 const MANIFEST: &str = "[package]\nname = \"fixture\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[lib]\npath = \"src/lib.rs\"\n";
@@ -31,15 +33,36 @@ fn accept(command: &str) -> Vec<AcceptanceCommand> {
     }]
 }
 
-fn plan(scope: &[&str], mutated: &[&str], acceptance: Vec<AcceptanceCommand>) -> VerificationPlan {
+/// A plan whose mutation log agrees with what is on disk, which is what
+/// an honest run produces: the tools wrote those bytes and nothing has
+/// touched them since.
+fn plan(
+    root: &std::path::Path,
+    scope: &[&str],
+    mutated: &[&str],
+    acceptance: Vec<AcceptanceCommand>,
+) -> VerificationPlan {
     VerificationPlan {
         work_order_id: "wo-1".into(),
         goal: "make parse fallible".into(),
         scope: scope.iter().map(PathBuf::from).collect(),
-        mutated: mutated.iter().map(PathBuf::from).collect(),
+        mutated: mutated
+            .iter()
+            .map(|rel| MutationRecord {
+                path: PathBuf::from(rel),
+                content_hash: hash_on_disk(root, rel),
+            })
+            .collect(),
+        changes: Vec::new(),
         witnesses: Vec::new(),
         acceptance,
     }
+}
+
+fn hash_on_disk(root: &std::path::Path, rel: &str) -> String {
+    std::fs::read(root.join(rel))
+        .map(|bytes| BlobHandle::of(&bytes).to_string())
+        .unwrap_or_default()
 }
 
 fn witness(root: &std::path::Path, rel: &str) -> ReadWitness {

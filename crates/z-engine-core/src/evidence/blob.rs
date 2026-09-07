@@ -3,13 +3,13 @@
 //! [`BlobHandle`] and is written to disk at most once.
 
 use std::fmt;
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::error::EvidenceError;
+use crate::fs_atomic::atomic_write;
 
 /// A validated, lowercase 64-character hex SHA-256 digest identifying one
 /// piece of immutable content. The only way to build one is either
@@ -164,55 +164,6 @@ impl BlobStore for FsBlobStore {
             });
         }
         Ok(bytes)
-    }
-}
-
-/// Crash-safe file creation: write to a temp sibling, flush it, then
-/// atomically rename over the target. Mirrors `tools::fsutil::atomic_write`
-/// but stays synchronous and dependency-free of the tools module, since
-/// evidence storage must not couple to tool/agent/UI layers.
-///
-/// `FsBlobStore::new` already validated/created `root` once at
-/// construction, so the common case here does not redundantly call
-/// `create_dir_all` on every write. If the directory has since
-/// disappeared (e.g. deleted out-of-band between construction and this
-/// call), creating the temp file fails with `NotFound`; only then is the
-/// directory (re)created and the write retried once, preserving
-/// correctness without paying the extra syscall on the hot path.
-fn atomic_write(target: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    let dir = target
-        .parent()
-        .ok_or_else(|| std::io::Error::other("target has no parent directory"))?;
-    let tmp = dir.join(format!(
-        ".{}.tmp-{}",
-        target
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "blob".into()),
-        ulid::Ulid::new()
-    ));
-    let mut file = match std::fs::File::create(&tmp) {
-        Ok(f) => f,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            std::fs::create_dir_all(dir)?;
-            std::fs::File::create(&tmp)?
-        }
-        Err(e) => return Err(e),
-    };
-    let result = (|| -> std::io::Result<()> {
-        file.write_all(bytes)?;
-        file.sync_all()
-    })();
-    if let Err(e) = result {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(e);
-    }
-    match std::fs::rename(&tmp, target) {
-        Ok(()) => Ok(()),
-        Err(e) => {
-            let _ = std::fs::remove_file(&tmp);
-            Err(e)
-        }
     }
 }
 

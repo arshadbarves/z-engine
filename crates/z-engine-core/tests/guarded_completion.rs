@@ -172,9 +172,10 @@ async fn guarded_completion_passes_when_verification_is_complete() {
 }
 
 /// An acceptance command the harness will not execute proves nothing, so
-/// it cannot be laundered into a completion.
+/// the order carrying it is refused where the model can still fix it: at
+/// admission. Nothing it would have authorized may reach disk.
 #[tokio::test]
-async fn guarded_completion_refuses_an_unrunnable_acceptance_command() {
+async fn guarded_admission_refuses_an_unrunnable_acceptance_command() {
     let tmp = tempfile::tempdir().unwrap();
     fixture(tmp.path());
     let good = format!("{MANIFEST}description = \"fixture crate\"\n");
@@ -182,13 +183,51 @@ async fn guarded_completion_refuses_an_unrunnable_acceptance_command() {
     let (_handle, mut ev) =
         run_guarded(tmp.path(), script_for(&good, "echo everything is fine")).await;
 
-    let blocked = wait_for(&mut ev, |e| {
+    let refusal = wait_for(
+        &mut ev,
+        |e| matches!(e, Event::ToolCallFinished { name, .. } if name == "set_work_order"),
+    )
+    .await;
+    let Event::ToolCallFinished { ok, summary, .. } = refusal else {
+        unreachable!()
+    };
+    assert!(!ok, "an unrunnable acceptance command cannot be admitted");
+    assert!(summary.contains("echo"), "{summary}");
+
+    // And the write the order would have authorized never lands: without
+    // an admitted order the mutation gate has nothing to authorize it.
+    wait_for(&mut ev, |e| {
         matches!(e, Event::TurnBlocked { .. } | Event::TurnCompleted { .. })
     })
     .await;
-    let Event::TurnBlocked { gate, reason, .. } = blocked else {
-        panic!("an unverifiable acceptance command must not complete: {blocked:?}");
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("Cargo.toml")).unwrap(),
+        MANIFEST,
+        "a refused order must not leave its change behind"
+    );
+}
+
+/// A cargo subcommand that is not a check — `cargo run`, `cargo install`,
+/// anything that executes or fetches code — is not evidence either, and is
+/// refused by the same rule rather than by a program allowlist that would
+/// wave it through.
+#[tokio::test]
+async fn guarded_admission_refuses_a_side_effecting_cargo_subcommand() {
+    let tmp = tempfile::tempdir().unwrap();
+    fixture(tmp.path());
+    let good = format!("{MANIFEST}description = \"fixture crate\"\n");
+
+    let (_handle, mut ev) =
+        run_guarded(tmp.path(), script_for(&good, "cargo run --bin fixture")).await;
+
+    let refusal = wait_for(
+        &mut ev,
+        |e| matches!(e, Event::ToolCallFinished { name, .. } if name == "set_work_order"),
+    )
+    .await;
+    let Event::ToolCallFinished { ok, summary, .. } = refusal else {
+        unreachable!()
     };
-    assert_eq!(gate, "completion");
-    assert!(reason.contains("echo"), "{reason}");
+    assert!(!ok, "`cargo run` executes the code it is meant to judge");
+    assert!(summary.contains("run"), "{summary}");
 }

@@ -25,6 +25,7 @@ mod bash_script;
 mod checkpoint_restore;
 mod context;
 mod edit_ladder;
+mod evidence_ctx;
 mod fsutil;
 mod gate_ctx;
 mod gate_facts;
@@ -44,7 +45,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-pub use context::{EvidenceStore, SubAgentFuture, SubAgentRunner, ToolCtx, ToolOutputChunk};
+pub use context::{SubAgentFuture, SubAgentRunner, ToolCtx, ToolOutputChunk};
+pub use evidence_ctx::EvidenceStore;
 pub(crate) use fsutil::atomic_write;
 pub use fsutil::{MAX_TOOL_OUTPUT_CHARS, truncate_with_tempfile, unified_diff};
 /// Shared subprocess plumbing, re-exported under intent-revealing names so
@@ -154,6 +156,21 @@ impl ToolRegistry {
 
     pub fn names(&self) -> &[String] {
         &self.order
+    }
+
+    /// Drop every tool whose name is not in `keep`, and report what went.
+    ///
+    /// Registration order is preserved for what remains, so a pruned
+    /// registry is indistinguishable from one that never had the extras.
+    pub fn retain(&mut self, keep: &[String]) -> Vec<String> {
+        let (kept, dropped): (Vec<String>, Vec<String>) = std::mem::take(&mut self.order)
+            .into_iter()
+            .partition(|name| keep.contains(name));
+        for name in &dropped {
+            self.tools.remove(name);
+        }
+        self.order = kept;
+        dropped
     }
 
     /// Read-only subset for sub-agents (spec section 9 v0.7): isolated

@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::evidence::{EvidenceError, EvidenceLedger, FsBlobStore};
-use crate::governance::WorkOrderStore;
+use crate::governance::{SnapshotError, WorkOrderStore, WorkspaceSnapshot};
 use crate::tools::{EvidenceStore, ToolRegistry, set_work_order::SetWorkOrderTool};
 
 use super::LoopConfig;
@@ -33,8 +33,14 @@ pub(super) struct Guarded {
 /// Distinct from "unguarded": the user asked for governance and it is
 /// unavailable, which is a refusal, not a mode.
 #[derive(Debug, thiserror::Error)]
-#[error("guarded mode unavailable: {0}")]
-pub(super) struct GuardedUnavailable(EvidenceError);
+pub(super) enum GuardedUnavailable {
+    #[error("guarded mode unavailable: {0}")]
+    Storage(#[from] EvidenceError),
+    /// Without a picture of the workspace as the run started, completion
+    /// could only ever trust the mutation log about what changed.
+    #[error("guarded mode unavailable: {0}")]
+    Workspace(#[from] SnapshotError),
+}
 
 /// Prepare guarded mode when `cfg.guarded` is set: open this run's
 /// evidence storage and register `set_work_order`.
@@ -56,21 +62,21 @@ pub(super) fn attach(
         return Ok(None);
     }
     let dir = run_dir(&cfg.project_root);
-    match open_run(&dir) {
-        Ok(evidence) => {
+    match prepare(&cfg.project_root, &dir) {
+        Ok((evidence, baseline)) => {
             registry.register(Arc::new(SetWorkOrderTool));
+            prune_ungoverned(registry, ev_tx);
             let _ = ev_tx.send(Event::StatusNote(
                 "guarded mode: reads are recorded as evidence; declare a work order before editing"
                     .into(),
             ));
             Ok(Some(Guarded {
                 evidence: Arc::new(evidence),
-                work_orders: Arc::new(WorkOrderStore::new()),
+                work_orders: Arc::new(WorkOrderStore::with_baseline(baseline)),
                 dir,
             }))
         }
-        Err(e) => {
-            let err = GuardedUnavailable(e);
+        Err(err) => {
             tracing::error!(error = %err, "refusing guarded run");
             let reason = format!("{err}; refusing to run ungoverned");
             // Error first so every consumer shows the detail, then the
@@ -80,6 +86,44 @@ pub(super) fn attach(
             let _ = ev_tx.send(Event::RunBlocked { reason });
             Err(err)
         }
+    }
+}
+
+/// Everything a guarded run needs before its first tool call: durable
+/// evidence storage, and the workspace as it stands right now.
+fn prepare(
+    project_root: &Path,
+    dir: &Path,
+) -> Result<(EvidenceStore, WorkspaceSnapshot), GuardedUnavailable> {
+    let evidence = open_run(dir)?;
+    let baseline = WorkspaceSnapshot::capture(project_root, None)?;
+    Ok((evidence, baseline))
+}
+
+/// Remove every tool a guarded run has no governance for.
+///
+/// Guarded mode's promise is that nothing changes the workspace without
+/// passing the mutation gate, and the gate only stands in front of tools
+/// this crate owns. Anything registered from outside — an MCP server's
+/// tools, most of all — can write files, run commands, and call network
+/// services with no work order, no evidence, and no entry in the mutation
+/// log, which would make the completion audit's change set unexplainable
+/// even when the agent behaved. Pruning here rather than at each
+/// registration site means a later registrar cannot forget the rule.
+fn prune_ungoverned(registry: &mut ToolRegistry, ev_tx: &UnboundedSender<Event>) {
+    let mut governed = ToolRegistry::guarded_builtins().names().to_vec();
+    governed.sort();
+    governed.dedup();
+    let dropped = registry.retain(&governed);
+    if !dropped.is_empty() {
+        let _ = ev_tx.send(Event::StatusNote(format!(
+            "guarded mode: {} unavailable ({} not governed by the mutation gate)",
+            dropped.join(", "),
+            match dropped.len() {
+                1 => "it is",
+                _ => "they are",
+            }
+        )));
     }
 }
 
@@ -147,6 +191,80 @@ mod tests {
     /// there is nothing to ground a work order — or a mutation gate — in.
     /// The run must be refused, never silently downgraded to an ungoverned
     /// one that still believes it is guarded.
+    /// A tool registered from outside this crate — an MCP server's, in
+    /// production — has no mutation gate in front of it, so a guarded run
+    /// must not advertise it. Registered *before* `attach`, exactly as the
+    /// agent task wires MCP servers today.
+    #[test]
+    fn guarded_runs_drop_tools_the_mutation_gate_does_not_govern() {
+        struct Foreign;
+
+        #[async_trait::async_trait]
+        impl crate::tools::Tool for Foreign {
+            fn name(&self) -> &str {
+                "mcp__files__write"
+            }
+            fn description(&self) -> &str {
+                "writes files with no work order, no evidence, no log"
+            }
+            fn parameters_schema(&self) -> serde_json::Value {
+                serde_json::json!({"type": "object"})
+            }
+            async fn run(
+                &self,
+                _input: serde_json::Value,
+                _ctx: &crate::tools::ToolCtx,
+            ) -> Result<crate::tools::ToolOutput, crate::tools::ToolError> {
+                unreachable!("a guarded run must never be able to call this")
+            }
+        }
+
+        let tmp = tempfile::tempdir().unwrap();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut registry = ToolRegistry::builtins();
+        registry.register(Arc::new(Foreign));
+
+        attach(&cfg(tmp.path(), true), &mut registry, &tx)
+            .expect("storage must open")
+            .expect("guarded wiring");
+
+        assert!(
+            !registry.names().iter().any(|n| n == "mcp__files__write"),
+            "an ungoverned mutation tool cannot survive into a guarded run: {:?}",
+            registry.names()
+        );
+        assert!(
+            registry.names().iter().any(|n| n == "write_file"),
+            "the governed built-ins must survive: {:?}",
+            registry.names()
+        );
+        assert!(registry.names().iter().any(|n| n == "set_work_order"));
+        let reported = std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>();
+        assert!(
+            reported
+                .iter()
+                .any(|e| matches!(e, Event::StatusNote(m) if m.contains("mcp__files__write"))),
+            "the run has to say what it took away: {reported:?}"
+        );
+    }
+
+    #[test]
+    fn a_guarded_run_starts_from_a_baseline_of_the_workspace() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("f.rs"), b"fn a() {}\n").unwrap();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut registry = ToolRegistry::builtins();
+
+        let guarded = attach(&cfg(tmp.path(), true), &mut registry, &tx)
+            .unwrap()
+            .unwrap();
+
+        assert!(
+            guarded.work_orders.baseline().is_some(),
+            "completion cannot audit a change set it has no baseline for"
+        );
+    }
+
     #[test]
     fn guarded_storage_failure_refuses_the_run_instead_of_degrading() {
         let tmp = tempfile::tempdir().unwrap();

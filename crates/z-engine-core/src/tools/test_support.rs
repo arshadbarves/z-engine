@@ -6,14 +6,16 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use crate::evidence::{BlobStore, EvidenceLedger, FsBlobStore};
-use crate::governance::WorkOrderStore;
+use crate::governance::{WorkOrderStore, WorkspaceSnapshot};
 use crate::perms::PolicyEngine;
 
 use super::semantics::StubSemantics;
 use super::{EvidenceStore, ToolCtx};
 
 /// A guarded `ToolCtx` rooted at `root`: per-run evidence storage, a
-/// work-order slot, and — when `semantics` is given — a scripted Rust
+/// work-order slot holding a baseline snapshot of `root` (so completion
+/// audits see the same change set production would), and — when
+/// `semantics` is given — a scripted Rust
 /// semantic provider so tests never spawn rust-analyzer and can drive
 /// every answer the gate distinguishes.
 ///
@@ -33,7 +35,9 @@ pub(crate) fn guarded_ctx(
         tempfile::tempdir().unwrap().keep(),
     )
     .with_evidence(Arc::new(EvidenceStore::new(ledger, blobs)))
-    .with_work_orders(Arc::new(WorkOrderStore::new()));
+    .with_work_orders(Arc::new(WorkOrderStore::with_baseline(
+        WorkspaceSnapshot::capture(root, None).unwrap(),
+    )));
     if let Some(stub) = semantics {
         ctx.semantics = Some(Arc::new(stub));
     }

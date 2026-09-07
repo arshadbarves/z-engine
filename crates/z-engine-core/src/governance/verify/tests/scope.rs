@@ -14,7 +14,12 @@ async fn a_change_outside_the_declared_scope_blocks_even_when_everything_compile
     ];
     std::fs::write(tmp.path().join("src/lib.rs"), format!("{LIB}// snuck in\n")).unwrap();
 
-    let mut p = plan(&["Cargo.toml"], &["Cargo.toml"], accept("cargo check"));
+    let mut p = plan(
+        tmp.path(),
+        &["Cargo.toml"],
+        &["Cargo.toml"],
+        accept("cargo check"),
+    );
     p.witnesses = witnesses;
     let manifest = VerificationRunner::new(tmp.path()).run(&p).await;
 
@@ -33,6 +38,7 @@ async fn a_mutation_of_an_undeclared_path_is_a_breach() {
     let tmp = cargo_fixture();
     let manifest = VerificationRunner::new(tmp.path())
         .run(&plan(
+            tmp.path(),
             &["Cargo.toml"],
             &["Cargo.toml", "src/lib.rs"],
             accept("cargo check"),
@@ -49,7 +55,12 @@ async fn a_mutation_of_an_undeclared_path_is_a_breach() {
 #[tokio::test]
 async fn untouched_witnesses_outside_the_scope_are_not_breaches() {
     let tmp = cargo_fixture();
-    let mut p = plan(&["Cargo.toml"], &["Cargo.toml"], accept("cargo check"));
+    let mut p = plan(
+        tmp.path(),
+        &["Cargo.toml"],
+        &["Cargo.toml"],
+        accept("cargo check"),
+    );
     p.witnesses = vec![witness(tmp.path(), "src/lib.rs")];
     let manifest = VerificationRunner::new(tmp.path()).run(&p).await;
     assert!(manifest.breaches.is_empty(), "{:?}", manifest.breaches);
@@ -65,6 +76,7 @@ async fn the_verifier_s_own_writes_are_not_charged_to_the_agent() {
     // the lock file, changing it out from under this witness.
     std::fs::write(repo.path().join("Cargo.lock"), "# placeholder\n").unwrap();
     let mut p = plan(
+        repo.path(),
         &["src/lib.rs"],
         &["src/lib.rs"],
         accept("cargo check --quiet"),

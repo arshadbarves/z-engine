@@ -8,12 +8,14 @@
 //! model instructions — the instructions that tell an agent *when* to
 //! declare an order live in `prompts/system-main.md`.
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::evidence::EvidenceRecord;
 
+use super::plan::MutationRecord;
+use super::snapshot::WorkspaceSnapshot;
 use super::work_order::{WorkOrder, WorkOrderError};
 
 /// A validated order plus the fresh evidence that admitted it. Only
@@ -89,8 +91,18 @@ fn range_label(record: &EvidenceRecord) -> String {
     }
 }
 
-/// Holds the one order a guarded run is currently working under, and the
-/// paths actually changed under it.
+/// The mutation log could not be read.
+///
+/// Reported rather than swallowed: an empty log and an unreadable one
+/// look identical to a caller that defaults, and one of them means "this
+/// run changed nothing" while the other means "this run cannot say what
+/// it changed".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("this run's mutation log is unreadable")]
+pub struct MutationLogUnavailable;
+
+/// Holds the one order a guarded run is currently working under, the
+/// changes made under it, and the workspace as the run first found it.
 ///
 /// Shared between the `set_work_order` tool (writer) and the turn
 /// pipeline (reader); a poisoned lock reports no active order, which
@@ -101,12 +113,32 @@ fn range_label(record: &EvidenceRecord) -> String {
 #[derive(Debug, Default)]
 pub struct WorkOrderStore {
     active: Mutex<Option<Arc<ActiveWorkOrder>>>,
-    mutated: Mutex<BTreeSet<PathBuf>>,
+    /// Path to the hash of the bytes the last authorized write left there.
+    mutated: Mutex<BTreeMap<PathBuf, String>>,
+    /// The tree as this run found it; `None` when nothing captured one,
+    /// which verification treats as a reason to block a changed workspace
+    /// rather than as an empty change set.
+    baseline: Option<WorkspaceSnapshot>,
 }
 
 impl WorkOrderStore {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// The store a guarded run uses: it remembers the workspace it
+    /// started from, so completion can compare against it rather than
+    /// trusting the mutation log to be the whole story.
+    pub fn with_baseline(baseline: WorkspaceSnapshot) -> Self {
+        Self {
+            baseline: Some(baseline),
+            ..Self::default()
+        }
+    }
+
+    /// The workspace as this run found it, if it was captured.
+    pub fn baseline(&self) -> Option<&WorkspaceSnapshot> {
+        self.baseline.as_ref()
     }
 
     /// Replace the active order (there is only ever one).
@@ -124,21 +156,44 @@ impl WorkOrderStore {
         self.active.lock().ok()?.clone()
     }
 
-    /// Record that `repo_relative` was changed under this run. Called
-    /// only after a mutation actually reached disk, so a refused edit
-    /// never makes the run look like it changed something.
-    pub fn note_mutation(&self, repo_relative: PathBuf) {
-        if let Ok(mut set) = self.mutated.lock() {
-            set.insert(repo_relative);
+    /// Record that `repo_relative` was changed under this run, and the
+    /// hash of the bytes the tool left there. Called only after a
+    /// mutation actually reached disk, so a refused edit never makes the
+    /// run look like it changed something.
+    ///
+    /// A later write to the same path replaces the hash: what completion
+    /// authorizes is the state the run finished in.
+    pub fn note_mutation(&self, repo_relative: PathBuf, content_hash: String) {
+        if let Ok(mut log) = self.mutated.lock() {
+            log.insert(repo_relative, content_hash);
         }
     }
 
-    /// Paths changed under this run, deduplicated and ordered.
-    pub fn mutated_paths(&self) -> Vec<PathBuf> {
-        self.mutated
-            .lock()
-            .map(|set| set.iter().cloned().collect())
-            .unwrap_or_default()
+    /// Poison the mutation log the way a panicking tool would, so tests
+    /// can exercise the fail-closed path rather than assert it exists.
+    #[cfg(test)]
+    pub(crate) fn poison_for_test(&self) {
+        let hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _held = self.mutated.lock().unwrap();
+            panic!("poisoning the mutation log");
+        }));
+        std::panic::set_hook(hook);
+    }
+
+    /// Every change this run authorized, ordered by path.
+    ///
+    /// Errors rather than defaulting: see [`MutationLogUnavailable`].
+    pub fn mutations(&self) -> Result<Vec<MutationRecord>, MutationLogUnavailable> {
+        let log = self.mutated.lock().map_err(|_| MutationLogUnavailable)?;
+        Ok(log
+            .iter()
+            .map(|(path, content_hash)| MutationRecord {
+                path: path.clone(),
+                content_hash: content_hash.clone(),
+            })
+            .collect())
     }
 }
 
@@ -185,15 +240,46 @@ mod tests {
     }
 
     #[test]
-    fn the_mutation_log_is_deduplicated_and_ordered() {
+    fn the_mutation_log_keeps_one_final_hash_per_path_in_order() {
         let store = WorkOrderStore::new();
-        assert!(store.mutated_paths().is_empty());
-        store.note_mutation(PathBuf::from("src/lib.rs"));
-        store.note_mutation(PathBuf::from("Cargo.toml"));
-        store.note_mutation(PathBuf::from("src/lib.rs"));
+        assert!(store.mutations().unwrap().is_empty());
+        store.note_mutation(PathBuf::from("src/lib.rs"), "hash-a".into());
+        store.note_mutation(PathBuf::from("Cargo.toml"), "hash-b".into());
+        store.note_mutation(PathBuf::from("src/lib.rs"), "hash-c".into());
+
+        let logged: Vec<(PathBuf, String)> = store
+            .mutations()
+            .unwrap()
+            .into_iter()
+            .map(|m| (m.path, m.content_hash))
+            .collect();
         assert_eq!(
-            store.mutated_paths(),
-            [PathBuf::from("Cargo.toml"), PathBuf::from("src/lib.rs")]
+            logged,
+            [
+                (PathBuf::from("Cargo.toml"), "hash-b".to_string()),
+                // The last write wins: it is the state completion has to
+                // account for, not the one before it.
+                (PathBuf::from("src/lib.rs"), "hash-c".to_string()),
+            ]
         );
+    }
+
+    /// A lock a panicking tool poisoned must not read as "changed
+    /// nothing" — that is the one answer that would let an unverified run
+    /// complete.
+    #[test]
+    fn a_poisoned_mutation_log_reports_an_error_rather_than_an_empty_log() {
+        let store = WorkOrderStore::new();
+        store.note_mutation(PathBuf::from("src/lib.rs"), "hash-a".into());
+        store.poison_for_test();
+        assert_eq!(store.mutations(), Err(MutationLogUnavailable));
+    }
+
+    #[test]
+    fn a_store_without_a_baseline_says_so_rather_than_inventing_one() {
+        assert!(WorkOrderStore::new().baseline().is_none());
+        let tmp = tempfile::tempdir().unwrap();
+        let snapshot = WorkspaceSnapshot::capture(tmp.path(), None).unwrap();
+        assert!(WorkOrderStore::with_baseline(snapshot).baseline().is_some());
     }
 }

@@ -5,12 +5,13 @@
 //! deliberately narrow and separate from the verification policy in
 //! [`super::verify`]:
 //!
-//! - no shell. The command is split into argv and spawned directly, so
-//!   there is no metacharacter, pipeline, or substitution to smuggle work
-//!   through — and a missing program surfaces as a spawn error instead of
-//!   an ambiguous exit 127;
-//! - an allowlist over the program name, checked before anything is
-//!   spawned;
+//! - no shell. The command is split into argv by [`super::acceptance`]
+//!   and spawned directly, so there is no metacharacter, pipeline, or
+//!   substitution to smuggle work through — and a missing program
+//!   surfaces as a spawn error instead of an ambiguous exit 127;
+//! - the command policy is re-checked here, immediately before the
+//!   spawn, so an order that reached the runner without passing
+//!   admission still cannot execute;
 //! - a wall-clock bound, enforced by killing the whole process group so a
 //!   grandchild cannot outlive the check or keep its pipes open;
 //! - a bounded output tail, so one runaway command cannot blow up the
@@ -23,6 +24,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::tools::{drain_pipe, kill_process_tree};
 
+use super::acceptance::{self, CommandPolicy};
 use super::manifest::CheckStatus;
 
 /// Largest output kept per check. Enough for a compiler error block,
@@ -48,29 +50,6 @@ impl CommandRun {
     }
 }
 
-/// Split `command` into argv, refusing anything a shell would have to
-/// interpret. Verification never needs a pipeline; accepting one would
-/// mean accepting an unbounded, unallowlisted write set.
-fn argv(command: &str) -> Result<Vec<String>, String> {
-    const SHELL_CHARS: &[char] = &[
-        '|', '&', ';', '<', '>', '(', ')', '$', '`', '\\', '"', '\'', '\n', '*', '?', '~', '{', '}',
-    ];
-    let mut out = Vec::new();
-    for token in command.split_whitespace() {
-        if let Some(bad) = token.chars().find(|c| SHELL_CHARS.contains(c)) {
-            return Err(format!(
-                "`{command}` contains the shell character `{bad}`; verification commands are run \
-                 directly, without a shell"
-            ));
-        }
-        out.push(token.to_string());
-    }
-    if out.is_empty() {
-        return Err("empty command".into());
-    }
-    Ok(out)
-}
-
 /// How often a running check notices the user asked to stop.
 const ABORT_POLL: Duration = Duration::from_millis(150);
 
@@ -79,8 +58,8 @@ const ABORT_POLL: Duration = Duration::from_millis(150);
 /// wall-clock bound it is supposed to enforce.
 const DRAIN_GRACE: Duration = Duration::from_secs(5);
 
-/// Run `command` in `root`, bounded by `timeout`, if its program is in
-/// `allowed`. Never panics and never returns a pass it did not observe.
+/// Run `command` in `root`, bounded by `timeout`, if `policy` admits it.
+/// Never panics and never returns a pass it did not observe.
 ///
 /// `abort` is polled while the child runs, so a user who stops the turn
 /// does not have to wait out the timeout.
@@ -88,19 +67,25 @@ pub(super) async fn run_bounded(
     command: &str,
     root: &std::path::Path,
     timeout: Duration,
-    allowed: &[String],
+    policy: &CommandPolicy,
     abort: Option<&AtomicBool>,
 ) -> CommandRun {
-    let args = match argv(command) {
+    let args = match acceptance::validate(command, policy) {
         Ok(a) => a,
-        Err(reason) => return CommandRun::refused(reason),
+        Err(e) => return CommandRun::refused(e.to_string()),
     };
-    if !allowed.iter().any(|p| *p == args[0]) {
-        return CommandRun::refused(format!(
-            "`{}` is not a verification command this harness will run (allowed: {})",
-            args[0],
-            allowed.join(", ")
-        ));
+    // Checked before the spawn as well as during the wait: once the user
+    // has asked to stop, the remaining checks must not start processes
+    // the caller then has to wait for.
+    if abort.is_some_and(|f| f.load(Ordering::Relaxed)) {
+        return CommandRun {
+            status: CheckStatus::Unavailable {
+                reason: format!("{command}: stopped before it started"),
+            },
+            stdout: String::new(),
+            output_tail: String::new(),
+            duration_ms: 0,
+        };
     }
 
     let mut cmd = tokio::process::Command::new(&args[0]);
@@ -245,8 +230,8 @@ mod tests {
 
     const NOW: Duration = Duration::from_secs(10);
 
-    fn allowed(progs: &[&str]) -> Vec<String> {
-        progs.iter().map(|p| (*p).to_string()).collect()
+    fn allowed(progs: &[&str]) -> CommandPolicy {
+        CommandPolicy::programs(progs)
     }
 
     #[tokio::test]
@@ -257,7 +242,7 @@ mod tests {
             &format!("touch {}", marker.display()),
             tmp.path(),
             NOW,
-            &allowed(["cargo"].as_slice()),
+            &allowed(&["cargo"]),
             None,
         )
         .await;
@@ -284,6 +269,46 @@ mod tests {
             };
             assert!(reason.contains("without a shell"), "{reason}");
         }
+    }
+
+    /// The policy is re-checked at the spawn seam, so a command that
+    /// never passed admission still cannot execute here.
+    #[tokio::test]
+    async fn the_cargo_policy_is_enforced_again_before_spawning() {
+        let tmp = tempfile::tempdir().unwrap();
+        let marker = tmp.path().join("ran");
+        std::fs::write(tmp.path().join("Cargo.toml"), "[package]\n").unwrap();
+        for command in ["cargo install ripgrep", "cargo run --bin evil", "just test"] {
+            let run = run_bounded(command, tmp.path(), NOW, &CommandPolicy::Cargo, None).await;
+            let CheckStatus::Rejected { reason } = &run.status else {
+                panic!("{command} must be refused, got {:?}", run.status);
+            };
+            assert!(!reason.is_empty(), "a refusal has to explain itself");
+        }
+        assert!(!marker.exists());
+    }
+
+    /// Once the user has stopped the turn, the remaining checks must not
+    /// start processes the caller then has to wait for and reap.
+    #[tokio::test]
+    async fn a_check_reached_after_an_abort_never_spawns_anything() {
+        let tmp = tempfile::tempdir().unwrap();
+        let marker = tmp.path().join("ran");
+        let abort = AtomicBool::new(true);
+        let run = run_bounded(
+            &format!("touch {}", marker.display()),
+            tmp.path(),
+            NOW,
+            &allowed(&["touch"]),
+            Some(&abort),
+        )
+        .await;
+        assert!(
+            matches!(&run.status, CheckStatus::Unavailable { reason } if reason.contains("stopped")),
+            "{:?}",
+            run.status
+        );
+        assert!(!marker.exists(), "an aborted check must not have run");
     }
 
     #[tokio::test]

@@ -24,6 +24,7 @@ mod prompt_inspect;
 mod revert;
 mod side_requests;
 mod state;
+mod stop_watch;
 mod stream;
 mod subagent;
 mod system_prompt;

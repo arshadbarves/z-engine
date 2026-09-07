@@ -64,7 +64,8 @@ mod tests {
     use super::*;
     use crate::evidence::{BlobStore, EvidenceLedger, FsBlobStore};
     use crate::perms::PolicyEngine;
-    use crate::tools::context::{EvidenceStore, ToolCtx};
+    use crate::tools::context::ToolCtx;
+    use crate::tools::evidence_ctx::EvidenceStore;
     use std::sync::{Arc, Mutex};
 
     /// A `ToolCtx` rooted at `root` with a fresh, temporary evidence

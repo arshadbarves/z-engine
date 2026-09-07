@@ -20,10 +20,11 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-use crate::evidence::BlobHandle;
-
+use super::acceptance::CommandPolicy;
+use super::audit::audit;
 use super::command_run::{run_bounded, tail};
-use super::manifest::{CheckOutcome, CheckStatus, ScopeBreach, Verdict, VerificationManifest};
+use super::manifest::{CheckOutcome, CheckStatus, Verdict, VerificationManifest};
+use super::plan::VerificationPlan;
 use super::work_order::AcceptanceCommand;
 
 /// Default wall-clock bound per check. Generous enough for a cold
@@ -31,42 +32,14 @@ use super::work_order::AcceptanceCommand;
 /// turn open forever.
 pub const DEFAULT_CHECK_TIMEOUT: Duration = Duration::from_secs(600);
 
-/// Programs verification will execute. Narrow on purpose: these are run
-/// without an approval prompt, so the list is the harness's own promise
-/// about what a work order can make it do.
-const DEFAULT_ALLOWED_PROGRAMS: &[&str] = &["cargo"];
-
 const CARGO_CHECK: &str = "cargo check --workspace --all-targets --message-format=json";
-
-/// One path this run read, and the hash it had when it was read.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReadWitness {
-    /// Repository-relative path, as recorded on the evidence record.
-    pub path: PathBuf,
-    /// SHA-256 of the whole file at capture time.
-    pub file_hash: String,
-}
-
-/// The facts a verification run is judged against.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VerificationPlan {
-    pub work_order_id: String,
-    pub goal: String,
-    /// Repository-relative writable paths the order declared.
-    pub scope: Vec<PathBuf>,
-    /// Repository-relative paths this run actually changed.
-    pub mutated: Vec<PathBuf>,
-    /// Every path this run read, with the hash it had at read time.
-    pub witnesses: Vec<ReadWitness>,
-    pub acceptance: Vec<AcceptanceCommand>,
-}
 
 /// Runs the checks a guarded completion depends on.
 #[derive(Debug, Clone)]
 pub struct VerificationRunner {
     root: PathBuf,
     timeout: Duration,
-    allowed: Vec<String>,
+    policy: CommandPolicy,
     abort: Option<Arc<AtomicBool>>,
 }
 
@@ -75,10 +48,7 @@ impl VerificationRunner {
         Self {
             root: root.into(),
             timeout: DEFAULT_CHECK_TIMEOUT,
-            allowed: DEFAULT_ALLOWED_PROGRAMS
-                .iter()
-                .map(|p| (*p).to_string())
-                .collect(),
+            policy: CommandPolicy::Cargo,
             abort: None,
         }
     }
@@ -95,10 +65,13 @@ impl VerificationRunner {
         self
     }
 
-    /// Replace the program allowlist. Tests use this to reach the timeout
-    /// and missing-program paths without pretending `cargo` misbehaves.
+    /// Replace the command policy with a bare program allowlist. Tests
+    /// use this to reach the timeout and missing-program paths without
+    /// pretending `cargo` misbehaves; production always runs the cargo
+    /// policy this type is constructed with.
+    #[cfg(test)]
     pub fn with_allowed_programs(mut self, programs: &[&str]) -> Self {
-        self.allowed = programs.iter().map(|p| (*p).to_string()).collect();
+        self.policy = CommandPolicy::programs(programs);
         self
     }
 
@@ -109,50 +82,17 @@ impl VerificationRunner {
         // `Cargo.lock`, a test suite touches `target/` — and auditing
         // afterwards would charge those writes to the agent as scope
         // breaches it did not commit.
-        let breaches = self.audit_scope(plan);
+        let breaches = audit(&self.root, plan);
         let mut checks = vec![self.cargo_check(plan).await];
-        checks.extend(self.acceptance_checks(&plan.acceptance).await);
+        checks.extend(self.acceptance_checks(plan, &plan.acceptance).await);
         VerificationManifest {
             work_order_id: plan.work_order_id.clone(),
             goal: plan.goal.clone(),
             scope: plan.scope.clone(),
-            mutated: plan.mutated.clone(),
+            mutated: plan.mutated_paths(),
             breaches,
             checks,
         }
-    }
-
-    /// Changes the declared scope does not account for, from two
-    /// directions: something changed that was never declared writable, and
-    /// something the run read outside its scope no longer matches the
-    /// bytes it read.
-    fn audit_scope(&self, plan: &VerificationPlan) -> Vec<ScopeBreach> {
-        let mut breaches = Vec::new();
-        for path in &plan.mutated {
-            if !plan.scope.contains(path) {
-                breaches.push(ScopeBreach {
-                    path: path.clone(),
-                    reason: "changed but not declared writable".into(),
-                });
-            }
-        }
-        for witness in &plan.witnesses {
-            if plan.scope.contains(&witness.path) || plan.mutated.contains(&witness.path) {
-                continue;
-            }
-            let reason = match std::fs::read(self.root.join(&witness.path)) {
-                Ok(bytes) if BlobHandle::of(&bytes).to_string() == witness.file_hash => continue,
-                Ok(_) => "changed since this run read it, outside the declared scope",
-                Err(_) => "was read by this run and is now unreadable",
-            };
-            breaches.push(ScopeBreach {
-                path: witness.path.clone(),
-                reason: reason.into(),
-            });
-        }
-        breaches.sort_by(|a, b| a.path.cmp(&b.path));
-        breaches.dedup_by(|a, b| a.path == b.path);
-        breaches
     }
 
     /// Does the workspace still compile?
@@ -163,7 +103,7 @@ impl VerificationRunner {
     /// commands as the only required evidence, which is the model
     /// grading its own work.
     async fn cargo_check(&self, plan: &VerificationPlan) -> CheckOutcome {
-        let touched_rust = plan.mutated.iter().any(|p| is_rust_relevant(p));
+        let touched_rust = plan.mutated.iter().any(|m| is_rust_relevant(&m.path));
         let Some(dir) = self.cargo_root(plan) else {
             return match touched_rust {
                 false => CheckOutcome::skipped(
@@ -185,7 +125,7 @@ impl VerificationRunner {
                 },
             };
         };
-        let run = run_bounded(CARGO_CHECK, &dir, self.timeout, &self.allowed, self.abort()).await;
+        let run = run_bounded(CARGO_CHECK, &dir, self.timeout, &self.policy, self.abort()).await;
         // The exit status is authoritative — a manifest error emits no
         // compiler messages at all — but when cargo did produce
         // diagnostics they explain the failure far better than raw JSON.
@@ -206,7 +146,11 @@ impl VerificationRunner {
     /// Every acceptance command the order declared. A mutating order that
     /// declared none has offered no proof of its own goal, which is a
     /// refusal recorded as such rather than an empty list.
-    async fn acceptance_checks(&self, commands: &[AcceptanceCommand]) -> Vec<CheckOutcome> {
+    async fn acceptance_checks(
+        &self,
+        plan: &VerificationPlan,
+        commands: &[AcceptanceCommand],
+    ) -> Vec<CheckOutcome> {
         if commands.is_empty() {
             return vec![CheckOutcome {
                 name: "acceptance".into(),
@@ -221,13 +165,18 @@ impl VerificationRunner {
                 output_tail: String::new(),
             }];
         }
+        // Acceptance commands are cargo commands, so they run where the
+        // manifest they compile against lives — the same directory
+        // `cargo check` uses. Running them at a project root that is not
+        // a cargo root would fail for a reason the run cannot fix.
+        let dir = self.cargo_root(plan).unwrap_or_else(|| self.root.clone());
         let mut out = Vec::with_capacity(commands.len());
         for command in commands {
             let run = run_bounded(
                 &command.command,
-                &self.root,
+                &dir,
                 self.timeout,
-                &self.allowed,
+                &self.policy,
                 self.abort(),
             )
             .await;
@@ -256,6 +205,7 @@ impl VerificationRunner {
         }
         plan.mutated
             .iter()
+            .map(|m| &m.path)
             .filter(|p| is_rust_relevant(p))
             .find_map(|p| {
                 let mut dir = self.root.join(p);
@@ -319,7 +269,7 @@ pub fn write_manifest(dir: &Path, manifest: &VerificationManifest) -> std::io::R
     })
     .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     text.push('\n');
-    std::fs::write(&path, text)?;
+    crate::fs_atomic::atomic_write(&path, text.as_bytes())?;
     Ok(path)
 }
 

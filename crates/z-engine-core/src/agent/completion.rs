@@ -19,7 +19,7 @@
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 
 use z_engine_provider::ChatMessage;
 
@@ -28,6 +28,7 @@ use crate::tools::ToolCtx;
 
 use super::events::{Command, Event};
 use super::state::LoopState;
+use super::stop_watch::{Stop, unwind, watch_for_abort};
 use super::turn::TurnOutcome;
 
 /// The gate this module speaks for, named in [`Event::TurnBlocked`].
@@ -44,21 +45,19 @@ pub(super) async fn settle_completion(
     cmd_rx: &mut UnboundedReceiver<Command>,
     ev_tx: &UnboundedSender<Event>,
 ) -> TurnOutcome {
-    // A run that changed nothing has nothing to prove, guarded or not.
-    if !ctx.has_mutated() {
-        return TurnOutcome::Completed;
-    }
-    // Guarded mutations cannot happen without an accepted order (the
-    // mutation gate refuses them), so a missing plan here means the store
-    // became unreadable. Fail closed rather than complete on a claim.
-    let Some(plan) = ctx.verification_plan() else {
-        return TurnOutcome::Blocked {
-            gate: GATE,
-            reason: "this run changed files but its work order is no longer readable, so nothing \
-                     can be verified"
-                .into(),
-            manifest_path: None,
-        };
+    // A run with nothing to account for — unguarded, or guarded and
+    // genuinely still — has nothing to prove. A run that cannot say what
+    // it did is a different thing entirely, and blocks.
+    let plan = match ctx.verification_plan() {
+        Ok(Some(plan)) => plan,
+        Ok(None) => return TurnOutcome::Completed,
+        Err(e) => {
+            return TurnOutcome::Blocked {
+                gate: GATE,
+                reason: e.to_string(),
+                manifest_path: None,
+            };
+        }
     };
 
     let _ = ev_tx.send(Event::StatusNote(format!(
@@ -66,17 +65,14 @@ pub(super) async fn settle_completion(
         plan.work_order_id
     )));
     let runner = VerificationRunner::new(&ctx.project_root).with_abort(Arc::clone(&ctx.abort));
-    let manifest = tokio::select! {
-        manifest = runner.run(&plan) => manifest,
-        () = watch_for_abort(cmd_rx, &ctx.abort) => {
-            // The flag is set; let the checks unwind and report the stop
-            // rather than a verdict they never reached.
-            return TurnOutcome::Aborted;
-        }
+    // Pinned rather than dropped on abort: dropping the future would kill
+    // the child this task spawned but leave its process group unreaped,
+    // so the stop is awaited — bounded — and what it stopped is recorded.
+    let mut running = std::pin::pin!(runner.run(&plan));
+    let (manifest, stop) = tokio::select! {
+        manifest = &mut running => (manifest, None),
+        stop = watch_for_abort(cmd_rx, &ctx.abort) => (unwind(running, &plan).await, Some(stop)),
     };
-    if ctx.aborted() {
-        return TurnOutcome::Aborted;
-    }
 
     // Persist first: the refusal points at the manifest, and a manifest
     // that could not be written is itself reported rather than ignored.
@@ -90,6 +86,21 @@ pub(super) async fn settle_completion(
         }
         None => None,
     };
+
+    if let Some(stop) = stop {
+        // The checks are no longer running, so the flag has done its job.
+        // Leaving it set would make every later tool call in this run
+        // believe the user is still asking to stop; a shutdown keeps it,
+        // because there is no later turn to protect.
+        if matches!(stop, Stop::Abort) {
+            ctx.abort.store(false, Ordering::Relaxed);
+        }
+        let _ = ev_tx.send(Event::StatusNote(match &manifest_path {
+            Some(path) => format!("verification stopped; what it reached is recorded in {path}"),
+            None => "verification stopped before it finished".into(),
+        }));
+        return TurnOutcome::Aborted;
+    }
 
     // The transcript keeps the evidence either way, so a follow-up turn
     // starts from what actually ran rather than from the model's belief.
@@ -106,20 +117,6 @@ pub(super) async fn settle_completion(
             manifest_path,
         },
     }
-}
-
-/// Resolve once the user asks to stop, setting the shared flag so the
-/// running checks reap their own process trees. Pends forever otherwise,
-/// so it only ever loses the `select!`.
-async fn watch_for_abort(cmd_rx: &mut UnboundedReceiver<Command>, abort: &AtomicBool) {
-    while let Some(cmd) = cmd_rx.recv().await {
-        if matches!(cmd, Command::Abort | Command::Shutdown) {
-            abort.store(true, Ordering::Relaxed);
-            return;
-        }
-    }
-    // The sender is gone: nobody can abort, so never resolve.
-    std::future::pending().await
 }
 
 #[cfg(test)]
@@ -181,7 +178,7 @@ mod tests {
         ctx.set_work_order(&order(&["Cargo.toml"], &[&id], "cargo check"))
             .unwrap();
         std::fs::write(repo.path().join("Cargo.toml"), content).unwrap();
-        ctx.note_mutation(&repo.path().join("Cargo.toml"));
+        ctx.note_mutation(&repo.path().join("Cargo.toml"), content.as_bytes());
         (ctx, store, repo)
     }
 
@@ -249,6 +246,81 @@ mod tests {
         let outcome = settle_completion(&ctx, &mut st, &mut commands(), &channel()).await;
         assert!(matches!(outcome, TurnOutcome::Completed), "{outcome:?}");
         assert!(run_dir.path().join("verification.json").is_file());
+    }
+
+    /// Stopping verification must not brick the rest of the run: the flag
+    /// that stopped the checks is cleared once they have stopped, and what
+    /// they reached is still recorded.
+    #[tokio::test]
+    async fn an_aborted_verification_unwinds_records_itself_and_clears_the_stop_flag() {
+        let (ctx, _store, _repo) = mutated(&format!("{MANIFEST}description = \"fixture\"\n"));
+        let run_dir = tempfile::tempdir().unwrap();
+        let mut st = state(Some(run_dir.path().to_path_buf()));
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        tx.send(Command::Abort).unwrap();
+
+        let outcome = settle_completion(&ctx, &mut st, &mut rx, &channel()).await;
+
+        assert!(matches!(outcome, TurnOutcome::Aborted), "{outcome:?}");
+        assert!(
+            !ctx.aborted(),
+            "a stopped verification must not leave every later tool call refusing to run"
+        );
+        let manifest: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(run_dir.path().join("verification.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            manifest["complete"],
+            serde_json::json!(false),
+            "an interrupted verification proves nothing: {manifest}"
+        );
+        assert!(
+            st.working.is_empty(),
+            "a stopped turn has no verdict to put in the transcript"
+        );
+    }
+
+    /// A change nothing recorded is the case the mutation log cannot see:
+    /// it must block, and must say which path it could not account for.
+    #[tokio::test]
+    async fn a_change_no_tool_recorded_blocks_the_completion() {
+        let (ctx, _store, repo) = mutated(&format!("{MANIFEST}description = \"fixture\"\n"));
+        // Written the way an approved shell command or a background
+        // process would: on disk, with nothing in the mutation log.
+        std::fs::write(
+            repo.path().join("src/lib.rs"),
+            format!("{LIB}// snuck in\n"),
+        )
+        .unwrap();
+        let run_dir = tempfile::tempdir().unwrap();
+        let mut st = state(Some(run_dir.path().to_path_buf()));
+
+        let outcome = settle_completion(&ctx, &mut st, &mut commands(), &channel()).await;
+
+        let TurnOutcome::Blocked { reason, .. } = outcome else {
+            panic!("an unrecorded change cannot complete: {outcome:?}");
+        };
+        assert!(reason.contains("src/lib.rs"), "{reason}");
+    }
+
+    /// The fail-closed half of the same rule: if the run cannot read its
+    /// own record of what it changed, it cannot certify that it changed
+    /// nothing.
+    #[tokio::test]
+    async fn an_unreadable_mutation_log_blocks_instead_of_completing() {
+        let repo = cargo_fixture();
+        let (ctx, _store) = guarded_ctx(repo.path(), None);
+        ctx.work_orders.as_ref().unwrap().poison_for_test();
+        let mut st = state(None);
+
+        let outcome = settle_completion(&ctx, &mut st, &mut commands(), &channel()).await;
+
+        let TurnOutcome::Blocked { gate, reason, .. } = outcome else {
+            panic!("an unreadable log cannot complete: {outcome:?}");
+        };
+        assert_eq!(gate, "completion");
+        assert!(reason.contains("unreadable"), "{reason}");
     }
 
     /// An unwritable manifest is a reporting failure, not a licence to

@@ -143,7 +143,7 @@ impl Tool for EditFileTool {
         ctx.note_read(&resolved);
         // The bytes are on disk: completion verification must now account
         // for this file.
-        ctx.note_mutation(&resolved);
+        ctx.note_mutation(&resolved, rep.new_content.as_bytes());
 
         let diff = unified_diff(&current, &rep.new_content, &disp);
         let body = format!("{disp}: edited (match: {})\n{diff}", rep.rung);

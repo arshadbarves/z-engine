@@ -64,7 +64,11 @@ pub(super) async fn agent_task(
         Arc::clone(&perms),
         cfg.tmp_dir.clone(),
     )
-    .with_task_runner(runner);
+    .with_task_runner(runner)
+    // One flag, one meaning: the tools and the loop must agree about
+    // whether the user is asking to stop, or a turn that was stopped
+    // during verification leaves every later tool call refusing to run.
+    .with_abort(Arc::clone(&abort_flag));
     if let Some(g) = &guarded {
         ctx = ctx
             .with_evidence(Arc::clone(&g.evidence))
@@ -153,6 +157,8 @@ pub(super) async fn agent_task(
                 images,
             } => {
                 state.current_task = user_text.clone();
+                // A new turn starts un-stopped, whatever ended the last one.
+                abort_flag.store(false, Ordering::Relaxed);
                 ctx.begin_checkpoint_turn();
                 if let Some(w) = recorder.as_mut() {
                     let _ = w.record(&SessionEvent::UserMsg {

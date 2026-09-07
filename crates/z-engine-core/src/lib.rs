@@ -14,6 +14,8 @@ pub mod agent;
 pub mod config;
 pub mod context;
 pub mod evidence;
+/// Crash-safe file replacement shared by evidence, governance, and tools.
+pub(crate) mod fs_atomic;
 pub mod governance;
 pub mod lsp;
 pub mod mcp;

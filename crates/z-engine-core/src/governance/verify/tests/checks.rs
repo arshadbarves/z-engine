@@ -8,6 +8,7 @@ async fn a_workspace_that_still_compiles_with_a_passing_acceptance_is_complete()
     let tmp = cargo_fixture();
     let manifest = VerificationRunner::new(tmp.path())
         .run(&plan(
+            tmp.path(),
             &["src/lib.rs"],
             &["src/lib.rs"],
             accept("cargo check"),
@@ -35,6 +36,7 @@ async fn a_broken_edit_blocks_and_the_refusal_carries_the_compiler_error() {
 
     let manifest = VerificationRunner::new(tmp.path())
         .run(&plan(
+            tmp.path(),
             &["src/lib.rs"],
             &["src/lib.rs"],
             accept("cargo check"),
@@ -67,6 +69,7 @@ async fn a_broken_manifest_blocks_even_though_cargo_emits_no_diagnostics() {
 
     let manifest = VerificationRunner::new(tmp.path())
         .run(&plan(
+            tmp.path(),
             &["Cargo.toml"],
             &["Cargo.toml"],
             accept("cargo check"),
@@ -87,7 +90,12 @@ async fn a_hanging_acceptance_command_times_out_and_blocks() {
     let manifest = VerificationRunner::new(tmp.path())
         .with_timeout(Duration::from_millis(300))
         .with_allowed_programs(&["sleep"])
-        .run(&plan(&["src/lib.rs"], &["src/lib.rs"], accept("sleep 120")))
+        .run(&plan(
+            tmp.path(),
+            &["src/lib.rs"],
+            &["src/lib.rs"],
+            accept("sleep 120"),
+        ))
         .await;
 
     assert_eq!(
@@ -107,6 +115,7 @@ async fn an_acceptance_command_whose_program_is_missing_blocks() {
     let manifest = VerificationRunner::new(tmp.path())
         .with_allowed_programs(&["z-engine-no-such-program"])
         .run(&plan(
+            tmp.path(),
             &["src/lib.rs"],
             &["src/lib.rs"],
             accept("z-engine-no-such-program --check"),
@@ -126,6 +135,7 @@ async fn an_acceptance_command_outside_the_allowlist_is_refused_unrun() {
     let marker = tmp.path().join("ran");
     let manifest = VerificationRunner::new(tmp.path())
         .run(&plan(
+            tmp.path(),
             &["src/lib.rs"],
             &["src/lib.rs"],
             accept(&format!("touch {}", marker.display())),
@@ -144,7 +154,7 @@ async fn an_acceptance_command_outside_the_allowlist_is_refused_unrun() {
 async fn a_mutating_order_with_no_acceptance_command_cannot_complete() {
     let tmp = cargo_fixture();
     let manifest = VerificationRunner::new(tmp.path())
-        .run(&plan(&["src/lib.rs"], &["src/lib.rs"], vec![]))
+        .run(&plan(tmp.path(), &["src/lib.rs"], &["src/lib.rs"], vec![]))
         .await;
 
     let Verdict::Blocked(reason) = manifest.verdict() else {
@@ -161,7 +171,12 @@ async fn a_project_without_a_cargo_manifest_records_the_skip() {
     std::fs::write(tmp.path().join("notes.md"), "# notes\n").unwrap();
     let manifest = VerificationRunner::new(tmp.path())
         .with_allowed_programs(&["true"])
-        .run(&plan(&["notes.md"], &["notes.md"], accept("true")))
+        .run(&plan(
+            tmp.path(),
+            &["notes.md"],
+            &["notes.md"],
+            accept("true"),
+        ))
         .await;
 
     let outcome = check(&manifest, "cargo-check");
@@ -187,7 +202,12 @@ async fn changing_rust_with_no_manifest_to_compile_it_is_refused_not_skipped() {
 
     let manifest = VerificationRunner::new(tmp.path())
         .with_allowed_programs(&["true"])
-        .run(&plan(&["src/lib.rs"], &["src/lib.rs"], accept("true")))
+        .run(&plan(
+            tmp.path(),
+            &["src/lib.rs"],
+            &["src/lib.rs"],
+            accept("true"),
+        ))
         .await;
 
     let outcome = check(&manifest, "cargo-check");
@@ -220,7 +240,7 @@ async fn a_crate_below_a_non_cargo_root_is_compiled_where_its_manifest_lives() {
     let rel = "rust/fixture/src/lib.rs";
     let manifest = VerificationRunner::new(tmp.path())
         .with_allowed_programs(&["cargo"])
-        .run(&plan(&[rel], &[rel], Vec::new()))
+        .run(&plan(tmp.path(), &[rel], &[rel], Vec::new()))
         .await;
 
     let outcome = check(&manifest, "cargo-check");
@@ -253,7 +273,12 @@ async fn an_aborted_run_stops_its_checks_instead_of_waiting_out_the_timeout() {
         .with_timeout(Duration::from_secs(600))
         .with_allowed_programs(&["sleep"])
         .with_abort(flag)
-        .run(&plan(&["notes.md"], &["notes.md"], accept("sleep 120")))
+        .run(&plan(
+            tmp.path(),
+            &["notes.md"],
+            &["notes.md"],
+            accept("sleep 120"),
+        ))
         .await;
 
     assert!(
@@ -286,5 +311,76 @@ fn the_manifest_is_written_where_the_refusal_can_point_at_it() {
     assert_eq!(
         serde_json::from_str::<VerificationManifest>(&text).unwrap(),
         manifest
+    );
+}
+
+/// The manifest is the artefact a refusal points at, so it is written the
+/// way every other durable artefact in this crate is: whole or not at all,
+/// leaving no half-written file and no temporary debris behind.
+#[test]
+fn the_manifest_is_written_atomically_and_leaves_nothing_behind() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("runs/01ABC");
+    let mut manifest = VerificationManifest {
+        work_order_id: "wo-1".into(),
+        goal: "g".into(),
+        scope: vec![PathBuf::from("src/lib.rs")],
+        mutated: vec![],
+        breaches: vec![],
+        checks: vec![],
+    };
+    write_manifest(&dir, &manifest).unwrap();
+    manifest.goal = "a second, longer verdict for the same run".into();
+    let path = write_manifest(&dir, &manifest).unwrap();
+
+    let entries: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(
+        entries,
+        ["verification.json"],
+        "an atomic write leaves no temporary file behind"
+    );
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(
+        serde_json::from_str::<VerificationManifest>(&text).unwrap(),
+        manifest,
+        "the rewrite must replace the whole file, not overlay it"
+    );
+}
+
+/// Acceptance commands are cargo commands, so they have to run where the
+/// manifest they compile against lives — the same place `cargo check`
+/// runs. At a non-cargo project root they would otherwise fail for a
+/// reason the run cannot fix.
+#[tokio::test]
+async fn acceptance_commands_run_at_the_nested_cargo_root_too() {
+    let tmp = tempfile::tempdir().unwrap();
+    let crate_dir = tmp.path().join("rust/fixture");
+    std::fs::create_dir_all(crate_dir.join("src")).unwrap();
+    std::fs::write(crate_dir.join("Cargo.toml"), MANIFEST).unwrap();
+    std::fs::write(crate_dir.join("src/lib.rs"), LIB).unwrap();
+
+    let rel = "rust/fixture/src/lib.rs";
+    let manifest = VerificationRunner::new(tmp.path())
+        .run(&plan(
+            tmp.path(),
+            &[rel],
+            &[rel],
+            accept("cargo check --quiet"),
+        ))
+        .await;
+
+    let outcome = check(&manifest, "acceptance");
+    assert!(
+        outcome.status.is_pass(),
+        "the acceptance command must run where the crate is: {outcome:?}"
+    );
+    assert_eq!(
+        manifest.verdict(),
+        Verdict::Complete,
+        "{}",
+        manifest.summary()
     );
 }
