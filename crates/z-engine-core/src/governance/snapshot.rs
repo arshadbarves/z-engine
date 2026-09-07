@@ -16,6 +16,32 @@
 //! walked directly. Either way a snapshot stores content hashes of the
 //! bytes on disk, so the comparison is about content and never about
 //! timestamps or git bookkeeping.
+//!
+//! # What is *not* audited, and why that is bounded
+//!
+//! `target/`, `node_modules/`, `.git/`, `.z-engine/` and everything
+//! `.gitignore` covers are excluded, because hashing a cargo target
+//! directory on every turn would cost more than the run. That exclusion
+//! would be a hole if anything could write there unaccounted, so the
+//! guarded run closes it from three sides rather than claiming a full
+//! audit it does not perform:
+//!
+//! 1. no shell command runs in a guarded run unless its write set is
+//!    provably empty (`perms::read_only`);
+//! 2. every governed write is logged and hash-checked against the bytes
+//!    the tool left behind, wherever it landed (`governance::audit`);
+//! 3. and the exclusion is *overridden* for an explicit, bounded set of
+//!    paths — see [`WorkspaceSnapshot::capture_watching`]. Anything the
+//!    active order declares writable, anything a governed tool wrote, and
+//!    anything the run read is snapshotted even when it sits under an
+//!    ignored directory, so a declared ignored path is compared like any
+//!    other and a check that rewrites one is caught.
+//!
+//! What remains outside is genuinely outside: an ignored path that no
+//! order declared, no tool wrote and no read witnessed. `cargo check`
+//! rewriting `target/debug/**` is the intended case, and arbitrary
+//! `build.rs` / proc-macro code executing during verification is the
+//! accepted residual risk (docs/deviations.md row 12).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -74,6 +100,26 @@ impl WorkspaceSnapshot {
     /// deleted — or restored to its committed content — is still
     /// compared rather than quietly dropping out of view.
     pub fn capture(root: &Path, baseline: Option<&Self>) -> Result<Self, SnapshotError> {
+        Self::capture_watching(root, baseline, &BTreeSet::new())
+    }
+
+    /// [`WorkspaceSnapshot::capture`], plus an explicit set of paths that
+    /// are watched **even when they are ignored or excluded**.
+    ///
+    /// This is the audited ignored subset. It is deliberately a list of
+    /// concrete repository-relative paths the run already named — the
+    /// order's scope, the mutation log, the read witnesses — and never a
+    /// pattern or a directory: a broader rule would either cost a walk of
+    /// `target/` or let an unnamed ignored path in through the side.
+    ///
+    /// Watching one costs a single `read`, so the set is bounded by what
+    /// the run itself declared, and a path that does not exist is
+    /// recorded as [`ChangeState::Missing`] exactly like any other.
+    pub fn capture_watching(
+        root: &Path,
+        baseline: Option<&Self>,
+        watched: &BTreeSet<PathBuf>,
+    ) -> Result<Self, SnapshotError> {
         let mut candidates = match git_candidates(root) {
             Some(paths) => paths,
             None => walk_candidates(root)?,
@@ -81,7 +127,15 @@ impl WorkspaceSnapshot {
         if let Some(base) = baseline {
             candidates.extend(base.files.keys().cloned());
         }
+        candidates.extend(watched.iter().filter(|p| p.is_relative()).cloned());
         Self::hash_all(root, candidates)
+    }
+
+    /// The paths this snapshot is watching, so a later capture keeps
+    /// comparing them. A path only enters the set by being declared,
+    /// written, read, or already watched — never by being discovered.
+    pub fn watched_paths(&self) -> BTreeSet<PathBuf> {
+        self.files.keys().cloned().collect()
     }
 
     /// Every path whose content differs between this snapshot (the
@@ -173,6 +227,11 @@ impl WorkspaceSnapshot {
     #[cfg(test)]
     pub(super) fn watched(&self) -> Vec<PathBuf> {
         self.files.keys().cloned().collect()
+    }
+
+    #[cfg(test)]
+    pub(super) fn is_watching(&self, path: &str) -> bool {
+        self.files.contains_key(Path::new(path))
     }
 }
 

@@ -36,14 +36,44 @@ pub enum SemanticHealth {
     Unavailable { reason: String },
 }
 
+/// One declaration the semantic provider placed in the file, and the
+/// lines it occupies.
+///
+/// Governance defines this itself rather than importing the LSP client's
+/// type, for the same reason it defines [`SemanticHealth`]: the gate must
+/// not know which provider answered. The extent is the whole declaration
+/// (signature, attributes, body), 1-based and inclusive, because that is
+/// the unit a work order authorizes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SymbolExtent {
+    pub name: String,
+    /// The declaration this one is nested in, when the provider said so.
+    pub container: Option<String>,
+    pub range: LineRange,
+}
+
+impl SymbolExtent {
+    /// Does `line` fall inside this declaration?
+    pub fn contains_line(&self, line: u32) -> bool {
+        self.range.0 <= line && line <= self.range.1
+    }
+
+    /// Does this declaration cover every line of `changed`? A whole-file
+    /// change (`None`) is never covered by one symbol — a file is more
+    /// than its declarations.
+    pub fn covers(&self, changed: Option<LineRange>) -> bool {
+        changed.is_some_and(|(first, last)| self.contains_line(first) && self.contains_line(last))
+    }
+}
+
 /// What the *semantic* provider (rust-analyzer) said about the file
 /// being changed. Only [`SemanticEvidence::Resolved`] can authorize:
 /// "the server has nothing for this file" and "the server answered about
 /// another file" are refusals, never empty successes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SemanticEvidence {
-    /// Declarations the provider resolved in this document.
-    Resolved { symbols: Vec<String> },
+    /// Declarations the provider resolved in this document, with extents.
+    Resolved { symbols: Vec<SymbolExtent> },
     /// Provider reachable, but no analysis for this file.
     Unindexed { reason: String },
     /// Provider answered about a different document, or unreadably.

@@ -60,8 +60,22 @@ impl Approvals for Recorded {
     }
 }
 
+/// Long enough that no scripted feed reaches it, so a test that exercises
+/// the deadline has to ask for it explicitly.
+fn generous() -> Limits {
+    Limits {
+        deadline: Duration::from_secs(30),
+    }
+}
+
 async fn run(events: Vec<Event>) -> anyhow::Result<()> {
-    drive(Scripted::new(events), &Recorded::default(), false).await
+    drive(
+        Scripted::new(events),
+        &Recorded::default(),
+        false,
+        generous(),
+    )
+    .await
 }
 
 /// The refusal a guarded run emits: detail first, verdict second.
@@ -126,6 +140,7 @@ async fn an_error_no_verdict_ever_explains_does_not_hang_the_run() {
             )]),
             &Recorded::default(),
             false,
+            generous(),
         ),
     )
     .await
@@ -151,6 +166,7 @@ async fn a_verdict_that_arrives_a_moment_later_still_decides_the_exit() {
         ]),
         &Recorded::default(),
         false,
+        generous(),
     )
     .await
     .expect_err("blocked");
@@ -210,6 +226,7 @@ async fn approvals_are_denied_without_a_terminal_and_the_run_continues() {
         ]),
         &approvals,
         false,
+        generous(),
     )
     .await
     .expect("denied approvals do not fail the run");
@@ -256,4 +273,107 @@ async fn nothing_after_a_blocked_turn_can_make_it_succeed() {
     .await
     .expect_err("a blocked turn must not exit zero");
     assert!(err.to_string().contains("nothing was verified"), "{err}");
+}
+
+/// The silent drop. A panicked or early-returning agent task drops the
+/// event sender, and the runner used to read that closed channel as a
+/// finished run — exiting zero with nothing verified, in the mode whose
+/// whole promise is that it fails closed.
+#[tokio::test]
+async fn a_channel_that_closes_without_a_terminal_event_is_a_failure() {
+    for prelude in [
+        vec![],
+        vec![Event::TurnStarted],
+        vec![
+            Event::TurnStarted,
+            Event::TokenDelta("working on it".into()),
+            Event::ToolCallFinished {
+                name: "read_file".into(),
+                ok: true,
+                duration_ms: 4,
+                summary: "read 40 lines".into(),
+            },
+        ],
+    ] {
+        let err = run(prelude)
+            .await
+            .expect_err("a dropped agent must not exit zero");
+        let msg = err.to_string();
+        assert!(msg.contains("without a verdict"), "{msg}");
+        assert!(msg.contains("nothing was verified"), "{msg}");
+    }
+}
+
+/// …and the clean exit still exists: only `TurnCompleted` grants it, and
+/// a channel closing afterwards changes nothing.
+#[tokio::test]
+async fn an_explicit_completion_is_still_a_clean_exit() {
+    run(vec![
+        Event::TurnStarted,
+        Event::TokenDelta("done".into()),
+        Event::TurnCompleted {
+            prompt_tokens: 10,
+            completion_tokens: 20,
+        },
+    ])
+    .await
+    .expect("an explicitly completed turn exits zero");
+}
+
+/// A provider that accepted the request and then stopped answering keeps
+/// the channel open forever. Without a global bound the run outlives the
+/// CI job; with one it exits non-zero and says which knob raises it.
+#[tokio::test]
+async fn a_stalled_run_exits_on_its_deadline_instead_of_hanging() {
+    let limits = Limits {
+        deadline: Duration::from_millis(120),
+    };
+    let err = timeout(
+        Duration::from_secs(5),
+        drive(Live::new(vec![]), &Recorded::default(), false, limits),
+    )
+    .await
+    .expect("the run deadline must be enforced, not merely declared")
+    .expect_err("a run with no verdict must not exit zero");
+
+    let msg = err.to_string();
+    assert!(msg.contains("run deadline"), "{msg}");
+    assert!(msg.contains("--timeout"), "{msg}");
+}
+
+/// The bound covers the whole run, not one quiet gap: a feed that keeps
+/// talking without ever finishing still ends at the deadline.
+#[tokio::test]
+async fn a_chatty_run_that_never_finishes_still_ends_at_the_deadline() {
+    let limits = Limits {
+        deadline: Duration::from_millis(150),
+    };
+    let chatter: Vec<(Duration, Event)> = (0..50)
+        .map(|i| {
+            (
+                Duration::from_millis(10),
+                Event::StatusNote(format!("still working ({i})")),
+            )
+        })
+        .collect();
+    let err = timeout(
+        Duration::from_secs(5),
+        drive(Live::new(chatter), &Recorded::default(), false, limits),
+    )
+    .await
+    .expect("the deadline bounds the run, not the gap between events")
+    .expect_err("no verdict means no clean exit");
+    assert!(err.to_string().contains("run deadline"), "{err}");
+}
+
+/// The default is finite: a runner whose ceiling could be absent would
+/// only be bounded when someone remembered to ask.
+#[test]
+fn the_run_deadline_defaults_to_a_finite_bound() {
+    assert_eq!(Limits::default().deadline, DEFAULT_RUN_DEADLINE);
+    assert_eq!(Limits::from_secs(None).deadline, DEFAULT_RUN_DEADLINE);
+    assert_eq!(
+        Limits::from_secs(Some(90)).deadline,
+        Duration::from_secs(90)
+    );
 }

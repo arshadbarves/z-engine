@@ -21,11 +21,13 @@
 //! nothing" and "I cannot tell you what I changed" must not look alike to
 //! the gate that grants completion.
 
-use std::path::Path;
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
 
 use crate::evidence::BlobHandle;
 use crate::governance::{
-    PlanError, ReadWitness, Verification, VerificationPlan, WorkspaceSnapshot,
+    MutationRecord, PlanError, ReadWitness, Verification, VerificationPlan, WorkOrderStore,
+    WorkspaceSnapshot,
 };
 
 use super::ToolCtx;
@@ -70,7 +72,16 @@ impl ToolCtx {
         // Captured whether or not there is a baseline to compare it to:
         // the checks are about to run, and the tree they are handed is
         // what their own writes have to be measured against afterwards.
-        let workspace = WorkspaceSnapshot::capture(&self.project_root, baseline.as_ref())?;
+        //
+        // The bounded audited ignored subset is folded in here: whatever
+        // the order declared writable, whatever a governed tool wrote,
+        // and whatever the run read is watched even under `target/` or a
+        // `.gitignore` rule, so an ignored path this run named cannot
+        // change without the audit seeing it.
+        let witnesses = self.read_witnesses()?;
+        let watched = audited_paths(store, &mutated, &witnesses);
+        let workspace =
+            WorkspaceSnapshot::capture_watching(&self.project_root, baseline.as_ref(), &watched)?;
         // A guarded run with no baseline cannot see third-party changes;
         // only a run that also changed nothing itself is safe to wave
         // through.
@@ -89,7 +100,7 @@ impl ToolCtx {
             mutated,
             changes,
             workspace,
-            witnesses: self.read_witnesses()?,
+            witnesses,
             acceptance: active.order.acceptance_commands.clone(),
         }))
     }
@@ -141,6 +152,27 @@ impl ToolCtx {
             })
             .collect())
     }
+}
+
+/// The bounded set of paths a guarded snapshot watches even when they are
+/// ignored or excluded: the active order's scope, this run's authorized
+/// writes, and everything it read.
+///
+/// Derived from the run's own record rather than configured, so it grows
+/// only when the run itself names a path — never into a walk of `target/`.
+fn audited_paths(
+    store: &WorkOrderStore,
+    mutated: &[MutationRecord],
+    witnesses: &[ReadWitness],
+) -> BTreeSet<PathBuf> {
+    store
+        .active()
+        .map(|active| active.order.writable_paths.clone())
+        .unwrap_or_default()
+        .into_iter()
+        .chain(mutated.iter().map(|m| m.path.clone()))
+        .chain(witnesses.iter().map(|w| w.path.clone()))
+        .collect()
 }
 
 #[cfg(test)]
@@ -255,6 +287,48 @@ mod tests {
             .verification_plan()
             .expect_err("an unreadable log cannot certify a clean run");
         assert!(matches!(err, PlanError::TurnRecordUnavailable), "{err:?}");
+    }
+
+    /// The bounded audited ignored subset (finding I7).
+    ///
+    /// `target/` is excluded from the workspace audit for cost, which
+    /// would be a hole if a path there could change unaccounted. A path
+    /// the run itself named — declared writable, written, or read — is
+    /// watched wherever it lives, so an ignored-path change is a change
+    /// the plan carries rather than one it cannot see.
+    #[test]
+    fn a_declared_or_written_path_is_audited_even_under_an_ignored_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join("target")).unwrap();
+        std::fs::write(tmp.path().join("target/generated.rs"), b"fn a() {}\n").unwrap();
+        std::fs::write(tmp.path().join("target/noise.bin"), b"junk\n").unwrap();
+        let (ctx, _dir) = guarded_ctx(tmp.path(), None);
+        let id = read(&ctx, "target/generated.rs", b"fn a() {}\n");
+        ctx.set_work_order(&order(&["target/generated.rs"], &[&id]))
+            .unwrap();
+
+        // A governed write into the declared ignored path…
+        ctx.note_mutation(&tmp.path().join("target/generated.rs"), b"fn b() {}\n");
+        std::fs::write(tmp.path().join("target/generated.rs"), b"fn b() {}\n").unwrap();
+        // …and unaccounted build noise beside it.
+        std::fs::write(tmp.path().join("target/noise.bin"), b"more junk\n").unwrap();
+
+        let plan = ctx.verification_plan().unwrap().unwrap();
+        let audited = plan.audited_paths();
+        assert!(
+            audited.contains(&PathBuf::from("target/generated.rs")),
+            "a declared, written, read path must be audited wherever it lives: {audited:?}"
+        );
+        assert!(
+            !audited.contains(&PathBuf::from("target/noise.bin")),
+            "the subset stays bounded to what the run named: {audited:?}"
+        );
+        assert!(
+            plan.workspace
+                .watched_paths()
+                .contains(&PathBuf::from("target/generated.rs")),
+            "the snapshot handed to the checks must be watching it too"
+        );
     }
 
     /// Same rule for the evidence side: no witnesses must not be

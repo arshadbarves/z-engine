@@ -57,6 +57,16 @@ pub enum GateFailure {
     )]
     UnresolvedTargetSymbol { symbols: String, path: PathBuf },
     #[error(
+        "guarded mode: this change touches {path} {changed}, which is outside every target \
+         symbol the order declared there — {symbols}. Edit inside one of those symbols, or \
+         re-declare the order with set_work_order naming the symbol you are changing"
+    )]
+    ChangeOutsideTargetSymbol {
+        path: PathBuf,
+        changed: String,
+        symbols: String,
+    },
+    #[error(
         "guarded mode: the Rust semantic provider has no analysis for {path} ({reason}), \
          so this change cannot be localized — wait for indexing to finish, or make the \
          file reachable from the workspace, then retry"
@@ -125,5 +135,14 @@ mod tests {
             .to_string()
             .contains("does not describe src/lib.rs")
         );
+        let outside = GateFailure::ChangeOutsideTargetSymbol {
+            path: PathBuf::from("src/lib.rs"),
+            changed: "lines 40-44".into(),
+            symbols: "parse (lines 1-9)".into(),
+        }
+        .to_string();
+        assert!(outside.contains("lines 40-44"), "{outside}");
+        assert!(outside.contains("parse (lines 1-9)"), "{outside}");
+        assert!(outside.contains("set_work_order"), "{outside}");
     }
 }

@@ -30,7 +30,7 @@ impl LspClient {
     /// server is re-spawned up to the client's bounded attempt limit.
     pub async fn health(&self) -> LspHealth {
         match self.ensure().await {
-            Ok(()) => LspHealth::Ready,
+            Ok(_generation) => LspHealth::Ready,
             Err(reason) => LspHealth::Unavailable(reason),
         }
     }

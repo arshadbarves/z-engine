@@ -23,6 +23,7 @@ use crate::tools::{ToolCtx, ToolRegistry};
 use super::LoopConfig;
 use super::events::{Command, Event};
 use super::execute::{ExecutionsOutcome, execute_calls};
+use super::prompt_plan;
 use super::side_requests::{run_review, summarize_segment};
 use super::state::LoopState;
 use super::stream::{StreamOutcome, consume_stream};
@@ -32,6 +33,18 @@ use super::system_prompt::l0_message;
 /// cap"; 500 consecutive tool rounds is far beyond any real task and only
 /// guards pathological provider behavior. Recorded in docs/deviations.md.
 const DEFAULT_MAX_TOOL_ROUNDS: u32 = 500;
+
+/// The gate that speaks for the prompt budget in [`Event::TurnBlocked`].
+const PROMPT_GATE: &str = "prompt-budget";
+
+/// The L0 message is built as a `ChatMessage`; the prompt plan works in
+/// text, because that is what the builder measures.
+fn text_of(message: ChatMessage) -> String {
+    match message {
+        ChatMessage::System { content } | ChatMessage::User { content } => content,
+        other => super::prompt_inspect::role_and_content(&other).1,
+    }
+}
 
 /// How a turn ended. `Completed` is the only outcome a guarded run can
 /// reach on the strength of the model's final message alone — and only
@@ -125,28 +138,50 @@ pub(super) async fn run_turn(
             tracing::debug!("repo map refreshed");
         }
 
-        let mut request_messages = Vec::with_capacity(state.working.len() + 3);
-        request_messages.push(l0_message(cfg));
+        let mut instructions = vec![text_of(l0_message(cfg))];
         if let Some(map) = &state.repo_map_text {
             if !map.is_empty() {
-                request_messages.push(ChatMessage::system(map.clone()));
+                instructions.push(map.clone());
             }
         }
         if let Some(notes_block) = notes.lock().ok().and_then(|n| n.render_block()) {
-            request_messages.push(ChatMessage::system(notes_block));
+            instructions.push(notes_block);
         }
-        // Guarded runs pin the accepted work order just above the
-        // conversation, so the declared scope is always in view.
-        if let Some(digest) = state.work_order_digest() {
-            request_messages.push(ChatMessage::system(digest));
-        }
-        // Everything above the conversation is the harness's own doing;
-        // its hash is what a replay compares prompts on.
-        let prefix_len = request_messages.len();
-        request_messages.extend(state.working.iter().cloned());
+        let order = state.active_work_order();
+        let tools = registry.defs();
+        let materials = prompt_plan::Materials {
+            instructions,
+            // Guarded runs pin the accepted work order and the evidence
+            // behind it just above the conversation, so the declared
+            // scope is always in view.
+            order: order.as_deref(),
+            working: &state.working,
+            tools: &tools,
+            budget_tokens: u64::from(cfg.max_context_tokens),
+        };
+        // Guarded runs are bounded by the manifest that describes them:
+        // it decides what is sent, and a pinned overflow means there is
+        // nothing to send. Unguarded runs keep the request they always
+        // had, with the manifest attached for the inspector only.
+        let plan = if state.work_orders.is_some() {
+            match prompt_plan::bounded(&materials) {
+                Ok(plan) => plan,
+                Err(overflow) => {
+                    return TurnOutcome::Blocked {
+                        gate: PROMPT_GATE,
+                        reason: format!(
+                            "{overflow}; nothing was sent — reduce the work order's scope or                              start a new session"
+                        ),
+                        manifest_path: None,
+                    };
+                }
+            }
+        } else {
+            prompt_plan::legacy(&materials)
+        };
+        let prefix_len = plan.prefix_len;
 
-        let mut request =
-            ChatRequest::new(cfg.model.clone(), request_messages).with_tools(registry.defs());
+        let mut request = ChatRequest::new(cfg.model.clone(), plan.messages).with_tools(tools);
         // Explicit output ceiling: without it gateways assume the model
         // maximum and pre-charge credits against that worst case.
         request = request.with_max_tokens(cfg.max_output_tokens);
@@ -155,12 +190,12 @@ pub(super) async fn run_turn(
         }
         if let Ok(mut slot) = state.last_prompt.lock() {
             *slot = Some(
-                super::prompt_inspect::PromptInspect::from_request(&request, true).with_manifest(
-                    state.active_work_order().as_deref(),
-                    u64::from(cfg.max_context_tokens),
-                ),
+                super::prompt_inspect::PromptInspect::from_request(&request, true)
+                    .with_prompt_manifest(plan.manifest),
             );
         }
+        // Everything above the conversation is the harness's own doing;
+        // its hash is what a replay compares prompts on.
         ctx.record_prompt_prefix(&request.messages[..prefix_len]);
         let mut stream = client.stream_chat(&request, Arc::clone(abort_flag));
 

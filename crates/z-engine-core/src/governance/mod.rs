@@ -35,7 +35,7 @@ pub use active::{ActiveWorkOrder, WorkOrderStore};
 pub use evidence_view::EvidenceView;
 pub use gate::{
     EvidenceState, GateDecision, GateEngine, GateFailure, LineRange, MutationRequest, RustFacts,
-    SemanticEvidence, SemanticHealth, changed_line_range,
+    SemanticEvidence, SemanticHealth, SymbolExtent, changed_line_range,
 };
 pub use manifest::{CheckOutcome, CheckStatus, ScopeBreach, Verdict, VerificationManifest};
 pub use plan::{
@@ -44,5 +44,5 @@ pub use plan::{
 pub use prompt::{PromptManifest, PromptOverflow, PromptSection, PromptSnapshot, build_prompt};
 pub use snapshot::{SnapshotError, WorkspaceSnapshot};
 pub use turn_record::{TurnRecord, TurnRecordUnavailable};
-pub use verify::{Verification, VerificationRunner, write_manifest};
+pub use verify::{LATEST_MANIFEST, Verification, VerificationRunner, write_manifest};
 pub use work_order::{AcceptanceCommand, WorkOrder, WorkOrderError};

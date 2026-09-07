@@ -293,63 +293,6 @@ async fn an_aborted_run_stops_its_checks_instead_of_waiting_out_the_timeout() {
     assert!(matches!(manifest.verdict(), Verdict::Blocked(_)));
 }
 
-#[test]
-fn the_manifest_is_written_where_the_refusal_can_point_at_it() {
-    let tmp = tempfile::tempdir().unwrap();
-    let dir = tmp.path().join("runs/01ABC");
-    let manifest = VerificationManifest {
-        work_order_id: "wo-1".into(),
-        goal: "g".into(),
-        scope: vec![PathBuf::from("src/lib.rs")],
-        mutated: vec![],
-        breaches: vec![],
-        checks: vec![],
-    };
-    let path = write_manifest(&dir, &manifest).unwrap();
-    assert_eq!(path, dir.join("verification.json"));
-    let text = std::fs::read_to_string(&path).unwrap();
-    assert_eq!(
-        serde_json::from_str::<VerificationManifest>(&text).unwrap(),
-        manifest
-    );
-}
-
-/// The manifest is the artefact a refusal points at, so it is written the
-/// way every other durable artefact in this crate is: whole or not at all,
-/// leaving no half-written file and no temporary debris behind.
-#[test]
-fn the_manifest_is_written_atomically_and_leaves_nothing_behind() {
-    let tmp = tempfile::tempdir().unwrap();
-    let dir = tmp.path().join("runs/01ABC");
-    let mut manifest = VerificationManifest {
-        work_order_id: "wo-1".into(),
-        goal: "g".into(),
-        scope: vec![PathBuf::from("src/lib.rs")],
-        mutated: vec![],
-        breaches: vec![],
-        checks: vec![],
-    };
-    write_manifest(&dir, &manifest).unwrap();
-    manifest.goal = "a second, longer verdict for the same run".into();
-    let path = write_manifest(&dir, &manifest).unwrap();
-
-    let entries: Vec<String> = std::fs::read_dir(&dir)
-        .unwrap()
-        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
-        .collect();
-    assert_eq!(
-        entries,
-        ["verification.json"],
-        "an atomic write leaves no temporary file behind"
-    );
-    let text = std::fs::read_to_string(&path).unwrap();
-    assert_eq!(
-        serde_json::from_str::<VerificationManifest>(&text).unwrap(),
-        manifest,
-        "the rewrite must replace the whole file, not overlay it"
-    );
-}
-
 /// Acceptance commands are cargo commands, so they have to run where the
 /// manifest they compile against lives — the same place `cargo check`
 /// runs. At a non-cargo project root they would otherwise fail for a

@@ -101,7 +101,14 @@ pub(super) async fn settle_completion(
 
     // Persist first: the refusal points at the manifest, and a manifest
     // that could not be written is itself reported rather than ignored.
-    let manifest_path = match state.run_dir.as_ref().map(|d| write_manifest(d, manifest)) {
+    // Each turn files its own record, so a later refusal never erases the
+    // account of an earlier verified turn.
+    let turn = state.next_verification_turn();
+    let manifest_path = match state
+        .run_dir
+        .as_ref()
+        .map(|d| write_manifest(d, turn, manifest))
+    {
         Some(Ok(path)) => Some(path.display().to_string()),
         Some(Err(e)) => {
             let _ = ev_tx.send(Event::StatusNote(format!(

@@ -155,3 +155,24 @@ fn a_tape_outside_the_project_is_accepted() {
     };
     assert!(parsed.check_tape_paths(project.path()).is_ok());
 }
+
+/// The run bound is a value the user can set, and a value that cannot be
+/// nonsense: a zero or unparseable ceiling would be no ceiling at all.
+#[test]
+fn the_run_deadline_is_configurable_and_must_be_a_positive_number() {
+    assert_eq!(
+        args("--headless go --timeout 90").unwrap().timeout_secs,
+        Some(90)
+    );
+
+    for bad in ["0", "-5", "later"] {
+        let err =
+            args(&format!("--headless go --timeout {bad}")).expect_err("a run needs a real bound");
+        assert_eq!(err, CliError::BadTimeout(bad.to_string()), "{bad}");
+    }
+    // …and it means nothing without a run to bound.
+    assert_eq!(
+        args("--timeout 90").unwrap_err(),
+        CliError::NeedsHeadless("--timeout".into())
+    );
+}

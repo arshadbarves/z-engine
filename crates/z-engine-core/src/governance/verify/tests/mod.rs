@@ -65,11 +65,20 @@ fn plan(
         changes: Vec::new(),
         // The tree as it stands before the checks run; a default here
         // would make every file in the fixture look like something a
-        // check created.
-        workspace: WorkspaceSnapshot::capture(root, None).unwrap(),
+        // check created. Captured watching the paths this order named,
+        // exactly as `ToolCtx::verification_plan` does, so a declared
+        // path under an ignored directory is audited here too.
+        workspace: WorkspaceSnapshot::capture_watching(root, None, &declared(scope, mutated))
+            .unwrap(),
         witnesses: Vec::new(),
         acceptance,
     }
+}
+
+/// The bounded audited subset a plan carries: what the order declared
+/// writable, plus what the tools wrote.
+fn declared(scope: &[&str], mutated: &[&str]) -> std::collections::BTreeSet<PathBuf> {
+    scope.iter().chain(mutated).map(PathBuf::from).collect()
 }
 
 fn hash_on_disk(root: &std::path::Path, rel: &str) -> String {
@@ -94,4 +103,5 @@ fn check<'a>(m: &'a VerificationManifest, name: &str) -> &'a CheckOutcome {
 }
 
 mod checks;
+mod persist;
 mod scope;

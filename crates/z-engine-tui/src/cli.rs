@@ -42,6 +42,9 @@ pub struct Args {
     pub replay_run: Option<PathBuf>,
     /// Write the run's metrics as JSON here once the run is over.
     pub metrics_out: Option<PathBuf>,
+    /// Wall-clock ceiling for a headless run, in seconds. `None` uses the
+    /// runner's default, which is finite either way.
+    pub timeout_secs: Option<u64>,
     /// `--help` was asked for; the caller prints usage and exits 0.
     pub help: bool,
 }
@@ -77,6 +80,11 @@ pub enum CliError {
     )]
     ReplayOverride(String),
     #[error(
+        "--timeout needs a positive whole number of seconds, not {0:?}: a \
+         run with no bound is a CI job that never ends."
+    )]
+    BadTimeout(String),
+    #[error(
         "{flag} must point outside the project: {path} is inside {root}, \
          and a guarded run treats every change under its root as work to \
          account for. Put the tape somewhere else."
@@ -102,6 +110,8 @@ GUARDED RUNS (headless):
   --record-run PATH     record the run (traffic, gates, evidence, verdict)
   --replay-run PATH     serve the run from a cassette: no network, no API key
   --metrics-out PATH    write the run's metrics as JSON
+  --timeout SECS        bound the whole run (default 1800s); a run with no
+                        verdict by then exits non-zero
 
 Cassettes must live outside the project directory.";
 
@@ -139,6 +149,15 @@ pub fn parse(argv: &[String]) -> Result<Args, CliError> {
             "--metrics-out" => {
                 args.metrics_out = Some(PathBuf::from(value(&mut i, "--metrics-out")?))
             }
+            "--timeout" => {
+                let raw = value(&mut i, "--timeout")?;
+                let secs = raw
+                    .parse::<u64>()
+                    .ok()
+                    .filter(|s| *s > 0)
+                    .ok_or_else(|| CliError::BadTimeout(raw.clone()))?;
+                args.timeout_secs = Some(secs);
+            }
             "--help" | "-h" => args.help = true,
             other => return Err(CliError::Unknown(other.to_string())),
         }
@@ -162,6 +181,7 @@ impl Args {
                 ("--record-run", self.record_run.is_some()),
                 ("--replay-run", self.replay_run.is_some()),
                 ("--metrics-out", self.metrics_out.is_some()),
+                ("--timeout", self.timeout_secs.is_some()),
             ] {
                 if present {
                     return Err(CliError::NeedsHeadless(flag.to_string()));

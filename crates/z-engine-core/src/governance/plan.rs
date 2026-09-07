@@ -82,6 +82,24 @@ impl VerificationPlan {
         self.mutated.iter().map(|m| m.path.clone()).collect()
     }
 
+    /// Every path this run named for itself: the order's declared scope,
+    /// what the governed tools wrote, and what it read.
+    ///
+    /// This is the *audited ignored subset* — the bounded set of paths a
+    /// snapshot keeps watching even under an ignored or excluded
+    /// directory (see [`super::snapshot`]). It is derived rather than
+    /// configured, so it can never be widened into "hash the tree" or
+    /// narrowed into "trust the log".
+    pub fn audited_paths(&self) -> std::collections::BTreeSet<PathBuf> {
+        self.scope
+            .iter()
+            .cloned()
+            .chain(self.mutated.iter().map(|m| m.path.clone()))
+            .chain(self.witnesses.iter().map(|w| w.path.clone()))
+            .chain(self.workspace.watched_paths())
+            .collect()
+    }
+
     /// The hash the harness last authorized for `path`, if any.
     pub(super) fn authorized_hash(&self, path: &PathBuf) -> Option<&str> {
         self.mutated

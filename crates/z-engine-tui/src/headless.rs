@@ -11,10 +11,44 @@ pub async fn run_one_shot(
     ev: EventRx,
     task: &str,
     auto_approve: bool,
+    limits: Limits,
 ) -> anyhow::Result<()> {
     eprintln!("zengine --headless · task: {task}");
     handle.submit(task.to_string());
-    drive(ev, &handle, auto_approve).await
+    drive(ev, &handle, auto_approve, limits).await
+}
+
+/// Default ceiling on a whole headless run. Generous enough for a cold
+/// workspace compile plus a multi-turn task, finite so an unattended CI
+/// job cannot be held open by a provider that stopped answering.
+pub const DEFAULT_RUN_DEADLINE: Duration = Duration::from_secs(30 * 60);
+
+/// What bounds one headless run. A separate value rather than a constant
+/// so CI can shorten it and tests can prove the bound exists.
+#[derive(Debug, Clone, Copy)]
+pub struct Limits {
+    /// Wall-clock ceiling for the whole run, verdict included.
+    pub deadline: Duration,
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            deadline: DEFAULT_RUN_DEADLINE,
+        }
+    }
+}
+
+impl Limits {
+    /// Bound the run at `secs`, or keep the default when unset.
+    pub fn from_secs(secs: Option<u64>) -> Self {
+        match secs {
+            Some(secs) => Self {
+                deadline: Duration::from_secs(secs),
+            },
+            None => Self::default(),
+        }
+    }
 }
 
 /// The event feed, as the runner needs it. `EventRx` is the real one; a
@@ -52,13 +86,30 @@ impl Approvals for AgentHandle {
 /// only errors still exits immediately afterwards.
 const BLOCKED_VERDICT_GRACE: Duration = Duration::from_millis(150);
 
+/// Drive one run to its verdict.
+///
+/// Two ways out that are *not* success, and both used to be: an agent
+/// that drops the event channel without a terminal event has verified
+/// nothing, and a run that never produces one at all must not outlive
+/// its deadline. Exiting zero for either would make a fail-closed mode
+/// report a clean run for work that never happened.
 async fn drive<E: Events>(
     mut ev: E,
     approvals: &impl Approvals,
     auto_approve: bool,
+    limits: Limits,
 ) -> anyhow::Result<()> {
+    let deadline = Instant::now() + limits.deadline;
     loop {
-        match ev.next().await {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        let Ok(next) = timeout(remaining, ev.next()).await else {
+            anyhow::bail!(
+                "no verdict within the {}s run deadline; nothing was verified \
+                 (raise it with --timeout SECS)",
+                limits.deadline.as_secs()
+            );
+        };
+        match next {
             Some(Event::ReasoningDelta(_)) => {
                 eprintln!("[thinking…]");
             }
@@ -139,7 +190,13 @@ async fn drive<E: Events>(
             Some(Event::RunBlocked { reason }) => return Err(blocked(reason)),
             Some(Event::TranscriptTrimmed { .. }) => {}
             Some(Event::SessionTitle { .. }) => {}
-            None => return Ok(()),
+            // The agent task ended without saying how. A panic, an early
+            // return, or a dropped sender all land here, and none of them
+            // is a finished turn: the only clean exit is `TurnCompleted`.
+            None => anyhow::bail!(
+                "the agent stopped without a verdict: the event channel closed before any turn \
+                 finished, so nothing was verified"
+            ),
         }
     }
 }

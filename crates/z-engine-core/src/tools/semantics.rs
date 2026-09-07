@@ -77,6 +77,9 @@ impl ToolCtx {
 /// Scripted provider for tests, so gating never spawns rust-analyzer and
 /// every answer shape — including the refusals — is reachable.
 #[cfg(test)]
+use crate::lsp::DeclaredSymbol;
+
+#[cfg(test)]
 pub(crate) struct StubSemantics {
     pub(crate) health: LspHealth,
     pub(crate) answer: SymbolAnswer,
@@ -84,11 +87,34 @@ pub(crate) struct StubSemantics {
 
 #[cfg(test)]
 impl StubSemantics {
-    /// A healthy provider that resolves exactly `symbols` for any file.
+    /// A healthy provider that resolves exactly `symbols` for any file,
+    /// each spanning the first three lines — enough for the fixtures that
+    /// are about *which* symbol, not about where it ends.
     pub(crate) fn resolving(symbols: &[&str]) -> Self {
+        Self::placing(
+            &symbols
+                .iter()
+                .map(|s| (*s, (1u32, 3u32)))
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    /// A healthy provider that resolves each symbol over a given extent,
+    /// so a test can put the change inside one declaration and outside
+    /// another.
+    pub(crate) fn placing(symbols: &[(&str, (u32, u32))]) -> Self {
         Self {
             health: LspHealth::Ready,
-            answer: SymbolAnswer::Resolved(symbols.iter().map(|s| (*s).to_string()).collect()),
+            answer: SymbolAnswer::Resolved(
+                symbols
+                    .iter()
+                    .map(|(name, range)| DeclaredSymbol {
+                        name: (*name).to_string(),
+                        container: None,
+                        range: *range,
+                    })
+                    .collect(),
+            ),
         }
     }
 
@@ -153,7 +179,11 @@ mod tests {
         assert_eq!(
             ctx.semantic_symbols(&tmp.path().join("src/lib.rs"), "fn parse() {}")
                 .await,
-            SymbolAnswer::Resolved(vec!["parse".to_string()])
+            SymbolAnswer::Resolved(vec![DeclaredSymbol {
+                name: "parse".to_string(),
+                container: None,
+                range: (1, 3),
+            }])
         );
     }
 }

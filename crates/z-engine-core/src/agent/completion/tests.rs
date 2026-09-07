@@ -297,3 +297,46 @@ async fn a_change_made_after_a_verified_turn_is_still_caught() {
     };
     assert!(reason.contains("src/lib.rs"), "{reason}");
 }
+
+/// Two turns, two records. A run's account of itself is append-only:
+/// turn 2's refusal files its own manifest and leaves turn 1's proof
+/// exactly where it was, with the turn-less name pointing at the newest.
+#[tokio::test]
+async fn each_turn_files_its_own_manifest_and_never_overwrites_the_last() {
+    let (ctx, _store, repo) = mutated(MANIFEST);
+    let run_dir = tempfile::tempdir().unwrap();
+    let mut st = state(Some(run_dir.path().to_path_buf()));
+
+    let first = settle_completion(&ctx, &mut st, &mut commands(), &channel()).await;
+    assert!(matches!(first, TurnOutcome::Completed), "{first:?}");
+
+    // Turn 2 changes something no governed tool recorded, so it blocks.
+    std::fs::write(repo.path().join("src/lib.rs"), "pub fn parse() {}\n").unwrap();
+    let second = settle_completion(&ctx, &mut st, &mut commands(), &channel()).await;
+    assert!(matches!(second, TurnOutcome::Blocked { .. }), "{second:?}");
+
+    let verdict = |name: &str| -> serde_json::Value {
+        serde_json::from_str(&std::fs::read_to_string(run_dir.path().join(name)).unwrap()).unwrap()
+    };
+    assert_eq!(
+        verdict("verification-1.json")["complete"],
+        serde_json::json!(true),
+        "the first turn's proof must survive the second turn"
+    );
+    assert_eq!(
+        verdict("verification-2.json")["complete"],
+        serde_json::json!(false)
+    );
+    assert_eq!(
+        verdict("verification.json")["turn"],
+        serde_json::json!(2),
+        "the pointer follows the newest record"
+    );
+    let TurnOutcome::Blocked { manifest_path, .. } = second else {
+        unreachable!()
+    };
+    assert!(
+        manifest_path.unwrap().ends_with("verification-2.json"),
+        "a refusal points at its own turn's record, not at the pointer"
+    );
+}

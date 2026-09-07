@@ -160,3 +160,70 @@ fn an_absorbed_deletion_stays_absorbed() {
     let later = WorkspaceSnapshot::capture(tmp.path(), Some(&baseline)).unwrap();
     assert!(baseline.changes(&later).is_empty());
 }
+
+/// The bounded audited ignored subset (finding I7).
+///
+/// `target/` is excluded because hashing it every turn would cost more
+/// than the run — but "excluded by default" must not mean "invisible".
+/// A path the run explicitly named is watched wherever it lives, so a
+/// change to it is a change like any other.
+#[test]
+fn an_explicitly_watched_path_is_audited_even_under_an_excluded_directory() {
+    let tmp = tempfile::tempdir().unwrap();
+    write(tmp.path(), "target/generated.rs", "fn a() {}\n");
+    write(tmp.path(), "target/noise.bin", "junk\n");
+
+    let watched: BTreeSet<PathBuf> = [PathBuf::from("target/generated.rs")].into();
+    let baseline = WorkspaceSnapshot::capture_watching(tmp.path(), None, &watched).unwrap();
+    assert!(baseline.is_watching("target/generated.rs"));
+    assert!(
+        !baseline.is_watching("target/noise.bin"),
+        "the subset stays bounded: only what the run named is watched"
+    );
+
+    write(tmp.path(), "target/generated.rs", "fn b() {}\n");
+    write(tmp.path(), "target/noise.bin", "more junk\n");
+    let now = WorkspaceSnapshot::capture_watching(tmp.path(), Some(&baseline), &watched).unwrap();
+    assert_eq!(
+        changed(&baseline, &now),
+        ["target/generated.rs"],
+        "a declared ignored path changes visibly; undeclared build output does not"
+    );
+}
+
+/// …and once watched, it stays watched through the baseline, so a later
+/// capture that is not told about it again still compares it.
+#[test]
+fn a_watched_ignored_path_survives_in_the_baseline() {
+    let tmp = tempfile::tempdir().unwrap();
+    write(tmp.path(), "target/generated.rs", "fn a() {}\n");
+    let watched: BTreeSet<PathBuf> = [PathBuf::from("target/generated.rs")].into();
+    let baseline = WorkspaceSnapshot::capture_watching(tmp.path(), None, &watched).unwrap();
+    assert_eq!(
+        baseline.watched_paths(),
+        watched,
+        "the watched set is exactly what was asked for"
+    );
+
+    std::fs::remove_file(tmp.path().join("target/generated.rs")).unwrap();
+    let now = WorkspaceSnapshot::capture(tmp.path(), Some(&baseline)).unwrap();
+    assert_eq!(
+        changed(&baseline, &now),
+        ["target/generated.rs"],
+        "a deletion under an excluded directory is still a change once watched"
+    );
+}
+
+/// The subset is a list of paths, not a prefix: naming one file under
+/// `target/` must not drag the rest of the directory into the audit.
+#[test]
+fn watching_a_path_never_widens_into_its_directory() {
+    let tmp = tempfile::tempdir().unwrap();
+    for i in 0..5 {
+        write(tmp.path(), &format!("target/debug/dep{i}.d"), "x\n");
+    }
+    write(tmp.path(), "target/kept.rs", "fn a() {}\n");
+    let watched: BTreeSet<PathBuf> = [PathBuf::from("target/kept.rs")].into();
+    let snapshot = WorkspaceSnapshot::capture_watching(tmp.path(), None, &watched).unwrap();
+    assert_eq!(snapshot.watched(), [PathBuf::from("target/kept.rs")]);
+}

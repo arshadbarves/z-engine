@@ -120,6 +120,7 @@ pub(super) async fn agent_task(
         last_prompt,
         work_orders: guarded.as_ref().map(|g| Arc::clone(&g.work_orders)),
         run_dir: guarded.as_ref().map(|g| g.dir.clone()),
+        verified_turns: 0,
     };
     // Seed from a previous session's transcript (resume).
     let mut titled = resume.is_some();

@@ -14,8 +14,8 @@
 
 use std::path::Path;
 
-use crate::governance::{RustFacts, SemanticEvidence, SemanticHealth};
-use crate::lsp::{LspHealth, SymbolAnswer};
+use crate::governance::{RustFacts, SemanticEvidence, SemanticHealth, SymbolExtent};
+use crate::lsp::{DeclaredSymbol, LspHealth, SymbolAnswer};
 
 use super::ToolCtx;
 
@@ -63,9 +63,22 @@ fn outline_symbols(text: &str) -> Option<Vec<String>> {
 
 fn evidence(answer: SymbolAnswer) -> SemanticEvidence {
     match answer {
-        SymbolAnswer::Resolved(symbols) => SemanticEvidence::Resolved { symbols },
+        SymbolAnswer::Resolved(symbols) => SemanticEvidence::Resolved {
+            symbols: symbols.into_iter().map(extent).collect(),
+        },
         SymbolAnswer::Unindexed(reason) => SemanticEvidence::Unindexed { reason },
         SymbolAnswer::Mismatched(reason) => SemanticEvidence::Mismatched { reason },
+    }
+}
+
+/// Carry the provider's declaration across the layer boundary. The
+/// translation is total and lossless on purpose: dropping the range here
+/// would leave the gate authorizing on names again.
+fn extent(symbol: DeclaredSymbol) -> SymbolExtent {
+    SymbolExtent {
+        name: symbol.name,
+        container: symbol.container,
+        range: symbol.range,
     }
 }
 
@@ -111,8 +124,13 @@ mod tests {
         assert_eq!(
             facts.semantic,
             SemanticEvidence::Resolved {
-                symbols: vec!["parse".to_string()]
-            }
+                symbols: vec![SymbolExtent {
+                    name: "parse".to_string(),
+                    container: None,
+                    range: (1, 3),
+                }]
+            },
+            "the provider's extents must survive the crossing into governance"
         );
     }
 

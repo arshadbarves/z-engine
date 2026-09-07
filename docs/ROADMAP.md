@@ -60,8 +60,9 @@ when verification it did not author says it may.
 
 - [x] Evidence store: every read mints an id; edits cite the lines they cover
 - [x] Work orders: goal, writable paths, target symbols, cited evidence, acceptance commands
-- [x] Mutation gate: work order → in-root → declared scope → named symbol (Rust) → evidence covering every changed line → rust-analyzer placing that symbol
-- [x] Completion gate: `cargo check --workspace --all-targets` plus the order's acceptance commands, over a diff whose every change is attributable to a governed tool; the verdict lands in `<project>/.z-engine/runs/<id>/verification.json`
+- [x] Mutation gate: work order → in-root → declared scope → named symbol (Rust) → evidence covering every changed line → rust-analyzer placing that symbol **and every changed line inside that symbol's extent**
+- [x] Prompt budget: the pure bounded prompt builder assembles the guarded request itself; a prompt whose pinned content will not fit is blocked before the provider is called (`prompt-budget` gate)
+- [x] Completion gate: `cargo check --workspace --all-targets` plus the order's acceptance commands, over a diff whose every change is attributable to a governed tool; each turn's verdict is retained in `<project>/.z-engine/runs/<id>/verification-<turn>.json`, with `verification.json` pointing at the newest
 - [x] Record & replay: a cassette carries the run's traffic, gate rulings, evidence ids, verdict and cost; a replay re-asks its own gates and re-runs its own verification with no network and no key
 - [x] Headless exposure: `--guarded`, `--record-run PATH`, `--replay-run PATH`, `--metrics-out PATH`
 
@@ -73,6 +74,9 @@ zengine --guarded --headless "make word_count count words" \
 # re-run it from the tape: no provider, no credential
 zengine --guarded --headless "make word_count count words" \
         --replay-run ~/tapes/run.jsonl
+
+# CI: bound the whole run (default 30 min) — a stalled provider exits non-zero
+zengine --guarded --headless "…" --timeout 900
 ```
 
 Cassettes must live outside the project directory — a guarded run accounts
@@ -85,5 +89,16 @@ frozen fixture in `tests/fixtures/guarded-rust-edit` end to end (scoped
 order, one function changed, second file refused, held-out `cargo test`
 deciding the turn) and replays that run to the same verdict.
 Limits — Rust-only symbol authorization, rust-analyzer required,
-cargo-only acceptance, no mutating shell, no unread new files — are
-recorded in docs/deviations.md rows 10–14.
+cargo-only acceptance, no mutating shell, no unread new files, a bounded
+(not total) audit of ignored paths, and arbitrary code execution through
+`build.rs`/proc-macros during verification — are recorded in
+docs/deviations.md rows 10–16.
+
+**Behaviour changes worth noting when upgrading.** The read-only shell
+proof is stricter: it now refuses unquoted `{ }`, `[ ]`, and word-initial
+`~`, because brace expansion could turn a proven-safe command into a
+writing one (`sort {-o,out} in`). Commands using those forms — and the
+previously auto-approved `sed -n`, `awk`, `env cmd`, `find -fprint` — now
+prompt in ordinary runs instead of auto-approving. A headless run that
+loses its agent without a terminal event, or that produces no verdict
+within `--timeout` (30 min default), exits non-zero rather than zero.

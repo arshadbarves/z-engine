@@ -2,6 +2,7 @@
 //! account for, and who is blamed for a change on disk.
 
 use super::*;
+use std::path::Path;
 
 /// A change to a file the run read but never declared writable never
 /// passed the mutation gate — so verification is where it must surface.
@@ -164,5 +165,55 @@ async fn the_lockfile_a_check_writes_is_not_a_breach_and_is_handed_on() {
     assert!(
         out.settled.is_some(),
         "a completed verification must say what it left behind"
+    );
+}
+
+/// The bounded audited ignored subset, at the end that matters (I7).
+///
+/// `target/` is excluded from the workspace audit for cost. A path the
+/// order *declared writable* is watched anyway, so an acceptance command
+/// that rewrites it after the audit is a breach rather than an invisible
+/// change — and the build output beside it stays excluded, which is the
+/// bound the exclusion is worth keeping for.
+#[tokio::test]
+async fn a_check_that_rewrites_a_declared_ignored_path_is_still_a_breach() {
+    let tmp = cargo_fixture();
+    std::fs::create_dir_all(tmp.path().join("target")).unwrap();
+    std::fs::write(tmp.path().join("target/generated.rs"), b"fn a() {}\n").unwrap();
+    std::fs::write(tmp.path().join("target/noise.bin"), b"junk\n").unwrap();
+
+    let manifest = VerificationRunner::new(tmp.path())
+        .with_allowed_programs(&["cp"])
+        .proved(&plan(
+            tmp.path(),
+            &["Cargo.toml", "target/generated.rs"],
+            &[],
+            accept("cp Cargo.toml target/generated.rs"),
+        ))
+        .await;
+
+    let Verdict::Blocked(reason) = manifest.verdict() else {
+        panic!(
+            "a check that rewrote a declared path cannot verify it: {}",
+            manifest.summary()
+        );
+    };
+    assert!(reason.contains("target/generated.rs"), "{reason}");
+    assert!(
+        manifest
+            .breaches
+            .iter()
+            .any(|b| b.path == Path::new("target/generated.rs")
+                && b.reason.contains("after the audit")),
+        "{:?}",
+        manifest.breaches
+    );
+    assert!(
+        !manifest
+            .breaches
+            .iter()
+            .any(|b| b.path == Path::new("target/noise.bin")),
+        "undeclared build output stays outside the audit, by design: {:?}",
+        manifest.breaches
     );
 }

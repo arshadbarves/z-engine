@@ -250,6 +250,7 @@ async fn run_headless(
         _ => None,
     };
 
+    let limits = headless::Limits::from_secs(args.timeout_secs);
     let outcome = match &taped {
         Some(taped) => {
             let (handle, ev_rx) = spawn_with_run_recorder(
@@ -259,19 +260,28 @@ async fn run_headless(
                 recorder,
                 Some(Arc::clone(&taped.recorder)),
             );
-            headless::run_one_shot(handle, ev_rx, &task, args.auto_approve).await
+            headless::run_one_shot(handle, ev_rx, &task, args.auto_approve, limits).await
         }
         None => {
             let (handle, ev_rx) = spawn_with_recorder(lc, resume_state, recorder);
-            headless::run_one_shot(handle, ev_rx, &task, args.auto_approve).await
+            headless::run_one_shot(handle, ev_rx, &task, args.auto_approve, limits).await
         }
     };
 
     // How the run went is worth keeping whether or not it got where it was
-    // going, so metrics are written before its verdict is returned.
+    // going, so metrics are written before its verdict is returned — but
+    // writing them is bookkeeping, not the verdict. A failed write is
+    // reported and must never replace what the run decided: it would turn
+    // a clean run into an exit 1 and hide a blocked run's gate message
+    // behind an I/O error.
     if let (Some(destination), Some(taped)) = (&args.metrics_out, &taped) {
         taped.recorder.settle().await;
-        cassette::write_metrics(&taped.tape, destination)?;
+        if let Err(e) = cassette::write_metrics(&taped.tape, destination) {
+            eprintln!(
+                "warning: could not write metrics to {}: {e}",
+                destination.display()
+            );
+        }
     }
     outcome
 }

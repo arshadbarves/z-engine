@@ -1,6 +1,5 @@
-//! Localization for Rust source: proving that the symbol a work order
-//! promised to change actually lives, semantically, in the file about to
-//! be written.
+//! Localization for Rust source: proving that the lines about to change
+//! lie inside a symbol the work order promised to change.
 //!
 //! The order of proof matters and is deliberate:
 //!
@@ -10,21 +9,35 @@
 //!    mention the target as a declaration, stop here without paying for a
 //!    semantic round trip's worth of doubt. It can only ever refuse.
 //! 3. The provider must have **answered about this document**, and its
-//!    answer must contain the target. This is the only step that
+//!    answer must place a target symbol here. This is the only step that
 //!    authorizes; "not indexed yet" and "answered about another file" are
 //!    refusals, because an unproven claim is exactly what the gate exists
 //!    to stop.
+//! 4. Every changed line must fall inside the **extent** of one of those
+//!    target symbols. Without this the unit of authorization is the file:
+//!    naming `parse` would license rewriting the function beside it, which
+//!    is precisely the claim the mode is built to make false.
+//!
+//! Step 4 is why [`SemanticEvidence::Resolved`] carries ranges rather
+//! than names. Tree-sitter has start lines but no extents, so it stays
+//! where it was — narrowing, never authorizing.
 
 use std::path::Path;
 
 use crate::governance::ActiveWorkOrder;
 
 use super::engine::GateDecision;
-use super::facts::{RustFacts, SemanticEvidence, SemanticHealth};
+use super::facts::{LineRange, RustFacts, SemanticEvidence, SemanticHealth, SymbolExtent};
 use super::failure::GateFailure;
 
-/// Decide whether `facts` localize the order's target symbols in `path`.
-pub(super) fn localize(facts: &RustFacts, order: &ActiveWorkOrder, path: &Path) -> GateDecision {
+/// Decide whether `facts` localize the order's target symbols in `path`,
+/// and whether `changed` stays inside them.
+pub(super) fn localize(
+    facts: &RustFacts,
+    order: &ActiveWorkOrder,
+    path: &Path,
+    changed: Option<LineRange>,
+) -> GateDecision {
     let targets = &order.order.target_symbols;
     if targets.is_empty() {
         return GateDecision::Fail(GateFailure::NoTargetSymbol);
@@ -35,28 +48,49 @@ pub(super) fn localize(facts: &RustFacts, order: &ActiveWorkOrder, path: &Path) 
         });
     }
     // Tree-sitter narrows; it never authorizes. An outline that has no
-    // opinion (unparseable or absent) simply narrows nothing.
+    // opinion (unparseable or absent) simply narrows nothing. It is
+    // matched on the leaf name alone, because it knows nothing about
+    // containers — narrowing on a qualifier it cannot see would turn a
+    // refusal to *narrow* into a refusal to *authorize*.
     if let Some(outline) = &facts.outline {
-        if !declares(outline, targets) {
+        if !outline
+            .iter()
+            .any(|d| targets.iter().any(|t| leaf(t) == leaf(d)))
+        {
             return unresolved(targets, path);
         }
     }
-    match &facts.semantic {
+    let symbols = match &facts.semantic {
         SemanticEvidence::Unindexed { reason } => {
-            GateDecision::Fail(GateFailure::SemanticEvidenceUnavailable {
+            return GateDecision::Fail(GateFailure::SemanticEvidenceUnavailable {
                 path: path.to_path_buf(),
                 reason: reason.clone(),
-            })
+            });
         }
         SemanticEvidence::Mismatched { reason } => {
-            GateDecision::Fail(GateFailure::SemanticEvidenceMismatch {
+            return GateDecision::Fail(GateFailure::SemanticEvidenceMismatch {
                 path: path.to_path_buf(),
                 reason: reason.clone(),
-            })
+            });
         }
-        SemanticEvidence::Resolved { symbols } if declares(symbols, targets) => GateDecision::Pass,
-        SemanticEvidence::Resolved { .. } => unresolved(targets, path),
+        SemanticEvidence::Resolved { symbols } => symbols,
+    };
+
+    let declared: Vec<&SymbolExtent> = symbols
+        .iter()
+        .filter(|s| matches_any(&s.name, s.container.as_deref(), targets))
+        .collect();
+    if declared.is_empty() {
+        return unresolved(targets, path);
     }
+    if declared.iter().any(|s| s.covers(changed)) {
+        return GateDecision::Pass;
+    }
+    GateDecision::Fail(GateFailure::ChangeOutsideTargetSymbol {
+        path: path.to_path_buf(),
+        changed: label(changed),
+        symbols: describe(&declared),
+    })
 }
 
 fn unresolved(targets: &[String], path: &Path) -> GateDecision {
@@ -66,151 +100,50 @@ fn unresolved(targets: &[String], path: &Path) -> GateDecision {
     })
 }
 
-/// Does any target appear among `declared`? Symbols are compared by their
-/// final `::` segment, which is what a file-level symbol list reports.
-fn declares(declared: &[String], targets: &[String]) -> bool {
-    targets
-        .iter()
-        .any(|t| declared.iter().any(|d| leaf(d) == leaf(t)))
+/// Does a declaration named `name` (nested in `container`) answer to any
+/// of `targets`?
+///
+/// Targets are compared by their final `::` segment, which is what a
+/// file-level symbol list reports. A *qualified* target additionally
+/// pins the container when the provider named one, so `Parser::run` does
+/// not authorize a free function called `run` in the same file.
+fn matches_any(name: &str, container: Option<&str>, targets: &[String]) -> bool {
+    targets.iter().any(|target| {
+        if leaf(target) != leaf(name) {
+            return false;
+        }
+        match (qualifier(target), container) {
+            (Some(expected), Some(actual)) => leaf(expected) == leaf(actual),
+            (Some(_), None) => false,
+            (None, _) => true,
+        }
+    })
 }
 
 fn leaf(symbol: &str) -> &str {
     symbol.rsplit("::").next().unwrap_or(symbol).trim()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::governance::gate::engine::tests::active;
-    use std::path::PathBuf;
+/// The part of `Type::method` before the final `::`, if any.
+fn qualifier(symbol: &str) -> Option<&str> {
+    symbol.rsplit_once("::").map(|(head, _)| head.trim())
+}
 
-    fn facts(outline: Option<&[&str]>, semantic: SemanticEvidence) -> RustFacts {
-        RustFacts {
-            health: SemanticHealth::Ready,
-            outline: outline.map(|names| names.iter().map(|s| (*s).to_string()).collect()),
-            semantic,
-        }
-    }
-
-    fn resolved(symbols: &[&str]) -> SemanticEvidence {
-        SemanticEvidence::Resolved {
-            symbols: symbols.iter().map(|s| (*s).to_string()).collect(),
-        }
-    }
-
-    fn path() -> PathBuf {
-        PathBuf::from("src/lib.rs")
-    }
-
-    #[test]
-    fn semantic_evidence_authorizes_a_symbol_both_sources_agree_on() {
-        let order = active(&["src/lib.rs"], &["parse"]);
-        assert_eq!(
-            localize(
-                &facts(Some(&["parse", "render"]), resolved(&["parse", "render"])),
-                &order,
-                &path()
-            ),
-            GateDecision::Pass
-        );
-    }
-
-    /// The load-bearing case: tree-sitter sees the symbol, rust-analyzer
-    /// does not. A text outline cannot authorize, so this must refuse.
-    #[test]
-    fn a_tree_sitter_outline_alone_never_authorizes() {
-        let order = active(&["src/lib.rs"], &["parse"]);
-        let decision = localize(
-            &facts(Some(&["parse"]), resolved(&["render"])),
-            &order,
-            &path(),
-        );
-        assert!(
-            matches!(
-                decision,
-                GateDecision::Fail(GateFailure::UnresolvedTargetSymbol { .. })
-            ),
-            "{decision:?}"
-        );
-    }
-
-    #[test]
-    fn an_unindexed_or_foreign_answer_is_a_refusal_not_an_empty_pass() {
-        let order = active(&["src/lib.rs"], &["parse"]);
-        let unindexed = localize(
-            &facts(
-                Some(&["parse"]),
-                SemanticEvidence::Unindexed {
-                    reason: "documentSymbol timed out".into(),
-                },
-            ),
-            &order,
-            &path(),
-        );
-        assert!(
-            matches!(
-                unindexed,
-                GateDecision::Fail(GateFailure::SemanticEvidenceUnavailable { .. })
-            ),
-            "{unindexed:?}"
-        );
-
-        let foreign = localize(
-            &facts(
-                Some(&["parse"]),
-                SemanticEvidence::Mismatched {
-                    reason: "symbols were reported for file:///other.rs".into(),
-                },
-            ),
-            &order,
-            &path(),
-        );
-        assert!(
-            matches!(
-                foreign,
-                GateDecision::Fail(GateFailure::SemanticEvidenceMismatch { .. })
-            ),
-            "{foreign:?}"
-        );
-    }
-
-    #[test]
-    fn an_unhealthy_provider_blocks_before_any_symbol_is_weighed() {
-        let order = active(&["src/lib.rs"], &["parse"]);
-        let mut unhealthy = facts(Some(&["parse"]), resolved(&["parse"]));
-        unhealthy.health = SemanticHealth::Unavailable {
-            reason: "spawn rust-analyzer: not found".into(),
-        };
-        assert!(matches!(
-            localize(&unhealthy, &order, &path()),
-            GateDecision::Fail(GateFailure::SemanticProviderUnavailable { .. })
-        ));
-    }
-
-    #[test]
-    fn an_order_naming_no_symbol_localizes_nothing() {
-        let order = active(&["src/lib.rs"], &[]);
-        assert_eq!(
-            localize(
-                &facts(Some(&["parse"]), resolved(&["parse"])),
-                &order,
-                &path()
-            ),
-            GateDecision::Fail(GateFailure::NoTargetSymbol)
-        );
-    }
-
-    #[test]
-    fn a_missing_outline_narrows_nothing_and_semantics_still_decide() {
-        let order = active(&["src/lib.rs"], &["WorkOrder::parse"]);
-        assert_eq!(
-            localize(&facts(None, resolved(&["parse"])), &order, &path()),
-            GateDecision::Pass,
-            "qualified targets resolve by their final segment"
-        );
-        assert!(matches!(
-            localize(&facts(None, resolved(&["render"])), &order, &path()),
-            GateDecision::Fail(GateFailure::UnresolvedTargetSymbol { .. })
-        ));
+fn label(range: Option<LineRange>) -> String {
+    match range {
+        Some((first, last)) if first == last => format!("line {first}"),
+        Some((first, last)) => format!("lines {first}-{last}"),
+        None => "the whole file".to_string(),
     }
 }
+
+fn describe(declared: &[&SymbolExtent]) -> String {
+    declared
+        .iter()
+        .map(|s| format!("{} (lines {}-{})", s.name, s.range.0, s.range.1))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+#[cfg(test)]
+mod tests;

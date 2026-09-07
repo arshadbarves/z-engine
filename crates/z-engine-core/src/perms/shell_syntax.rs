@@ -69,10 +69,19 @@ pub(super) fn segments(command: &str) -> Option<Vec<String>> {
     Some(out)
 }
 
+/// Expansions that rewrite the *word list* before the command runs and
+/// whose result cannot be read off the text. Brace expansion turns one
+/// word into many (`sort {-o,out} in` → `sort -o out in`, a write), and
+/// bracket expressions are pathname expansion by another name. Both are
+/// refused outright rather than merely flagged, because a proof built on
+/// the pre-expansion text would be proving the wrong command.
+const WORD_LIST_EXPANSION: &[char] = &['{', '}', '[', ']'];
+
 /// Quote-aware tokenizer for one segment. Returns `(command, args,
 /// unquoted_glob)` or `None` when the segment redirects (`<`, `>`),
-/// substitutes (`$(`, backtick), or has unbalanced quotes — all fail
-/// closed. `unquoted_glob` is true when `*`/`?` appears outside quotes.
+/// substitutes (`$(`, backtick), expands its own word list (`{a,b}`,
+/// `[a-z]`, `~`), or has unbalanced quotes — all fail closed.
+/// `unquoted_glob` is true when `*`/`?` appears outside quotes.
 pub(super) fn tokenize(seg: &str) -> Option<(String, Vec<String>, bool)> {
     let mut tokens: Vec<String> = Vec::new();
     let mut cur = String::new();
@@ -130,6 +139,19 @@ pub(super) fn tokenize(seg: &str) -> Option<(String, Vec<String>, bool)> {
             // command substitution) and can inject arbitrary words into
             // the argument list. Neither is provable ahead of time.
             '$' => return None,
+            // Brace and bracket expansion inject words the same way, and
+            // tilde expansion escapes the project root. `*`/`?` are the
+            // only expansions this tokenizer reports instead of refusing,
+            // because the read-only table reasons about what a glob can
+            // expand into (see `read_only::proof`); nothing reasons about
+            // `{-o,out}`, so it must never reach the proof at all.
+            c if WORD_LIST_EXPANSION.contains(&c) => return None,
+            // A tilde only expands where the shell expands it: at the
+            // start of a word, or just after an unquoted `=`/`:` in a
+            // word that looks like an assignment. Anywhere else it is an
+            // ordinary character, and refusing it there would cost
+            // everyday forms like `git diff HEAD~1` for nothing.
+            '~' if expands_as_tilde(&cur) => return None,
             '\\' => {
                 if let Some(n) = chars.next() {
                     cur.push(n);
@@ -155,6 +177,14 @@ pub(super) fn tokenize(seg: &str) -> Option<(String, Vec<String>, bool)> {
     }
     let first = tokens.first()?.clone();
     Some((first, tokens.into_iter().skip(1).collect(), unquoted_glob))
+}
+
+/// Would a `~` appearing after `word_so_far` be a tilde-prefix? True at
+/// the start of a word and after the `=`/`:` of an assignment-shaped one
+/// (`FOO=~/x`, `PATH=a:~/b`, `--output=~/out`), which is everywhere the
+/// shell substitutes a home directory.
+fn expands_as_tilde(word_so_far: &str) -> bool {
+    word_so_far.is_empty() || word_so_far.ends_with('=') || word_so_far.ends_with(':')
 }
 
 #[cfg(test)]
@@ -217,5 +247,111 @@ mod tests {
         assert_eq!(e.decide_command("echo hi >> out"), Decision::Gate);
         assert_eq!(e.decide_command("cat < secret"), Decision::Gate);
         assert_eq!(e.decide_command("ls 2>&1"), Decision::Allow);
+    }
+
+    /// Brace expansion rewrites the word list *before* the command runs,
+    /// so a proof read off the pre-expansion text proves nothing about
+    /// the command that actually executes. Each line below is a command
+    /// the option/operand tables would otherwise call read-only.
+    #[test]
+    fn brace_expansion_is_never_proven_because_it_forges_the_word_list() {
+        let e = engine(&[]);
+        for command in [
+            // `sort -o out in` — writes `out`
+            "sort {-o,out} in",
+            // `rg --pre rm foo` — runs `rm` as ripgrep's preprocessor
+            "rg {--pre,rm} foo",
+            // `uniq in out` — writes `out`, defeating InputsAtMost(1)
+            "uniq {in,out}",
+            // `env FOO=b cat /etc/passwd` — defeats ArgPolicy::Assignments
+            "env {FOO=b,cat,/etc/passwd}",
+            // ranges and nesting expand just as freely
+            "wc -l file{1..9}",
+            "ls {a,b}/{c,d}",
+            // a lone brace is still brace syntax to the shell
+            "cat }",
+            "cat {",
+        ] {
+            assert!(
+                !PolicyEngine::is_provably_read_only(command),
+                "{command} must not be provable"
+            );
+            assert_eq!(e.decide_command(command), Decision::Gate, "{command}");
+        }
+    }
+
+    /// Bracket expressions are pathname expansion, and tilde expansion
+    /// reaches outside the project root; neither is decidable from the
+    /// text, so both refuse rather than being flagged like `*`.
+    #[test]
+    fn bracket_and_tilde_expansion_are_never_proven() {
+        let e = engine(&[]);
+        for command in [
+            "uniq [io]n",
+            "sort -[o]",
+            "cat file[12]",
+            "ls ~",
+            "cat ~/.ssh/id_rsa",
+            "wc -l ~user/notes",
+            "sort --output=~/out in",
+            "env FOO=~/x",
+            "git log --grep=x --author=~y",
+        ] {
+            assert!(
+                !PolicyEngine::is_provably_read_only(command),
+                "{command} must not be provable"
+            );
+            assert_eq!(e.decide_command(command), Decision::Gate, "{command}");
+        }
+        // A tilde the shell would not expand is an ordinary character,
+        // and the everyday forms that rely on that keep working.
+        for command in ["git diff HEAD~1", "git log HEAD~3..HEAD", "wc -l notes~"] {
+            assert!(
+                PolicyEngine::is_provably_read_only(command),
+                "{command} must stay provable"
+            );
+        }
+    }
+
+    /// Quoting is what makes these characters literal, and the tokenizer
+    /// has to agree with the shell about that — otherwise the refusal
+    /// above would cost every legitimate use of a brace or a bracket.
+    #[test]
+    fn quoted_braces_brackets_and_tildes_stay_literal_operands() {
+        let e = engine(&[]);
+        for command in [
+            "rg -n '\\{a,b\\}' src",
+            "find . -name '[a-z]*.rs'",
+            "grep -rn \"{}\" src",
+            "jq -r '{name: .name}' package.json",
+            "wc -l 'notes~'",
+        ] {
+            assert!(
+                PolicyEngine::is_provably_read_only(command),
+                "{command} must stay provable"
+            );
+            assert_eq!(e.decide_command(command), Decision::Allow, "{command}");
+        }
+    }
+
+    /// The stricter tokenizer must only ever tighten: an expansion the
+    /// proof now refuses must not become auto-approvable through the
+    /// accept-edits filesystem set either.
+    #[test]
+    fn expansion_syntax_also_tightens_the_accept_edits_set() {
+        for command in [
+            "rm {a,b}",
+            "touch ~/x",
+            "mv a[12] b",
+            "cp {a,b} c",
+            "mkdir -p {a,b}/c",
+        ] {
+            assert!(
+                !PolicyEngine::is_common_fs_command(command),
+                "{command} must not auto-approve in accept-edits"
+            );
+        }
+        // …while the ordinary relative forms still do.
+        assert!(PolicyEngine::is_common_fs_command("mkdir -p a/b"));
     }
 }

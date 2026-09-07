@@ -29,20 +29,24 @@ pub(super) struct LoopState {
     /// verification writes its manifest beside the evidence that produced
     /// it. `None` in unguarded runs, which never verify.
     pub(super) run_dir: Option<std::path::PathBuf>,
+    /// How many turns have been settled by the completion gate. Each one
+    /// keeps its own manifest, so this only ever counts up — a turn never
+    /// reuses a number, and therefore never overwrites a record.
+    pub(super) verified_turns: u64,
+}
+
+impl LoopState {
+    /// Claim the number the next verification manifest is filed under.
+    pub(super) fn next_verification_turn(&mut self) -> u64 {
+        self.verified_turns += 1;
+        self.verified_turns
+    }
 }
 
 impl LoopState {
     /// The order this run is working under, if any.
     pub(super) fn active_work_order(&self) -> Option<Arc<crate::governance::ActiveWorkOrder>> {
         self.work_orders.as_ref()?.active()
-    }
-
-    /// Digest of the order this run is working under, pinned into every
-    /// request while it is active. `None` in unguarded runs and before an
-    /// order is accepted, which keeps those prompts byte-identical to
-    /// what they were before governance existed.
-    pub(super) fn work_order_digest(&self) -> Option<String> {
-        Some(self.active_work_order()?.digest())
     }
 
     pub(super) fn estimate_working(&self) -> u64 {
@@ -103,6 +107,7 @@ impl LoopState {
             last_prompt: Arc::new(Mutex::new(None)),
             work_orders: None,
             run_dir,
+            verified_turns: 0,
         }
     }
 }

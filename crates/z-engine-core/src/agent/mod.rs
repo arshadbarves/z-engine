@@ -24,6 +24,7 @@ mod lanes;
 mod local_commands;
 mod mcp_setup;
 mod prompt_inspect;
+mod prompt_plan;
 mod revert;
 mod side_requests;
 mod state;

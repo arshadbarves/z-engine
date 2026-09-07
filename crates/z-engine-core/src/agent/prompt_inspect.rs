@@ -104,11 +104,24 @@ impl PromptInspect {
     /// produce the same manifest. Overflow (pinned content alone exceeding
     /// `budget_tokens`) leaves the manifest empty and is logged — the
     /// inspector must never truncate what the loop actually sent.
+    ///
+    /// This is the **observational** path, for previews, resumes, and
+    /// unguarded turns: it describes a request that was already built. A
+    /// guarded turn builds the manifest *first* and attaches it with
+    /// [`PromptInspect::with_prompt_manifest`], so what is inspected and
+    /// what is sent are one decision rather than two.
     pub fn with_manifest(mut self, order: Option<&ActiveWorkOrder>, budget_tokens: u64) -> Self {
         match build_prompt(&self.snapshot(order), budget_tokens) {
             Ok(manifest) => self.manifest = Some(manifest),
             Err(overflow) => tracing::warn!(%overflow, "prompt manifest over budget"),
         }
+        self
+    }
+
+    /// Attach a manifest that was built *before* the request, and which
+    /// therefore decided what the request contains.
+    pub fn with_prompt_manifest(mut self, manifest: Option<PromptManifest>) -> Self {
+        self.manifest = manifest;
         self
     }
 
@@ -150,8 +163,15 @@ impl PromptInspect {
     }
 }
 
-fn part_from_message(idx: usize, msg: &ChatMessage) -> PromptPart {
-    let (role, content) = match msg {
+/// One message as text, with the role that labels it.
+///
+/// The single renderer for "what does this message contribute to the
+/// prompt": the inspector labels and sizes it, and
+/// [`super::prompt_plan`] measures the same string when it decides what
+/// fits. Two renderers would mean the manifest could describe a prompt
+/// nobody sent.
+pub(super) fn role_and_content(msg: &ChatMessage) -> (&'static str, String) {
+    match msg {
         ChatMessage::System { content } => ("system", content.clone()),
         ChatMessage::User { content } => ("user", content.clone()),
         ChatMessage::UserMulti { content } => ("user", flatten_parts(content)),
@@ -175,7 +195,11 @@ fn part_from_message(idx: usize, msg: &ChatMessage) -> PromptPart {
             tool_call_id,
             content,
         } => ("tool", format!("[{tool_call_id}]\n{content}")),
-    };
+    }
+}
+
+fn part_from_message(idx: usize, msg: &ChatMessage) -> PromptPart {
+    let (role, content) = role_and_content(msg);
     PromptPart {
         label: label_for(idx, role, &content),
         role: role.to_string(),
@@ -212,12 +236,20 @@ fn label_for(idx: usize, role: &str, content: &str) -> String {
     }
 }
 
-fn tool_from_def(def: &ToolDef) -> PromptTool {
+/// One tool definition as the prompt sees it: name, description, schema.
+/// Shared with [`super::prompt_plan`] for the same reason as
+/// [`role_and_content`].
+pub(super) fn tool_blob(def: &ToolDef) -> String {
     let schema = serde_json::to_string_pretty(&def.function.parameters).unwrap_or_default();
-    let blob = format!(
+    format!(
         "{}\n{}\n{schema}",
         def.function.name, def.function.description
-    );
+    )
+}
+
+fn tool_from_def(def: &ToolDef) -> PromptTool {
+    let schema = serde_json::to_string_pretty(&def.function.parameters).unwrap_or_default();
+    let blob = tool_blob(def);
     PromptTool {
         name: def.function.name.clone(),
         description: def.function.description.clone(),

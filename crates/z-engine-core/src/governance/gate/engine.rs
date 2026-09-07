@@ -79,10 +79,16 @@ impl GateEngine {
     }
 
     /// The Rust half: does the semantic provider place a declared target
-    /// symbol in this file? See [`super::localize`] for why tree-sitter
-    /// evidence cannot stand in for it.
-    pub fn localize(facts: &RustFacts, order: &ActiveWorkOrder, path: &Path) -> GateDecision {
-        localize::localize(facts, order, path)
+    /// symbol in this file, and does `changed` fall inside it? See
+    /// [`super::localize`] for why tree-sitter evidence cannot stand in
+    /// for either question.
+    pub fn localize(
+        facts: &RustFacts,
+        order: &ActiveWorkOrder,
+        path: &Path,
+        changed: Option<LineRange>,
+    ) -> GateDecision {
+        localize::localize(facts, order, path, changed)
     }
 
     /// Both phases at once. `rust` must be supplied whenever
@@ -98,7 +104,7 @@ impl GateEngine {
             return prescreen;
         };
         match rust {
-            Some(facts) => Self::localize(facts, order, Path::new(identity)),
+            Some(facts) => Self::localize(facts, order, Path::new(identity), req.changed),
             None => GateDecision::Fail(GateFailure::SemanticEvidenceUnavailable {
                 path: PathBuf::from(identity),
                 reason: "no semantic facts were gathered for this change".into(),
@@ -161,7 +167,7 @@ fn join_paths(paths: &[PathBuf]) -> String {
 #[cfg(test)]
 pub(super) mod tests {
     use super::*;
-    use crate::governance::gate::facts::{SemanticEvidence, SemanticHealth};
+    use crate::governance::gate::facts::{SemanticEvidence, SemanticHealth, SymbolExtent};
     use crate::governance::work_order::AcceptanceCommand;
     use crate::governance::{ActiveWorkOrder, WorkOrder};
 
@@ -200,12 +206,21 @@ pub(super) mod tests {
         }
     }
 
+    /// Facts in which every named symbol spans the whole of a small file,
+    /// so a test that is not about extents is not accidentally about them.
     fn proven(symbols: &[&str]) -> RustFacts {
         RustFacts {
             health: SemanticHealth::Ready,
             outline: Some(symbols.iter().map(|s| (*s).to_string()).collect()),
             semantic: SemanticEvidence::Resolved {
-                symbols: symbols.iter().map(|s| (*s).to_string()).collect(),
+                symbols: symbols
+                    .iter()
+                    .map(|s| SymbolExtent {
+                        name: (*s).to_string(),
+                        container: None,
+                        range: (1, 10),
+                    })
+                    .collect(),
             },
         }
     }

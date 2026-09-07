@@ -35,6 +35,10 @@ pub const DEFAULT_CHECK_TIMEOUT: Duration = Duration::from_secs(600);
 
 const CARGO_CHECK: &str = "cargo check --workspace --all-targets --message-format=json";
 
+/// Name of the pointer file that always holds the newest turn's manifest.
+/// The retained records are `verification-<turn>.json` beside it.
+pub const LATEST_MANIFEST: &str = "verification.json";
+
 /// What a verification proved, and what it left behind.
 ///
 /// The workspace is part of the result because the checks are processes
@@ -110,26 +114,32 @@ impl VerificationRunner {
         // the audit, so look again. What the checks touched is either the
         // harness's own bookkeeping or something that has never been
         // judged, and the second kind blocks.
-        let (settled, harness_writes) =
-            match WorkspaceSnapshot::capture(&self.root, Some(&plan.workspace)) {
-                Ok(post) => {
-                    let residue = reconcile_after_checks(&plan.workspace, &post);
-                    breaches.extend(residue.breaches);
-                    (Some(post), residue.harness)
-                }
-                Err(source) => {
-                    // Unreadable afterwards means unaccountable: refuse
-                    // rather than assume the checks were well behaved.
-                    breaches.push(ScopeBreach {
-                        path: self.root.clone(),
-                        reason: format!(
-                            "the workspace could not be re-read after the checks ran, so what \
+        // Re-captured watching the same bounded set the plan was built
+        // from, so a check that rewrote a declared-but-ignored path is
+        // compared rather than excluded.
+        let (settled, harness_writes) = match WorkspaceSnapshot::capture_watching(
+            &self.root,
+            Some(&plan.workspace),
+            &plan.audited_paths(),
+        ) {
+            Ok(post) => {
+                let residue = reconcile_after_checks(&plan.workspace, &post);
+                breaches.extend(residue.breaches);
+                (Some(post), residue.harness)
+            }
+            Err(source) => {
+                // Unreadable afterwards means unaccountable: refuse
+                // rather than assume the checks were well behaved.
+                breaches.push(ScopeBreach {
+                    path: self.root.clone(),
+                    reason: format!(
+                        "the workspace could not be re-read after the checks ran, so what \
                              they changed is unknown: {source}"
-                        ),
-                    });
-                    (None, Vec::new())
-                }
-            };
+                    ),
+                });
+                (None, Vec::new())
+            }
+        };
         breaches.sort_by(|a, b| a.path.cmp(&b.path));
         breaches.dedup_by(|a, b| a.path == b.path);
 
@@ -297,31 +307,62 @@ fn render_diagnostics(stdout: &str) -> Option<String> {
 /// verdict it produced. The verdict is written rather than left implicit
 /// so anyone reading the file — a human, a later run, a CI step — sees
 /// what it decided without re-implementing the rule.
-pub fn write_manifest(dir: &Path, manifest: &VerificationManifest) -> std::io::Result<PathBuf> {
+///
+/// One file per turn (`verification-<turn>.json`), because a run is not
+/// one turn: turn 2's refusal must not erase the record that turn 1 was
+/// verified. `verification.json` is maintained beside them as a pointer
+/// to the newest record, written atomically and holding the same bytes,
+/// so a reader that only knows the old name still sees a whole manifest.
+///
+/// Refuses to overwrite an existing per-turn record: a repeated turn
+/// number means the caller lost count, and silently replacing evidence is
+/// exactly what this function exists to prevent.
+pub fn write_manifest(
+    dir: &Path,
+    turn: u64,
+    manifest: &VerificationManifest,
+) -> std::io::Result<PathBuf> {
     #[derive(serde::Serialize)]
     #[serde(rename_all = "camelCase")]
     struct Persisted<'a> {
         #[serde(flatten)]
         manifest: &'a VerificationManifest,
+        turn: u64,
         complete: bool,
         #[serde(skip_serializing_if = "Option::is_none")]
         blocked_reason: Option<String>,
     }
 
     std::fs::create_dir_all(dir)?;
-    let path = dir.join("verification.json");
+    let path = dir.join(format!("verification-{turn}.json"));
+    if path.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!(
+                "{} already records turn {turn}; verification records are never replaced",
+                path.display()
+            ),
+        ));
+    }
     let blocked_reason = match manifest.verdict() {
         Verdict::Complete => None,
         Verdict::Blocked(reason) => Some(reason),
     };
     let mut text = serde_json::to_string_pretty(&Persisted {
         manifest,
+        turn,
         complete: blocked_reason.is_none(),
         blocked_reason,
     })
     .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     text.push('\n');
     crate::fs_atomic::atomic_write(&path, text.as_bytes())?;
+    // The pointer is a convenience, not the record. A run that could not
+    // refresh it still has every turn's manifest on disk, so the failure
+    // is logged rather than reported as "the manifest was not written".
+    if let Err(e) = crate::fs_atomic::atomic_write(&dir.join(LATEST_MANIFEST), text.as_bytes()) {
+        tracing::warn!(error = %e, "could not refresh the latest-verification pointer");
+    }
     Ok(path)
 }
 
