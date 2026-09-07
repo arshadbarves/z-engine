@@ -21,10 +21,11 @@ use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 use super::acceptance::CommandPolicy;
-use super::audit::audit;
+use super::audit::{audit, reconcile_after_checks};
 use super::command_run::{run_bounded, tail};
-use super::manifest::{CheckOutcome, CheckStatus, Verdict, VerificationManifest};
-use super::plan::VerificationPlan;
+use super::manifest::{CheckOutcome, CheckStatus, ScopeBreach, Verdict, VerificationManifest};
+use super::plan::{VerificationPlan, WorkspaceChange};
+use super::snapshot::WorkspaceSnapshot;
 use super::work_order::AcceptanceCommand;
 
 /// Default wall-clock bound per check. Generous enough for a cold
@@ -33,6 +34,24 @@ use super::work_order::AcceptanceCommand;
 pub const DEFAULT_CHECK_TIMEOUT: Duration = Duration::from_secs(600);
 
 const CARGO_CHECK: &str = "cargo check --workspace --all-targets --message-format=json";
+
+/// What a verification proved, and what it left behind.
+///
+/// The workspace is part of the result because the checks are processes
+/// that write: the turn that follows this one has to be judged against
+/// the tree these checks produced, not the tree they were handed.
+#[derive(Debug)]
+pub struct Verification {
+    /// What was proven, and every breach found on either side of the checks.
+    pub manifest: VerificationManifest,
+    /// The tree as the checks left it; `None` only when it could not be
+    /// re-read — which is itself recorded as a breach, so a `None` here
+    /// can never accompany a complete manifest.
+    pub settled: Option<WorkspaceSnapshot>,
+    /// Changes the harness's own toolchain made while checking. Absorbed
+    /// even when the turn is refused, because no agent made them.
+    pub harness_writes: Vec<WorkspaceChange>,
+}
 
 /// Runs the checks a guarded completion depends on.
 #[derive(Debug, Clone)]
@@ -75,23 +94,56 @@ impl VerificationRunner {
         self
     }
 
-    /// Verify `plan` and return what was proven.
-    pub async fn run(&self, plan: &VerificationPlan) -> VerificationManifest {
+    /// Verify `plan` and return what was proven, together with the state
+    /// the checks left the workspace in.
+    pub async fn run(&self, plan: &VerificationPlan) -> Verification {
         // Audit before running anything. The checks are processes that
         // write to the workspace themselves — `cargo check` refreshes
         // `Cargo.lock`, a test suite touches `target/` — and auditing
         // afterwards would charge those writes to the agent as scope
         // breaches it did not commit.
-        let breaches = audit(&self.root, plan);
+        let mut breaches = audit(&self.root, plan);
         let mut checks = vec![self.cargo_check(plan).await];
         checks.extend(self.acceptance_checks(plan, &plan.acceptance).await);
-        VerificationManifest {
-            work_order_id: plan.work_order_id.clone(),
-            goal: plan.goal.clone(),
-            scope: plan.scope.clone(),
-            mutated: plan.mutated_paths(),
-            breaches,
-            checks,
+
+        // …but "audit first" is only safe if nothing may change behind
+        // the audit, so look again. What the checks touched is either the
+        // harness's own bookkeeping or something that has never been
+        // judged, and the second kind blocks.
+        let (settled, harness_writes) =
+            match WorkspaceSnapshot::capture(&self.root, Some(&plan.workspace)) {
+                Ok(post) => {
+                    let residue = reconcile_after_checks(&plan.workspace, &post);
+                    breaches.extend(residue.breaches);
+                    (Some(post), residue.harness)
+                }
+                Err(source) => {
+                    // Unreadable afterwards means unaccountable: refuse
+                    // rather than assume the checks were well behaved.
+                    breaches.push(ScopeBreach {
+                        path: self.root.clone(),
+                        reason: format!(
+                            "the workspace could not be re-read after the checks ran, so what \
+                             they changed is unknown: {source}"
+                        ),
+                    });
+                    (None, Vec::new())
+                }
+            };
+        breaches.sort_by(|a, b| a.path.cmp(&b.path));
+        breaches.dedup_by(|a, b| a.path == b.path);
+
+        Verification {
+            manifest: VerificationManifest {
+                work_order_id: plan.work_order_id.clone(),
+                goal: plan.goal.clone(),
+                scope: plan.scope.clone(),
+                mutated: plan.mutated_paths(),
+                breaches,
+                checks,
+            },
+            settled,
+            harness_writes,
         }
     }
 

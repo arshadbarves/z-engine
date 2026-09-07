@@ -29,6 +29,51 @@ fn the_intended_test_and_check_commands_are_admitted() {
     }
 }
 
+/// `cargo fmt` rewrites the files it reads, and acceptance commands run
+/// *after* the change set has been audited — so a formatting run that
+/// edits would leave the workspace different from the one that was
+/// judged. Only the reporting spellings are admitted.
+#[test]
+fn formatting_is_admitted_only_when_it_reports_instead_of_rewriting() {
+    for command in ["cargo fmt", "cargo fmt --all", "cargo fmt -p z-engine-core"] {
+        assert_eq!(
+            cargo(command).unwrap_err(),
+            AcceptanceError::FormatWouldRewrite,
+            "{command} would rewrite the audited sources"
+        );
+    }
+    // Both sides of the `--` separator, and both orders, prove the same
+    // thing: the run only reports.
+    for command in [
+        "cargo fmt --check",
+        "cargo fmt -- --check",
+        "cargo fmt --all --check",
+        "cargo fmt --all -- --check",
+        "cargo fmt -- --check --edition 2021",
+        "cargo fmt --check --all",
+    ] {
+        assert!(cargo(command).is_ok(), "{command} only reports");
+    }
+}
+
+/// The other way a permitted subcommand can rewrite the tree it is
+/// meant to be judging.
+#[test]
+fn subcommands_that_would_edit_the_sources_are_refused() {
+    for command in [
+        "cargo clippy --fix",
+        "cargo clippy --workspace --fix --allow-dirty",
+        "cargo fmt --check --emit files",
+        "cargo fmt -- --check --emit=files",
+    ] {
+        let err = cargo(command).unwrap_err();
+        assert!(
+            matches!(err, AcceptanceError::ArgumentNotAllowed { .. }),
+            "{command}: {err}"
+        );
+    }
+}
+
 #[test]
 fn only_cargo_may_be_run_unattended() {
     for command in ["just test", "make check", "./verify.sh", "npm test", "sh"] {

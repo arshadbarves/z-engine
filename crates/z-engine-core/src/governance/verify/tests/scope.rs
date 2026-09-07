@@ -21,7 +21,7 @@ async fn a_change_outside_the_declared_scope_blocks_even_when_everything_compile
         accept("cargo check"),
     );
     p.witnesses = witnesses;
-    let manifest = VerificationRunner::new(tmp.path()).run(&p).await;
+    let manifest = VerificationRunner::new(tmp.path()).proved(&p).await;
 
     let Verdict::Blocked(reason) = manifest.verdict() else {
         panic!(
@@ -37,7 +37,7 @@ async fn a_change_outside_the_declared_scope_blocks_even_when_everything_compile
 async fn a_mutation_of_an_undeclared_path_is_a_breach() {
     let tmp = cargo_fixture();
     let manifest = VerificationRunner::new(tmp.path())
-        .run(&plan(
+        .proved(&plan(
             tmp.path(),
             &["Cargo.toml"],
             &["Cargo.toml", "src/lib.rs"],
@@ -62,7 +62,7 @@ async fn untouched_witnesses_outside_the_scope_are_not_breaches() {
         accept("cargo check"),
     );
     p.witnesses = vec![witness(tmp.path(), "src/lib.rs")];
-    let manifest = VerificationRunner::new(tmp.path()).run(&p).await;
+    let manifest = VerificationRunner::new(tmp.path()).proved(&p).await;
     assert!(manifest.breaches.is_empty(), "{:?}", manifest.breaches);
 }
 
@@ -83,7 +83,7 @@ async fn the_verifier_s_own_writes_are_not_charged_to_the_agent() {
     );
     p.witnesses = vec![witness(repo.path(), "Cargo.lock")];
 
-    let manifest = VerificationRunner::new(repo.path()).run(&p).await;
+    let manifest = VerificationRunner::new(repo.path()).proved(&p).await;
 
     assert!(
         manifest.breaches.is_empty(),
@@ -95,5 +95,74 @@ async fn the_verifier_s_own_writes_are_not_charged_to_the_agent() {
         Verdict::Complete,
         "{}",
         manifest.summary()
+    );
+}
+
+/// The audit runs *before* the checks, so an acceptance command that
+/// edits sources would otherwise be judged against a tree that no longer
+/// exists. The workspace is captured again afterwards for exactly this.
+#[tokio::test]
+async fn an_acceptance_command_that_writes_after_the_audit_is_a_breach() {
+    let tmp = cargo_fixture();
+    let manifest = VerificationRunner::new(tmp.path())
+        .with_allowed_programs(&["touch"])
+        .proved(&plan(
+            tmp.path(),
+            &["Cargo.toml"],
+            &[],
+            accept("touch snuck-in.rs"),
+        ))
+        .await;
+
+    let Verdict::Blocked(reason) = manifest.verdict() else {
+        panic!(
+            "a check that edits the workspace cannot verify it: {}",
+            manifest.summary()
+        );
+    };
+    assert!(reason.contains("snuck-in.rs"), "{reason}");
+    assert!(
+        manifest
+            .breaches
+            .iter()
+            .any(|b| b.reason.contains("after the audit")),
+        "{:?}",
+        manifest.breaches
+    );
+}
+
+/// …and the lockfile cargo refreshes on the way through is not charged
+/// to anyone: it is the harness's own bookkeeping.
+#[tokio::test]
+async fn the_lockfile_a_check_writes_is_not_a_breach_and_is_handed_on() {
+    let tmp = cargo_fixture();
+    let out = VerificationRunner::new(tmp.path())
+        .run(&plan(
+            tmp.path(),
+            &["Cargo.toml"],
+            &["Cargo.toml"],
+            accept("cargo check"),
+        ))
+        .await;
+
+    assert!(
+        tmp.path().join("Cargo.lock").exists(),
+        "the fixture must actually make cargo write a lockfile"
+    );
+    assert!(
+        out.manifest.breaches.is_empty(),
+        "{:?}",
+        out.manifest.breaches
+    );
+    assert!(
+        out.harness_writes
+            .iter()
+            .any(|c| c.path == Path::new("Cargo.lock")),
+        "the lockfile must be handed on as the harness's own: {:?}",
+        out.harness_writes
+    );
+    assert!(
+        out.settled.is_some(),
+        "a completed verification must say what it left behind"
     );
 }

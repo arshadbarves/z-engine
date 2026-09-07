@@ -29,6 +29,14 @@ fn fixture(root: &Path) {
 /// answers in prose — the false completion this gate exists to catch.
 fn script_for(content: &str, acceptance: &str) -> Script {
     let script = Script::default();
+    push_turn(&script, content, acceptance);
+    script
+}
+
+/// The four rounds one guarded turn takes. Split out so a multi-turn
+/// script is the same turn twice rather than a second transcript that
+/// could drift from the first.
+fn push_turn(script: &Script, content: &str, acceptance: &str) {
     script.push(format!(
         "{}{}{}",
         tool_call_delta(
@@ -73,7 +81,6 @@ fn script_for(content: &str, acceptance: &str) -> Script {
         finish_json("stop", 40, 5),
         done()
     ));
-    script
 }
 
 async fn run_guarded(
@@ -230,4 +237,57 @@ async fn guarded_admission_refuses_a_side_effecting_cargo_subcommand() {
     };
     assert!(!ok, "`cargo run` executes the code it is meant to judge");
     assert!(summary.contains("run"), "{summary}");
+}
+
+/// A guarded run is more than one turn, and the first turn's *own*
+/// verification writes to the workspace: `cargo check` resolves the
+/// dependency graph and leaves a `Cargo.lock` behind.
+///
+/// If the run kept judging every turn against the tree it started in,
+/// that lockfile would open turn 2 as a change no governed tool
+/// recorded, and no guarded session could ever complete twice. This is
+/// the end-to-end proof that it can.
+#[tokio::test]
+async fn a_guarded_session_can_complete_more_than_one_turn() {
+    let tmp = tempfile::tempdir().unwrap();
+    fixture(tmp.path());
+    let first = format!("{MANIFEST}description = \"fixture crate\"\n");
+    let second = format!("{MANIFEST}description = \"fixture crate\"\nkeywords = [\"fixture\"]\n");
+
+    let script = Script::default();
+    push_turn(&script, &first, "cargo check");
+    push_turn(&script, &second, "cargo check");
+
+    let (handle, mut ev) = run_guarded(tmp.path(), script).await;
+
+    let turn_one = wait_for(&mut ev, |e| {
+        matches!(e, Event::TurnBlocked { .. } | Event::TurnCompleted { .. })
+    })
+    .await;
+    assert!(
+        matches!(turn_one, Event::TurnCompleted { .. }),
+        "the first turn must verify: {turn_one:?}"
+    );
+    // Without this the test could pass vacuously: it is the verifier's
+    // own write that turn 2 used to be charged for.
+    assert!(
+        tmp.path().join("Cargo.lock").exists(),
+        "verification must actually have written a lockfile"
+    );
+
+    handle.submit("now add a keyword too");
+    let turn_two = wait_for(&mut ev, |e| {
+        matches!(e, Event::TurnBlocked { .. } | Event::TurnCompleted { .. })
+    })
+    .await;
+    assert!(
+        matches!(turn_two, Event::TurnCompleted { .. }),
+        "a second governed turn must not answer for the first turn's checks: {turn_two:?}"
+    );
+    assert!(
+        std::fs::read_to_string(tmp.path().join("Cargo.toml"))
+            .unwrap()
+            .contains("keywords"),
+        "the second turn's change must have landed"
+    );
 }

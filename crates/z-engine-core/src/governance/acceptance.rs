@@ -15,6 +15,16 @@
 //! `--config` alone can install a target runner, which is arbitrary code
 //! execution by another name.
 //!
+//! One further rule, and the reason it exists: acceptance commands run
+//! *after* the completion audit has already read the workspace, so a
+//! command that rewrites source would change the very bytes the audit
+//! judged. `cargo fmt` does exactly that unless it is asked to report
+//! instead (`--check`), and `--fix`/`--emit` do it for the other
+//! subcommands, so all of them are refused here. What slips through
+//! anyway is caught by the post-check reconciliation in `governance::audit`,
+//! which re-reads the tree once the checks are done; this rule is the
+//! half that gives the model a fixable answer before anything runs.
+//!
 //! The policy is enforced twice: at work-order admission, so the model
 //! learns immediately and in its own vocabulary, and again in
 //! [`super::command_run`] before a process is spawned, so an order that
@@ -23,6 +33,9 @@
 /// Cargo subcommands verification will run. Narrow on purpose: each one
 /// only compiles, lints, formats, or tests the project it is pointed at.
 pub const SAFE_CARGO_SUBCOMMANDS: &[&str] = &["build", "check", "clippy", "fmt", "test"];
+
+/// The argument that turns `cargo fmt` from a rewriter into a reporter.
+const FMT_REPORT_ONLY: &str = "--check";
 
 /// Arguments that would let a permitted subcommand act on something
 /// other than this project, or execute something the project did not
@@ -60,6 +73,16 @@ const DENIED_FLAGS: &[(&str, &str)] = &[
     ),
     ("--git", "verification never fetches from a git source"),
     ("--path", "verification never installs from a path source"),
+    (
+        "--fix",
+        "an acceptance command runs after the change set has been audited, so it may report on \
+         the sources but never rewrite them",
+    ),
+    (
+        "--emit",
+        "an acceptance command runs after the change set has been audited, so it may report on \
+         the sources but never rewrite them",
+    ),
     (
         "-Z",
         "unstable cargo flags are outside what this harness will run unattended",
@@ -122,6 +145,12 @@ pub enum AcceptanceError {
     SubcommandNotAllowed { subcommand: String, allowed: String },
     #[error("`{argument}` is not allowed in an acceptance command: {reason}")]
     ArgumentNotAllowed { argument: String, reason: String },
+    #[error(
+        "`cargo fmt` rewrites the sources it is judging, and acceptance commands run after the \
+         change set has been audited; declare `cargo fmt --check` (or `cargo fmt --all -- \
+         --check`) so it reports instead"
+    )]
+    FormatWouldRewrite,
 }
 
 /// Split `command` into argv and check it against `policy`.
@@ -191,6 +220,12 @@ fn check_cargo(args: &[String], policy: &CommandPolicy) -> Result<(), Acceptance
     }
     for argument in &args[2..] {
         check_argument(argument)?;
+    }
+    // Position-independent on purpose: `--check` is a rustfmt flag, so it
+    // is written both before and after the `--` separator, and either
+    // spelling proves the run will only report.
+    if subcommand == "fmt" && !args[2..].iter().any(|a| a == FMT_REPORT_ONLY) {
+        return Err(AcceptanceError::FormatWouldRewrite);
     }
     Ok(())
 }

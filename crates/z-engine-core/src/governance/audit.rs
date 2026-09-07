@@ -8,6 +8,11 @@
 //! own, because it is what makes the mutation log non-self-certifying:
 //! the log says what the governed tools did, the snapshot says what
 //! actually changed, and only their exact agreement is authorized.
+//!
+//! [`reconcile_after_checks`] closes the other end of the same question:
+//! the audit judges the tree before the checks run, so the tree is
+//! captured again afterwards and anything that moved in between is
+//! either the harness's own doing or a breach.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -15,7 +20,8 @@ use std::path::{Path, PathBuf};
 use crate::evidence::BlobHandle;
 
 use super::manifest::ScopeBreach;
-use super::plan::{ChangeState, VerificationPlan};
+use super::plan::{ChangeState, VerificationPlan, WorkspaceChange};
+use super::snapshot::WorkspaceSnapshot;
 
 /// Everything the declared scope and the mutation log fail to account for.
 ///
@@ -95,164 +101,57 @@ pub(super) fn audit(root: &Path, plan: &VerificationPlan) -> Vec<ScopeBreach> {
     breaches
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::governance::plan::{MutationRecord, WorkspaceChange};
+/// Files the harness's own toolchain writes as a side effect of being
+/// asked a question. Cargo refreshes the lockfile whenever it resolves a
+/// dependency graph, including for `check` and `test`.
+///
+/// Deliberately a closed list of *file names*, not a prefix or a
+/// pattern: anything broader would let an acceptance command hide a
+/// source edit behind a plausible-looking path.
+const HARNESS_OWNED: &[&str] = &["Cargo.lock"];
 
-    fn hash(text: &str) -> String {
-        BlobHandle::of(text.as_bytes()).to_string()
-    }
-
-    fn write(root: &Path, rel: &str, text: &str) -> PathBuf {
-        let path = root.join(rel);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, text).unwrap();
-        PathBuf::from(rel)
-    }
-
-    fn plan(scope: &[&str], mutated: Vec<MutationRecord>) -> VerificationPlan {
-        VerificationPlan {
-            work_order_id: "wo".into(),
-            goal: "g".into(),
-            scope: scope.iter().map(PathBuf::from).collect(),
-            mutated,
-            changes: Vec::new(),
-            witnesses: Vec::new(),
-            acceptance: Vec::new(),
-        }
-    }
-
-    #[test]
-    fn an_authorized_write_that_still_holds_its_bytes_is_clean() {
-        let tmp = tempfile::tempdir().unwrap();
-        let path = write(tmp.path(), "src/lib.rs", "fn a() {}\n");
-        let mut p = plan(
-            &["src/lib.rs"],
-            vec![MutationRecord {
-                path,
-                content_hash: hash("fn a() {}\n"),
-            }],
-        );
-        p.changes = vec![WorkspaceChange {
-            path: PathBuf::from("src/lib.rs"),
-            state: ChangeState::Present {
-                content_hash: hash("fn a() {}\n"),
-            },
-        }];
-        assert!(audit(tmp.path(), &p).is_empty());
-    }
-
-    /// The point of the whole module: a change nobody logged is a breach
-    /// even though the mutation log is perfectly consistent with itself.
-    #[test]
-    fn a_change_no_tool_recorded_is_a_breach() {
-        let tmp = tempfile::tempdir().unwrap();
-        write(tmp.path(), "src/lib.rs", "fn a() {}\n");
-        write(tmp.path(), "sneaky.rs", "fn b() {}\n");
-        let mut p = plan(
-            &["src/lib.rs"],
-            vec![MutationRecord {
-                path: PathBuf::from("src/lib.rs"),
-                content_hash: hash("fn a() {}\n"),
-            }],
-        );
-        p.changes = vec![WorkspaceChange {
-            path: PathBuf::from("sneaky.rs"),
-            state: ChangeState::Present {
-                content_hash: hash("fn b() {}\n"),
-            },
-        }];
-
-        let breaches = audit(tmp.path(), &p);
-        assert_eq!(breaches.len(), 1, "{breaches:?}");
-        assert_eq!(breaches[0].path, PathBuf::from("sneaky.rs"));
-        assert!(breaches[0].reason.contains("no governed tool"));
-    }
-
-    /// Declaring a path writable buys the run one *recorded* write to it,
-    /// not a licence for anything else to edit it.
-    #[test]
-    fn an_unlogged_change_inside_the_declared_scope_is_still_a_breach() {
-        let tmp = tempfile::tempdir().unwrap();
-        write(tmp.path(), "src/lib.rs", "fn edited_by_someone_else() {}\n");
-        let mut p = plan(&["src/lib.rs"], Vec::new());
-        p.changes = vec![WorkspaceChange {
-            path: PathBuf::from("src/lib.rs"),
-            state: ChangeState::Present {
-                content_hash: hash("fn edited_by_someone_else() {}\n"),
-            },
-        }];
-
-        let breaches = audit(tmp.path(), &p);
-        assert_eq!(breaches.len(), 1, "{breaches:?}");
-        assert_eq!(breaches[0].path, PathBuf::from("src/lib.rs"));
-    }
-
-    /// The log records what a tool wrote; if the bytes on disk are now
-    /// different, the log is describing a file that no longer exists.
-    #[test]
-    fn an_authorized_write_overwritten_afterwards_is_a_breach() {
-        let tmp = tempfile::tempdir().unwrap();
-        let path = write(tmp.path(), "src/lib.rs", "fn agent_wrote_this() {}\n");
-        let p = plan(
-            &["src/lib.rs"],
-            vec![MutationRecord {
-                path,
-                content_hash: hash("fn the_tool_reported_this_instead() {}\n"),
-            }],
-        );
-
-        let breaches = audit(tmp.path(), &p);
-        assert_eq!(breaches.len(), 1, "{breaches:?}");
-        assert!(
-            breaches[0].reason.contains("outside this run"),
-            "{breaches:?}"
-        );
-    }
-
-    #[test]
-    fn an_authorized_write_deleted_afterwards_is_a_breach() {
-        let tmp = tempfile::tempdir().unwrap();
-        let p = plan(
-            &["gone.rs"],
-            vec![MutationRecord {
-                path: PathBuf::from("gone.rs"),
-                content_hash: hash("fn a() {}\n"),
-            }],
-        );
-        let breaches = audit(tmp.path(), &p);
-        assert_eq!(breaches.len(), 1, "{breaches:?}");
-        assert!(breaches[0].reason.contains("no longer readable"));
-    }
-
-    #[test]
-    fn a_write_outside_the_declared_scope_is_a_breach() {
-        let tmp = tempfile::tempdir().unwrap();
-        let path = write(tmp.path(), "elsewhere.rs", "fn a() {}\n");
-        let p = plan(
-            &["src/lib.rs"],
-            vec![MutationRecord {
-                path,
-                content_hash: hash("fn a() {}\n"),
-            }],
-        );
-        let breaches = audit(tmp.path(), &p);
-        assert_eq!(breaches.len(), 1, "{breaches:?}");
-        assert!(breaches[0].reason.contains("not declared writable"));
-    }
-
-    #[test]
-    fn a_witness_that_changed_outside_the_scope_is_a_breach() {
-        let tmp = tempfile::tempdir().unwrap();
-        write(tmp.path(), "read.rs", "the new contents\n");
-        let mut p = plan(&[], Vec::new());
-        p.witnesses = vec![super::super::plan::ReadWitness {
-            path: PathBuf::from("read.rs"),
-            file_hash: hash("what it said when we read it\n"),
-        }];
-        let breaches = audit(tmp.path(), &p);
-        assert_eq!(breaches.len(), 1, "{breaches:?}");
-        assert!(breaches[0].reason.contains("since this run read it"));
-    }
+/// What running the checks left behind.
+pub(super) struct Residue {
+    /// Changes the harness itself is answerable for. The next turn is
+    /// not asked to explain these.
+    pub harness: Vec<WorkspaceChange>,
+    /// Changes nothing in the harness accounts for. These arrived after
+    /// the audit that judged this run, so nothing has judged them.
+    pub breaches: Vec<ScopeBreach>,
 }
+
+/// The audit judges the workspace *before* the checks run, because a
+/// check must not be trusted to describe the tree it is about to touch.
+/// That leaves a window: an acceptance command could edit sources after
+/// the audit passed and before the manifest is written.
+///
+/// So the tree is captured again afterwards and the difference is split
+/// in two: the lockfile cargo refreshes, which no agent wrote and no
+/// later turn can be asked about, and everything else — which blocks.
+pub(super) fn reconcile_after_checks(pre: &WorkspaceSnapshot, post: &WorkspaceSnapshot) -> Residue {
+    let mut residue = Residue {
+        harness: Vec::new(),
+        breaches: Vec::new(),
+    };
+    for change in pre.changes(post) {
+        let owned = change
+            .path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| HARNESS_OWNED.contains(&name));
+        if owned {
+            residue.harness.push(change);
+            continue;
+        }
+        residue.breaches.push(ScopeBreach {
+            path: change.path,
+            reason: "changed while the completion checks were running, after the audit that \
+                     judged this run"
+                .into(),
+        });
+    }
+    residue
+}
+
+#[cfg(test)]
+mod tests;

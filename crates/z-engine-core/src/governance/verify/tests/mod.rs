@@ -26,6 +26,15 @@ fn cargo_fixture() -> tempfile::TempDir {
     tmp
 }
 
+impl VerificationRunner {
+    /// Only what the checks proved. Most tests here are about the
+    /// verdict rather than about the state the checks left behind, and
+    /// say so by asking for the manifest alone.
+    async fn proved(&self, plan: &VerificationPlan) -> VerificationManifest {
+        self.run(plan).await.manifest
+    }
+}
+
 fn accept(command: &str) -> Vec<AcceptanceCommand> {
     vec![AcceptanceCommand {
         command: command.into(),
@@ -54,6 +63,10 @@ fn plan(
             })
             .collect(),
         changes: Vec::new(),
+        // The tree as it stands before the checks run; a default here
+        // would make every file in the fixture look like something a
+        // check created.
+        workspace: WorkspaceSnapshot::capture(root, None).unwrap(),
         witnesses: Vec::new(),
         acceptance,
     }

@@ -32,6 +32,9 @@ sha2.workspace = true
 [dev-dependencies]
 axum.workspace = true
 tempfile.workspace = true
+# `test-util` lets the abort-unwind grace period be exercised without
+# actually waiting it out.
+tokio = { workspace = true, features = ["test-util"] }
 
 [lints]
 workspace = true

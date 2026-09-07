@@ -91,6 +91,12 @@ pub(super) fn attach(
 
 /// Everything a guarded run needs before its first tool call: durable
 /// evidence storage, and the workspace as it stands right now.
+///
+/// This is the *first* turn's baseline, not the run's. Every later turn
+/// is judged against what the previous verified turn left behind — see
+/// [`crate::governance::turn_record`] — because verification itself
+/// writes to the workspace, and a frozen reference point would charge
+/// turn 2 for the checks turn 1 ran.
 fn prepare(
     project_root: &Path,
     dir: &Path,
@@ -260,7 +266,7 @@ mod tests {
             .unwrap();
 
         assert!(
-            guarded.work_orders.baseline().is_some(),
+            guarded.work_orders.baseline().unwrap().is_some(),
             "completion cannot audit a change set it has no baseline for"
         );
     }

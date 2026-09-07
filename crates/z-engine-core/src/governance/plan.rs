@@ -18,7 +18,7 @@
 
 use std::path::PathBuf;
 
-use super::snapshot::SnapshotError;
+use super::snapshot::{SnapshotError, WorkspaceSnapshot};
 use super::work_order::AcceptanceCommand;
 
 /// One path this run read, and the hash it had when it was read.
@@ -66,6 +66,11 @@ pub struct VerificationPlan {
     pub mutated: Vec<MutationRecord>,
     /// Every difference the workspace itself shows, authorized or not.
     pub changes: Vec<WorkspaceChange>,
+    /// The tree as it stood when this plan was assembled — before any
+    /// check ran. Comparing against it afterwards is what separates the
+    /// harness's own writes from a change that slipped in behind the
+    /// audit.
+    pub workspace: WorkspaceSnapshot,
     /// Every path this run read, with the hash it had at read time.
     pub witnesses: Vec<ReadWitness>,
     pub acceptance: Vec<AcceptanceCommand>,
@@ -92,10 +97,10 @@ impl VerificationPlan {
 #[derive(Debug, thiserror::Error)]
 pub enum PlanError {
     #[error(
-        "this run's record of what it changed is unreadable, so completion cannot be verified; \
-         start a new run"
+        "this run's record of what it started from and what it changed is unreadable, so \
+         completion cannot be verified; start a new run"
     )]
-    MutationLogUnavailable,
+    TurnRecordUnavailable,
     #[error(
         "this run's record of what it read is unreadable, so completion cannot be verified; start \
          a new run"

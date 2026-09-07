@@ -12,7 +12,9 @@ use tokio::sync::mpsc::UnboundedReceiver;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::governance::{CheckOutcome, CheckStatus, VerificationManifest, VerificationPlan};
+use crate::governance::{
+    CheckOutcome, CheckStatus, Verification, VerificationManifest, VerificationPlan,
+};
 
 use super::events::Command;
 
@@ -26,12 +28,19 @@ pub(super) const ABORT_UNWIND_GRACE: std::time::Duration = std::time::Duration::
 /// reached. A runner that will not unwind in time is recorded as such
 /// rather than waited on forever.
 pub(super) async fn unwind(
-    running: std::pin::Pin<&mut impl std::future::Future<Output = VerificationManifest>>,
+    running: std::pin::Pin<&mut impl std::future::Future<Output = Verification>>,
     plan: &VerificationPlan,
-) -> VerificationManifest {
+) -> Verification {
     match tokio::time::timeout(ABORT_UNWIND_GRACE, running).await {
-        Ok(manifest) => manifest,
-        Err(_) => stopped_manifest(plan, "the checks did not stop within the grace period"),
+        Ok(verification) => verification,
+        Err(_) => Verification {
+            manifest: stopped_manifest(plan, "the checks did not stop within the grace period"),
+            // A verification that would not stop cannot say what state it
+            // left the workspace in, so it settles nothing: the next turn
+            // still owes everything this one did.
+            settled: None,
+            harness_writes: Vec::new(),
+        },
     }
 }
 
@@ -98,6 +107,7 @@ mod tests {
             scope: vec![std::path::PathBuf::from("src/lib.rs")],
             mutated: Vec::new(),
             changes: Vec::new(),
+            workspace: crate::governance::WorkspaceSnapshot::default(),
             witnesses: Vec::new(),
             acceptance: Vec::new(),
         }
@@ -107,12 +117,30 @@ mod tests {
     /// is killed and reaped before the turn ends.
     #[tokio::test]
     async fn a_runner_that_stops_in_time_reports_what_it_reached() {
-        let manifest = async { stopped_manifest(&plan(), "the checks noticed the stop") };
-        let out = unwind(std::pin::pin!(manifest), &plan()).await;
+        let running = async {
+            Verification {
+                manifest: stopped_manifest(&plan(), "the checks noticed the stop"),
+                settled: None,
+                harness_writes: Vec::new(),
+            }
+        };
+        let out = unwind(std::pin::pin!(running), &plan()).await;
         assert!(matches!(
-            out.checks[0].status,
+            out.manifest.checks[0].status,
             CheckStatus::Unavailable { .. }
         ));
+    }
+
+    /// A verification that had to be given up on must not hand the next
+    /// turn a settled workspace: nothing about it was judged.
+    #[tokio::test]
+    async fn a_runner_that_will_not_stop_settles_nothing() {
+        let never = std::future::pending::<Verification>();
+        tokio::time::pause();
+        let out = tokio::spawn(async move { unwind(std::pin::pin!(never), &plan()).await });
+        tokio::time::advance(ABORT_UNWIND_GRACE * 2).await;
+        let out = out.await.unwrap();
+        assert!(out.settled.is_none() && out.harness_writes.is_empty());
     }
 
     /// What a runner that will not unwind leaves behind: a manifest that

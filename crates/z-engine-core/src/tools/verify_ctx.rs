@@ -10,6 +10,11 @@
 //! guarded work-order store, and the change set comes from comparing the
 //! workspace against the snapshot the run started from.
 //!
+//! [`ToolCtx::settle_turn`] is the other half: once a turn has been
+//! judged, it decides what the *next* turn is judged against. A run is
+//! not one turn, and a baseline frozen at the run's start would charge
+//! every later turn for the checks the earlier ones ran.
+//!
 //! Nothing here defaults on failure. An unguarded run has no store and so
 //! has no plan, which is a fact; a guarded run whose log or evidence
 //! cannot be read has *no answer*, which is an error, because "I changed
@@ -19,7 +24,9 @@
 use std::path::Path;
 
 use crate::evidence::BlobHandle;
-use crate::governance::{PlanError, ReadWitness, VerificationPlan, WorkspaceSnapshot};
+use crate::governance::{
+    PlanError, ReadWitness, Verification, VerificationPlan, WorkspaceSnapshot,
+};
 
 use super::ToolCtx;
 use super::path_identity::{canonical_in_root, canonicalize_root, to_repo_relative};
@@ -56,17 +63,21 @@ impl ToolCtx {
         };
         let mutated = store
             .mutations()
-            .map_err(|_| PlanError::MutationLogUnavailable)?;
-        let changes = match store.baseline() {
-            Some(baseline) => {
-                let now = WorkspaceSnapshot::capture(&self.project_root, Some(baseline))?;
-                baseline.changes(&now)
-            }
-            // A guarded run with no baseline cannot see third-party
-            // changes; only a run that also changed nothing itself is
-            // safe to wave through.
-            None => Vec::new(),
-        };
+            .map_err(|_| PlanError::TurnRecordUnavailable)?;
+        let baseline = store
+            .baseline()
+            .map_err(|_| PlanError::TurnRecordUnavailable)?;
+        // Captured whether or not there is a baseline to compare it to:
+        // the checks are about to run, and the tree they are handed is
+        // what their own writes have to be measured against afterwards.
+        let workspace = WorkspaceSnapshot::capture(&self.project_root, baseline.as_ref())?;
+        // A guarded run with no baseline cannot see third-party changes;
+        // only a run that also changed nothing itself is safe to wave
+        // through.
+        let changes = baseline
+            .as_ref()
+            .map(|b| b.changes(&workspace))
+            .unwrap_or_default();
         if mutated.is_empty() && changes.is_empty() {
             return Ok(None);
         }
@@ -77,13 +88,45 @@ impl ToolCtx {
             scope: active.order.writable_paths.clone(),
             mutated,
             changes,
+            workspace,
             witnesses: self.read_witnesses()?,
             acceptance: active.order.acceptance_commands.clone(),
         }))
     }
 
-    /// One witness per path this run read: the repository-relative path
-    /// and the whole-file hash it had at read time.
+    /// Move the line this run is judged against, now that a turn has
+    /// been judged.
+    ///
+    /// Called once per guarded turn, after the verdict and never before
+    /// it. Two outcomes, deliberately asymmetric:
+    ///
+    /// - **verified** — the workspace the checks left behind becomes what
+    ///   the next turn starts from, and the log of authorized writes is
+    ///   cleared. This is the only way a change the agent made stops
+    ///   needing to be accounted for, and it is reachable only from a
+    ///   complete manifest.
+    /// - **refused** — nothing the agent did is blessed. Only the
+    ///   harness's own writes are absorbed, because the next turn cannot
+    ///   be asked to explain a lockfile `cargo check` rewrote.
+    ///
+    /// A verification that could not re-read the workspace reports no
+    /// settled state; that failure is itself a breach, so it cannot
+    /// arrive here alongside a verified verdict.
+    pub fn settle_turn(&self, verified: bool, outcome: &Verification) {
+        let Some(store) = &self.work_orders else {
+            return; // unguarded: nothing was ever governed
+        };
+        let outcome_of_settling = match (verified, outcome.settled.clone()) {
+            (true, Some(settled)) => store.settle_verified(settled),
+            _ => store.settle_refused(&outcome.harness_writes),
+        };
+        // An unreadable record leaves the line where it was, so the next
+        // turn still owes everything this one did — which is the safe
+        // direction, and the only one available from here.
+        let _ = outcome_of_settling;
+    }
+
+    /// One witness per path this run read: the repository-relative path    /// and the whole-file hash it had at read time.
     fn read_witnesses(&self) -> Result<Vec<ReadWitness>, PlanError> {
         let Some(store) = self.evidence.as_ref() else {
             return Ok(Vec::new());
@@ -211,7 +254,7 @@ mod tests {
         let err = ctx
             .verification_plan()
             .expect_err("an unreadable log cannot certify a clean run");
-        assert!(matches!(err, PlanError::MutationLogUnavailable), "{err:?}");
+        assert!(matches!(err, PlanError::TurnRecordUnavailable), "{err:?}");
     }
 
     /// Same rule for the evidence side: no witnesses must not be

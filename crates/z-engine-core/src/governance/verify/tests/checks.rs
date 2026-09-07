@@ -7,7 +7,7 @@ use super::*;
 async fn a_workspace_that_still_compiles_with_a_passing_acceptance_is_complete() {
     let tmp = cargo_fixture();
     let manifest = VerificationRunner::new(tmp.path())
-        .run(&plan(
+        .proved(&plan(
             tmp.path(),
             &["src/lib.rs"],
             &["src/lib.rs"],
@@ -35,7 +35,7 @@ async fn a_broken_edit_blocks_and_the_refusal_carries_the_compiler_error() {
     .unwrap();
 
     let manifest = VerificationRunner::new(tmp.path())
-        .run(&plan(
+        .proved(&plan(
             tmp.path(),
             &["src/lib.rs"],
             &["src/lib.rs"],
@@ -68,7 +68,7 @@ async fn a_broken_manifest_blocks_even_though_cargo_emits_no_diagnostics() {
     .unwrap();
 
     let manifest = VerificationRunner::new(tmp.path())
-        .run(&plan(
+        .proved(&plan(
             tmp.path(),
             &["Cargo.toml"],
             &["Cargo.toml"],
@@ -90,7 +90,7 @@ async fn a_hanging_acceptance_command_times_out_and_blocks() {
     let manifest = VerificationRunner::new(tmp.path())
         .with_timeout(Duration::from_millis(300))
         .with_allowed_programs(&["sleep"])
-        .run(&plan(
+        .proved(&plan(
             tmp.path(),
             &["src/lib.rs"],
             &["src/lib.rs"],
@@ -114,7 +114,7 @@ async fn an_acceptance_command_whose_program_is_missing_blocks() {
     let tmp = cargo_fixture();
     let manifest = VerificationRunner::new(tmp.path())
         .with_allowed_programs(&["z-engine-no-such-program"])
-        .run(&plan(
+        .proved(&plan(
             tmp.path(),
             &["src/lib.rs"],
             &["src/lib.rs"],
@@ -134,7 +134,7 @@ async fn an_acceptance_command_outside_the_allowlist_is_refused_unrun() {
     let tmp = cargo_fixture();
     let marker = tmp.path().join("ran");
     let manifest = VerificationRunner::new(tmp.path())
-        .run(&plan(
+        .proved(&plan(
             tmp.path(),
             &["src/lib.rs"],
             &["src/lib.rs"],
@@ -154,7 +154,7 @@ async fn an_acceptance_command_outside_the_allowlist_is_refused_unrun() {
 async fn a_mutating_order_with_no_acceptance_command_cannot_complete() {
     let tmp = cargo_fixture();
     let manifest = VerificationRunner::new(tmp.path())
-        .run(&plan(tmp.path(), &["src/lib.rs"], &["src/lib.rs"], vec![]))
+        .proved(&plan(tmp.path(), &["src/lib.rs"], &["src/lib.rs"], vec![]))
         .await;
 
     let Verdict::Blocked(reason) = manifest.verdict() else {
@@ -171,7 +171,7 @@ async fn a_project_without_a_cargo_manifest_records_the_skip() {
     std::fs::write(tmp.path().join("notes.md"), "# notes\n").unwrap();
     let manifest = VerificationRunner::new(tmp.path())
         .with_allowed_programs(&["true"])
-        .run(&plan(
+        .proved(&plan(
             tmp.path(),
             &["notes.md"],
             &["notes.md"],
@@ -202,7 +202,7 @@ async fn changing_rust_with_no_manifest_to_compile_it_is_refused_not_skipped() {
 
     let manifest = VerificationRunner::new(tmp.path())
         .with_allowed_programs(&["true"])
-        .run(&plan(
+        .proved(&plan(
             tmp.path(),
             &["src/lib.rs"],
             &["src/lib.rs"],
@@ -240,7 +240,7 @@ async fn a_crate_below_a_non_cargo_root_is_compiled_where_its_manifest_lives() {
     let rel = "rust/fixture/src/lib.rs";
     let manifest = VerificationRunner::new(tmp.path())
         .with_allowed_programs(&["cargo"])
-        .run(&plan(tmp.path(), &[rel], &[rel], Vec::new()))
+        .proved(&plan(tmp.path(), &[rel], &[rel], Vec::new()))
         .await;
 
     let outcome = check(&manifest, "cargo-check");
@@ -273,7 +273,7 @@ async fn an_aborted_run_stops_its_checks_instead_of_waiting_out_the_timeout() {
         .with_timeout(Duration::from_secs(600))
         .with_allowed_programs(&["sleep"])
         .with_abort(flag)
-        .run(&plan(
+        .proved(&plan(
             tmp.path(),
             &["notes.md"],
             &["notes.md"],
@@ -364,7 +364,7 @@ async fn acceptance_commands_run_at_the_nested_cargo_root_too() {
 
     let rel = "rust/fixture/src/lib.rs";
     let manifest = VerificationRunner::new(tmp.path())
-        .run(&plan(
+        .proved(&plan(
             tmp.path(),
             &[rel],
             &[rel],

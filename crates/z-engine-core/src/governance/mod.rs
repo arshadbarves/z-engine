@@ -11,7 +11,8 @@
 //! authorization (`gate`), bounded subprocess execution (`command_run`),
 //! the facts a completion is judged against (`plan`), what the working
 //! tree actually holds (`snapshot`), reconciling those accounts
-//! (`audit`), completion checks (`verify`), and what those checks proved
+//! (`audit`), what a run has already been judged on (`turn_record`),
+//! completion checks (`verify`), and what those checks proved
 //! (`manifest`).
 
 pub mod acceptance;
@@ -22,6 +23,7 @@ pub mod manifest;
 pub mod plan;
 pub mod prompt;
 pub mod snapshot;
+pub mod turn_record;
 pub mod verify;
 pub mod work_order;
 
@@ -29,7 +31,7 @@ mod audit;
 mod command_run;
 
 pub use acceptance::{AcceptanceError, CommandPolicy, SAFE_CARGO_SUBCOMMANDS};
-pub use active::{ActiveWorkOrder, MutationLogUnavailable, WorkOrderStore};
+pub use active::{ActiveWorkOrder, WorkOrderStore};
 pub use evidence_view::EvidenceView;
 pub use gate::{
     EvidenceState, GateDecision, GateEngine, GateFailure, LineRange, MutationRequest, RustFacts,
@@ -41,5 +43,6 @@ pub use plan::{
 };
 pub use prompt::{PromptManifest, PromptOverflow, PromptSection, PromptSnapshot, build_prompt};
 pub use snapshot::{SnapshotError, WorkspaceSnapshot};
-pub use verify::{VerificationRunner, write_manifest};
+pub use turn_record::{TurnRecord, TurnRecordUnavailable};
+pub use verify::{Verification, VerificationRunner, write_manifest};
 pub use work_order::{AcceptanceCommand, WorkOrder, WorkOrderError};
