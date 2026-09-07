@@ -3,12 +3,16 @@
 //! only renders and translates keystrokes into commands.
 
 mod app;
+mod cassette;
+mod cli;
 mod headless;
 mod views;
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
-use z_engine_core::agent::{LoopConfig, ResumeState, spawn_with_recorder};
+use cli::{Args, USAGE};
+use z_engine_core::agent::{LoopConfig, ResumeState, spawn_with_recorder, spawn_with_run_recorder};
 use z_engine_core::config::{
     CliOverrides, Config, resolve_api_key, session_search_dirs, sessions_dir,
 };
@@ -30,73 +34,6 @@ fn resolve_session_file(id: &str) -> Option<PathBuf> {
         }
     }
     None
-}
-
-/// CLI surface for v0.1 (formalized in v1.0).
-#[derive(Debug, Default)]
-struct Args {
-    model: Option<String>,
-    base_url: Option<String>,
-    project: Option<PathBuf>,
-    /// One-shot mode: read task from argv/stdin, stream plain-text events,
-    /// exit non-zero on failure. Developer/acceptance flag (spec §9 v1.0
-    /// formalizes it; recorded in docs/deviations.md).
-    headless_task: Option<String>,
-    /// Headless companion: auto-approve every gated action (unsafe
-    /// convenience for scripted acceptance runs).
-    auto_approve: bool,
-    /// Starting permission mode (default|accept-edits|plan).
-    permission_mode: Option<String>,
-    /// Open the session picker at startup.
-    resume: bool,
-    /// Resume a specific session by ULID (or path).
-    session: Option<String>,
-}
-
-fn parse_args() -> Result<Args, String> {
-    let mut args = Args::default();
-    let argv: Vec<String> = std::env::args().skip(1).collect();
-    let mut i = 0usize;
-    while i < argv.len() {
-        let need_value = |i: &mut usize, flag: &str| -> Result<String, String> {
-            *i += 1;
-            argv.get(*i).cloned().ok_or(format!("{flag} needs a value"))
-        };
-        match argv[i].as_str() {
-            "--model" => args.model = Some(need_value(&mut i, "--model")?),
-            "--base-url" => args.base_url = Some(need_value(&mut i, "--base-url")?),
-            "--project" => args.project = Some(PathBuf::from(need_value(&mut i, "--project")?)),
-            "--headless" => {
-                // Task = following words up to the next --flag; none ⇒ stdin.
-                let mut parts: Vec<String> = Vec::new();
-                while i + 1 < argv.len() && !argv[i + 1].starts_with('-') {
-                    i += 1;
-                    parts.push(argv[i].clone());
-                }
-                args.headless_task = Some(if parts.is_empty() {
-                    String::new()
-                } else {
-                    parts.join(" ")
-                });
-            }
-            "--auto-approve" => args.auto_approve = true,
-            "--resume" => args.resume = true,
-            "--permission-mode" => {
-                args.permission_mode = Some(need_value(&mut i, "--permission-mode")?)
-            }
-            "--session" => args.session = Some(need_value(&mut i, "--session")?),
-            "--help" | "-h" => {
-                println!(
-                    "zengine v{} - personal TUI coding agent\n\nUSAGE:\n  zengine [--model M] [--base-url URL] [--project DIR]\n          [--resume | --session ULID]\n          [--headless \"task\" | --headless < task.txt] [--auto-approve]",
-                    env!("CARGO_PKG_VERSION")
-                );
-                std::process::exit(0);
-            }
-            other => return Err(format!("unknown argument: {other}")),
-        }
-        i += 1;
-    }
-    Ok(args)
 }
 
 fn init_logging() {
@@ -128,18 +65,29 @@ async fn load_config_and_key(
         },
         project_root,
     )?;
-    let key = resolve_api_key();
+    // A replayed run is served from its cassette; it must not so much as
+    // read a credential, let alone send one.
+    let key = if args.needs_api_key() {
+        resolve_api_key()
+    } else {
+        None
+    };
     Ok((cfg, key))
 }
 
 fn main() -> anyhow::Result<()> {
-    let args = match parse_args() {
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    let args = match cli::parse(&argv) {
         Ok(a) => a,
         Err(e) => {
             eprintln!("zengine: {e}");
             std::process::exit(2);
         }
     };
+    if args.help {
+        println!("zengine v{}\n\n{USAGE}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
     init_logging();
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -154,6 +102,10 @@ async fn run(args: Args) -> anyhow::Result<()> {
         .project
         .clone()
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+    if let Err(e) = args.check_tape_paths(&project_root) {
+        eprintln!("zengine: {e}");
+        std::process::exit(2);
+    }
     let cfg = load_config_and_key(&args, Some(project_root.as_path())).await?;
     let (config, api_key) = cfg;
 
@@ -192,7 +144,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
     let lc = LoopConfig {
         model: config.model.clone(),
         base_url: config.base_url.clone(),
-        api_key,
+        api_key: api_key.clone(),
         project_root: project_root.clone(),
         tmp_dir: std::env::temp_dir(),
         initial_allow_rules: config.permissions.allow.clone(),
@@ -205,24 +157,15 @@ async fn run(args: Args) -> anyhow::Result<()> {
         mcp_servers: config.mcp_servers.clone(),
         auto_allow_tools: vec![],
         initial_mode: parse_mode(args.permission_mode.as_deref()),
-        // Guarded (evidence-gated) mode is opt-in and not yet exposed here.
-        guarded: false,
+        // Evidence-gated mode: opt-in per run, interactive or headless.
+        guarded: args.guarded,
     };
 
-    if let Some(task) = args.headless_task {
-        let task = if task.trim().is_empty() {
-            use std::io::Read;
-            let mut buf = String::new();
-            std::io::stdin().read_to_string(&mut buf)?;
-            buf
-        } else {
-            task
-        };
-        let (handle, ev_rx) = spawn_with_recorder(lc, resume_state, recorder);
-        return headless::run_one_shot(handle, ev_rx, &task, args.auto_approve).await;
+    if args.headless_task.is_some() {
+        return run_headless(args, lc, resume_state, recorder).await;
     }
 
-    match resolve_api_key() {
+    match api_key.as_deref() {
         Some(k) => {
             let tail: String = k.chars().rev().take(4).collect();
             tracing::info!(key_tail = %tail, "auth resolved");
@@ -274,6 +217,56 @@ async fn run(args: Args) -> anyhow::Result<()> {
         initial_mode,
     )
     .await
+}
+
+/// One-shot mode, optionally taped. A recorded, replayed and plain run
+/// are driven by the same runner; only the provider underneath differs.
+async fn run_headless(
+    args: Args,
+    lc: LoopConfig,
+    resume_state: Option<ResumeState>,
+    recorder: Option<SessionWriter>,
+) -> anyhow::Result<()> {
+    let task = args.headless_task.clone().unwrap_or_default();
+    let task = if task.trim().is_empty() {
+        use std::io::Read;
+        let mut buf = String::new();
+        std::io::stdin().read_to_string(&mut buf)?;
+        buf
+    } else {
+        task
+    };
+
+    let taped = match (&args.record_run, &args.replay_run) {
+        (Some(path), _) => Some(cassette::recording(path, &lc.base_url, lc.api_key.clone())?),
+        (_, Some(path)) => Some(cassette::replaying(path)?),
+        _ => None,
+    };
+
+    let outcome = match &taped {
+        Some(taped) => {
+            let (handle, ev_rx) = spawn_with_run_recorder(
+                lc,
+                Arc::clone(&taped.provider),
+                resume_state,
+                recorder,
+                Some(Arc::clone(&taped.recorder)),
+            );
+            headless::run_one_shot(handle, ev_rx, &task, args.auto_approve).await
+        }
+        None => {
+            let (handle, ev_rx) = spawn_with_recorder(lc, resume_state, recorder);
+            headless::run_one_shot(handle, ev_rx, &task, args.auto_approve).await
+        }
+    };
+
+    // How the run went is worth keeping whether or not it got where it was
+    // going, so metrics are written before its verdict is returned.
+    if let (Some(destination), Some(taped)) = (&args.metrics_out, &taped) {
+        taped.recorder.settle().await;
+        cassette::write_metrics(&taped.tape, destination)?;
+    }
+    outcome
 }
 
 fn parse_mode(s: Option<&str>) -> z_engine_core::agent::PermissionMode {

@@ -1,0 +1,16 @@
+# Frozen fixture crate for the guarded vertical slice. Copied to a
+# temporary directory by `tests/guarded_vertical_slice.rs`; never built
+# in place, and deliberately dependency-free so `cargo check` and
+# `cargo test` are real, fast, offline verdicts.
+# Its own workspace root: the fixture must resolve identically wherever it
+# is copied, and never join the engine's workspace.
+[workspace]
+
+[package]
+name = "guarded-rust-edit"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+path = "src/lib.rs"

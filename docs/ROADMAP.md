@@ -51,3 +51,37 @@ Mirrors spec §9. Each version: tests green · clippy clean · demo done · tagg
 - [x] M3 packaging — scripts/package-gui.sh assembles Harness.app (Info.plist, RGBA icon, ad-hoc codesign); bundled binary verified launching (`14:42` build)
 
 Design doc: docs/design/gui-v0.1.md · TUI frozen at v1.1.x as keyboard-only client.
+
+## v1.2 — Evidence-gated runs (Rust vertical slice)
+
+Opt-in per run with `--guarded`. A guarded turn mints evidence when it
+reads, refuses mutations that no admitted work order covers, and ends only
+when verification it did not author says it may.
+
+- [x] Evidence store: every read mints an id; edits cite the lines they cover
+- [x] Work orders: goal, writable paths, target symbols, cited evidence, acceptance commands
+- [x] Mutation gate: work order → in-root → declared scope → named symbol (Rust) → evidence covering every changed line → rust-analyzer placing that symbol
+- [x] Completion gate: `cargo check --workspace --all-targets` plus the order's acceptance commands, over a diff whose every change is attributable to a governed tool; the verdict lands in `<project>/.z-engine/runs/<id>/verification.json`
+- [x] Record & replay: a cassette carries the run's traffic, gate rulings, evidence ids, verdict and cost; a replay re-asks its own gates and re-runs its own verification with no network and no key
+- [x] Headless exposure: `--guarded`, `--record-run PATH`, `--replay-run PATH`, `--metrics-out PATH`
+
+```bash
+# record an evidence-gated run and keep its metrics
+zengine --guarded --headless "make word_count count words" \
+        --record-run ~/tapes/run.jsonl --metrics-out ~/tapes/metrics.json
+
+# re-run it from the tape: no provider, no credential
+zengine --headless "make word_count count words" \
+        --replay-run ~/tapes/run.jsonl
+```
+
+Cassettes must live outside the project directory — a guarded run accounts
+for every change under its root, its own tape included.
+
+Baseline: `crates/z-engine-core/tests/guarded_vertical_slice.rs` drives the
+frozen fixture in `tests/fixtures/guarded-rust-edit` end to end (scoped
+order, one function changed, second file refused, held-out `cargo test`
+deciding the turn) and replays that run to the same verdict.
+Limits — Rust-only symbol authorization, rust-analyzer required,
+cargo-only acceptance, no mutating shell, no unread new files — are
+recorded in docs/deviations.md rows 10–14.

@@ -11,7 +11,19 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 
+use tokio::time::{Duration, Instant, sleep};
+
 use super::{LspClient, percent_encode_path};
+
+/// How long to keep asking while the server says it has nothing.
+///
+/// A freshly spawned rust-analyzer answers from the opened document almost
+/// at once, then reports nothing for a beat while it loads the workspace,
+/// then answers stably. Refusing an edit inside that window would gate on
+/// the server's start-up schedule rather than on the code, so an
+/// `Unindexed` answer is re-asked until it settles or the budget runs out.
+const WARMUP_BUDGET: Duration = Duration::from_secs(3);
+const WARMUP_INTERVAL: Duration = Duration::from_millis(250);
 
 /// What the semantic provider could say about one document.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,15 +50,23 @@ impl LspClient {
             return SymbolAnswer::Unindexed(format!("could not open the document: {e}"));
         }
         let uri = percent_encode_path(abs_path);
-        match self
-            .request(
-                "textDocument/documentSymbol",
-                json!({"textDocument": {"uri": uri}}),
-            )
-            .await
-        {
-            Ok(result) => parse_symbols(&result, &uri),
-            Err(e) => SymbolAnswer::Unindexed(e),
+        let deadline = Instant::now() + WARMUP_BUDGET;
+        loop {
+            let answer = match self
+                .request(
+                    "textDocument/documentSymbol",
+                    json!({"textDocument": {"uri": uri}}),
+                )
+                .await
+            {
+                Ok(result) => parse_symbols(&result, &uri),
+                Err(e) => SymbolAnswer::Unindexed(e),
+            };
+            let warming = matches!(answer, SymbolAnswer::Unindexed(_));
+            if !warming || Instant::now() >= deadline {
+                return answer;
+            }
+            sleep(WARMUP_INTERVAL).await;
         }
     }
 }

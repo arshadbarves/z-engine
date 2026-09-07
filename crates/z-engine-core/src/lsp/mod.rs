@@ -5,7 +5,7 @@
 //! notifications are captured into a store that tools and the edit hook
 //! read. A crashed server is transparently re-spawned on next use (bounded).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
@@ -27,6 +27,8 @@ struct Shared {
     diagnostics: Mutex<HashMap<String, Vec<Value>>>,
     /// Responses waiting for their id.
     pending: Mutex<HashMap<i64, oneshot::Sender<Result<Value, String>>>>,
+    /// Uris this connection has sent `didOpen` for.
+    open_docs: Mutex<HashSet<String>>,
     server_gone: AtomicBool,
     ready: AtomicBool,
     spawn_attempts: AtomicU32,
@@ -59,31 +61,17 @@ pub mod batch;
 pub mod cargo_check;
 pub mod health;
 pub mod symbols;
+pub mod wire;
 
 pub use health::LspHealth;
 pub use symbols::SymbolAnswer;
+use wire::{
+    did_change_params, did_open_params, find_frame, frame, is_response, percent_encode_path,
+};
 
 /// Public wrapper used by LSP tooling to build document URIs.
 pub fn percent_encode_path_public(p: &Path) -> String {
     percent_encode_path(p)
-}
-
-fn percent_encode_path(p: &Path) -> String {
-    let s = p.to_string_lossy();
-    let mut out = String::from("file://");
-    for b in s.bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => {
-                out.push(b as char)
-            }
-            _ => out.push_str(&format!("%{b:02X}")),
-        }
-    }
-    out
-}
-
-fn frame(body: &str) -> Vec<u8> {
-    format!("Content-Length: {}\r\n\r\n{body}", body.len()).into_bytes()
 }
 
 impl LspClient {
@@ -111,6 +99,7 @@ impl LspClient {
             shared: Arc::new(Shared {
                 diagnostics: Mutex::new(HashMap::new()),
                 pending: Mutex::new(HashMap::new()),
+                open_docs: Mutex::new(HashSet::new()),
                 server_gone: AtomicBool::new(false),
                 ready: AtomicBool::new(false),
                 spawn_attempts: AtomicU32::new(0),
@@ -150,6 +139,8 @@ impl LspClient {
             next_id: 0,
         });
         self.shared.server_gone.store(false, Ordering::Relaxed);
+        // A fresh server knows no documents, whatever the old one was told.
+        self.shared.open_docs.lock().await.clear();
 
         // Reader: parse frames, route responses / diagnostics.
         let shared = Arc::clone(&self.shared);
@@ -269,25 +260,24 @@ impl LspClient {
     /// Open (or fully replace) a document so the server analyzes current
     /// content. Uses didChange when already open.
     pub async fn open_document(&self, abs_path: &Path, text: &str) -> Result<(), String> {
+        // Connect first: a notification written before the server exists is
+        // lost, and the caller would then be told about stale on-disk bytes.
+        self.ensure().await?;
         let uri = percent_encode_path(abs_path);
-        let already_open = self.shared.diagnostics.lock().await.contains_key(&uri);
-        let method = if already_open {
-            "textDocument/didChange"
+        let already_open = self.shared.open_docs.lock().await.contains(&uri);
+        let (method, params) = if already_open {
+            (
+                "textDocument/didChange",
+                did_change_params(&uri, next_version(), text),
+            )
         } else {
-            "textDocument/didOpen"
+            ("textDocument/didOpen", did_open_params(&uri, text))
         };
-        let params = if already_open {
-            json!({
-                "textDocument": {"uri": uri, "version": next_version()},
-                "contentChanges": [{"text": text}]
-            })
-        } else {
-            json!({
-                "textDocument": {"uri": uri, "languageId": "rust", "version": 1},
-                "contentChanges": [{"text": text}]
-            })
-        };
-        self.notify(method, params).await
+        self.notify(method, params).await?;
+        if !already_open {
+            self.shared.open_docs.lock().await.insert(uri);
+        }
+        Ok(())
     }
 
     /// Snapshot of stored diagnostics for one uri.
@@ -320,24 +310,6 @@ fn next_version() -> i64 {
     V.fetch_add(1, Ordering::SeqCst)
 }
 
-/// Find the end offset of a complete LSP frame (headers + body), if present.
-fn find_frame(buf: &[u8]) -> Option<usize> {
-    let header_end = buf
-        .windows(4)
-        .position(|w| w == b"\r\n\r\n")
-        .map(|i| i + 4)?;
-    let headers = String::from_utf8_lossy(&buf[..header_end - 4]);
-    let len: usize = headers
-        .lines()
-        .find_map(|l| l.strip_prefix("Content-Length: "))
-        .and_then(|v| v.trim().parse().ok())?;
-    if buf.len() >= header_end + len {
-        Some(header_end + len)
-    } else {
-        None
-    }
-}
-
 async fn handle_message(shared: Arc<Shared>, raw: Vec<u8>) {
     let body_start = match raw.windows(4).position(|w| w == b"\r\n\r\n") {
         Some(i) => i + 4,
@@ -348,7 +320,8 @@ async fn handle_message(shared: Arc<Shared>, raw: Vec<u8>) {
     };
 
     // Response to a request?
-    if let Some(id) = v.get("id").and_then(Value::as_i64) {
+    if is_response(&v) {
+        let id = v["id"].as_i64().unwrap_or_default();
         let result = if v.get("error").is_some() {
             Err(v["error"]["message"]
                 .as_str()
