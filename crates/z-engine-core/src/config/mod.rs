@@ -26,8 +26,9 @@ pub use paths::{
     resolve_api_key, resolve_api_key_from, session_search_dirs, sessions_dir, slash_command_dirs,
 };
 pub use store::{
-    GeneralOverrides, list_bash_rules, persist_bash_rule, persist_general, persist_mcp_server,
-    remove_bash_rule, remove_cost_override, remove_mcp_server, set_cost_override,
+    GeneralOverrides, list_bash_rules, persist_bash_rule, persist_general, persist_global_general,
+    persist_mcp_server, remove_bash_rule, remove_cost_override, remove_mcp_server,
+    set_cost_override,
 };
 pub use types::{CliOverrides, Config, ConfigError, EnvVars, PartialConfig, PermissionsConfig};
 

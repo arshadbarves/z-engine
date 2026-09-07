@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.5] - 2026-09-07
+
+### Fixed
+- **Read-Only Filesystem on macOS App Launch**: Fixed `os error 30` when connecting providers or saving settings from the GUI by persisting general settings to the user's global configuration (`~/.config/z-engine/config.toml`), and gracefully falling back to saved workspaces or user home directory on launch instead of the root filesystem (`/`).
+- **Workspace Project Context Synchronization**: Automatically sync `ctx.project_root` when a new workspace is added in the GUI.
+
+---
+
 ## [1.4.4] - 2026-09-05
 
 ### Added

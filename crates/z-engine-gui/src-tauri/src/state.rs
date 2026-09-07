@@ -147,3 +147,20 @@ pub(crate) fn save_workspaces(roots: &[PathBuf]) -> Result<(), String> {
     std::fs::write(&tmp, text).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
 }
+
+pub(crate) fn is_valid_project_root(path: &Path) -> bool {
+    path.parent().is_some() && path.is_dir()
+}
+
+pub(crate) fn initial_project_root() -> PathBuf {
+    if let Ok(cwd) = std::env::current_dir() {
+        if is_valid_project_root(&cwd) {
+            return cwd;
+        }
+    }
+    let saved = load_workspaces();
+    if let Some(first) = saved.into_iter().find(|p| is_valid_project_root(p)) {
+        return first;
+    }
+    dirs::home_dir().unwrap_or_else(std::env::temp_dir)
+}

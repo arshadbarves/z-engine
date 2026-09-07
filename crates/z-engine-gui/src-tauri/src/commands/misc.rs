@@ -92,7 +92,10 @@ pub(crate) fn list_workspaces() -> Vec<String> {
 /// be an existing directory; duplicates are ignored. Returns the
 /// canonical path actually stored.
 #[tauri::command]
-pub(crate) fn add_workspace(path: String) -> Result<String, String> {
+pub(crate) fn add_workspace(
+    path: String,
+    state: tauri::State<'_, GuiState>,
+) -> Result<String, String> {
     let canonical = std::fs::canonicalize(&path).map_err(|e| format!("{path}: {e}"))?;
     if !canonical.is_dir() {
         return Err(format!("{} is not a directory", canonical.display()));
@@ -101,6 +104,11 @@ pub(crate) fn add_workspace(path: String) -> Result<String, String> {
     if !roots.contains(&canonical) {
         roots.push(canonical.clone());
         save_workspaces(&roots)?;
+    }
+    if let Ok(mut ctx_guard) = state.ctx.lock() {
+        if let Some(c) = ctx_guard.as_mut() {
+            c.project_root = canonical.clone();
+        }
     }
     Ok(canonical.to_string_lossy().into_owned())
 }

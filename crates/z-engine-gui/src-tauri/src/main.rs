@@ -17,7 +17,6 @@ mod state;
 
 use event_bridge::forward_events;
 use state::{AppCtx, GuiState, build_loop_config};
-use std::path::PathBuf;
 use tauri::Manager;
 use z_engine_core::agent::spawn_with_recorder;
 use z_engine_core::config::{CliOverrides, Config};
@@ -112,7 +111,7 @@ fn main() {
         ])
         .setup(|app| {
             let _ = z_engine_core::config::ensure_user_config();
-            let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let project_root = state::initial_project_root();
             let cfg = Config::load(&CliOverrides::default(), Some(&project_root))
                 .map_err(|e| e.to_string())?;
             let lc = build_loop_config(&cfg, &project_root);

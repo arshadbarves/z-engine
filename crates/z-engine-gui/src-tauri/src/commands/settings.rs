@@ -69,9 +69,15 @@ pub(crate) fn save_general(
         max_context_tokens,
         review_enabled: review,
     };
+    // Persist to global config so default preferences stick across sessions & workspaces.
+    z_engine_core::config::persist_global_general(&over).map_err(|e| e.to_string())?;
+
     let ctx_guard = state.ctx.lock().map_err(|_| "state poisoned")?;
-    let ctx = ctx_guard.as_ref().ok_or("not initialized")?;
-    z_engine_core::config::persist_general(&ctx.project_root, &over).map_err(|e| e.to_string())?;
+    if let Some(ctx) = ctx_guard.as_ref() {
+        if crate::state::is_valid_project_root(&ctx.project_root) {
+            let _ = z_engine_core::config::persist_general(&ctx.project_root, &over);
+        }
+    }
 
     if let Some(m) = model {
         if let Ok(h) = state.handle_for(None) {
@@ -109,6 +115,9 @@ pub(crate) fn save_mcp_server(
 ) -> Result<(), String> {
     let ctx_guard = state.ctx.lock().map_err(|_| "state poisoned")?;
     let ctx = ctx_guard.as_ref().ok_or("not initialized")?;
+    if !crate::state::is_valid_project_root(&ctx.project_root) {
+        return Err("No active workspace folder".into());
+    }
     z_engine_core::config::persist_mcp_server(&ctx.project_root, &name, &command, args)
         .map(|_| ())
         .map_err(|e| e.to_string())
@@ -121,6 +130,9 @@ pub(crate) fn remove_mcp_server(
 ) -> Result<(), String> {
     let ctx_guard = state.ctx.lock().map_err(|_| "state poisoned")?;
     let ctx = ctx_guard.as_ref().ok_or("not initialized")?;
+    if !crate::state::is_valid_project_root(&ctx.project_root) {
+        return Ok(());
+    }
     z_engine_core::config::remove_mcp_server(&ctx.project_root, &name).map_err(|e| e.to_string())
 }
 
@@ -132,6 +144,9 @@ pub(crate) fn list_permission_rules(
     let Some(ctx) = guard.as_ref() else {
         return Err("not initialized".into());
     };
+    if !crate::state::is_valid_project_root(&ctx.project_root) {
+        return Ok(Vec::new());
+    }
     z_engine_core::config::list_bash_rules(&ctx.project_root).map_err(|e| e.to_string())
 }
 
@@ -144,6 +159,9 @@ pub(crate) fn save_permission_rule(
     let Some(ctx) = guard.as_ref() else {
         return Err("not initialized".into());
     };
+    if !crate::state::is_valid_project_root(&ctx.project_root) {
+        return Err("No active workspace folder".into());
+    }
     z_engine_core::config::persist_bash_rule(&ctx.project_root, &rule)
         .map(|_| ())
         .map_err(|e| e.to_string())
@@ -158,6 +176,9 @@ pub(crate) fn remove_permission_rule(
     let Some(ctx) = guard.as_ref() else {
         return Err("not initialized".into());
     };
+    if !crate::state::is_valid_project_root(&ctx.project_root) {
+        return Ok(());
+    }
     z_engine_core::config::remove_bash_rule(&ctx.project_root, &rule).map_err(|e| e.to_string())
 }
 

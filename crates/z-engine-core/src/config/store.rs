@@ -91,10 +91,8 @@ pub struct GeneralOverrides {
     pub review_enabled: Option<bool>,
 }
 
-/// Persist general settings into `<project>/.z-engine/config.toml`,
-/// preserving every other section. `None` fields are left untouched.
-pub fn persist_general(
-    project_root: &std::path::Path,
+fn persist_general_to_path(
+    path: &std::path::Path,
     over: &GeneralOverrides,
 ) -> std::io::Result<PathBuf> {
     if over.model.is_none()
@@ -102,19 +100,26 @@ pub fn persist_general(
         && over.max_context_tokens.is_none()
         && over.review_enabled.is_none()
     {
-        return Ok(project_config_path(project_root));
+        return Ok(path.to_path_buf());
     }
-    let path = project_config_path(project_root);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let text = read_project_text(project_root)?;
-    let mut fmt: FileFormat = toml::from_str(&text).map_err(|e| {
-        std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!("cannot parse {}: {e}", path.display()),
-        )
-    })?;
+    let text = match std::fs::read_to_string(path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => return Err(e),
+    };
+    let mut fmt: FileFormat = if text.trim().is_empty() {
+        FileFormat::default()
+    } else {
+        toml::from_str(&text).map_err(|e| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("cannot parse {}: {e}", path.display()),
+            )
+        })?
+    };
     if let Some(m) = &over.model {
         fmt.model = Some(m.clone());
     }
@@ -127,8 +132,29 @@ pub fn persist_general(
     if let Some(r) = over.review_enabled {
         fmt.review = Some(r);
     }
-    write_project_config(&path, &fmt)?;
-    Ok(path)
+    write_project_config(path, &fmt)?;
+    Ok(path.to_path_buf())
+}
+
+/// Persist general settings into `<project>/.z-engine/config.toml`,
+/// preserving every other section. `None` fields are left untouched.
+pub fn persist_general(
+    project_root: &std::path::Path,
+    over: &GeneralOverrides,
+) -> std::io::Result<PathBuf> {
+    persist_general_to_path(&project_config_path(project_root), over)
+}
+
+/// Persist general settings into global `~/.config/z-engine/config.toml`.
+pub fn persist_global_general(over: &GeneralOverrides) -> std::io::Result<PathBuf> {
+    let env = super::types::EnvVars::from_process_env();
+    let path = super::paths::global_config_path(&env).ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "cannot resolve global config path",
+        )
+    })?;
+    persist_general_to_path(&path, over)
 }
 
 /// Persist an MCP stdio server into `<project>/.z-engine/config.toml`
