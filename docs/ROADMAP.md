@@ -78,7 +78,9 @@ zengine --headless "make word_count count words" \
 Cassettes must live outside the project directory — a guarded run accounts
 for every change under its root, its own tape included.
 
-Baseline: `crates/z-engine-core/tests/guarded_vertical_slice.rs` drives the
+Baseline (needs `rust-analyzer` on PATH; without it the test fails rather
+than skipping — set `Z_ENGINE_ALLOW_MISSING_SEMANTICS=1` to opt out):
+`crates/z-engine-core/tests/guarded_vertical_slice.rs` drives the
 frozen fixture in `tests/fixtures/guarded-rust-edit` end to end (scoped
 order, one function changed, second file refused, held-out `cargo test`
 deciding the turn) and replays that run to the same verdict.

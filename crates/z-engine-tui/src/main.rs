@@ -239,7 +239,14 @@ async fn run_headless(
 
     let taped = match (&args.record_run, &args.replay_run) {
         (Some(path), _) => Some(cassette::recording(path, &lc.base_url, lc.api_key.clone())?),
-        (_, Some(path)) => Some(cassette::replaying(path)?),
+        (_, Some(path)) => {
+            let taped = cassette::replaying(path)?;
+            eprintln!(
+                "zengine --replay-run · taping this run to {}",
+                taped.tape.display()
+            );
+            Some(taped)
+        }
         _ => None,
     };
 

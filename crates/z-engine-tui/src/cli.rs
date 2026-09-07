@@ -189,7 +189,7 @@ impl Args {
     /// Needs the resolved project root, so it is a separate step from
     /// parsing; the caller runs it once the root is known.
     pub fn check_tape_paths(&self, project_root: &Path) -> Result<(), CliError> {
-        let root = std::fs::canonicalize(project_root).unwrap_or_else(|_| project_root.to_owned());
+        let root = anchor(project_root);
         for (flag, path) in [
             ("--record-run", self.record_run.as_ref()),
             ("--replay-run", self.replay_run.as_ref()),
@@ -201,9 +201,7 @@ impl Args {
             } else {
                 std::env::current_dir().unwrap_or_default().join(path)
             };
-            let parent = absolute.parent().unwrap_or(&absolute);
-            let anchored = std::fs::canonicalize(parent).unwrap_or_else(|_| parent.to_owned());
-            if anchored.starts_with(&root) {
+            if anchor(&absolute).starts_with(&root) {
                 return Err(CliError::TapeInsideProject {
                     flag: flag.to_string(),
                     path: path.display().to_string(),
@@ -220,5 +218,35 @@ impl Args {
     /// never read a key, let alone send one anywhere.
     pub fn needs_api_key(&self) -> bool {
         self.replay_run.is_none()
+    }
+}
+
+/// Resolve `path` as far as the filesystem can, keeping the part that does
+/// not exist yet.
+///
+/// Both sides of an "is this inside the project?" question must be
+/// anchored the same way: a macOS temp dir reaches its real location
+/// through a symlink (`/var` → `/private/var`), so comparing a resolved
+/// root against an unresolved tape would call a tape inside the project
+/// outside it — exactly for the not-yet-created directories a first run
+/// makes.
+fn anchor(path: &Path) -> PathBuf {
+    let mut pending: Vec<std::ffi::OsString> = Vec::new();
+    let mut cursor = path.to_path_buf();
+    loop {
+        if let Ok(real) = std::fs::canonicalize(&cursor) {
+            let mut resolved = real;
+            resolved.extend(pending.iter().rev());
+            return resolved;
+        }
+        let (Some(parent), Some(name)) = (cursor.parent(), cursor.file_name()) else {
+            return path.to_path_buf();
+        };
+        pending.push(name.to_owned());
+        let parent = parent.to_path_buf();
+        if parent.as_os_str().is_empty() {
+            return path.to_path_buf();
+        }
+        cursor = parent;
     }
 }

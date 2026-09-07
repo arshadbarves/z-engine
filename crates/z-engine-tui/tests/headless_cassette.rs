@@ -144,43 +144,60 @@ async fn replaying_that_cassette_needs_neither_a_server_nor_a_key() {
     );
 
     // Nothing to answer the run but the tape: no key in the environment,
-    // and the recorded host is not listening for it either.
-    let metrics_out = sandbox.vault.path().join("replayed.json");
-    let replayed = Command::new(env!("CARGO_BIN_EXE_zengine"))
-        .args([
-            "--project",
-            &project,
-            "--headless",
-            "say done",
-            "--replay-run",
-            tape.to_str().unwrap(),
-            "--metrics-out",
-            metrics_out.to_str().unwrap(),
-        ])
-        .env("HOME", sandbox.home.path())
-        .env("XDG_DATA_HOME", sandbox.home.path().join("data"))
-        .env("XDG_CONFIG_HOME", sandbox.home.path().join("config"))
-        .env(
-            "ZENGINE_CONFIG",
-            sandbox.home.path().join("config/z-engine/config.toml"),
-        )
-        .env_remove("ZENGINE_API_KEY")
-        .output()
-        .expect("the zengine binary must run");
+    // and the recorded host is not listening for it either. Twice, because
+    // a tape worth keeping is one that can be replayed again.
+    for attempt in 1..=2 {
+        let metrics_out = sandbox
+            .vault
+            .path()
+            .join(format!("replayed-{attempt}.json"));
+        let replayed = Command::new(env!("CARGO_BIN_EXE_zengine"))
+            .args([
+                "--project",
+                &project,
+                "--headless",
+                "say done",
+                "--replay-run",
+                tape.to_str().unwrap(),
+                "--metrics-out",
+                metrics_out.to_str().unwrap(),
+            ])
+            .env("HOME", sandbox.home.path())
+            .env("XDG_DATA_HOME", sandbox.home.path().join("data"))
+            .env("XDG_CONFIG_HOME", sandbox.home.path().join("config"))
+            .env(
+                "ZENGINE_CONFIG",
+                sandbox.home.path().join("config/z-engine/config.toml"),
+            )
+            .env_remove("ZENGINE_API_KEY")
+            .output()
+            .expect("the zengine binary must run");
 
-    assert!(
-        replayed.status.success(),
-        "the replay must reach the same end: {}",
-        String::from_utf8_lossy(&replayed.stderr)
-    );
+        assert!(
+            replayed.status.success(),
+            "replay {attempt} must reach the same end: {}",
+            String::from_utf8_lossy(&replayed.stderr)
+        );
+        assert_eq!(
+            metrics(&metrics_out)["outcome"],
+            serde_json::json!("completed")
+        );
+    }
+
     assert_eq!(
-        metrics(&metrics_out)["outcome"],
-        serde_json::json!("completed")
+        replay_tapes(sandbox.vault.path()),
+        2,
+        "each replay tapes itself beside the cassette it read"
     );
-    assert!(
-        sandbox.vault.path().join("run.replay.jsonl").is_file(),
-        "a replayed run tapes itself beside the cassette it read"
-    );
+}
+
+/// How many tapes a replay has left in `vault`.
+fn replay_tapes(vault: &Path) -> usize {
+    std::fs::read_dir(vault)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_name().to_string_lossy().starts_with("run.replay-"))
+        .count()
 }
 
 #[tokio::test(flavor = "multi_thread")]

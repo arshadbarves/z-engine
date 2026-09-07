@@ -61,8 +61,13 @@ pub fn replaying(tape: &Path) -> Result<Taped> {
     })
 }
 
-/// Where a replay writes its own tape: beside the one it reads, so the two
-/// can be compared without the replay ever overwriting the original.
+/// Where a replay writes its own tape: beside the one it reads, under a
+/// name of its own.
+///
+/// One cassette records exactly one run, so the destination cannot be
+/// derived from the source alone — a tape worth keeping is one that can
+/// be replayed again tomorrow, and a fixed name would refuse the second
+/// attempt.
 fn replay_tape_path(source: &Path) -> PathBuf {
     let stem = source
         .file_stem()
@@ -72,7 +77,8 @@ fn replay_tape_path(source: &Path) -> PathBuf {
         .extension()
         .map(|e| format!(".{}", e.to_string_lossy()))
         .unwrap_or_default();
-    source.with_file_name(format!("{stem}.replay{extension}"))
+    let id = ulid::Ulid::new();
+    source.with_file_name(format!("{stem}.replay-{id}{extension}"))
 }
 
 /// Copy the run's metrics out of its tape as JSON.
@@ -95,14 +101,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_replay_writes_beside_the_tape_it_reads() {
-        assert_eq!(
-            replay_tape_path(Path::new("/tapes/run.jsonl")),
-            PathBuf::from("/tapes/run.replay.jsonl")
+    fn a_replay_writes_beside_the_tape_it_reads_under_a_name_of_its_own() {
+        let first = replay_tape_path(Path::new("/tapes/run.jsonl"));
+        assert_eq!(first.parent(), Some(Path::new("/tapes")));
+        let named = first.file_name().unwrap().to_string_lossy().to_string();
+        assert!(
+            named.starts_with("run.replay-") && named.ends_with(".jsonl"),
+            "{named}"
         );
-        assert_eq!(
-            replay_tape_path(Path::new("/tapes/run")),
-            PathBuf::from("/tapes/run.replay")
+        assert_ne!(
+            first,
+            replay_tape_path(Path::new("/tapes/run.jsonl")),
+            "the same cassette must be replayable twice"
+        );
+        assert!(
+            replay_tape_path(Path::new("/tapes/run"))
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("run.replay-")
         );
     }
 

@@ -62,22 +62,25 @@ fn read(root: &Path, rel: &str) -> String {
 /// without a working provider there is nothing to assert — see
 /// `docs/deviations.md`.
 ///
-/// Set `Z_ENGINE_REQUIRE_SEMANTICS=1` where a provider is expected (a
-/// release check, a CI image that installs rust-analyzer) and the skip
-/// becomes a failure: a baseline that can quietly assert nothing is not a
-/// baseline.
+/// A missing provider fails this baseline rather than skipping it: a test
+/// that can quietly assert nothing is not a baseline, and libtest hides
+/// the notice a skip would print. Hosts that genuinely cannot run
+/// rust-analyzer opt out with `Z_ENGINE_ALLOW_MISSING_SEMANTICS=1`, which
+/// says so out loud in the command that runs the suite.
 async fn semantics_ready(root: &Path) -> bool {
     let ready = match LspClient::probe(root) {
         Some(server) => LspClient::new(root, server).health().await.is_ready(),
         None => false,
     };
-    if !ready && std::env::var("Z_ENGINE_REQUIRE_SEMANTICS").is_ok_and(|v| v != "0") {
-        panic!(
-            "Z_ENGINE_REQUIRE_SEMANTICS is set but no Rust semantic provider \
-             answered for {}: install rust-analyzer or unset the variable",
-            root.display()
-        );
-    }
+    let excused = std::env::var("Z_ENGINE_ALLOW_MISSING_SEMANTICS").is_ok_and(|v| v != "0");
+    assert!(
+        ready || excused,
+        "no Rust semantic provider answered for {}: the guarded slice cannot \
+         be proven here. Install rust-analyzer, or set \
+         Z_ENGINE_ALLOW_MISSING_SEMANTICS=1 to run the suite without this \
+         baseline.",
+        root.display()
+    );
     ready
 }
 
@@ -242,7 +245,7 @@ async fn the_guarded_slice_gates_a_rust_edit_on_evidence_scope_and_a_held_out_te
     let vault = tempfile::tempdir().unwrap();
     plant(repo.path());
     if !semantics_ready(repo.path()).await {
-        eprintln!("no Rust semantic provider on this host; skipping the guarded slice");
+        eprintln!("Z_ENGINE_ALLOW_MISSING_SEMANTICS: skipping the guarded slice");
         return;
     }
     let (events, ..) = record_slice(repo.path(), vault.path()).await;
@@ -313,7 +316,7 @@ async fn the_recorded_slice_replays_to_the_same_verdict_without_a_network() {
     let vault = tempfile::tempdir().unwrap();
     plant(repo.path());
     if !semantics_ready(repo.path()).await {
-        eprintln!("no Rust semantic provider on this host; skipping the guarded slice replay");
+        eprintln!("Z_ENGINE_ALLOW_MISSING_SEMANTICS: skipping the guarded slice replay");
         return;
     }
     let (events, script, base, tape) = record_slice(repo.path(), vault.path()).await;

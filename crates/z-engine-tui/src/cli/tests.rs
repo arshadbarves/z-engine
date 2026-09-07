@@ -128,12 +128,28 @@ fn a_tape_inside_the_project_is_refused() {
 }
 
 #[test]
+fn a_tape_in_a_directory_the_run_would_create_inside_the_project_is_refused() {
+    // The parent does not exist yet, and on macOS the project root is
+    // reached through a symlink: the check has to survive both at once.
+    let project = tempfile::tempdir().unwrap();
+    let parsed = Args {
+        headless_task: Some("go".into()),
+        record_run: Some(project.path().join("tapes/run.jsonl")),
+        ..Args::default()
+    };
+    assert!(
+        parsed.check_tape_paths(project.path()).is_err(),
+        "a tape under a directory the run would create is still inside the project"
+    );
+}
+
+#[test]
 fn a_tape_outside_the_project_is_accepted() {
     let project = tempfile::tempdir().unwrap();
     let vault = tempfile::tempdir().unwrap();
     let parsed = Args {
         headless_task: Some("go".into()),
-        record_run: Some(vault.path().join("run.jsonl")),
+        record_run: Some(vault.path().join("tapes/run.jsonl")),
         metrics_out: Some(vault.path().join("metrics.json")),
         ..Args::default()
     };
