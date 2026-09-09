@@ -152,9 +152,7 @@ pub(crate) fn start_session(
         None => base_root,
     };
     crate::commands::cassette::pick_tape(record_run.as_deref(), replay_run.as_deref())?;
-    if resume_path.is_some() && replay_run.is_some() {
-        return Err("replay starts a fresh session: pass no resume_path with replay_run".into());
-    }
+    crate::commands::cassette::check_resume_replay(resume_path.as_deref(), replay_run.as_deref())?;
     let record_tape: Option<PathBuf> = record_run
         .as_deref()
         .map(|t| crate::commands::cassette::check_tape_outside_project(Path::new(t), &project_root))

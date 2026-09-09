@@ -1,4 +1,5 @@
 import { startSession } from "./commands";
+import { browserGuarded } from "./guardedMode";
 import {
   estimateCompletionTokens,
   estimatePromptTokens,
@@ -36,7 +37,7 @@ export async function hydrateOpenSession(
     transcriptStore.getSnapshot().length > 0 || busyStore.getSnapshot();
   const gen = live ? null : beginHydrate();
   try {
-    const result = await startSession(path, root ?? null);
+    const result = await startSession(path, root ?? null, { guarded: browserGuarded() });
     // After restart (and any sessionChanged race) the parked snap is
     // empty — rebuild from JSONL whenever the transcript is still blank.
     if (transcriptStore.getSnapshot().length === 0 && !busyStore.getSnapshot()) {
@@ -45,7 +46,7 @@ export async function hydrateOpenSession(
     }
   } catch (e) {
     console.error("session replay failed:", e);
-    pushToast(live ? "Could not switch to this chat" : "Could not restore this chat", "warn");
+    pushToast(`${live ? "Could not switch to this chat" : "Could not restore this chat"}: ${String(e)}`, "warn");
   } finally {
     if (gen != null) window.setTimeout(() => endHydrate(gen), 32);
   }
@@ -67,7 +68,7 @@ export async function hydrateNewSession(
     return ulid ? { ulid, path } : null;
   } catch (e) {
     console.error(e);
-    pushToast("Could not start a new chat", "warn");
+    pushToast(`Could not start a new chat: ${String(e)}`, "warn");
     return null;
   } finally {
     window.setTimeout(() => endHydrate(gen), 32);

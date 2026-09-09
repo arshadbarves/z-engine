@@ -1,6 +1,6 @@
 //! GUI run tapes: record a session's provider traffic onto a cassette, or
 //! serve a fresh session from one. Mirrors `z-engine-tui/src/cassette.rs`.
-//! A replayed run never resolves an API key and never touches the network.
+//! A replayed run never uses an API key and never touches the network.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -23,6 +23,16 @@ impl std::fmt::Debug for Taped {
 pub(crate) fn pick_tape(record: Option<&str>, replay: Option<&str>) -> Result<(), String> {
     if record.is_some() && replay.is_some() {
         return Err("--record-run and --replay-run cannot be combined: a run is either served by a provider or by a cassette.".into());
+    }
+    Ok(())
+}
+
+pub(crate) fn check_resume_replay(
+    resume: Option<&str>,
+    replay: Option<&str>,
+) -> Result<(), String> {
+    if resume.is_some() && replay.is_some() {
+        return Err("replay starts a fresh session: pass no resume_path with replay_run".into());
     }
     Ok(())
 }
@@ -127,6 +137,14 @@ mod tests {
     fn record_and_replay_together_are_refused() {
         let err = pick_tape(Some("/tmp/a.jsonl"), Some("/tmp/b.jsonl")).unwrap_err();
         assert!(err.contains("cannot be combined"), "{err}");
+    }
+
+    #[test]
+    fn resume_and_replay_together_are_refused() {
+        let err = check_resume_replay(Some("/tmp/s.jsonl"), Some("/tmp/b.jsonl")).unwrap_err();
+        assert!(err.contains("replay starts a fresh session"), "{err}");
+        assert!(check_resume_replay(Some("/tmp/s.jsonl"), None).is_ok());
+        assert!(check_resume_replay(None, Some("/tmp/b.jsonl")).is_ok());
     }
 
     #[test]
