@@ -7,6 +7,7 @@
     type HarnessConfig,
   } from "$lib/commands";
   import { configStore } from "$lib/configStore";
+  import { browserGuarded, saveBrowserGuarded } from "$lib/guardedMode";
   import { detectProviderId, PROVIDERS } from "$lib/providers";
   import { modelStore, pushToast } from "$lib/runtime";
   import Icon, { Check, ChevronDown, ExternalLink, KeyRound, Sparkles } from "$lib/ui/icons";
@@ -24,6 +25,11 @@
   let hasKey = $state(Boolean(cfg.hasApiKey));
   let hint = $state(cfg.apiKeyHint ?? null);
   let saved = $state(false);
+  let guarded = $state(browserGuarded());
+  function handleGuardedChange(value: boolean) {
+    guarded = value;
+    saveBrowserGuarded(value);
+  }
 
   const activeProvider = $derived(
     PROVIDERS.find((p) => p.id === selectedProviderId) ?? PROVIDERS[0],
@@ -227,6 +233,16 @@
         </div>
         <label class="switch-toggle">
           <input type="checkbox" bind:checked={review} />
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+      <div class="form-row check">
+        <div>
+          <span class="form-label-title">Guarded mode</span>
+          <span class="form-label-desc">Evidence-gated edits for new chats: scoped work orders plus verification before done</span>
+        </div>
+        <label class="switch-toggle">
+          <input type="checkbox" checked={guarded} onchange={(e) => handleGuardedChange(e.currentTarget.checked)} />
           <span class="switch-slider"></span>
         </label>
       </div>

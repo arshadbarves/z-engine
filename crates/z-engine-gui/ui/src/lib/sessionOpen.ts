@@ -53,12 +53,13 @@ export async function hydrateOpenSession(
 
 export async function hydrateNewSession(
   root: string | null,
+  opts?: { guarded?: boolean },
 ): Promise<{ ulid: string; path: string } | null> {
   const gen = beginHydrate();
   parkCurrentAndReset();
   resetUsage();
   try {
-    const result = await startSession(null, root);
+    const result = await startSession(null, root, { guarded: opts?.guarded ?? false });
     const ulid = result?.ulid;
     if (ulid && ulid !== sessionStore.getSnapshot()) activateSession(ulid);
     const path = result?.path ?? "";

@@ -25,8 +25,24 @@ export interface StartSessionResult {
   path?: string | null;
 }
 
-export const startSession = (resumePath: string | null, root?: string | null) =>
-  invoke<StartSessionResult>("start_session", { resumePath, root });
+export interface SessionOpts {
+  guarded?: boolean;
+  recordRun?: string | null;
+  replayRun?: string | null;
+}
+
+export const startSession = (
+  resumePath: string | null,
+  root?: string | null,
+  opts?: SessionOpts,
+) =>
+  invoke<StartSessionResult>("start_session", {
+    resumePath,
+    root,
+    guarded: opts?.guarded ?? false,
+    recordRun: opts?.recordRun ?? null,
+    replayRun: opts?.replayRun ?? null,
+  });
 export const listSessions = () => invoke("list_sessions");
 export const deleteSession = (path: string) => invoke("delete_session", { path });
 

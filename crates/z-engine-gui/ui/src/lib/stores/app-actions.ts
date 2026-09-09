@@ -1,4 +1,5 @@
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
+import { browserGuarded } from "../guardedMode";
 import { handleApprove, handleDeny } from "../approvalDispatch";
 import { createWorktree, deleteSession, listSessions, submit } from "../commands";
 import {
@@ -45,7 +46,7 @@ export async function openSession(
 
 export async function newTask(refresh: () => Promise<void>): Promise<PendingNew> {
   const root = workspaceStore.getSnapshot().active;
-  const created = await hydrateNewSession(root);
+  const created = await hydrateNewSession(root, { guarded: browserGuarded() });
   void refreshCustomCommands();
   void refresh();
   return created?.path
