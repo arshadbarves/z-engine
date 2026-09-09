@@ -112,7 +112,7 @@ fn main() {
             let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             let cfg = Config::load(&CliOverrides::default(), Some(&project_root))
                 .map_err(|e| e.to_string())?;
-            let lc = build_loop_config(&cfg, &project_root);
+            let lc = build_loop_config(&cfg, &project_root, false);
 
             let (handle, ev_rx) = spawn_with_recorder(lc, None, None);
             {

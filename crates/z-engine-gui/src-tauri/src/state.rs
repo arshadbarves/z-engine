@@ -83,6 +83,7 @@ pub(crate) fn resolve_api_key() -> Option<String> {
 pub(crate) fn build_loop_config(
     cfg: &Config,
     project_root: &Path,
+    guarded: bool,
 ) -> z_engine_core::agent::LoopConfig {
     z_engine_core::agent::LoopConfig {
         model: cfg.model.clone(),
@@ -100,8 +101,7 @@ pub(crate) fn build_loop_config(
         mcp_servers: cfg.mcp_servers.clone(),
         auto_allow_tools: vec![],
         initial_mode: z_engine_core::agent::PermissionMode::Normal,
-        // Guarded (evidence-gated) mode is opt-in and not yet exposed here.
-        guarded: false,
+        guarded,
     }
 }
 
@@ -147,4 +147,40 @@ pub(crate) fn save_workspaces(roots: &[PathBuf]) -> Result<(), String> {
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, text).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use z_engine_core::agent::PermissionMode;
+
+    #[test]
+    fn guarded_flag_reaches_loop_config() {
+        let cfg = Config::default();
+        let root = PathBuf::from("/tmp/proj");
+        assert!(build_loop_config(&cfg, &root, true).guarded);
+        assert!(!build_loop_config(&cfg, &root, false).guarded);
+    }
+
+    #[test]
+    fn gui_uses_resolved_guarded_config_without_changing_permissions() {
+        for (text, expected) in [
+            ("", true),
+            ("guarded = false", false),
+            ("guarded = true", true),
+        ] {
+            let cfg = Config::layer(
+                Some(Path::new("config.toml")),
+                Some(text),
+                &Default::default(),
+                &Default::default(),
+            )
+            .unwrap();
+            let loop_cfg = build_loop_config(&cfg, Path::new("."), cfg.guarded);
+            assert_eq!(loop_cfg.guarded, expected, "{text}");
+            assert_eq!(loop_cfg.initial_mode, PermissionMode::Normal);
+            assert!(loop_cfg.auto_allow_tools.is_empty());
+        }
+    }
 }

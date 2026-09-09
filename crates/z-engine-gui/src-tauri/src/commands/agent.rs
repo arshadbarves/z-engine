@@ -120,6 +120,7 @@ pub(crate) fn deny(id: u64, state: tauri::State<'_, GuiState>) -> Result<(), Str
 pub(crate) fn start_session(
     resume_path: Option<String>,
     root: Option<String>,
+    guarded: Option<bool>,
     state: tauri::State<'_, GuiState>,
     app: tauri::AppHandle,
 ) -> Result<StartSessionResult, String> {
@@ -148,7 +149,7 @@ pub(crate) fn start_session(
         None => base_root,
     };
     let cfg = Config::load(&Default::default(), Some(&project_root)).map_err(|e| e.to_string())?;
-    let lc = build_loop_config(&cfg, &project_root);
+    let lc = build_loop_config(&cfg, &project_root, guarded.unwrap_or(false));
 
     let recorder: Option<z_engine_core::session::SessionWriter>;
     let recorder_path: Option<PathBuf>;
