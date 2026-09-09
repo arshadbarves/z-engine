@@ -4,9 +4,10 @@ use crate::session_store::{
 };
 use crate::state::{GuiState, build_loop_config};
 use serde_json::json;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tauri::{Emitter, Manager};
-use z_engine_core::agent::spawn_with_recorder;
+use z_engine_core::agent::{spawn_with_recorder, spawn_with_run_recorder};
 use z_engine_core::config::Config;
 
 #[tauri::command]
@@ -121,6 +122,8 @@ pub(crate) fn start_session(
     resume_path: Option<String>,
     root: Option<String>,
     guarded: Option<bool>,
+    record_run: Option<String>,
+    replay_run: Option<String>,
     state: tauri::State<'_, GuiState>,
     app: tauri::AppHandle,
 ) -> Result<StartSessionResult, String> {
@@ -148,8 +151,33 @@ pub(crate) fn start_session(
         }
         None => base_root,
     };
+    crate::commands::cassette::pick_tape(record_run.as_deref(), replay_run.as_deref())?;
+    if resume_path.is_some() && replay_run.is_some() {
+        return Err("replay starts a fresh session: pass no resume_path with replay_run".into());
+    }
+    let record_tape: Option<PathBuf> = record_run
+        .as_deref()
+        .map(|t| crate::commands::cassette::check_tape_outside_project(Path::new(t), &project_root))
+        .transpose()?;
+    let replay_tape: Option<PathBuf> = replay_run
+        .as_deref()
+        .map(|t| crate::commands::cassette::check_tape_outside_project(Path::new(t), &project_root))
+        .transpose()?;
     let cfg = Config::load(&Default::default(), Some(&project_root)).map_err(|e| e.to_string())?;
-    let lc = build_loop_config(&cfg, &project_root, guarded.unwrap_or(false));
+    let mut lc = build_loop_config(&cfg, &project_root, guarded.unwrap_or(false));
+    let taped = match (&record_tape, &replay_tape) {
+        (Some(path), None) => Some(crate::commands::cassette::recording(
+            path,
+            &lc.base_url,
+            lc.api_key.clone(),
+        )?),
+        (None, Some(path)) => {
+            lc.api_key = None;
+            Some(crate::commands::cassette::replaying(path)?)
+        }
+        (None, None) => None,
+        _ => unreachable!("pick_tape refused record+replay above"),
+    };
 
     let recorder: Option<z_engine_core::session::SessionWriter>;
     let recorder_path: Option<PathBuf>;
@@ -214,7 +242,16 @@ pub(crate) fn start_session(
         .and_then(|p| p.file_stem().map(|s| s.to_string_lossy().into_owned()))
         .unwrap_or_default();
 
-    let (_handle, ev_rx) = spawn_with_recorder(lc, resume_state, recorder);
+    let (_handle, ev_rx) = match &taped {
+        Some(taped) => spawn_with_run_recorder(
+            lc,
+            Arc::clone(&taped.provider),
+            resume_state,
+            recorder,
+            Some(Arc::clone(&taped.recorder)),
+        ),
+        None => spawn_with_recorder(lc, resume_state, recorder),
+    };
     state.insert_loop(ulid.clone(), _handle)?;
     let _ = state.shutdown_one("boot");
 

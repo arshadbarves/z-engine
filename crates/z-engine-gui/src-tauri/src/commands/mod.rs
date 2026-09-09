@@ -1,4 +1,5 @@
 pub(crate) mod agent;
+pub(crate) mod cassette;
 pub(crate) mod misc;
 pub(crate) mod settings;
 pub(crate) mod update;
