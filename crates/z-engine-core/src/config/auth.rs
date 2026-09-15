@@ -5,6 +5,18 @@ use super::paths::{auth_path, ensure_global_config};
 use super::types::EnvVars;
 
 pub const OPENROUTER: &str = "openrouter";
+/// OpenCode Zen gateway (`https://opencode.ai/zen/v1`).
+pub const OPENCODE: &str = "opencode";
+
+/// Map a configured `base_url` to the `auth.json` provider bucket.
+pub fn provider_id_for_base_url(base_url: &str) -> &'static str {
+    let base = base_url.to_ascii_lowercase();
+    if base.contains("opencode.ai") {
+        OPENCODE
+    } else {
+        OPENROUTER
+    }
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct AuthEntry {
@@ -58,6 +70,26 @@ pub fn openrouter_key(env: &EnvVars) -> Option<String> {
     provider_key(env, OPENROUTER)
 }
 
+pub fn opencode_key(env: &EnvVars) -> Option<String> {
+    provider_key(env, OPENCODE)
+}
+
+pub fn key_status_for_base_url(env: &EnvVars, base_url: &str) -> KeyStatus {
+    key_status(env, provider_id_for_base_url(base_url))
+}
+
+pub fn current_key_status_for_base_url(base_url: &str) -> KeyStatus {
+    key_status_for_base_url(&EnvVars::from_process_env(), base_url)
+}
+
+pub fn set_key_for_base_url(
+    env: &EnvVars,
+    base_url: &str,
+    key: Option<&str>,
+) -> std::io::Result<()> {
+    set_provider_key(env, provider_id_for_base_url(base_url), key)
+}
+
 pub fn set_provider_key(env: &EnvVars, provider: &str, key: Option<&str>) -> std::io::Result<()> {
     let _ = ensure_global_config(env);
     let mut file = load(env);
@@ -80,6 +112,14 @@ pub fn set_provider_key(env: &EnvVars, provider: &str, key: Option<&str>) -> std
 
 pub fn set_openrouter_key(env: &EnvVars, key: Option<&str>) -> std::io::Result<()> {
     set_provider_key(env, OPENROUTER, key)
+}
+
+pub fn set_opencode_key(env: &EnvVars, key: Option<&str>) -> std::io::Result<()> {
+    set_provider_key(env, OPENCODE, key)
+}
+
+pub fn set_current_key_for_base_url(base_url: &str, key: Option<&str>) -> std::io::Result<()> {
+    set_key_for_base_url(&EnvVars::from_process_env(), base_url, key)
 }
 
 fn hint_for(key: &str) -> String {
@@ -124,6 +164,18 @@ mod tests {
             harness_config: Some(dir.join("config.toml").to_string_lossy().into_owned()),
             harness_shell: None,
         }
+    }
+
+    #[test]
+    fn provider_id_for_base_url_routes_zen() {
+        assert_eq!(
+            provider_id_for_base_url("https://opencode.ai/zen/v1"),
+            OPENCODE
+        );
+        assert_eq!(
+            provider_id_for_base_url("https://openrouter.ai/api/v1"),
+            OPENROUTER
+        );
     }
 
     #[test]

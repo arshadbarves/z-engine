@@ -18,6 +18,7 @@ import {
   syncWorking,
 } from "./state";
 import { resetTranscript, setBusy, submitLocal } from "./mutations";
+import { markTaskReportsPending } from "./taskReportRefresh";
 
 function parked() {
   return parkedEntries();
@@ -34,6 +35,7 @@ export function activateSession(ulid: string) {
   const parkedSnap = takeSnap(ulid);
   rt.sessionId = ulid;
   loadSnap(parkedSnap ?? emptySnap(rt.usage.maxTokens));
+  if (parkedSnap) markTaskReportsPending();
   emitSession();
   emitChange(parked());
   emitQueue();
@@ -77,13 +79,20 @@ export function applyToParked(
   rt.emitPaused = true;
   const saved = snapshot();
   const savedId = rt.sessionId;
+  const savedLock = rt.hydrateLock;
   loadSnap(getSnap(sid) ?? emptySnap(rt.usage.maxTokens));
   rt.sessionId = sid;
-  dispatch(ev);
-  parkSnap(sid, snapshot());
-  rt.sessionId = savedId;
-  loadSnap(saved);
-  rt.emitPaused = false;
+  // A visible session's hydration must not discard another session's evidence.
+  rt.hydrateLock = false;
+  try {
+    dispatch(ev);
+    parkSnap(sid, snapshot());
+  } finally {
+    rt.sessionId = savedId;
+    loadSnap(saved);
+    rt.hydrateLock = savedLock;
+    rt.emitPaused = false;
+  }
   syncWorking(parked());
 }
 

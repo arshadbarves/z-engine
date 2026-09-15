@@ -11,7 +11,6 @@
     MessageSquare,
     Search,
     Sparkles,
-    Terminal,
     User,
     Wrench,
     X,

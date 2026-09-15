@@ -12,6 +12,17 @@ export interface ProviderPreset {
 
 export const PROVIDERS: ProviderPreset[] = [
   {
+    id: "opencode",
+    name: "OpenCode Zen",
+    baseUrl: "https://opencode.ai/zen/v1",
+    defaultModel: "deepseek-v4-flash-free",
+    keyUrl: "https://opencode.ai/zen",
+    keyPlaceholder: "Zen API key from opencode.ai/zen",
+    desc: "OpenCode’s curated gateway. Free chat/completions models work without a key; a Zen key is only needed for paid models.",
+    tag: "API key",
+    color: "#0ea5e9",
+  },
+  {
     id: "openrouter",
     name: "OpenRouter",
     baseUrl: "https://openrouter.ai/api/v1",
@@ -112,6 +123,7 @@ export const PROVIDERS: ProviderPreset[] = [
 
 export function detectProviderId(baseUrl: string | null | undefined): string {
   const url = (baseUrl ?? "").trim().toLowerCase();
+  if (url.includes("opencode.ai")) return "opencode";
   if (!url || url.includes("openrouter.ai")) return "openrouter";
   if (url.includes("openai.com")) return "openai";
   if (url.includes("anthropic.com")) return "anthropic";

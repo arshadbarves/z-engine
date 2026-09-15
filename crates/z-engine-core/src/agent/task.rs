@@ -1,9 +1,7 @@
 //! The background agent task: startup wiring (MCP, LSP, notes, hooks) and
 //! the idle command loop that dispatches single turns.
 
-use std::collections::BTreeMap;
-use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -15,23 +13,23 @@ use crate::context::{
     notes::{NotesInput, NotesStore},
 };
 use crate::perms::PolicyEngine;
-use crate::session::{SessionEvent, SessionWriter};
+use crate::session::SessionWriter;
 use crate::tools::{CheckpointStore, ToolCtx, ToolRegistry};
 
 use super::LoopConfig;
 use super::events::{Command, Event};
 use super::handle::ResumeState;
+use super::hooks::{run_hook, run_shell_passthrough};
 use super::prompt_inspect::PromptInspect;
 use super::revert::{revert_last_turn, revert_to_turn, trim_working_before_user_turn};
-use super::side_requests::generate_session_title;
 use super::state::LoopState;
 use super::system_prompt::l0_message;
-use super::turn::{TurnOutcome, run_turn};
+use super::{submission, task_completion};
 
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn agent_task(
     mut cfg: LoopConfig,
-    client: Client,
+    mut client: Client,
     perms: Arc<Mutex<PolicyEngine>>,
     registry: ToolRegistry,
     mut cmd_rx: UnboundedReceiver<Command>,
@@ -59,6 +57,18 @@ pub(super) async fn agent_task(
             }
             Ok(()) => {
                 for info in conn.list_tools().await {
+                    if registry.get(&info.name).is_some()
+                        || matches!(
+                            info.name.as_str(),
+                            "go_to_definition" | "find_references" | "lsp_diagnostics"
+                        )
+                    {
+                        let _ = ev_tx.send(Event::StatusNote(format!(
+                            "MCP tool '{}' was not registered because its name is already reserved",
+                            info.name
+                        )));
+                        continue;
+                    }
                     let tool = crate::mcp::tool_adapter::McpTool {
                         conn: Arc::new(conn.clone()),
                         info,
@@ -85,6 +95,10 @@ pub(super) async fn agent_task(
     )
     .with_task_runner(runner);
     ctx.checkpoints = checkpoints;
+    ctx.abort = Arc::clone(&abort_flag);
+    ctx.evidence_dir = recorder
+        .as_ref()
+        .map(|writer| writer.path.with_extension("artifacts"));
     ctx.output_tx = Arc::new(output_tx);
     ctx.notes = Arc::clone(&notes);
 
@@ -165,41 +179,7 @@ pub(super) async fn agent_task(
                 text: user_text,
                 images,
             } => {
-                state.current_task = user_text.clone();
-                ctx.begin_checkpoint_turn();
-                if let Some(w) = recorder.as_mut() {
-                    let _ = w.record(&SessionEvent::UserMsg {
-                        text: user_text.clone(),
-                        images: images.clone(),
-                    });
-                }
-                if !titled {
-                    titled = true;
-                    let client = client.clone();
-                    let model = cfg.model.clone();
-                    let prompt = user_text.clone();
-                    let ev_tx2 = ev_tx.clone();
-                    let path = recorder.as_ref().map(|w| w.path.clone());
-                    tokio::spawn(async move {
-                        let title = generate_session_title(&client, &model, &prompt)
-                            .await
-                            .unwrap_or_else(|| crate::session::fallback_title(&prompt));
-                        if let Some(path) = path {
-                            if let Ok(mut w) = SessionWriter::append_to(&path) {
-                                let _ = w.record(&SessionEvent::Title {
-                                    text: title.clone(),
-                                });
-                            }
-                        }
-                        let _ = ev_tx2.send(Event::SessionTitle { text: title });
-                    });
-                }
-                state
-                    .working
-                    .push(ChatMessage::user_with_images(&user_text, &images));
-                let _ = ev_tx.send(Event::TurnStarted);
-
-                let outcome = run_turn(
+                submission::submit(
                     &cfg,
                     &client,
                     &registry,
@@ -211,35 +191,11 @@ pub(super) async fn agent_task(
                     &meter,
                     &notes,
                     &mut recorder,
+                    &mut titled,
+                    user_text,
+                    images,
                 )
                 .await;
-
-                match outcome {
-                    TurnOutcome::Completed => {
-                        if let Some(w) = recorder.as_mut() {
-                            let _ = w.record(&SessionEvent::TurnEnd {
-                                outcome: "completed".into(),
-                            });
-                        }
-                        let _ = ev_tx.send(Event::TurnCompleted {
-                            prompt_tokens: state.last_usage.prompt_tokens,
-                            completion_tokens: state.last_usage.completion_tokens,
-                        });
-                        run_hook(&cfg.hooks, "turn_completed", &cfg.project_root, &ev_tx).await;
-                    }
-                    TurnOutcome::Aborted => {
-                        abort_flag.store(false, Ordering::Relaxed);
-                        if let Some(w) = recorder.as_mut() {
-                            let _ = w.record(&SessionEvent::TurnEnd {
-                                outcome: "aborted".into(),
-                            });
-                        }
-                        let _ = ev_tx.send(Event::TurnAborted);
-                    }
-                    TurnOutcome::Failed(msg) => {
-                        let _ = ev_tx.send(Event::Error(msg));
-                    }
-                }
             }
             Command::SetMode(m) => {
                 cfg.initial_mode = m;
@@ -254,6 +210,19 @@ pub(super) async fn agent_task(
                 cfg.api_key = key;
                 let _ = ev_tx.send(Event::StatusNote("api key updated".into()));
             }
+            Command::SetProvider { base_url, api_key } => {
+                match Client::new(&base_url, api_key.clone()) {
+                    Ok(next) => {
+                        client = next;
+                        cfg.base_url = base_url;
+                        cfg.api_key = api_key;
+                        let _ = ev_tx.send(Event::StatusNote("provider updated".into()));
+                    }
+                    Err(error) => {
+                        let _ = ev_tx.send(Event::Error(error.to_string()));
+                    }
+                }
+            }
             Command::SetReasoningEffort(effort) => {
                 state.reasoning_effort = effort.clone();
                 let note = match effort {
@@ -263,7 +232,15 @@ pub(super) async fn agent_task(
                 let _ = ev_tx.send(Event::StatusNote(note));
             }
             Command::Shell(cmd) => match registry.get("bash") {
-                Some(bash) => run_shell_passthrough(&cmd, bash, &ctx, &ev_tx).await,
+                Some(bash) => {
+                    if let Err(error) =
+                        task_completion::invalidate_and_publish(&ctx, &mut recorder, &ev_tx)
+                    {
+                        let _ = ev_tx.send(Event::Error(error.to_string()));
+                        continue;
+                    }
+                    run_shell_passthrough(&cmd, bash, &ctx, &ev_tx).await;
+                }
                 None => {
                     let _ = ev_tx.send(Event::StatusNote("shell unavailable".into()));
                 }
@@ -279,9 +256,25 @@ pub(super) async fn agent_task(
                 ));
             }
             Command::RevertLastTurn => {
+                if let Err(error) =
+                    task_completion::invalidate_and_publish(&ctx, &mut recorder, &ev_tx)
+                {
+                    let _ = ev_tx.send(Event::Error(error.to_string()));
+                    continue;
+                }
                 revert_last_turn(&ctx, &cfg.project_root, &ev_tx);
             }
             Command::RevertToTurn(keep) => {
+                if keep == 0 {
+                    if let Ok(mut task_guard) = ctx.task.lock() {
+                        *task_guard = None;
+                    }
+                } else if let Err(error) =
+                    task_completion::invalidate_and_publish(&ctx, &mut recorder, &ev_tx)
+                {
+                    let _ = ev_tx.send(Event::Error(error.to_string()));
+                    continue;
+                }
                 revert_to_turn(&ctx, &cfg.project_root, keep, &ev_tx);
                 trim_working_before_user_turn(&mut state.working, keep);
                 if let Some(w) = recorder.as_mut() {
@@ -297,74 +290,6 @@ pub(super) async fn agent_task(
         }
     }
     tracing::debug!("agent task exiting");
-}
-
-/// Run a lifecycle hook (`[hooks]` in config.toml) with a hard timeout.
-/// stdout becomes a status note; failures are reported but never fatal.
-async fn run_hook(
-    hooks: &BTreeMap<String, String>,
-    event: &str,
-    root: &Path,
-    ev_tx: &UnboundedSender<Event>,
-) {
-    let Some(cmd) = hooks.get(event) else {
-        return;
-    };
-    let output = tokio::time::timeout(
-        std::time::Duration::from_secs(15),
-        crate::tools::shell_line(cmd)
-            .current_dir(root)
-            .env("ZENGINE_EVENT", event)
-            .env("HARNESS_EVENT", event)
-            .env("ZENGINE_PROJECT_ROOT", root)
-            .env("HARNESS_PROJECT_ROOT", root)
-            .output(),
-    )
-    .await;
-    match output {
-        Ok(Ok(out)) if out.status.success() => {
-            let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if !text.is_empty() {
-                let _ = ev_tx.send(Event::StatusNote(format!("[hook:{event}] {text}")));
-            }
-        }
-        Ok(Ok(out)) => {
-            let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
-            let _ = ev_tx.send(Event::StatusNote(format!(
-                "[hook:{event}] failed (exit {}): {}",
-                out.status,
-                err.chars().take(160).collect::<String>()
-            )));
-        }
-        Ok(Err(e)) => {
-            tracing::warn!(event, error = %e, "hook spawn failed");
-        }
-        Err(_) => {
-            let _ = ev_tx.send(Event::StatusNote(format!(
-                "[hook:{event}] timed out after 15s"
-            )));
-        }
-    }
-}
-
-/// `!<cmd>` passthrough: run locally through the bash tool so output is
-/// truncated/spilled consistently; never touches the model.
-async fn run_shell_passthrough(
-    cmd: &str,
-    bash: Arc<dyn crate::tools::Tool>,
-    ctx: &ToolCtx,
-    ev_tx: &UnboundedSender<Event>,
-) {
-    use serde_json::json;
-    let input = json!({"command": cmd.to_string()});
-    let out = bash.run(input, ctx).await;
-    let text = match out {
-        Ok(o) => o.result,
-        Err(e) => format!("ERROR: {e}"),
-    };
-    for line in text.lines().take(40) {
-        let _ = ev_tx.send(Event::StatusNote(format!("$ {line}")));
-    }
 }
 
 /// Wait for a meaningful action; channel close / Shutdown ends the task.

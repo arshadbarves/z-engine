@@ -9,6 +9,9 @@ authors.workspace = true
 
 [dependencies]
 z-engine-provider = { path = "../z-engine-provider" }
+z-engine-runtime = { path = "../z-engine-runtime" }
+z-engine-context = { path = "../z-engine-context" }
+z-engine-project = { path = "../z-engine-project" }
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -27,6 +30,7 @@ similar.workspace = true
 strsim.workspace = true
 tree-sitter.workspace = true
 tree-sitter-rust.workspace = true
+sha2.workspace = true
 
 [dev-dependencies]
 axum.workspace = true

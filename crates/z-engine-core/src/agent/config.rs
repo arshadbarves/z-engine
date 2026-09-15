@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use crate::context::compact;
 
-/// Everything the loop needs; built once at startup (headless or TUI).
+/// Everything the GUI-owned agent session needs; captured at session startup.
 #[derive(Debug, Clone)]
 pub struct LoopConfig {
     pub model: String,
@@ -27,6 +27,8 @@ pub struct LoopConfig {
     pub keep_recent_messages: usize,
     /// Run the post-edit reviewer pass (spec section 9 v0.9).
     pub review_enabled: bool,
+    /// Maximum automatic continuations after an incomplete response (0 disables).
+    pub max_task_continuations: u32,
     /// External MCP stdio servers to register at startup (v0.9).
     pub mcp_servers: Vec<crate::mcp::McpServerConfig>,
     /// Tools auto-allowed without gating (e.g. trusted MCP externals).
@@ -52,6 +54,7 @@ impl LoopConfig {
             compact_at_percent: 92,
             keep_recent_messages: compact::DEFAULT_KEEP_RECENT,
             review_enabled: true,
+            max_task_continuations: 3,
             mcp_servers: Vec::new(),
             auto_allow_tools: Vec::new(),
             initial_mode: crate::agent::events::PermissionMode::Normal,

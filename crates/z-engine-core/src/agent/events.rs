@@ -1,8 +1,7 @@
 //! Typed messages crossing the core↔UI boundary.
 //!
-//! Core→TUI [`Event`]s arrive over an unbounded channel; TUI→core
-//! [`Command`]s flow the other way (spec §3). These types are the *only*
-//! coupling between the two worlds.
+//! Core-to-GUI [`Event`]s arrive over a channel; [`Command`]s flow the
+//! other way. The runtime remains independent of the desktop framework.
 
 /// Interaction permission mode (Claude Code parity).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
@@ -53,6 +52,11 @@ pub enum Command {
     SetModel(String),
     /// Settings: replace the OpenRouter API key on the live client.
     SetApiKey(Option<String>),
+    /// Settings: hot-switch the OpenAI-compatible gateway and matching key.
+    SetProvider {
+        base_url: String,
+        api_key: Option<String>,
+    },
     /// Per-session reasoning effort (`low|medium|high|xhigh`); `None` clears
     /// it so non-reasoning models never receive the parameter.
     SetReasoningEffort(Option<String>),
@@ -116,6 +120,10 @@ pub enum Event {
         completion_tokens: u64,
     },
     TurnAborted,
+    /// Authoritative task projection, emitted after durable recording.
+    TaskUpdated {
+        report: crate::verification::TaskReport,
+    },
     Error(String),
     /// Per-message revert: drop the user turn at `keep_turn` and everything
     /// after it from the in-memory transcript. `keep_turn` is the 0-based
@@ -182,6 +190,7 @@ impl serde::Serialize for Event {
                 "promptTokens": prompt_tokens, "completionTokens": completion_tokens
             }),
             Event::TurnAborted => json!({"type": "turnAborted"}),
+            Event::TaskUpdated { report } => json!({"type": "taskUpdated", "report": report}),
             Event::Error(m) => json!({"type": "error", "message": m}),
             Event::TranscriptTrimmed { keep_turn } => {
                 json!({"type": "transcriptTrimmed", "keepTurn": keep_turn})

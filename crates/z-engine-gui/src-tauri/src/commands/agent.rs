@@ -1,6 +1,7 @@
 use crate::event_bridge::forward_events;
 use crate::session_store::{
-    StartSessionResult, ack_session_file, contain_session, session_events_json, sessions_dir,
+    StartSessionResult, ack_session_file, contain_session, persist_restart_interruptions,
+    session_events_json, sessions_dir,
 };
 use crate::state::{GuiState, build_loop_config};
 use serde_json::json;
@@ -147,7 +148,7 @@ pub(crate) fn start_session(
         }
         None => base_root,
     };
-    let cfg = Config::load(&Default::default(), Some(&project_root)).map_err(|e| e.to_string())?;
+    let cfg = Config::load(Some(&project_root)).map_err(|e| e.to_string())?;
     let lc = build_loop_config(&cfg, &project_root);
 
     let recorder: Option<z_engine_core::session::SessionWriter>;
@@ -163,8 +164,12 @@ pub(crate) fn start_session(
                 .unwrap_or_default();
             let events =
                 z_engine_core::session::read_events(&contained).map_err(|e| e.to_string())?;
-            ui_events = session_events_json(&events);
-            if !ulid.is_empty() && state.has_loop(&ulid)? {
+            let already_live = !ulid.is_empty() && state.has_loop(&ulid)?;
+            if !already_live {
+                persist_restart_interruptions(&events, &contained)?;
+            }
+            ui_events = session_events_json(&events, already_live)?;
+            if already_live {
                 state.set_active(ulid.clone())?;
                 ack_session_file(&contained);
                 if root.is_some() {

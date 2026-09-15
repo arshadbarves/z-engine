@@ -6,24 +6,25 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Instant;
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use z_engine_provider::ToolCall;
 
 use crate::perms::{Decision, PolicyEngine};
-use crate::tools::{ToolCtx, ToolError, ToolOutput, ToolRegistry};
+use crate::session::SessionWriter;
+use crate::tools::{ToolCtx, ToolRegistry};
 
 use super::events::{Command, Event};
 use super::state::LoopState;
 
-const INPUT_PREVIEW_CHARS: usize = 160;
+use super::tool_execution::{input_preview, run_one};
 
 pub(super) enum ExecutionsOutcome {
     /// `(tool_call_id, transcript content)` in original call order.
     Ran(Vec<(String, String)>),
     Aborted,
+    Failed(String),
 }
 
 enum Verdict {
@@ -41,6 +42,7 @@ pub(super) async fn execute_calls(
     state: &mut LoopState,
     abort_flag: &Arc<AtomicBool>,
     mode: &crate::agent::events::PermissionMode,
+    recorder: &mut Option<SessionWriter>,
 ) -> ExecutionsOutcome {
     // Phase 1 â decide every call up front (approvals surface sequentially).
     let mut verdicts: Vec<Verdict> = Vec::with_capacity(calls.len());
@@ -55,7 +57,7 @@ pub(super) async fn execute_calls(
         // Mode enforcement precedes everything else.
         let mutating = matches!(
             call.function.name.as_str(),
-            "bash" | "write_file" | "edit_file"
+            "bash" | "write_file" | "edit_file" | "run_verification"
         );
         if *mode == crate::agent::events::PermissionMode::Plan && mutating {
             let _ = ev_tx.send(Event::StatusNote(format!(
@@ -166,6 +168,23 @@ pub(super) async fn execute_calls(
         });
     }
 
+    for (call, verdict) in calls.iter().zip(&verdicts) {
+        let result = match verdict {
+            Verdict::Run => super::operation_tracking::before_call(
+                &call.function.name,
+                &parse_input(&call.function.arguments),
+                ctx,
+            ),
+            Verdict::Denied => super::operation_tracking::denied(&call.function.name, ctx),
+        };
+        if let Err(error) = result {
+            return ExecutionsOutcome::Failed(error.to_string());
+        }
+    }
+    if let Err(error) = super::task_completion::publish(ctx, recorder, ev_tx) {
+        return ExecutionsOutcome::Failed(error.to_string());
+    }
+
     // Phase 2 â run: concurrency-safe tools together, unsafe ones serially.
     let mut outcomes: HashMap<usize, String> = HashMap::new();
     let mut safe_batch: Vec<(usize, ToolCall)> = Vec::new();
@@ -241,7 +260,12 @@ async fn wait_for_approval(
                 return ApprovalResolution::Granted(decision);
             }
             Some(Command::Deny { id: got }) if got == id => return ApprovalResolution::Denied,
-            Some(Command::Abort) | Some(Command::Shutdown) => {
+            Some(Command::Abort) => {
+                abort_flag.store(true, Ordering::Relaxed);
+                return ApprovalResolution::AbortTurn;
+            }
+            Some(Command::Shutdown) => {
+                cmd_rx.close();
                 abort_flag.store(true, Ordering::Relaxed);
                 return ApprovalResolution::AbortTurn;
             }
@@ -252,74 +276,4 @@ async fn wait_for_approval(
 
 pub(super) fn parse_input(arguments: &str) -> serde_json::Value {
     serde_json::from_str(arguments).unwrap_or(serde_json::Value::Null)
-}
-
-/// Execute one allowed/approved call: events + timing + error mapping.
-/// Errors become `"ERROR: â¦"` transcript text (self-correction path).
-async fn run_one(
-    call: ToolCall,
-    ctx: &ToolCtx,
-    registry: &ToolRegistry,
-    ev_tx: &UnboundedSender<Event>,
-) -> String {
-    let started = Instant::now();
-    let input = parse_input(&call.function.arguments);
-    let preview = input_preview(&input);
-    let name = call.function.name.clone();
-    let _ = ev_tx.send(Event::ToolCallStarted {
-        name: name.clone(),
-        preview,
-    });
-
-    if ctx.aborted() {
-        return "[aborted]".to_string();
-    }
-    let input_hook = input.clone();
-
-    let result: Result<ToolOutput, ToolError> = match registry.get(&name) {
-        Some(tool) => tool.run(input, ctx).await,
-        None => Err(ToolError::Failed(format!("unknown tool: {name}"))),
-    };
-
-    let duration_ms = started.elapsed().as_millis() as u64;
-    let mut out = match result {
-        Ok(out) => out,
-        Err(e) => {
-            let _ = ev_tx.send(Event::ToolCallFinished {
-                name,
-                ok: false,
-                duration_ms,
-                summary: e.to_string(),
-            });
-            return format!("ERROR: {e}");
-        }
-    };
-
-    // Diagnostics-after-edit hook: rust-analyzer feedback lands inside the
-    // same tool-result so the model fixes errors immediately (spec 9 v0.8).
-    crate::tools::lsp_tools::maybe_attach_diagnostics(
-        &name,
-        out.ok,
-        &input_hook,
-        ctx,
-        &mut out.result,
-    )
-    .await;
-
-    let _ = ev_tx.send(Event::ToolCallFinished {
-        name,
-        ok: out.ok,
-        duration_ms,
-        summary: out.summary,
-    });
-    out.result
-}
-
-fn input_preview(input: &serde_json::Value) -> String {
-    let s = serde_json::to_string(input).unwrap_or_else(|_| "<unserializable>".into());
-    let mut s: String = s.chars().take(INPUT_PREVIEW_CHARS).collect();
-    if s.chars().count() == INPUT_PREVIEW_CHARS {
-        s.push('\u{2026}');
-    }
-    s
 }

@@ -5,6 +5,18 @@ modifying this codebase MUST maintain the structure defined below.** The
 structure exists so every file stays small, single-purpose, and easy to
 navigate. Violations are review-blocking.
 
+Companion conventions: [Engineering & Coding Style Guide](docs/engineering/style-guide.md).
+The [supervised harness](docs/architecture/supervised-harness.md) describes the
+current bounded implementation and its limits.
+The [GUI-first architecture](docs/architecture/agent-harness.md) and
+[vertical-slice roadmap](docs/roadmap/agent-harness.md) describe staged future
+work; they do not change the current layout below. Update this contract in the
+same implementation slice as any crate or frontend migration.
+
+The desktop GUI is the only product frontend. Do not add a terminal or
+headless replacement. The agent's shell tool and private integration-test
+fixtures remain supported; neither is a public command-line product.
+
 ## Golden rules
 
 1. **File budget:** target ≤300 lines; hard cap 400. When a file would
@@ -18,19 +30,20 @@ navigate. Violations are review-blocking.
    `src/prompts.rs`. Never inline prompt text inside logic files.
 5. **Dependency direction (DIP):**
    ```
-   z-engine-provider   ←  transport only (HTTP/SSE/types), no agent logic
-        ↑
-   z-engine-core       ←  brain: agent loop, tools, perms, context,
-        ↑                session, config, prompts. NO UI dependencies.
-        ↑
-   z-engine-tui  /  z-engine-gui   ←  frontends; may import core, never
-                                    the reverse
+   z-engine-gui -> z-engine-core
+   z-engine-core -> z-engine-provider  # model transport only
+                 -> z-engine-runtime   # pure bounded supervisor contracts
+                 -> z-engine-context   # provider-independent context packets
+                 -> z-engine-project   # read-only project discovery
    ```
-   Core must not depend on TUI/GUI; provider must not depend on core.
+   Core must not depend on GUI. Provider, runtime, context, and project must
+   not depend on core or GUI. Runtime and context perform no model,
+   filesystem, or process I/O; project discovery reads bounded filesystem
+   inputs but never executes suggested checks.
    Cross-layer calls go through traits/re-exported types, never
    concrete internals.
-6. **Errors:** libraries (`-core`, `-provider`) use typed
-   `thiserror` enums. Application shells (tui/gui) may use `anyhow`.
+6. **Errors:** libraries (`-core`, `-provider`, `-runtime`, `-context`, `-project`) use typed
+   `thiserror` enums. The GUI application shell may use `anyhow`.
 7. **Tests live next to what they test** (`#[cfg(test)] mod tests`) or
    in `tests/` for integration flows. One concern per integration file.
 
@@ -42,11 +55,25 @@ crates/
 │   ├── src/lib.rs             #   re-exports only
 │   ├── src/{types,client,sse,accumulate}.rs
 │   └── tests/fixtures/sse/    #   recorded SSE streams as fixtures
+├── z-engine-runtime/          # pure bounded task supervision contracts
+│   ├── src/lib.rs             #   re-exports only
+│   └── src/{supervisor,types}.rs
+├── z-engine-context/          # bounded packets; no provider or filesystem I/O
+│   ├── src/lib.rs             #   re-exports only
+│   ├── src/{builder,packet,report,notes,error}.rs
+│   └── tests/                #   budgets, evidence boundaries, supervision data
+├── z-engine-project/          # bounded, read-only language-neutral discovery
+│   ├── src/lib.rs             #   re-exports only
+│   ├── src/{discovery,traversal,filesystem,markers,options,types,error}.rs
+│   ├── src/parsers/           #   manifest-specific discovery; no check execution
+│   └── tests/                #   profiles, malformed input, bounds, containment
 ├── z-engine-core/
 │   ├── prompts/               # ✏️ EDIT PROMPTS HERE (plain markdown)
 │   │   ├── system-main.md     #   L0 operating instructions
 │   │   ├── reviewer.md        #   post-edit reviewer persona
 │   │   ├── summarizer.md      #   compaction summarizer
+│   │   ├── task-supervision.md #  bounded continuation guidance
+│   │   ├── context-packet.md  #   task data provenance and retention
 │   │   ├── subagent.md        #   research sub-agent persona
 │   │   └── session-title.md   #   sidebar session title
 │   └── src/
@@ -58,12 +85,17 @@ crates/
 │       │   ├── handle.rs      # AgentHandle lifecycle/spawn
 │       │   ├── task.rs        # command loop, MCP/LSP wiring
 │       │   ├── turn.rs        # single-turn pipeline
+│       │   ├── request.rs     # grounded request assembly
+│       │   ├── supervision.rs # bounded response-boundary adapter
+│       │   ├── task_completion.rs # durable completion gate
 │       │   ├── execute.rs     # tool execution + approval gating
 │       │   ├── stream.rs      # stream consumption
 │       │   ├── state.rs       # LoopState
 │       │   ├── revert.rs      # rewind handlers
 │       │   ├── subagent.rs    # isolated research loops
-│       │   ├── side_requests.rs # review + summarize calls
+│       │   ├── auxiliary.rs   # bounded, cancellable text collection
+│       │   ├── side_requests.rs # summary + title requests
+│       │   ├── review.rs      # advisory reviewer outcomes
 │       │   ├── system_prompt.rs # L0 assembly (uses crate::prompts)
 │       │   └── events.rs      # Event/Command enums (UI contract)
 │       ├── config/
@@ -78,20 +110,21 @@ crates/
 │       │   ├── engine.rs      # PolicyEngine decisions
 │       │   └── shell_syntax.rs# tokenizer + safe-lists
 │       ├── context/
-│       │   ├── mod.rs         # L0 assembly + AGENTS.md loader
+│       │   ├── mod.rs         # composition root
+│       │   ├── system.rs      # L0 assembly + AGENTS.md loader
+│       │   ├── task_packet.rs # observed report + unverified notes projection
 │       │   ├── budget.rs compact.rs cost.rs notes.rs repo_map.rs
 │       ├── tools/
-│       │   ├── mod.rs         # Tool trait + registry (+ re-exports)
+│       │   ├── mod.rs         # composition root + re-exports
+│       │   ├── interface.rs   # Tool contract + outcomes
+│       │   ├── registry.rs    # ToolRegistry + built-in registrations
 │       │   ├── context.rs     # ToolCtx (the per-call capability bundle)
 │       │   ├── fsutil.rs      # atomic_write, diffs, truncation
 │       │   └── <tool_name>.rs # ONE FILE PER TOOL (bash, edit_file, …)
 │       ├── lsp/  mcp/         # external-process integrations
+│       ├── verification/     # typed checks, artifacts, freshness and final gate
+│       ├── verification/     # typed checks, evidence, freshness, completion gate
 │       └── session/           # JSONL transcript store
-├── z-engine-tui/src/
-│   ├── main.rs                # terminal setup/teardown only
-│   ├── app/
-│   │   ├── mod.rs state.rs input.rs reducer.rs run.rs
-│   └── views/                 # PURE render fns over &App (no mutation)
 └── z-engine-gui/src-tauri/src/
     ├── main.rs                # builder wiring only (<160 lines)
     ├── state.rs event_bridge.rs git_util.rs catalog.rs

@@ -1,6 +1,7 @@
 import type { ReplayEvent } from "../types";
 import { push, resetTranscript } from "./mutations";
 import { rt } from "./state";
+import { applyTaskReport, ensureUnassessedTask } from "./taskReports";
 
 function shortArgs(name: string, raw: string): string {
   try {
@@ -38,10 +39,14 @@ export function replaySession(events: ReplayEvent[]) {
   for (const ev of events) {
     switch (ev.type) {
       case "user_msg":
+        ensureUnassessedTask();
         push("user", ev.text ?? "", {
           images: ev.images && ev.images.length > 0 ? ev.images : undefined,
           runTurn: rt.runTurnCounter++,
         });
+        break;
+      case "task_updated":
+        applyTaskReport(ev.report, true);
         break;
       case "assistant_msg": {
         if (ev.content) push("assistant", ev.content);
@@ -66,4 +71,5 @@ export function replaySession(events: ReplayEvent[]) {
         break;
     }
   }
+  ensureUnassessedTask();
 }

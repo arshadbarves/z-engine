@@ -5,9 +5,9 @@
   import Icon, { ChevronDown, Shield } from "$lib/ui/icons";
 
   const MODES = [
-    { id: "normal", label: "normal", desc: "Ask before every file edit and command" },
-    { id: "accept-edits", label: "auto-accept edits", desc: "Apply edits without asking; commands still gated" },
-    { id: "plan", label: "plan", desc: "Read-only — explore and propose, change nothing" },
+    { id: "normal", label: "Ask", desc: "Ask before gated edits and commands" },
+    { id: "accept-edits", label: "Allow edits", desc: "Apply edits without asking; commands still gated" },
+    { id: "plan", label: "Read-only", desc: "Investigate without changing files or executing project code" },
   ] as const;
 
   const mode = bindStore(modeStore);
@@ -28,16 +28,22 @@
 
 <div class="model-picker">
   {#if open}
-    <div class="popover-backdrop" onclick={() => (open = false)}></div>
+    <button
+      type="button"
+      class="popover-backdrop"
+      aria-label="Close access permissions menu"
+      tabindex="-1"
+      onclick={() => (open = false)}
+    ></button>
   {/if}
-  <button class="mode model-btn" onclick={() => (open = !open)} title="Permission mode">
+  <button class="mode model-btn" onclick={() => (open = !open)} title="Access permissions">
     <Icon icon={Shield} size={11} />
     <span>{current.label}</span>
     <Icon icon={ChevronDown} size={9} strokeWidth={2.4} />
   </button>
   {#if open}
     <div class="popover" role="menu">
-      <div class="popover-head">Permission mode</div>
+      <div class="popover-head">Access permissions</div>
       <div class="popover-current">{current.label}</div>
       {#each MODES.filter((m) => m.id !== mode.current) as m}
         <button class="popover-item" role="menuitem" onclick={() => void pick(m.id)}>

@@ -5,6 +5,18 @@ All notable changes to the **Z Engine** project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.6] - 2026-09-15
+
+### Added
+- **Procedural Apple-Grade Brand Icon & Logo**:
+  - Bespoke procedural generator (`scripts/generate_icons.py`) mathematically constructing Apple-grade continuous squircle, liquid titanium kinetic Z geometry, radiant solar combustion core, machined chamfer highlights, and multi-stage drop shadows.
+  - Complete multi-platform desktop asset suite: macOS `icon.icns`, Windows `icon.ico`, multi-resolution PNGs (`icon.png`, `icon-512.png`, `icon-256.png`, `128x128.png`, `64x64.png`, `32x32.png`, Windows Store & Square logos), `icon.svg`, and web `favicon.svg`.
+  - In-app `LogoMark.svelte` updated with kinetic Z geometry and lightweight gradients for crisp rendering across all UI surfaces (TopBar, Sidebar, HomeScreen, About modal).
+- **Supervised Task Runtime & Verification Architecture**:
+  - Bounded task supervision, durable verification gate, evidence collection, and task report projection.
+  - Refined GUI components including TaskReportCard, CheckEvidenceDetails, ActivityTabs, AppearanceSettings, process disclosure, and settings cards.
+  - Specialized bounded crates: `z-engine-context`, `z-engine-runtime`, and `z-engine-project`.
+
 ---
 
 ## [1.4.5] - 2026-09-07

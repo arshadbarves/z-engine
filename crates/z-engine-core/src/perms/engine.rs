@@ -13,6 +13,8 @@ const AUTO_ALLOW_TOOLS: &[&str] = &[
     "go_to_definition",
     "find_references",
     "lsp_diagnostics",
+    "assess_completion",
+    "inspect_project",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,6 +89,11 @@ impl PolicyEngine {
         if ok { Decision::Allow } else { Decision::Gate }
     }
 
+    /// Effect classification, deliberately independent of user allow rules.
+    pub fn command_is_read_only(command: &str) -> bool {
+        super::effects::command_is_read_only(command)
+    }
+
     /// True when the command only mutates the working tree through the
     /// common filesystem set (`mkdir/touch/rm/rmdir/mv/cp/sed`) or is
     /// outright read-only — the `accept-edits` auto-approve set
@@ -152,6 +159,7 @@ mod tests {
         assert_eq!(e.decide("read_file", &json!({})), Decision::Allow);
         assert_eq!(e.decide("glob", &json!({})), Decision::Allow);
         assert_eq!(e.decide("grep", &json!({})), Decision::Allow);
+        assert_eq!(e.decide("inspect_project", &json!({})), Decision::Allow);
     }
 
     #[test]

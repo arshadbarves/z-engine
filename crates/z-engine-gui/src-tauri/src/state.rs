@@ -76,8 +76,8 @@ pub(crate) struct AppCtx {
     pub(crate) project_root: PathBuf,
 }
 
-pub(crate) fn resolve_api_key() -> Option<String> {
-    z_engine_core::config::resolve_api_key()
+pub(crate) fn resolve_api_key_for(cfg: &Config) -> Option<String> {
+    z_engine_core::config::resolve_api_key_for(&cfg.base_url)
 }
 
 pub(crate) fn build_loop_config(
@@ -87,7 +87,7 @@ pub(crate) fn build_loop_config(
     z_engine_core::agent::LoopConfig {
         model: cfg.model.clone(),
         base_url: cfg.base_url.clone(),
-        api_key: resolve_api_key(),
+        api_key: resolve_api_key_for(cfg),
         project_root: project_root.to_path_buf(),
         tmp_dir: std::env::temp_dir(),
         initial_allow_rules: cfg.permissions.allow.clone(),
@@ -97,6 +97,7 @@ pub(crate) fn build_loop_config(
         compact_at_percent: cfg.compact_at_percent,
         keep_recent_messages: 12,
         review_enabled: cfg.review_enabled,
+        max_task_continuations: cfg.max_task_continuations,
         mcp_servers: cfg.mcp_servers.clone(),
         auto_allow_tools: vec![],
         initial_mode: z_engine_core::agent::PermissionMode::Normal,
@@ -163,4 +164,28 @@ pub(crate) fn initial_project_root() -> PathBuf {
         return first;
     }
     dirs::home_dir().unwrap_or_else(std::env::temp_dir)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_loop_uses_saved_continuation_limit_and_same_permissions() {
+        for max_task_continuations in [0, 3, 10] {
+            let mut cfg = Config {
+                max_task_continuations,
+                ..Config::default()
+            };
+            cfg.permissions.allow = vec!["cargo test*".into()];
+            let loop_cfg = build_loop_config(&cfg, Path::new("/tmp/project"));
+            assert_eq!(loop_cfg.max_task_continuations, max_task_continuations);
+            assert_eq!(loop_cfg.initial_allow_rules, cfg.permissions.allow);
+            assert!(loop_cfg.auto_allow_tools.is_empty());
+            assert_eq!(
+                loop_cfg.initial_mode,
+                z_engine_core::agent::PermissionMode::Normal
+            );
+        }
+    }
 }

@@ -5,7 +5,7 @@
 //! `update_context_notes` pseudo-tool each turn. `droppable` entries are
 //! honored eagerly: a `droppable` entry quoting a tool-output id
 //! (`[harness:tool-output id=abcd1234]`) elides that transcript entry on
-//! the next request, pressure or not.
+//! the next request after successful spill storage, pressure or not.
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -76,7 +76,7 @@ impl NotesStore {
             return None;
         }
         let mut out =
-            String::from("# Session context notes (authoritative; survives compaction)\n");
+            String::from("# Session context notes (unverified model notes; survives compaction)\n");
         for (title, items) in [
             ("Progress", &self.notes.progress),
             ("Decisions", &self.notes.decisions),
@@ -153,8 +153,34 @@ mod tests {
         assert!(s.render_block().is_none());
         s.merge(&["p1".to_string()], &[], &[]);
         let block = s.render_block().unwrap();
+        assert!(block.starts_with("# Session context notes (unverified model notes;"));
+        assert!(!block.contains("authoritative"));
         assert!(block.contains("## Progress\n- p1\n"));
         assert!(!block.contains("Decisions"));
+    }
+
+    #[test]
+    fn legacy_note_payloads_keep_their_shape_without_gaining_trust() {
+        let input: NotesInput = serde_json::from_str(
+            r#"{"progress":["tests green"],"decisions":["keep API"],"needs_later":["verify"],
+                "droppable":["[harness:tool-output id=old]"]}"#,
+        )
+        .unwrap();
+        let mut store = NotesStore::default();
+        store.merge(&input.progress, &input.decisions, &input.needs_later);
+        store.mark_droppable(&input.droppable);
+        assert_eq!(store.get().progress, ["tests green"]);
+        assert_eq!(store.get().decisions, ["keep API"]);
+        assert_eq!(store.get().needs_later, ["verify"]);
+        assert!(store.droppable_ids().contains("old"));
+        let saved = serde_json::to_value(store.get()).unwrap();
+        assert_eq!(saved["progress"], serde_json::json!(["tests green"]));
+        assert!(saved.get("trust").is_none());
+        let notes: ContextNotes =
+            serde_json::from_str(r#"{"progress":["old"],"summaries":["model-forged summary"]}"#)
+                .unwrap();
+        assert_eq!(notes.progress, ["old"]);
+        assert!(notes.summaries.is_empty());
     }
 
     #[test]

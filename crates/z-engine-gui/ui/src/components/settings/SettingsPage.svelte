@@ -1,9 +1,12 @@
 <script lang="ts">
-  import { getConfig, type HarnessConfig } from "$lib/commands";
+  import { getConfig } from "$lib/commands";
+  import { configStore } from "$lib/configStore";
+  import { shouldApplyConfigResponse } from "$lib/domain/configRequest";
   import { bindStore } from "$lib/svelte/bind.svelte";
   import { updateStore } from "$lib/updateStore";
   import Icon, {
     ChevronLeft,
+    Eye,
     Info,
     Search,
     Server,
@@ -13,61 +16,70 @@
   } from "$lib/ui/icons";
   import WindowControlsMaybe from "../chrome/WindowControlsMaybe.svelte";
   import AboutTab from "./AboutTab.svelte";
+  import AppearanceTab from "./AppearanceTab.svelte";
   import GeneralTab from "./GeneralTab.svelte";
   import McpTab from "./McpTab.svelte";
   import PermissionsTab from "./PermissionsTab.svelte";
   import ProvidersTab from "./ProvidersTab.svelte";
   import "../../settings.css";
 
-  type Tab = "providers" | "general" | "permissions" | "mcp" | "about";
+  type Tab = "providers" | "general" | "appearance" | "permissions" | "mcp" | "about";
   type Props = { isClosing?: boolean; onClose: () => void };
 
   let { isClosing = false, onClose }: Props = $props();
   let tab = $state<Tab>("providers");
   let search = $state("");
-  let cfg = $state<HarnessConfig | null>(null);
+  const config = bindStore(configStore);
   const update = bindStore(updateStore);
+  const cfg = $derived(config.current);
 
   const tabs: Array<{
     id: Tab;
     label: string;
     hint: string;
-    color: string;
+    toneClass: string;
     icon: typeof Sliders;
   }> = [
     {
       id: "providers",
       label: "Providers",
       hint: "AI models & API keys",
-      color: "#6366f1",
+      toneClass: "settings-tone-shell",
       icon: Sparkles,
     },
     {
       id: "general",
       label: "General & Agent",
       hint: "Code review & context limits",
-      color: "#00d68f",
+      toneClass: "settings-tone-working",
       icon: Sliders,
+    },
+    {
+      id: "appearance",
+      label: "Appearance",
+      hint: "Task report detail",
+      toneClass: "settings-tone-accent",
+      icon: Eye,
     },
     {
       id: "permissions",
       label: "Permissions",
       hint: "Terminal approvals & safety",
-      color: "#38bdf8",
+      toneClass: "settings-tone-shell",
       icon: Shield,
     },
     {
       id: "mcp",
       label: "Integrations",
       hint: "External MCP tool servers",
-      color: "#a78bfa",
+      toneClass: "settings-tone-attention",
       icon: Server,
     },
     {
       id: "about",
       label: "About & Updates",
       hint: "Version, updates & storage",
-      color: "#f5a623",
+      toneClass: "settings-tone-attention",
       icon: Info,
     },
   ];
@@ -85,11 +97,18 @@
   const active = $derived(tabs.find((t) => t.id === tab) ?? tabs[0]);
 
   $effect(() => {
+    let alive = true;
+    const requestSnapshot = configStore.getSnapshot();
     getConfig()
       .then((c) => {
-        cfg = c;
+        if (shouldApplyConfigResponse(alive, requestSnapshot, configStore.getSnapshot())) {
+          configStore.set(c);
+        }
       })
       .catch(console.error);
+    return () => {
+      alive = false;
+    };
   });
 
   $effect(() => {
@@ -172,7 +191,7 @@
               class={`settings-nav-btn${tab === t.id ? " active" : ""}`}
               onclick={() => (tab = t.id)}
             >
-              <span class="settings-nav-icon" style={`color: ${t.color}`}>
+              <span class={`settings-nav-icon ${t.toneClass}`}>
                 <Icon icon={t.icon} size={15} />
               </span>
               <span class="settings-nav-copy">
@@ -195,7 +214,7 @@
       <section class="canvas-pane settings-canvas-pane">
         <div class="settings-pane-head">
           <div class="head-left">
-            <div class="settings-head-badge" style={`color: ${active.color}`}>
+            <div class={`settings-head-badge ${active.toneClass}`}>
               <Icon icon={active.icon} size={15} />
             </div>
             <div class="settings-head-text">
@@ -213,6 +232,8 @@
               <ProvidersTab {cfg} />
             {:else if tab === "general"}
               <GeneralTab {cfg} />
+            {:else if tab === "appearance"}
+              <AppearanceTab {cfg} />
             {:else if tab === "permissions"}
               <PermissionsTab />
             {:else if tab === "mcp"}
@@ -226,3 +247,21 @@
     </div>
   </div>
 </div>
+
+<style>
+  .settings-tone-accent {
+    color: var(--accent);
+  }
+
+  .settings-tone-working {
+    color: var(--tone-working);
+  }
+
+  .settings-tone-shell {
+    color: var(--tone-shell);
+  }
+
+  .settings-tone-attention {
+    color: var(--tone-attention);
+  }
+</style>

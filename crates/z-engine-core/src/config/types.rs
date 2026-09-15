@@ -3,6 +3,16 @@ use std::path::PathBuf;
 
 use crate::context::cost::Pricing;
 
+pub const MAX_TASK_CONTINUATIONS: u32 = 10;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TaskReportView {
+    Quiet,
+    Compact,
+    Detailed,
+}
+
 /// Fully resolved configuration after layering.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Config {
@@ -22,6 +32,9 @@ pub struct Config {
     pub permissions: PermissionsConfig,
     /// Post-edit reviewer pass (spec section 9 v0.9).
     pub review_enabled: bool,
+    /// Bounded continuations for supported code-changing tasks; zero disables.
+    pub max_task_continuations: u32,
+    pub task_report_view: TaskReportView,
     /// Post-edit reviewer pass (spec section 9 v0.9).
     /// MCP stdio servers (spec section 9 v0.9).
     pub mcp_servers: Vec<crate::mcp::McpServerConfig>,
@@ -51,17 +64,12 @@ pub struct PartialConfig {
     pub max_output_tokens: Option<u32>,
     pub compact_at_percent: Option<u8>,
     pub review_enabled: Option<bool>,
+    pub max_task_continuations: Option<u32>,
+    pub task_report_view: Option<TaskReportView>,
     pub mcp_servers: Option<Vec<crate::mcp::McpServerConfig>>,
     pub permissions_allow: Option<Vec<String>>,
     pub cost_overrides: Option<BTreeMap<String, Pricing>>,
     pub shell_path: Option<String>,
-}
-
-/// CLI-provided overrides (`--model`, `--base-url`).
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct CliOverrides {
-    pub model: Option<String>,
-    pub base_url: Option<String>,
 }
 
 /// Environment variables honored by the loader (injectable for tests).
@@ -99,6 +107,8 @@ fn first_env(names: &[&str]) -> Option<String> {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
+    #[error("max_task_continuations must be between 0 and 10, got {0}")]
+    InvalidTaskContinuations(u32),
     #[error("failed reading config file {path}: {source}")]
     Read {
         path: PathBuf,
@@ -124,6 +134,8 @@ impl Default for Config {
             hooks: BTreeMap::new(),
             permissions: PermissionsConfig::default(),
             review_enabled: true,
+            max_task_continuations: 3,
+            task_report_view: TaskReportView::Quiet,
             mcp_servers: Vec::new(),
             cost_overrides: BTreeMap::new(),
             shell_path: None,
@@ -152,6 +164,8 @@ pub(super) struct FileFormat {
     pub(super) max_output_tokens: Option<u32>,
     pub(super) compact_at_percent: Option<u8>,
     pub(super) review: Option<bool>,
+    pub(super) max_task_continuations: Option<u32>,
+    pub(super) task_report_view: Option<TaskReportView>,
     pub(super) permissions: Option<FilePermissions>,
     pub(super) mcp: Option<McpFileSection>,
     pub(super) cost: Option<CostFileSection>,
@@ -193,6 +207,8 @@ pub(super) fn parse_partial(text: &str) -> Result<PartialConfig, toml::de::Error
         max_output_tokens: f.max_output_tokens,
         compact_at_percent: f.compact_at_percent,
         review_enabled: f.review,
+        max_task_continuations: f.max_task_continuations,
+        task_report_view: f.task_report_view,
         permissions_allow: f.permissions.and_then(|p| p.allow),
         cost_overrides: f.cost.map(|c| c.overrides),
         mcp_servers: f.mcp.map(|m| {

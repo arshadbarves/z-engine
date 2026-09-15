@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupTranscript } from "./activity";
+import { groupTranscript, parseActivityLedger } from "./activity";
 import { contextBreakdown } from "./contextBreakdown";
 import { familyTitle, pathPills, splitWork } from "./toolGroups";
 import { activityBrief } from "./toolUi";
@@ -60,6 +60,23 @@ describe("activityBrief", () => {
       }),
     ];
     expect(activityBrief(tools)).toBe("2/2 · Grep foo");
+  });
+});
+
+describe("parseActivityLedger", () => {
+  it("preserves output for non-terminal tool details", () => {
+    const parsed = parseActivityLedger([
+      msg({
+        id: 1,
+        kind: "tool",
+        text: "",
+        toolName: "read_file",
+        preview: "src/main.ts",
+        output: "export const ready = true;",
+      }),
+    ]);
+
+    expect(parsed.files[0].output).toBe("export const ready = true;");
   });
 });
 

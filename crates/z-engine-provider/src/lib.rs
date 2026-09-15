@@ -5,6 +5,7 @@ pub mod accumulate;
 pub mod client;
 pub mod sse;
 pub mod types;
+pub mod zen;
 
 pub use accumulate::{AccumulatedToolCall, ToolCallAccumulator};
 pub use client::{Client, ProviderError};

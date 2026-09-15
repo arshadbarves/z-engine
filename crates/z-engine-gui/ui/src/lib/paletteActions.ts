@@ -1,5 +1,6 @@
-import { compact, notes, setMode, setModel, submit } from "./commands";
-import { draftStore, modeStore, modelStore, submitLocal } from "./events";
+import { compact, notes, setMode, setModel } from "./commands";
+import { draftStore, modeStore, modelStore } from "./events";
+import { submitTask } from "./sessionSubmit";
 import { HERO_EXAMPLES } from "./constants";
 import type { PaletteItem } from "./paletteTypes";
 import {
@@ -133,8 +134,7 @@ export function paletteActions(opts: {
       icon: Workflow,
       run: () => {
         draftStore.set("");
-        submitLocal(ex);
-        void submit(ex).catch(console.error);
+        void submitTask(ex);
       },
     })),
   ];

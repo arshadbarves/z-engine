@@ -1,4 +1,7 @@
 /** Shared frontend types. Runtime, domain, and screens all import from here. */
+import type { TaskReport } from "./domain/taskReport";
+
+export type { CheckEvidence, EvidenceArtifact, TaskReport, TaskStatus } from "./domain/taskReport";
 
 export type MsgKind =
   | "user"
@@ -9,6 +12,7 @@ export type MsgKind =
   | "notice"
   | "command"
   | "error"
+  | "task"
   | "status";
 
 export interface Msg {
@@ -35,12 +39,26 @@ export interface Msg {
   /** 0-based index of this user message among turns in the current app run. */
   runTurn?: number | null;
   images?: string[];
+  taskId?: string;
+  taskReport?: TaskReport;
+  taskReportError?: string;
+  taskFreshnessPending?: boolean;
+}
+
+export interface ToastAction {
+  label: string;
+  onclick?: () => void;
+  variant?: "primary" | "secondary";
 }
 
 export interface Toast {
   id: number;
   text: string;
-  tone: "info" | "ok" | "warn";
+  title?: string;
+  tag?: string;
+  tone: "info" | "ok" | "warn" | "error";
+  actions?: ToastAction[];
+  onDismiss?: () => void;
 }
 
 export interface Usage {
@@ -58,6 +76,17 @@ export interface QueuedMessage {
 
 export type EventPayload = { type: string } & Record<string, unknown>;
 
+export type TaskUpdatedEvent = {
+  type: "taskUpdated";
+  report: TaskReport;
+  sessionId?: string;
+};
+
+export interface TaskUpdatedReplayEvent {
+  type: "task_updated";
+  report: TaskReport;
+}
+
 export interface ReplayToolCall {
   id: string;
   name: string;
@@ -73,6 +102,8 @@ export interface ReplayEvent {
   model?: string;
   project_root?: string;
   images?: string[];
+  /** Journal data is validated before it enters the transcript. */
+  report?: unknown;
 }
 
 export type Listener = () => void;

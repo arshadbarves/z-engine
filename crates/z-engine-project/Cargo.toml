@@ -1,0 +1,23 @@
+[package]
+name = "z-engine-project"
+description = "Bounded, read-only project and verification capability discovery"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+cap-std = "3"
+ignore.workspace = true
+quick-xml = "0.38"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

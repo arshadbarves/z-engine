@@ -7,6 +7,7 @@ export type {
   ReplayToolCall,
   SessionActivity,
   Toast,
+  ToastAction,
 } from "../types";
 
 export {
@@ -29,6 +30,7 @@ export {
 export {
   beginHydrate,
   commandLocal,
+  dismissToast,
   endHydrate,
   pushNotice,
   pushToast,

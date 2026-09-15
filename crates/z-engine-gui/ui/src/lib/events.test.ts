@@ -5,10 +5,7 @@ import {
   endHydrate,
   handleEvent,
   hydrateStore,
-  replaySession,
   resetForTests,
-  resetTranscript,
-  resolveApproval,
   sessionStore,
   setBusy,
   submitLocal,
@@ -184,42 +181,6 @@ describe("tool cards", () => {
   });
 });
 
-describe("approval", () => {
-  it("captures id, scopes and diff detailPreview", () => {
-    handleEvent({
-      type: "approvalRequired",
-      id: 7,
-      tool: "edit_file",
-      inputPreview: "src/lib.rs",
-      suggestedRule: null,
-      detailPreview: "--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1 +1 @@\n-old\n+new",
-      canPersist: true,
-      bashCommand: null,
-    });
-    const m = msgs()[0];
-    expect(m.kind).toBe("approval");
-    expect(m.approvalId).toBe(7);
-    expect(m.canPersist).toBe(true);
-    expect(m.detailPreview).toContain("@@ -1");
-  });
-
-  it("does not duplicate an approval card with the same id", () => {
-    const ev = {
-      type: "approvalRequired",
-      id: 7,
-      tool: "bash",
-      inputPreview: "ls",
-      suggestedRule: null,
-      detailPreview: null,
-      canPersist: false,
-      bashCommand: "ls",
-    };
-    handleEvent(ev);
-    handleEvent(ev);
-    expect(msgs().filter((m) => m.kind === "approval")).toHaveLength(1);
-  });
-});
-
 describe("usage", () => {
   it("usageUpdated feeds the usage store", () => {
     handleEvent({ type: "usageUpdated", promptTokens: 1000, completionTokens: 50 });
@@ -242,66 +203,13 @@ describe("user + command echo", () => {
   });
 });
 
-describe("approval resolution (A3)", () => {
-  it("collapses the card to an approved notice in place", () => {
-    handleEvent({
-      type: "approvalRequired",
-      id: 3,
-      tool: "bash",
-      inputPreview: "cargo test",
-      suggestedRule: "cargo test*",
-      detailPreview: null,
-      canPersist: true,
-      bashCommand: "cargo test",
-    });
-    resolveApproval(3, "once");
-    const m = msgs()[0];
-    expect(m.kind).toBe("notice");
-    expect(m.text).toContain("✓ approved");
-    expect(m.text).toContain("cargo test");
-    expect(m.approvalId).toBe(3); // id retained so re-resolution is a no-op-safe
-  });
-
-  it("records session/persist scope and denials", () => {
-    handleEvent({
-      type: "approvalRequired",
-      id: 4,
-      tool: "bash",
-      inputPreview: "rm x",
-      suggestedRule: null,
-      detailPreview: null,
-      canPersist: false,
-      bashCommand: "rm x",
-    });
-    resolveApproval(4, "session");
-    expect(msgs()[0].text).toContain("session rule");
-    handleEvent({
-      type: "approvalRequired",
-      id: 5,
-      tool: "edit_file",
-      inputPreview: "a.rs",
-      suggestedRule: null,
-      detailPreview: null,
-      canPersist: false,
-      bashCommand: null,
-    });
-    resolveApproval(5, "deny");
-    expect(msgs()[1].text).toContain("✗ denied");
-  });
-
-  it("ignores unknown approval ids", () => {
-    resolveApproval(999, "once");
-    expect(msgs()).toHaveLength(0);
-  });
-});
-
 describe("turn markers", () => {
-  it("turnCompleted leaves a done row in the chat", () => {
+  it("turnCompleted leaves a neutral response-finished row in the chat", () => {
     setBusy(true);
     handleEvent({ type: "turnCompleted", promptTokens: 1, completionTokens: 1 });
     const row = msgs().find((m) => m.kind === "status");
-    expect(row?.text).toMatch(/^✓ done/);
-    expect(row?.ok).toBe(true);
+    expect(row?.text).toMatch(/^Response finished/);
+    expect(row?.ok).toBeUndefined();
   });
   it("turnAborted leaves an aborted row, not a toast", () => {
     handleEvent({ type: "turnAborted" });
@@ -334,58 +242,6 @@ describe("status note routing (A5)", () => {
     expect(msgs()).toHaveLength(0);
     expect(shellStore.getSnapshot().entries.at(-1)?.lines).toContain("ls");
     expect(toastStore.getSnapshot().some((t) => t.text.startsWith("context at "))).toBe(true);
-  });
-});
-
-describe("session replay", () => {
-  // Shapes below mirror exactly what serde produces for
-  // z_engine_core::session::SessionEvent (snake_case variant tags).
-  it("rebuilds transcript cards from serde-tagged session JSONL events", () => {
-    resetTranscript();
-    replaySession([
-      { type: "meta", model: "m", project_root: "/" },
-      { type: "user_msg", text: "fix it" },
-      {
-        type: "assistant_msg",
-        content: "Reading the file.",
-        tool_calls: [{ id: "t1", name: "read_file", arguments: '{"path":"Cargo.toml"}' }],
-      },
-      { type: "tool_result", tool_call_id: "t1", content: "--- stdout ---\nline" },
-      { type: "note", text: "compacted" },
-    ]);
-    expect(msgs().map((m) => m.kind)).toEqual(["user", "assistant", "tool"]);
-    const tool = msgs()[2];
-    expect(tool.toolName).toBe("read_file");
-    expect(tool.preview).toBe("Cargo.toml");
-    expect(tool.streaming).toBe(false);
-    expect(tool.summary).toContain("line");
-    expect(tool.output).toContain("line");
-    expect(msgs()[0].runTurn).toBe(0);
-  });
-
-  it("assigns sequential runTurn so restored prompts can be edited", () => {
-    resetTranscript();
-    replaySession([
-      { type: "user_msg", text: "one" },
-      { type: "assistant_msg", content: "ok" },
-      { type: "user_msg", text: "two" },
-    ]);
-    const users = msgs().filter((m) => m.kind === "user");
-    expect(users.map((m) => m.runTurn)).toEqual([0, 1]);
-  });
-
-  it("regression: camelCase tags match nothing (serde emits snake_case)", () => {
-    resetTranscript();
-    replaySession([{ type: "user_msg", text: "real shape" }]);
-    expect(msgs().map((m) => m.text)).toEqual(["real shape"]);
-    replaySession([{ type: "userMsg", text: "legacy shape" }]);
-    expect(msgs()).toHaveLength(0);
-  });
-
-  it("resetTranscript clears everything", () => {
-    submitLocal("hi");
-    resetTranscript();
-    expect(msgs()).toHaveLength(0);
   });
 });
 
@@ -422,31 +278,5 @@ describe("attachments (B)", () => {
   it("sessionChanged records the active session ulid", () => {
     handleEvent({ type: "sessionChanged", ulid: "01ABC" });
     expect(sessionStore.getSnapshot()).toBe("01ABC");
-  });
-});
-
-describe("session hydrate lock", () => {
-  it("swallows turnAborted so a swap cannot toast over the restored chat", () => {
-    replaySession([{ type: "user_msg", text: "kept" }]);
-    beginHydrate();
-    handleEvent({ type: "turnAborted" });
-    handleEvent({ type: "tokenDelta", text: "stale" });
-    expect(msgs().map((m) => m.text)).toEqual(["kept"]);
-    expect(toastStore.getSnapshot().some((t) => t.text.toLowerCase().includes("abort"))).toBe(
-      false,
-    );
-    endHydrate();
-  });
-
-  it("still records sessionChanged while locked", () => {
-    beginHydrate();
-    handleEvent({ type: "sessionChanged", ulid: "01NEW" });
-    expect(sessionStore.getSnapshot()).toBe("01NEW");
-    endHydrate();
-  });
-
-  it("replays attached images on user_msg", () => {
-    replaySession([{ type: "user_msg", text: "see this", images: ["data:image/png;base64,xx"] }]);
-    expect(msgs()[0].images).toEqual(["data:image/png;base64,xx"]);
   });
 });

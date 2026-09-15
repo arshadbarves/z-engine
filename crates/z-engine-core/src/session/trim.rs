@@ -2,11 +2,11 @@
 //! Used by per-message revert so reopening a session does not resurrect
 //! the dropped turns.
 
-use std::fs::OpenOptions;
-use std::io::Write;
 use std::path::Path;
 
-use super::{SessionEvent, read_events};
+use super::SessionEvent;
+use super::reader::read_transcript;
+use super::storage::{lock, path_state, replace_events};
 
 /// Keep every event up to (not including) the `keep`-th `UserMsg`
 /// (0-based). `keep == 0` retains only the prefix before the first user
@@ -28,40 +28,14 @@ pub fn events_before_user_turn(events: &[SessionEvent], keep: u64) -> Vec<Sessio
 }
 
 /// Rewrite `path` so it only contains events before user-turn `keep`.
-/// Callers that hold a [`super::SessionWriter`] must reopen it afterwards
-/// so the append handle tracks the new inode.
+/// Existing append handles automatically follow the replacement.
 pub fn trim_file_before_user_turn(path: &Path, keep: u64) -> std::io::Result<()> {
-    let events = read_events(path)?;
+    let shared = path_state(path)?;
+    let mut state = lock(&shared)?;
+    state.ensure_healthy()?;
+    let events = read_transcript(path)?.events;
     let kept = events_before_user_turn(&events, keep);
-    let mut body = String::new();
-    for ev in &kept {
-        let line = serde_json::to_string(ev)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        body.push_str(&line);
-        body.push('\n');
-    }
-    let dir = path
-        .parent()
-        .ok_or_else(|| std::io::Error::other("session path has no parent"))?;
-    let tmp = dir.join(format!(
-        ".{}.trim-{}",
-        path.file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "session.jsonl".into()),
-        ulid::Ulid::new()
-    ));
-    {
-        let mut f = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(&tmp)?;
-        f.write_all(body.as_bytes())?;
-        f.flush()?;
-    }
-    std::fs::rename(&tmp, path).inspect_err(|_| {
-        let _ = std::fs::remove_file(&tmp);
-    })
+    replace_events(path, &kept, &mut state)
 }
 
 #[cfg(test)]
@@ -118,7 +92,7 @@ mod tests {
 
     #[test]
     fn rewrite_drops_later_turns_from_disk() {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = tempfile::tempdir_in(".").unwrap();
         let mut w = SessionWriter::create(dir.path()).unwrap();
         for ev in [meta(), user("one"), assistant("a"), user("two")] {
             w.record(&ev).unwrap();

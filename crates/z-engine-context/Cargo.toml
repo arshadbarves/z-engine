@@ -1,0 +1,16 @@
+[package]
+name = "z-engine-context"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Deterministic, evidence-grounded context packets without model or filesystem I/O"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

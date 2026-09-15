@@ -1,7 +1,8 @@
 <script lang="ts">
   import { activeAtToken, stripAtToken } from "$lib/atFile";
   import { catalogStore } from "$lib/catalog";
-  import { abort, listProjectFiles, shellPassthrough, submit } from "$lib/commands";
+  import { abort, listProjectFiles, shellPassthrough } from "$lib/commands";
+  import { submitTask } from "$lib/sessionSubmit";
   import { dispatchSlashCommand } from "$lib/composerCommands";
   import { createComposerHistory } from "$lib/composerHistory";
   import { fileToDataUrl } from "$lib/imageUtil";
@@ -12,8 +13,6 @@
     draftStore,
     pushToast,
     queueStore,
-    setBusy,
-    submitLocal,
   } from "$lib/runtime";
   import { hideShell, shellStore, showShell } from "$lib/shellStore";
   import { filterSlash } from "$lib/slash";
@@ -22,12 +21,14 @@
   import ComposerAttachments from "./ComposerAttachments.svelte";
   import ComposerBar from "./ComposerBar.svelte";
   import ComposerPopovers from "./ComposerPopovers.svelte";
+  import ComposerQueue from "./ComposerQueue.svelte";
 
   const input = bindStore(draftStore);
   const attachments = bindStore(attachmentStore);
   const busyNow = bindStore(busyStore);
   const shell = bindStore(shellStore);
   const catalog = bindStore(catalogStore);
+  const queued = bindStore(queueStore);
   const { pushHistory, historyPrev, historyNext } = createComposerHistory();
 
   let images = $state<string[]>([]);
@@ -160,14 +161,9 @@
       }
       return;
     }
-    submitLocal(composed, myImages);
-    setBusy(true);
-    try {
-      await submit(composed, myImages);
-    } catch (err) {
-      console.error(err);
-      setBusy(false);
-      pushToast(String(err).replace("Error: ", ""), "warn");
+    if (!await submitTask(composed, myImages)) {
+      if (!draftStore.getSnapshot()) draftStore.set(composed);
+      if (images.length === 0) images = myImages;
     }
   }
 
@@ -231,6 +227,7 @@
       onSelectFile={insertFile}
       onHoverFile={(i) => (fileSel = i)}
     />
+    <ComposerQueue items={queued.current} onRemove={(i) => queueStore.removeAt(i)} />
     <ComposerAttachments
       attachments={attachments.current}
       {images}

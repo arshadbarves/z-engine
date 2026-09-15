@@ -43,8 +43,10 @@ Do not add a component library that ships its own theme.
 crates/z-engine-gui/ui/src/
 ├── main.ts                 # mount + platform class + global CSS
 ├── App.svelte              # composition root (wiring only)
-├── app.css                 # tokens + reset only
-├── styles/                 # layout / chat / chrome / overlays (no logic)
+├── index.css               # tokens, reset, and shared app/chat layout
+├── chrome.css              # chrome and supporting shell layout
+├── settings.css            # settings/full-screen inspector layout
+├── splash.css              # splash screen
 ├── lib/
 │   ├── commands.ts         # typed invoke wrappers — IPC boundary
 │   ├── types.ts            # Msg, Toast, SessionEntry, shared types
@@ -58,12 +60,14 @@ crates/z-engine-gui/ui/src/
 │   │   ├── listen.ts       # initEvents (Tauri listen, once)
 │   │   └── index.ts        # re-exports (lib/events.ts stays a façade)
 │   ├── stores/             # app-level stores (config, workspace, update, ui)
-│   ├── ui/                 # Bits UI kit + Icon + Button + presence
+│   ├── ui/                 # Bits UI kit + Icon + Button + SegmentedChoice
+│   │                       # + presence + copyFeedback
 │   └── svelte/             # bindStore() — store → rune
 └── components/
     ├── chrome/             # TopBar, WindowControls, Splash, Logo
     ├── sidebar/
     ├── chat/               # timeline, cards, composer
+    │   └── primitives/     # native Svelte chat presentation catalog
     ├── settings/
     └── overlays/           # palette, diff, worktree, shell
 ```
@@ -152,17 +156,45 @@ Use Bits primitives for:
 Do not invent another `position: fixed` overlay with a backdrop `div`
 unless Bits has no primitive for it (the boot splash is the exception).
 
-### 4.4 CSS
+### 4.4 Native chat primitives
 
-- Tokens live in `app.css` (`--bg`, `--accent`, `--radius-*`, …).
-- Feature CSS is in `styles/*.css`, imported once from `main.ts`.
+- `components/chat/primitives/` is the native Svelte presentation catalog:
+  conversation turns, assistant messages, message actions, process activity,
+  reasoning, evidence, status, and task-report summaries.
+- `ConversationTurn` selects the presentation for each timeline block.
+  Assistant reasoning and tool calls are grouped into one `ToolActivityGroup`
+  process disclosure; its tabs separate files, searches, terminal activity,
+  and reasoning without adding parallel transcript cards.
+- Task reports have three presentation modes. **Quiet** is the default and
+  shows the result with details disclosed on demand. **Compact** adds a short
+  summary and check count while details remain collapsed. **Detailed** keeps
+  checks and evidence inline.
+- The Appearance tab persists this choice as `task_report_view` through the
+  typed settings command and reconciles the saved value after an update.
+- These are local Svelte components, not an assistant-chat framework
+  dependency.
+
+### 4.5 CSS and visual hierarchy
+
+- Tokens, reset, shared app layout, and chat styles live in `index.css`.
+  `main.ts` also imports `chrome.css`. Settings and prompt-inspector screens
+  import `settings.css`; splash-only rules live in `splash.css`.
 - Prefer the **existing class names** (`.app`, `.transcript`, `.composer`,
-  `.sidebar`, …). The visual language is Linear warm-neutral + Arc islands.
+  `.sidebar`, …).
+- Keep the hierarchy low-clutter: stage → floating island → content column →
+  quiet nested metadata. Prefer spacing and type weight before adding another
+  border, badge, or filled panel.
+- Reuse semantic tokens: `--surface-raised` for elevated content,
+  `--surface-input` for inputs, `--surface-quiet` for nested metadata,
+  `--hover-*`/`--border-hover` for interaction, and `--tone-*` only for
+  meaningful status. Keep transcript and composer aligned with
+  `--measure-chat`, `--gutter-chat`, and `--column-chat`.
 - Scoped `<style>` in a component is allowed for one-off layout that will
-  never be reused. Shared look goes in `styles/`.
+  never be reused. Shared look belongs in the existing root CSS file for that
+  area; do not create a second styles tree.
 - No inline style objects except chart/canvas geometry.
 
-### 4.5 Icons
+### 4.6 Icons
 
 ```svelte
 <script>
@@ -174,12 +206,12 @@ unless Bits has no primitive for it (the boot splash is the exception).
 Add a new icon in `lib/ui/icons.ts` only. Do not import
 `@hugeicons/core-free-icons` from a screen.
 
-### 4.6 Full-screen overlay screens (Settings, Prompt Inspector, full-window views)
+### 4.7 Full-screen overlay screens (Settings, Prompt Inspector, full-window views)
 
 Full-window overlays must match the home screen's stage + floating island container architecture:
 
 1. **Stage & Window Layout**:
-   - Outer stage background `#141416` with smooth `sheet-in` / `sheet-out` transitions.
+   - Outer stage uses `--bg` (`#000`) with smooth `sheet-in` / `sheet-out` transitions.
    - Draggable 40px TopBar (`.app-topbar`) with `data-tauri-drag-region`.
    - macOS traffic lights clearance (`padding-left: 88px` on `html.plat-mac`).
    - Back button on top-left (`<button class="icon-btn" title="Back (Esc)" onclick={onClose}><Icon icon={ChevronLeft} size={15} /></button>`).
@@ -207,7 +239,7 @@ Full-window overlays must match the home screen's stage + floating island contai
 | An IPC command | Rust `commands/<domain>.rs` + `generate_handler!` + wrapper in `lib/commands.ts`. Then call the wrapper. |
 | An agent event | `handleEvent` in `lib/runtime/dispatch.ts` + type in `lib/types.ts`. Never listen in a component. |
 | A pure helper | `lib/domain/<name>.ts` + sibling `*.test.ts`. |
-| A CSS token | `--name` in `app.css`. Use it; do not hard-code hex in components. |
+| A CSS token | `--name` in `index.css`. Use it; do not hard-code hex in components. |
 
 ## 6. Testing
 
@@ -242,9 +274,9 @@ Full-window overlays must match the home screen's stage + floating island contai
 
 ## 9. Visual language (do not restyle casually)
 
-- Background `#141416` stage, floating islands, 13px system UI font.
-- Accent / ok `#4ebd8f`. Error `#d96568`. Warn `#d69e48`.
-- Radius 6 / 10 / 14. Quiet hairline borders at 6–10% white.
+- Black `--bg` stage, floating islands, 13px system UI font.
+- Accent is white; status uses `--ok`, `--err`, `--warn`, and `--tone-*`.
+- Radius 8 / 14 / 20. Quiet hairline borders at 8–14% white.
 - Overlay title bar; macOS traffic lights stay system-drawn.
 
 Changing the palette is a design change, not a drive-by cleanup.

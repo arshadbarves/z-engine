@@ -5,10 +5,9 @@ import {
   modeStore,
   sessionStore,
   pushNotice,
-  submitLocal,
-  setBusy,
 } from "./events";
-import { compact, notes, readSlashCommand, submit } from "./commands";
+import { compact, notes, readSlashCommand } from "./commands";
+import { submitTask } from "./sessionSubmit";
 import { getCustomCommands } from "./slash";
 import { updateStore } from "./updateStore";
 import { estimateCost, fmtCost } from "./util";
@@ -22,12 +21,9 @@ export function dispatchSlashCommand(name: string, input: string): void {
       try {
         const template = await readSlashCommand(name);
         const prompt = template.replaceAll("$ARGUMENTS", args).replace(/\s+$/, "");
-        submitLocal(prompt);
-        setBusy(true);
-        await submit(prompt);
+        await submitTask(prompt);
       } catch (e) {
         console.error(e);
-        setBusy(false);
         pushNotice(`/${name}: ${String(e)}`);
       }
     })();

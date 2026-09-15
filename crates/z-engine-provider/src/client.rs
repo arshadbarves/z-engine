@@ -18,6 +18,7 @@
 
 use super::sse::SseDecoder;
 use super::types::{ChatRequest, StreamEvent};
+use super::zen;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -53,6 +54,8 @@ pub struct Client {
     http: reqwest::Client,
     base_url: String,
     api_key: Arc<std::sync::Mutex<Option<String>>>,
+    /// Stable Zen conversation id; `None` for non-Zen gateways.
+    zen_session: Option<Arc<str>>,
 }
 
 impl std::fmt::Debug for Client {
@@ -63,6 +66,7 @@ impl std::fmt::Debug for Client {
                 "api_key",
                 &self.current_api_key().as_ref().map(|_| "<redacted>"),
             )
+            .field("zen_session", &self.zen_session)
             .finish()
     }
 }
@@ -82,10 +86,12 @@ impl Client {
         if base.is_empty() {
             return Err(ProviderError::Config("base_url is empty".into()));
         }
+        let zen_session = zen::is_zen_url(&base).then(|| Arc::from(zen::new_session_id()));
         Ok(Self {
             http,
             base_url: base,
             api_key: Arc::new(std::sync::Mutex::new(api_key)),
+            zen_session,
         })
     }
 
@@ -107,8 +113,9 @@ impl Client {
     /// Start a streaming chat completion.
     ///
     /// Returns a receiver of events ending with either `Done`-adjacent
-    /// normal closure or a single terminal `Err`. The `abort` flag is
-    /// checked between every chunk for instant cancellation.
+    /// normal closure or a single terminal `Err`. Dropping the receiver cancels
+    /// this request, including pending headers, reads and retry backoff. The
+    /// shared abort flag is also observed while no network data arrives.
     pub fn stream_chat(
         &self,
         req: &ChatRequest,
@@ -118,6 +125,7 @@ impl Client {
         let http = self.http.clone();
         let url = format!("{}/chat/completions", self.base_url);
         let api_key = self.current_api_key();
+        let zen_session = self.zen_session.clone();
 
         let body = match serde_json::to_vec(req) {
             Ok(b) => b,
@@ -135,107 +143,123 @@ impl Client {
         };
 
         tokio::spawn(async move {
-            let mut attempt: u32 = 0;
-            let response = loop {
-                attempt += 1;
-                if abort.load(std::sync::atomic::Ordering::Relaxed) {
-                    return;
-                }
-
-                let mut request = http
-                    .post(&url)
-                    .header("Content-Type", "application/json")
-                    .body(body.clone());
-                if let Some(key) = &api_key {
-                    request = request.bearer_auth(key);
-                }
-
-                match request.send().await {
-                    Ok(resp) if resp.status().is_success() => break Ok(resp),
-                    Ok(resp) => {
-                        let status = resp.status();
-                        let retry_after = retry_after_of(&resp);
-                        let snippet = resp
-                            .text()
-                            .await
-                            .unwrap_or_default()
-                            .chars()
-                            .take(ERROR_BODY_SNIPPET)
-                            .collect::<String>();
-                        let retryable = status.as_u16() == 429 || status.is_server_error();
-                        if !retryable {
-                            tracing::warn!(%status, len = snippet.len(), "non-retryable provider error");
-                            break Err(ProviderError::Http {
-                                status: status.as_u16(),
-                                body: snippet,
-                            });
-                        }
-                        if attempt >= MAX_ATTEMPTS {
-                            if status.as_u16() == 429 {
-                                break Err(ProviderError::RateLimited {
-                                    status: status.as_u16(),
-                                    attempts: attempt,
-                                    detail: rate_limit_detail(&snippet, retry_after),
-                                });
-                            }
-                            break Err(ProviderError::Http {
-                                status: status.as_u16(),
-                                body: snippet,
-                            });
-                        }
-                        let delay = retry_after.unwrap_or_else(|| backoff_delay(attempt));
-                        tracing::info!(%status, ?delay, attempt, "retryable provider error; backing off");
-                        tokio::time::sleep(delay).await;
-                    }
-                    Err(e) => {
-                        let retryable = e.is_connect() || e.is_timeout();
-                        if !retryable || attempt >= MAX_ATTEMPTS {
-                            break Err(ProviderError::Connect {
-                                attempts: attempt,
-                                cause: e.to_string(),
-                            });
-                        }
-                        let delay = backoff_delay(attempt);
-                        tracing::info!(attempt, ?delay, error = %e, "transport error; retrying");
-                        tokio::time::sleep(delay).await;
-                    }
-                }
-            };
-
-            let response = match response {
-                Ok(r) => r,
-                Err(e) => {
-                    let _ = tx.send(Err(e)).await;
-                    return;
-                }
-            };
-
-            let mut decoder = SseDecoder::new();
-            use futures::StreamExt;
-            let mut stream = response.bytes_stream();
-            while let Some(item) = stream.next().await {
-                if abort.load(std::sync::atomic::Ordering::Relaxed) {
-                    tracing::debug!("provider stream aborted");
-                    return;
-                }
-                match item {
-                    Ok(bytes) => {
-                        for ev in decoder.feed(&bytes) {
-                            if tx.send(Ok(ev)).await.is_err() {
-                                return; // consumer gone
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        let _ = tx
-                            .send(Err(ProviderError::StreamInterrupted(e.to_string())))
-                            .await;
+            let operation = async {
+                let mut attempt: u32 = 0;
+                let response = loop {
+                    attempt += 1;
+                    if abort.load(std::sync::atomic::Ordering::Relaxed) {
                         return;
                     }
+
+                    let mut request = http
+                        .post(&url)
+                        .header("Content-Type", "application/json")
+                        .body(body.clone());
+                    if let Some(session) = zen_session.as_deref() {
+                        request = zen::apply_headers(request, session);
+                    }
+                    if let Some(key) = &api_key {
+                        request = request.bearer_auth(key);
+                    }
+
+                    match request.send().await {
+                        Ok(resp) if resp.status().is_success() => break Ok(resp),
+                        Ok(resp) => {
+                            let status = resp.status();
+                            let retry_after = retry_after_of(&resp);
+                            let snippet = resp
+                                .text()
+                                .await
+                                .unwrap_or_default()
+                                .chars()
+                                .take(ERROR_BODY_SNIPPET)
+                                .collect::<String>();
+                            let retryable = status.as_u16() == 429 || status.is_server_error();
+                            if !retryable {
+                                tracing::warn!(%status, len = snippet.len(), "non-retryable provider error");
+                                break Err(ProviderError::Http {
+                                    status: status.as_u16(),
+                                    body: snippet,
+                                });
+                            }
+                            if attempt >= MAX_ATTEMPTS {
+                                if status.as_u16() == 429 {
+                                    break Err(ProviderError::RateLimited {
+                                        status: status.as_u16(),
+                                        attempts: attempt,
+                                        detail: rate_limit_detail(&snippet, retry_after),
+                                    });
+                                }
+                                break Err(ProviderError::Http {
+                                    status: status.as_u16(),
+                                    body: snippet,
+                                });
+                            }
+                            let delay = retry_after.unwrap_or_else(|| backoff_delay(attempt));
+                            tracing::info!(%status, ?delay, attempt, "retryable provider error; backing off");
+                            tokio::time::sleep(delay).await;
+                        }
+                        Err(e) => {
+                            let retryable = e.is_connect() || e.is_timeout();
+                            if !retryable || attempt >= MAX_ATTEMPTS {
+                                break Err(ProviderError::Connect {
+                                    attempts: attempt,
+                                    cause: e.to_string(),
+                                });
+                            }
+                            let delay = backoff_delay(attempt);
+                            tracing::info!(attempt, ?delay, error = %e, "transport error; retrying");
+                            tokio::time::sleep(delay).await;
+                        }
+                    }
+                };
+
+                let response = match response {
+                    Ok(r) => r,
+                    Err(e) => {
+                        let _ = tx.send(Err(e)).await;
+                        return;
+                    }
+                };
+
+                let mut decoder = SseDecoder::new();
+                use futures::StreamExt;
+                let mut stream = response.bytes_stream();
+                while let Some(item) = stream.next().await {
+                    if abort.load(std::sync::atomic::Ordering::Relaxed) {
+                        tracing::debug!("provider stream aborted");
+                        return;
+                    }
+                    match item {
+                        Ok(bytes) => {
+                            for ev in decoder.feed(&bytes) {
+                                if tx.send(Ok(ev)).await.is_err() {
+                                    return; // consumer gone
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            let _ = tx
+                                .send(Err(ProviderError::StreamInterrupted(e.to_string())))
+                                .await;
+                            return;
+                        }
+                    }
                 }
-            }
-            for ev in decoder.finish() {
-                let _ = tx.send(Ok(ev)).await;
+                for ev in decoder.finish() {
+                    let _ = tx.send(Ok(ev)).await;
+                }
+            };
+            let cancelled = async {
+                while !abort.load(std::sync::atomic::Ordering::Relaxed) {
+                    tokio::time::sleep(Duration::from_millis(25)).await;
+                }
+            };
+            tokio::select! {
+                biased;
+                _ = tx.closed() => {}
+                _ = cancelled => {}
+                _ = operation => {}
             }
         });
 
@@ -293,7 +317,17 @@ mod tests {
     fn trailing_slashes_trimmed_empty_rejected() {
         let c = Client::new("https://example.invalid/v1///", None).unwrap();
         assert_eq!(c.base_url, "https://example.invalid/v1");
+        assert!(c.zen_session.is_none());
         assert!(Client::new("   ", None).is_err());
+    }
+
+    #[test]
+    fn zen_client_keeps_a_stable_session_id() {
+        let c = Client::new("https://opencode.ai/zen/v1", None).unwrap();
+        let c2 = c.clone();
+        let session = c.zen_session.as_deref().expect("zen session");
+        assert!(session.starts_with("ses_"));
+        assert_eq!(c2.zen_session.as_deref(), Some(session));
     }
 
     #[test]

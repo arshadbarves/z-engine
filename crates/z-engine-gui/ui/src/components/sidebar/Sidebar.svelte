@@ -1,5 +1,6 @@
 <script lang="ts">
   import { sessionLabel } from "$lib/sessionList";
+  import { unreadSessionOutcome } from "$lib/domain/sessionOutcome";
   import type { SessionActivity } from "$lib/types";
   import type { SessionEntry } from "$lib/util";
   import { sameWorkspacePath, wsBasename } from "$lib/workspaces";
@@ -80,13 +81,6 @@
     return sessionLabel(session.firstUserMsg);
   }
 
-  function unreadOutcome(session: SessionEntry, active: boolean, activityState: SessionActivity | null) {
-    return !active && !activityState &&
-      (session.unreadOutcome === "completed" || session.unreadOutcome === "aborted")
-      ? session.unreadOutcome
-      : null;
-  }
-
   function workspaceActivity(items: SessionEntry[]): SessionActivity | null {
     let working = false;
     for (const s of items) {
@@ -104,11 +98,11 @@
   {@const title = sessionTitle(session)}
   {@const isWorking = activityState === "working"}
   {@const isApproval = activityState === "approval"}
-  {@const unread = unreadOutcome(session, active, activityState)}
+  {@const unread = unreadSessionOutcome(session.unreadOutcome, active, activityState)}
   <div
     class="sidebar-session-item{active ? ' active' : ''}{isWorking ? ' working' : ''}{isApproval
       ? ' approval'
-      : ''}{unread ? ` unread unread-${unread}` : ''}"
+      : ''}{unread ? ` unread unread-${unread.tone}` : ''}"
     role="button"
     tabindex={0}
     title={isApproval
@@ -141,9 +135,11 @@
         <span class="session-live-pill approval" title="Needs approval">Review</span>
       {:else if unread}
         <span
-          class="session-status-dot dot-{unread}"
-          title={unread === "completed" ? "Completed" : "Stopped"}
-          aria-label={unread}
+          class="session-status-dot"
+          data-tone={unread.tone}
+          role="img"
+          title={unread.label}
+          aria-label={unread.label}
         ></span>
       {/if}
       <button

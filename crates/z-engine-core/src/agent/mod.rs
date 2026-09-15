@@ -4,7 +4,7 @@
 //! Ownership model:
 //! - one background tokio task owns the conversation and the loop;
 //! - the UI world talks to it through [`AgentHandle`] (`Command`s in) and
-//!   an [`EventRx`] (`Event`s out) — the TUI never touches tools/provider;
+//!   an [`EventRx`] (`Event`s out); views never execute tools directly;
 //! - aborts are cooperative: an atomic flag checked by the provider stream
 //!   and every tool, plus `select!` points on the command channel between
 //!   chunks and while awaiting approvals.
@@ -14,17 +14,27 @@
 
 pub mod events;
 
+mod auxiliary;
+mod compaction;
 mod config;
 mod execute;
 mod handle;
+mod hooks;
+mod operation_tracking;
 mod prompt_inspect;
+mod request;
 mod revert;
+mod review;
 mod side_requests;
 mod state;
 mod stream;
 mod subagent;
+mod submission;
+mod supervision;
 mod system_prompt;
 mod task;
+mod task_completion;
+mod tool_execution;
 mod turn;
 
 pub use config::LoopConfig;

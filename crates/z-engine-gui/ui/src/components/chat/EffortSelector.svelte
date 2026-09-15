@@ -29,7 +29,13 @@
 {#if show}
   <div class="model-picker">
     {#if open}
-      <div class="popover-backdrop" onclick={() => (open = false)}></div>
+      <button
+        type="button"
+        class="popover-backdrop"
+        aria-label="Close reasoning effort menu"
+        tabindex="-1"
+        onclick={() => (open = false)}
+      ></button>
     {/if}
     <button class="mode model-btn" onclick={() => (open = !open)} title="Reasoning effort">
       <Icon icon={Brain} size={11} />

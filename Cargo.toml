@@ -3,13 +3,15 @@ exclude = ["tmp"]
 resolver = "3"
 members = [
     "crates/z-engine-provider",
+    "crates/z-engine-runtime",
+    "crates/z-engine-context",
+    "crates/z-engine-project",
     "crates/z-engine-core",
     "crates/z-engine-gui/src-tauri",
-    "crates/z-engine-tui",
 ]
 
 [workspace.package]
-version = "1.4.5"
+version = "1.4.6"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT"
@@ -21,7 +23,6 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 async-trait = "0.1"
 thiserror = "2"
-anyhow = "1"
 reqwest = { version = "0.12", default-features = false, features = [
     "json",
     "stream",
@@ -32,20 +33,16 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 ulid = { version = "1", features = ["serde"] }
 toml = "0.9"
 dirs = "6"
-ratatui = "0.29"
-crossterm = { version = "0.28", features = ["event-stream"] }
 futures = "0.3"
 globset = "0.4"
 regex = "1"
 ignore = "0.4"
 similar = "2"
 strsim = "0.11"
-syntect = { version = "5", default-features = false, features = [
-    "default-fancy",
-] }
 tree-sitter = "0.25"
 tree-sitter-rust = "0.23"
 semver = "1"
+sha2 = "0.10"
 
 # dev-dependencies shared across crates
 tempfile = "3"

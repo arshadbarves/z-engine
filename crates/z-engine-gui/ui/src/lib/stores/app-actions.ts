@@ -1,12 +1,12 @@
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { handleApprove, handleDeny } from "../approvalDispatch";
-import { createWorktree, deleteSession, listSessions, submit } from "../commands";
+import { createWorktree, deleteSession, listSessions } from "../commands";
+import { submitTask } from "../sessionSubmit";
 import {
   drainReadyQueues,
   parkCurrentAndReset,
   pushToast,
   sessionStore,
-  submitOnSession,
 } from "../runtime";
 import { hydrateNewSession, hydrateOpenSession } from "../sessionOpen";
 import {
@@ -143,11 +143,7 @@ export async function createWorktreeAndStart(name: string, startNew: () => Promi
 export function flushReadyQueues() {
   const jobs = drainReadyQueues();
   for (const job of jobs) {
-    submitOnSession(job.sessionId, job.text, job.images);
-    void submit(job.text, job.images, job.sessionId).catch((e) => {
-      console.error(e);
-      pushToast(String(e).replace("Error: ", ""), "warn");
-    });
+    void submitTask(job.text, job.images, job.sessionId);
   }
 }
 

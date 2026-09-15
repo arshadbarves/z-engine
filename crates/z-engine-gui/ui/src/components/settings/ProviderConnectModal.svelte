@@ -74,7 +74,7 @@
       });
       onClose();
     } catch (err) {
-      pushToast(`Failed to connect: ${String(err)}`, "error");
+      pushToast(`Failed to connect: ${String(err)}`, "warn");
     } finally {
       saving = false;
     }

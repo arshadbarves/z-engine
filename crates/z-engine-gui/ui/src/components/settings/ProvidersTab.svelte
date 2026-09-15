@@ -52,15 +52,15 @@
     model: string;
     baseUrl: string;
   }) {
-    if (params.apiKey) {
-      await saveApiKey(params.apiKey);
-    }
     await saveGeneral({
       model: params.model.trim() || null,
       baseUrl: params.baseUrl.trim() || null,
       maxContextTokens: cfg.maxContextTokens ?? null,
       review: cfg.reviewEnabled ?? null,
     });
+    if (params.apiKey) {
+      await saveApiKey(params.apiKey);
+    }
     if (params.model.trim()) {
       modelStore.set(params.model.trim());
     }

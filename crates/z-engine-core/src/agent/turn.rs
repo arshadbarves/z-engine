@@ -7,26 +7,23 @@ use std::sync::{Arc, Mutex};
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use z_engine_provider::{
-    AccumulatedToolCall, ChatMessage, ChatRequest, Client, ToolCall, ToolCallAccumulator,
-};
+use z_engine_provider::{AccumulatedToolCall, ChatMessage, Client, ToolCall, ToolCallAccumulator};
 
 use crate::context::{
-    self,
     budget::{BudgetMeter, Pressure},
-    compact,
     notes::NotesStore,
 };
 use crate::session::{SessionEvent, SessionWriter};
 use crate::tools::{ToolCtx, ToolRegistry};
+use crate::verification::WorkspaceSnapshot;
 
 use super::LoopConfig;
+use super::compaction::{compact_working_set, elide_marked_outputs};
 use super::events::{Command, Event};
 use super::execute::{ExecutionsOutcome, execute_calls};
-use super::side_requests::{run_review, summarize_segment};
+use super::review::{ReviewOutcome, run_review};
 use super::state::LoopState;
 use super::stream::{StreamOutcome, consume_stream};
-use super::system_prompt::l0_message;
 
 /// Safety valve against genuinely runaway loops. Spec says "no hard turn
 /// cap"; 500 consecutive tool rounds is far beyond any real task and only
@@ -52,8 +49,14 @@ pub(super) async fn run_turn(
     meter: &BudgetMeter,
     notes: &Arc<Mutex<NotesStore>>,
     recorder: &mut Option<SessionWriter>,
+    baseline: Option<&WorkspaceSnapshot>,
 ) -> TurnOutcome {
     let mut rounds: u32 = 0;
+    let mut malformed_rounds: u32 = 0;
+    let mut supervisor = match z_engine_runtime::Supervisor::new(cfg.max_task_continuations) {
+        Ok(supervisor) => supervisor,
+        Err(error) => return TurnOutcome::Failed(error.to_string()),
+    };
 
     loop {
         if abort_flag.load(Ordering::Relaxed) {
@@ -69,7 +72,15 @@ pub(super) async fn run_turn(
 
         // ---- pressure management (spec §6) ---------------------------
         if state.force_compact || meter.level(state.pressure_tokens()) == Pressure::Compact {
-            compact_working_set(client, cfg, state, notes, ev_tx, recorder).await;
+            if let Err(error) =
+                compact_working_set(client, cfg, state, notes, ev_tx, recorder, abort_flag).await
+            {
+                return if abort_flag.load(Ordering::Relaxed) {
+                    TurnOutcome::Aborted
+                } else {
+                    TurnOutcome::Failed(format!("Could not compact context: {error}"))
+                };
+            }
             state.force_compact = false;
         } else if meter.level(state.pressure_tokens()) == Pressure::Warn {
             let _ = ev_tx.send(Event::StatusNote(format!(
@@ -79,52 +90,19 @@ pub(super) async fn run_turn(
             )));
         }
         // Eager droppable elision — every round, pressure or not.
-        {
-            let ids = notes
-                .lock()
-                .map(|mut n| n.take_droppable_ids())
-                .unwrap_or_default();
-            let elided = compact::elide_droppable(&mut state.working, &ids, &cfg.tmp_dir);
-            if elided > 0 {
+        match elide_marked_outputs(&mut state.working, notes, &cfg.tmp_dir) {
+            Ok(0) => {}
+            Ok(count) => {
                 let _ = ev_tx.send(Event::StatusNote(format!(
-                    "dropped {elided} marked tool output(s) from context"
+                    "dropped {count} marked tool output(s) from context"
                 )));
             }
+            Err(error) => return TurnOutcome::Failed(error.to_string()),
         }
-
-        // ---- assemble L0 + repo map + L1 + working -------------------
-        use std::sync::atomic::Ordering as AtomicOrdering;
-        if ctx.repo_map_dirty.swap(false, AtomicOrdering::Relaxed) || state.repo_map_text.is_none()
-        {
-            state.repo_map_text = Some(context::repo_map::refresh_repo_map(ctx));
-            tracing::debug!("repo map refreshed");
-        }
-
-        let mut request_messages = Vec::with_capacity(state.working.len() + 3);
-        request_messages.push(l0_message(cfg));
-        if let Some(map) = &state.repo_map_text {
-            if !map.is_empty() {
-                request_messages.push(ChatMessage::system(map.clone()));
-            }
-        }
-        if let Some(notes_block) = notes.lock().ok().and_then(|n| n.render_block()) {
-            request_messages.push(ChatMessage::system(notes_block));
-        }
-        request_messages.extend(state.working.iter().cloned());
-
-        let mut request =
-            ChatRequest::new(cfg.model.clone(), request_messages).with_tools(registry.defs());
-        // Explicit output ceiling: without it gateways assume the model
-        // maximum and pre-charge credits against that worst case.
-        request = request.with_max_tokens(cfg.max_output_tokens);
-        if let Some(effort) = state.reasoning_effort.clone() {
-            request = request.with_reasoning_effort(effort);
-        }
-        if let Ok(mut slot) = state.last_prompt.lock() {
-            *slot = Some(super::prompt_inspect::PromptInspect::from_request(
-                &request, true,
-            ));
-        }
+        let request = match super::request::assemble(cfg, registry, ctx, state, notes, ev_tx) {
+            Ok(request) => request,
+            Err(error) => return TurnOutcome::Failed(error.to_string()),
+        };
         let mut stream = client.stream_chat(&request, Arc::clone(abort_flag));
 
         // ---- consume the stream --------------------------------------
@@ -156,6 +134,7 @@ pub(super) async fn run_turn(
         // reject unpaired tool results with 400 — poisoning the session).
         let mut wire_only_calls: Vec<ToolCall> = Vec::new();
         let mut synthetic_errors: Vec<(String, String)> = Vec::new();
+        let mut protocol_error = false;
 
         for call in finalized {
             match call {
@@ -166,6 +145,10 @@ pub(super) async fn run_turn(
                     raw_arguments,
                     reason,
                 } => {
+                    protocol_error = true;
+                    if let Err(error) = super::task_completion::invalidate(ctx) {
+                        return TurnOutcome::Failed(error.to_string());
+                    }
                     tracing::warn!(tool = ?name, %reason, "malformed tool arguments");
                     let raw_short: String = raw_arguments.chars().take(200).collect();
                     synthetic_errors.push((
@@ -183,6 +166,10 @@ pub(super) async fn run_turn(
                     });
                 }
                 AccumulatedToolCall::MissingId { index } => {
+                    protocol_error = true;
+                    if let Err(error) = super::task_completion::invalidate(ctx) {
+                        return TurnOutcome::Failed(error.to_string());
+                    }
                     tracing::warn!(index, "tool-call delta without id; skipped");
                     state.working.push(ChatMessage::user(format!(
                         "[harness] a tool call (index {index}) arrived without an id and was skipped."
@@ -194,7 +181,7 @@ pub(super) async fn run_turn(
         let mut all_wire_calls = complete_calls.clone();
         all_wire_calls.extend(wire_only_calls);
         if let Some(w) = recorder.as_mut() {
-            let _ = w.record(&SessionEvent::AssistantMsg {
+            if let Err(error) = w.record(&SessionEvent::AssistantMsg {
                 content: (!text.is_empty()).then(|| text.clone()),
                 tool_calls: all_wire_calls
                     .iter()
@@ -204,7 +191,11 @@ pub(super) async fn run_turn(
                         arguments: c.function.arguments.clone(),
                     })
                     .collect(),
-            });
+            }) {
+                return TurnOutcome::Failed(format!(
+                    "Could not record assistant response: {error}"
+                ));
+            }
         }
         state.working.push(ChatMessage::Assistant {
             content: (!text.is_empty()).then_some(text),
@@ -212,15 +203,44 @@ pub(super) async fn run_turn(
         });
         for (id, content) in synthetic_errors {
             if let Some(w) = recorder.as_mut() {
-                let _ = w.record(&SessionEvent::ToolResult {
+                if let Err(error) = w.record(&SessionEvent::ToolResult {
                     tool_call_id: id.clone(),
                     content: content.clone(),
-                });
+                }) {
+                    return TurnOutcome::Failed(format!("Could not record tool error: {error}"));
+                }
             }
             state.working.push(ChatMessage::tool_result(id, content));
         }
 
         if complete_calls.is_empty() {
+            if protocol_error {
+                malformed_rounds += 1;
+                if malformed_rounds <= 2 {
+                    continue;
+                }
+                return TurnOutcome::Failed(
+                    "Model emitted malformed tool calls after two correction attempts.".into(),
+                );
+            }
+            if cfg.max_task_continuations > 0 {
+                match super::supervision::at_boundary(
+                    &mut supervisor,
+                    ctx,
+                    baseline,
+                    recorder,
+                    ev_tx,
+                )
+                .await
+                {
+                    Ok(true) => continue,
+                    Ok(false) => {}
+                    Err(error) => return TurnOutcome::Failed(error.to_string()),
+                }
+            }
+            if abort_flag.load(Ordering::Relaxed) {
+                return TurnOutcome::Aborted;
+            }
             return TurnOutcome::Completed;
         }
         // Even when finish_reason â  tool_calls, emitted calls demand execution.
@@ -235,16 +255,24 @@ pub(super) async fn run_turn(
             state,
             abort_flag,
             &cfg.initial_mode,
+            recorder,
         )
         .await
         {
             ExecutionsOutcome::Ran(results) => {
                 for (call_id, content) in results {
                     if let Some(w) = recorder.as_mut() {
-                        let _ = w.record(&SessionEvent::ToolResult {
+                        if let Err(error) = w.record(&SessionEvent::ToolResult {
                             tool_call_id: call_id.clone(),
                             content: content.clone(),
-                        });
+                        }) {
+                            return TurnOutcome::Failed(format!(
+                                "Could not record tool result: {error}"
+                            ));
+                        }
+                    }
+                    if let Err(error) = super::task_completion::publish(ctx, recorder, ev_tx) {
+                        return TurnOutcome::Failed(error.to_string());
                     }
                     state
                         .working
@@ -255,55 +283,43 @@ pub(super) async fn run_turn(
                 // edited files, ask a side-model to audit the diffs.
                 let journal = ctx.take_edit_journal();
                 if cfg.review_enabled && !journal.is_empty() {
-                    match run_review(client, &cfg.model, &state.current_task, &journal).await {
-                        Some(findings) => {
+                    match run_review(
+                        client,
+                        &cfg.model,
+                        &state.current_task,
+                        &journal,
+                        abort_flag,
+                    )
+                    .await
+                    {
+                        ReviewOutcome::Findings(findings) => {
                             let _ =
                                 ev_tx.send(Event::StatusNote("reviewer posted findings".into()));
                             state
                                 .working
-                                .push(ChatMessage::user(format!("[harness reviewer]\n{findings}")));
+                                .push(ChatMessage::user(
+                                    serde_json::json!({"kind": "review_findings", "findings": findings}).to_string()
+                                ));
                         }
-                        None => {
+                        ReviewOutcome::NoFindings => {
                             let _ = ev_tx.send(Event::StatusNote("reviewer: no findings".into()));
+                        }
+                        ReviewOutcome::Cancelled => return TurnOutcome::Aborted,
+                        ReviewOutcome::Unavailable(reason) => {
+                            let _ = ev_tx.send(Event::StatusNote(reason.clone()));
+                            if let Err(error) = super::task_completion::block(ctx, reason.clone()) {
+                                return TurnOutcome::Failed(error.to_string());
+                            }
+                            state.working.push(ChatMessage::user(
+                                serde_json::json!({"kind": "review_unavailable", "reason": reason})
+                                    .to_string(),
+                            ));
                         }
                     }
                 }
             }
             ExecutionsOutcome::Aborted => return TurnOutcome::Aborted,
+            ExecutionsOutcome::Failed(error) => return TurnOutcome::Failed(error),
         }
     }
-}
-
-/// Compaction driver (spec section 6): elide L4, summarize L3 into L1.
-async fn compact_working_set(
-    client: &Client,
-    cfg: &LoopConfig,
-    state: &mut LoopState,
-    notes: &Arc<Mutex<NotesStore>>,
-    ev_tx: &UnboundedSender<Event>,
-    recorder: &mut Option<SessionWriter>,
-) {
-    let before = state.pressure_tokens();
-    let mut outcome = compact::compact(&state.working, cfg.keep_recent_messages, &cfg.tmp_dir);
-
-    if !outcome.summarize_input.is_empty() {
-        let summary = summarize_segment(client, cfg, &outcome.summarize_input).await;
-        if !summary.is_empty() {
-            if let Some(w) = recorder.as_mut() {
-                let _ = w.record(&SessionEvent::Note {
-                    text: summary.clone(),
-                });
-            }
-            if let Ok(mut n) = notes.lock() {
-                n.add_summary(summary);
-            }
-        }
-    }
-
-    state.working = std::mem::take(&mut outcome.messages);
-    let after = state.estimate_working();
-    let _ = ev_tx.send(Event::StatusNote(format!(
-        "context compacted: ~{} -> ~{} tokens ({} tool outputs elided)",
-        before, after, outcome.elided_tool_outputs
-    )));
 }

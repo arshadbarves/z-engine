@@ -22,7 +22,6 @@
     hydrateStore,
     initEvents,
     modelStore,
-    queueStore,
     sessionActivityStore,
     sessionStore,
     sessionsTickStore,
@@ -56,7 +55,6 @@
   const sessionsTick = bindStore(sessionsTickStore);
   const config = bindStore(configStore);
   const workspaces = bindStore(workspaceStore);
-  const queued = bindStore(queueStore);
   const awaitingApproval = bindStore(approvalGateStore);
   const sessionActivity = bindStore(sessionActivityStore);
   const hydrating = bindStore(hydrateStore);
@@ -231,18 +229,6 @@
             <JumpLatest onJump={() => scroller.jumpToLatest()} busy={busy.current} />
           {/if}
         </div>
-
-        {#if queued.current.length > 0}
-          <div class="queue-strip">
-            <span class="queue-label">queued</span>
-            {#each queued.current as q, i}
-              <span class="queue-pill" title={q.text}>
-                {q.text.slice(0, 48) || `(${q.images.length} image(s))`}
-                <button title="Remove from queue" onclick={() => queueStore.removeAt(i)}>×</button>
-              </span>
-            {/each}
-          </div>
-        {/if}
 
         <Composer />
       </div>

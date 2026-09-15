@@ -20,6 +20,7 @@ import {
   rt,
 } from "./state";
 import { parkedEntries } from "../sessionSnaps";
+import { applyTaskReport, ensureUnassessedTask } from "./taskReports";
 
 function parked() {
   return parkedEntries();
@@ -27,7 +28,7 @@ function parked() {
 
 export function handleEvent(ev: EventPayload) {
   const sid = String(ev.sessionId ?? "");
-  if (sid && rt.sessionId && sid !== rt.sessionId) {
+  if (sid && sid !== rt.sessionId && (rt.sessionId || ev.type !== "sessionChanged")) {
     if (sid === "boot") return;
     applyToParked(sid, dispatchEvent, ev);
     return;
@@ -77,6 +78,9 @@ export function dispatchEvent(ev: EventPayload) {
     }
     case "turnStarted":
       bumpSessionsTick();
+      break;
+    case "taskUpdated":
+      applyTaskReport(ev.report);
       break;
     case "toolCallStarted": {
       closeThinking();
@@ -182,9 +186,10 @@ export function dispatchEvent(ev: EventPayload) {
           completionTokens: Number(ev.completionTokens ?? rt.usage.completionTokens),
         };
         const ms = rt.turnStartedAt ? Date.now() - rt.turnStartedAt : 0;
-        push("status", ms > 0 ? `✓ done · ${(ms / 1000).toFixed(1)}s` : "✓ done", {
-          ok: true,
-        });
+        ensureUnassessedTask();
+        push("status", ms > 0
+          ? `Response finished · ${(ms / 1000).toFixed(1)}s`
+          : "Response finished");
       } else {
         push("status", "■ aborted", { ok: false });
       }
@@ -233,6 +238,10 @@ function routeStatusNote(text: string) {
   if (text === "shell unavailable") {
     appendShellLine("shell unavailable");
     pushToast("Shell unavailable", "warn");
+    return;
+  }
+  if (text.startsWith("rewind: no file changes recorded")) {
+    pushToast("No file changes to rewind", "info");
     return;
   }
   const tone: Toast["tone"] =

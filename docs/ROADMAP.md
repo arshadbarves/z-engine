@@ -1,5 +1,11 @@
 # Roadmap progress
 
+This is a historical delivery and acceptance record. New GUI-first harness
+work is tracked in the [vertical-slice roadmap](roadmap/agent-harness.md), with
+a [current-state assessment](architecture/current-state.md) separating existing
+capabilities from proposed guarantees. Checkmarks below retain their original
+scope and do not imply evidence-gated completion or durable Pause.
+
 Mirrors spec §9. Each version: tests green · clippy clean · demo done · tagged.
 
 - [x] **v0.1 — Walking skeleton** — workspace; SSE provider w/ streamed tool-call deltas;

@@ -29,6 +29,8 @@ export type TranscriptBlock =
 export type TurnBlock =
   | { type: "user"; msg: Msg }
   | { type: "approval"; msg: Msg }
+  | { type: "task"; msg: Msg }
+  | { type: "status"; msg: Msg }
   | { type: "assistant"; msg: Msg; workItems: Msg[] }
   | { type: "work"; items: Msg[] }
   | { type: "error"; msg: Msg };
@@ -78,13 +80,20 @@ export function groupTurns(messages: Msg[]): TurnBlock[] {
     }
 
     if (m.kind === "status") {
-      if (m.ok === false) {
-        if (pendingWork.length > 0) {
-          blocks.push({ type: "work", items: pendingWork });
-          pendingWork = [];
-        }
-        blocks.push({ type: "error", msg: m });
+      if (pendingWork.length > 0) {
+        blocks.push({ type: "work", items: pendingWork });
+        pendingWork = [];
       }
+      blocks.push({ type: m.ok === false ? "error" : "status", msg: m });
+      continue;
+    }
+
+    if (m.kind === "task") {
+      if (pendingWork.length > 0) {
+        blocks.push({ type: "work", items: pendingWork });
+        pendingWork = [];
+      }
+      blocks.push({ type: "task", msg: m });
       continue;
     }
 
@@ -179,6 +188,7 @@ export function parseActivityLedger(items: Msg[]): ActivityLedger {
           metric: dur > 0 ? fmtDur(dur) : undefined,
           dur,
           ok: m.ok,
+          output: m.output,
         };
         all.push(entry);
         files.push(entry);
@@ -191,6 +201,7 @@ export function parseActivityLedger(items: Msg[]): ActivityLedger {
           metric: dur > 0 ? fmtDur(dur) : undefined,
           dur,
           ok: m.ok,
+          output: m.output,
         };
         all.push(entry);
         files.push(entry);
@@ -203,6 +214,7 @@ export function parseActivityLedger(items: Msg[]): ActivityLedger {
           metric: dur > 0 ? fmtDur(dur) : undefined,
           dur,
           ok: m.ok,
+          output: m.output,
         };
         all.push(entry);
         searches.push(entry);
@@ -228,6 +240,7 @@ export function parseActivityLedger(items: Msg[]): ActivityLedger {
           metric: dur > 0 ? fmtDur(dur) : undefined,
           dur,
           ok: m.ok,
+          output: m.output,
         };
         all.push(entry);
       }

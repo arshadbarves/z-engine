@@ -79,19 +79,19 @@
 }
 
 .settings-nav-island {
-  width: 256px;
+  width: 260px;
   height: 100%;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px;
-  background: var(--bg-sidebar);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid var(--border);
+  padding: 10px 8px 8px 8px;
+  background: rgba(18, 18, 22, 0.72);
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-m);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 28px -4px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -106,18 +106,20 @@
 .prefs-search-wrap input {
   width: 100%;
   height: 32px;
-  padding: 0 24px 0 28px;
+  padding: 0 24px 0 30px;
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: var(--radius-s);
   font-size: 12px;
   color: var(--text);
   outline: none;
-  transition: border-color 0.14s ease;
+  transition: all var(--dur-fast) var(--ease-out);
 }
 
 .prefs-search-wrap input:focus {
-  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 .prefs-search-icon {
@@ -141,7 +143,7 @@
 .settings-nav {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   flex: 1;
   overflow-y: auto;
 }
@@ -151,14 +153,16 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 8px 10px;
-  border: none;
-  border-radius: 10px;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: 8px;
   background: transparent;
   color: var(--text-2);
   text-align: left;
   cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+  transition: background var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-fast) var(--ease-out);
 }
 
 .settings-nav-btn:hover {
@@ -167,25 +171,31 @@
 }
 
 .settings-nav-btn.active {
-  color: var(--text);
-  background: var(--accent-dim);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 .settings-nav-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
   background: rgba(255, 255, 255, 0.04);
   color: inherit;
   flex-shrink: 0;
+  transition: all var(--dur-fast) var(--ease-out);
+}
+
+.settings-nav-btn:hover .settings-nav-icon {
+  background: rgba(255, 255, 255, 0.07);
 }
 
 .settings-nav-btn.active .settings-nav-icon {
-  background: rgba(94, 106, 210, 0.16);
-  color: var(--accent);
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
 }
 
 .settings-nav-copy {
@@ -197,12 +207,13 @@
 
 .settings-nav-copy em {
   font-style: normal;
-  font-size: 13px;
-  font-weight: 560;
+  font-size: 12.5px;
+  font-weight: 550;
+  letter-spacing: -0.01em;
 }
 
 .settings-nav-copy small {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--text-3);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -210,19 +221,24 @@
 }
 
 .settings-nav-btn .update-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 4px rgba(94, 106, 210, 0.16);
+  background: var(--ok);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
   flex-shrink: 0;
 }
 
 .settings-rail-foot {
-  padding: 8px 4px 0;
-  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 4px 0 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 10px;
+  font-weight: 550;
   color: var(--text-3);
-  border-top: 1px solid var(--border);
+  letter-spacing: 0.02em;
 }
 
 /* ── canvas floating island ──────────────────────────────────────────── */
@@ -235,11 +251,9 @@
   flex-direction: column;
   position: relative;
   background: var(--surface);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
   overflow: hidden;
 }
 
@@ -548,9 +562,7 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  background: rgba(0, 0, 0, 0.72);
   animation: veil-in var(--dur-fast) var(--ease-out) both;
 }
 
@@ -566,10 +578,10 @@
   position: relative;
   width: 100%;
   max-width: 480px;
-  background: rgba(20, 20, 22, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-m);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65);
   overflow: hidden;
   z-index: 125;
   animation: content-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;

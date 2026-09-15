@@ -4,7 +4,6 @@
 use z_engine_provider::{ChatMessage, ChatRequest, ContentPart, ToolDef};
 
 use super::LoopConfig;
-use crate::context;
 
 /// One message that was (or will be) sent on the wire.
 #[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
@@ -41,10 +40,7 @@ pub struct PromptInspect {
 impl PromptInspect {
     /// L0 + advertised tools, for inspect-before-first-turn.
     pub fn preview(cfg: &LoopConfig, tools: Vec<ToolDef>) -> Self {
-        let l0 = ChatMessage::system(context::build_system_prompt(
-            &cfg.project_root,
-            context::load_agents_md(&cfg.project_root).as_deref(),
-        ));
+        let l0 = super::system_prompt::l0_message(cfg);
         Self::from_request(
             &ChatRequest::new(cfg.model.clone(), vec![l0]).with_tools(tools),
             false,
@@ -53,14 +49,11 @@ impl PromptInspect {
 
     /// Resume snapshot: L0 + persisted working set (notes/MCP filled in later).
     pub fn resumed(cfg: &LoopConfig, working: &[ChatMessage], tools: Vec<ToolDef>) -> Self {
-        let mut messages = vec![ChatMessage::system(context::build_system_prompt(
-            &cfg.project_root,
-            context::load_agents_md(&cfg.project_root).as_deref(),
-        ))];
+        let mut messages = vec![super::system_prompt::l0_message(cfg)];
         messages.extend(working.iter().cloned());
         Self::from_request(
             &ChatRequest::new(cfg.model.clone(), messages).with_tools(tools),
-            true,
+            false,
         )
     }
 
@@ -137,8 +130,16 @@ fn flatten_parts(parts: &[ContentPart]) -> String {
 }
 
 fn label_for(idx: usize, role: &str, content: &str) -> String {
+    if role == "user"
+        && content.starts_with('{')
+        && serde_json::from_str::<serde_json::Value>(content).is_ok_and(|value| {
+            value.get("kind").and_then(|kind| kind.as_str()) == Some("task_context")
+        })
+    {
+        return "Grounded task context".into();
+    }
     match role {
-        "system" if content.starts_with("# Repository symbol map") => "Repo map".into(),
+        "system" | "user" if content.starts_with("# Repository symbol map") => "Repo map".into(),
         "system" if content.starts_with("# Session context notes") => "Notes".into(),
         "system" if idx == 0 => "System".into(),
         "system" => "System".into(),

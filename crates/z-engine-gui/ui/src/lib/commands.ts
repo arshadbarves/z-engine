@@ -79,6 +79,8 @@ export interface McpServerInfo {
   args: string[];
 }
 
+export type TaskReportView = "quiet" | "compact" | "detailed";
+
 export interface HarnessConfig {
   model: string;
   maxContextTokens: number;
@@ -86,6 +88,8 @@ export interface HarnessConfig {
   compactAtPercent?: number;
   baseUrl?: string;
   reviewEnabled?: boolean;
+  maxTaskContinuations?: number;
+  taskReportView: TaskReportView;
   hasApiKey?: boolean;
   apiKeyHint?: string | null;
   pricing?: PricingInfo | null;
@@ -101,6 +105,8 @@ export interface GeneralPatch {
   baseUrl?: string | null;
   maxContextTokens?: number | null;
   review?: boolean | null;
+  maxTaskContinuations?: number | null;
+  taskReportView?: TaskReportView | null;
 }
 
 export const saveGeneral = (p: GeneralPatch) =>
@@ -109,6 +115,8 @@ export const saveGeneral = (p: GeneralPatch) =>
     baseUrl: p.baseUrl ?? null,
     maxContextTokens: p.maxContextTokens ?? null,
     review: p.review ?? null,
+    maxTaskContinuations: p.maxTaskContinuations ?? null,
+    taskReportView: p.taskReportView ?? null,
   });
 
 export const saveApiKey = (key: string | null) =>

@@ -4,11 +4,8 @@
   import { bindStore } from "$lib/svelte/bind.svelte";
   import type { Msg } from "$lib/types";
   import HomeScreen from "../home/HomeScreen.svelte";
-  import ActivityStrip from "./ActivityStrip.svelte";
-  import ApprovalCard from "./ApprovalCard.svelte";
   import ChatTimeline from "./ChatTimeline.svelte";
-  import Markdown from "./Markdown.svelte";
-  import UserCard from "./UserCard.svelte";
+  import ConversationTurn from "./primitives/ConversationTurn.svelte";
 
   type Props = {
     messages: Msg[];
@@ -48,33 +45,8 @@
       <HomeScreen {projectName} />
     {/if}
 
-    {#each turns as b (b.type === "work" ? b.items[0].id : b.msg.id)}
-      {#if b.type === "user"}
-        <UserCard m={b.msg} />
-      {:else if b.type === "approval"}
-        <ApprovalCard
-          m={b.msg}
-          onApprove={(d) => onApprove(b.msg, d)}
-          onDeny={() => onDeny(b.msg)}
-        />
-      {:else if b.type === "assistant"}
-        <div class="assistant-turn">
-          {#if b.workItems && b.workItems.length > 0}
-            <ActivityStrip items={b.workItems} />
-          {/if}
-          {#if b.msg.text.trim().length > 0 || b.msg.streaming}
-            <div class={`msg assistant${b.msg.streaming ? " streaming" : ""}`}>
-              <Markdown text={b.msg.text} />
-            </div>
-          {/if}
-        </div>
-      {:else if b.type === "work"}
-        <div class="assistant-turn">
-          <ActivityStrip items={b.items} />
-        </div>
-      {:else if b.type === "error"}
-        <div class="msg error">{b.msg.text}</div>
-      {/if}
+    {#each turns as turn (turn.type === "work" ? turn.items[0].id : turn.msg.id)}
+      <ConversationTurn {turn} {onApprove} {onDeny} />
     {/each}
 
     {#if showWorking}
@@ -85,6 +57,7 @@
           <span class="working-sec">{secs}s</span>
           <span class="working-hint"><kbd>Esc</kbd> aborts</span>
         </div>
+
       </div>
     {/if}
   </div>

@@ -11,7 +11,9 @@ pub const PROJECT_DIR: &str = ".z-engine";
 const DEFAULT_GLOBAL_TOML: &str = "# z-engine configuration\n\
 # OpenRouter API key lives in auth.json next to this file (Settings → General).\n\
 model = \"openrouter/free\"\n\
-base_url = \"https://openrouter.ai/api/v1\"\n";
+base_url = \"https://openrouter.ai/api/v1\"\n\
+# Bounded task continuations (0 disables; maximum 10). New sessions only.\n\
+max_task_continuations = 3\n";
 
 /// Directory used for new project-local writes.
 pub fn project_dir_write(project_root: &Path) -> PathBuf {
@@ -149,25 +151,72 @@ pub fn models_override_path() -> PathBuf {
         .join("models.json")
 }
 
-/// `ZENGINE_API_KEY`, then `auth.json` (OpenRouter) next to the global config.
+/// `ZENGINE_API_KEY`, then provider-specific env + `auth.json`.
 pub fn resolve_api_key() -> Option<String> {
     resolve_api_key_from(&EnvVars::from_process_env())
 }
 
-/// Injectable variant of [`resolve_api_key`] for tests.
+pub fn resolve_api_key_for(base_url: &str) -> Option<String> {
+    resolve_api_key_for_base_url(&EnvVars::from_process_env(), base_url)
+}
+
+fn trim_env(key: &str) -> Option<String> {
+    std::env::var(key)
+        .ok()
+        .map(|k| k.trim().to_string())
+        .filter(|t| !t.is_empty())
+}
+
+/// Injectable variant of [`resolve_api_key`] for tests (any configured key).
 pub fn resolve_api_key_from(env: &EnvVars) -> Option<String> {
-    if let Ok(k) = std::env::var("ZENGINE_API_KEY") {
-        let t = k.trim().to_string();
-        if !t.is_empty() {
-            return Some(t);
-        }
+    trim_env("ZENGINE_API_KEY")
+        .or_else(|| trim_env("OPENCODE_API_KEY"))
+        .or_else(|| super::auth::openrouter_key(env))
+        .or_else(|| super::auth::opencode_key(env))
+}
+
+/// Pick the API key that matches the active gateway (`base_url`).
+pub fn resolve_api_key_for_base_url(env: &EnvVars, base_url: &str) -> Option<String> {
+    if let Some(k) = trim_env("ZENGINE_API_KEY") {
+        return Some(k);
+    }
+    let base = base_url.to_ascii_lowercase();
+    if base.contains("opencode.ai") {
+        return trim_env("OPENCODE_API_KEY").or_else(|| super::auth::opencode_key(env));
+    }
+    if base.contains("openrouter.ai") {
+        return super::auth::openrouter_key(env);
     }
     super::auth::openrouter_key(env)
+        .or_else(|| trim_env("OPENCODE_API_KEY").or_else(|| super::auth::opencode_key(env)))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::auth;
+
+    #[test]
+    fn resolve_api_key_for_base_url_prefers_opencode_bucket() {
+        let tmp = tempfile::tempdir().unwrap();
+        let env = EnvVars {
+            harness_model: None,
+            harness_base_url: None,
+            harness_config: Some(
+                tmp.path()
+                    .join("config.toml")
+                    .to_string_lossy()
+                    .into_owned(),
+            ),
+            harness_shell: None,
+        };
+        auth::set_opencode_key(&env, Some("zen-secret")).unwrap();
+        assert_eq!(
+            resolve_api_key_for_base_url(&env, "https://opencode.ai/zen/v1").as_deref(),
+            Some("zen-secret")
+        );
+        assert!(resolve_api_key_for_base_url(&env, "https://openrouter.ai/api/v1").is_none());
+    }
 
     #[test]
     fn project_read_ignores_legacy_harness_and_uses_z_engine() {
@@ -195,6 +244,7 @@ mod tests {
         assert!(cfg_path.is_file());
         let text = std::fs::read_to_string(&cfg_path).unwrap();
         assert!(text.contains("openrouter"));
+        assert!(text.contains("max_task_continuations = 3"));
         let auth = tmp.path().join("auth.json");
         assert!(auth.is_file());
         assert_eq!(std::fs::read_to_string(&auth).unwrap().trim(), "{}");

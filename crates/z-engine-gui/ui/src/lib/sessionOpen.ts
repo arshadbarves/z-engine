@@ -18,6 +18,8 @@ import {
   type ReplayEvent,
 } from "./events";
 import { ulidFromPath } from "./sessionList";
+import { applyToParked } from "./runtime/session";
+import { markTaskReportsPending, mergeRefreshedTaskReports } from "./runtime/taskReportRefresh";
 
 function applyUsageFromTranscript() {
   const messages = transcriptStore.getSnapshot();
@@ -34,20 +36,29 @@ export async function hydrateOpenSession(
   activateSession(id);
   const live =
     transcriptStore.getSnapshot().length > 0 || busyStore.getSnapshot();
+  const reports = markTaskReportsPending();
   const gen = live ? null : beginHydrate();
   try {
     const result = await startSession(path, root ?? null);
+    if (id !== sessionStore.getSnapshot()) {
+      applyToParked(id, () => mergeRefreshedTaskReports(result.events, reports), {
+        type: "refreshTaskReports",
+      });
+      return;
+    }
     // After restart (and any sessionChanged race) the parked snap is
     // empty — rebuild from JSONL whenever the transcript is still blank.
     if (transcriptStore.getSnapshot().length === 0 && !busyStore.getSnapshot()) {
       replaySession((result?.events ?? []) as ReplayEvent[]);
       applyUsageFromTranscript();
+    } else {
+      mergeRefreshedTaskReports(result.events, reports);
     }
   } catch (e) {
     console.error("session replay failed:", e);
     pushToast(live ? "Could not switch to this chat" : "Could not restore this chat", "warn");
   } finally {
-    if (gen != null) window.setTimeout(() => endHydrate(gen), 32);
+    if (gen != null) globalThis.setTimeout(() => endHydrate(gen), 32);
   }
 }
 
@@ -55,20 +66,24 @@ export async function hydrateNewSession(
   root: string | null,
 ): Promise<{ ulid: string; path: string } | null> {
   const gen = beginHydrate();
+  let startedId = "";
   parkCurrentAndReset();
   resetUsage();
   try {
     const result = await startSession(null, root);
     const ulid = result?.ulid;
-    if (ulid && ulid !== sessionStore.getSnapshot()) activateSession(ulid);
-    const path = result?.path ?? "";
-    if (ulid && path) return { ulid, path };
-    return ulid ? { ulid, path } : null;
+    startedId = ulid;
+    if (!ulid || ulid === "boot" || !result.path) {
+      throw new Error("The backend did not return a recorded session path");
+    }
+    if (ulid !== sessionStore.getSnapshot()) activateSession(ulid);
+    return { ulid, path: result.path };
   } catch (e) {
     console.error(e);
+    if (startedId && sessionStore.getSnapshot() === startedId) parkCurrentAndReset();
     pushToast("Could not start a new chat", "warn");
     return null;
   } finally {
-    window.setTimeout(() => endHydrate(gen), 32);
+    endHydrate(gen);
   }
 }

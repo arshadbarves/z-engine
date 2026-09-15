@@ -1,14 +1,11 @@
 use super::paths::{global_config_path, project_config_read_path};
-use super::types::{CliOverrides, Config, ConfigError, EnvVars, PartialConfig};
+use super::types::{Config, ConfigError, EnvVars, MAX_TASK_CONTINUATIONS, PartialConfig};
 
 impl Config {
-    /// Load configuration from the process environment + config files +
-    /// CLI overrides. `project_root` enables the project-level
+    /// Load configuration from the process environment and config files.
+    /// `project_root` enables the project-level
     /// `.z-engine/config.toml` layer (spec section 8).
-    pub fn load(
-        cli: &CliOverrides,
-        project_root: Option<&std::path::Path>,
-    ) -> Result<Self, ConfigError> {
+    pub fn load(project_root: Option<&std::path::Path>) -> Result<Self, ConfigError> {
         let env = EnvVars::from_process_env();
         let global_path = global_config_path(&env);
         let global_text = match &global_path {
@@ -44,7 +41,6 @@ impl Config {
             project.as_deref(),
             project_text.as_deref(),
             &env,
-            cli,
         )
     }
 
@@ -54,12 +50,11 @@ impl Config {
         global_path: Option<&std::path::Path>,
         global_text: Option<&str>,
         env: &EnvVars,
-        cli: &CliOverrides,
     ) -> Result<Self, ConfigError> {
-        Self::layer_all(global_path, global_text, None, None, env, cli)
+        Self::layer_all(global_path, global_text, None, None, env)
     }
 
-    /// Full ladder: defaults < global < project < env < CLI.
+    /// Full ladder: defaults < global < project < env.
     /// Allow rules UNION across files; scalars override.
     pub fn layer_all(
         global_path: Option<&std::path::Path>,
@@ -67,7 +62,6 @@ impl Config {
         project_path: Option<&std::path::Path>,
         project_text: Option<&str>,
         env: &EnvVars,
-        cli: &CliOverrides,
     ) -> Result<Self, ConfigError> {
         // defaults
         let mut cfg = Config::default();
@@ -118,15 +112,11 @@ impl Config {
             },
         );
 
-        // CLI flags
-        apply(
-            &mut cfg,
-            &PartialConfig {
-                model: cli.model.clone(),
-                base_url: cli.base_url.clone(),
-                ..PartialConfig::default()
-            },
-        );
+        if cfg.max_task_continuations > MAX_TASK_CONTINUATIONS {
+            return Err(ConfigError::InvalidTaskContinuations(
+                cfg.max_task_continuations,
+            ));
+        }
 
         // Normalize: strip trailing slash so `{base}/chat/completions` joining
         // behaves regardless of how the user wrote it.
@@ -162,6 +152,12 @@ fn apply(cfg: &mut Config, partial: &PartialConfig) {
     }
     if let Some(v) = partial.review_enabled {
         cfg.review_enabled = v;
+    }
+    if let Some(v) = partial.max_task_continuations {
+        cfg.max_task_continuations = v;
+    }
+    if let Some(v) = partial.task_report_view {
+        cfg.task_report_view = v;
     }
     if let Some(v) = &partial.mcp_servers {
         // union by name; later layers win on command/args
@@ -207,7 +203,7 @@ mod tests {
 
     #[test]
     fn defaults_when_no_layers() {
-        let cfg = Config::layer(None, None, &env(None, None), &CliOverrides::default()).unwrap();
+        let cfg = Config::layer(None, None, &env(None, None)).unwrap();
         assert_eq!(cfg, Config::default());
         assert_eq!(cfg.base_url, "https://openrouter.ai/api/v1");
     }
@@ -225,7 +221,6 @@ allow = ["cargo test*", "git status"]
             Some(std::path::Path::new("/tmp/harness-test-config.toml")),
             Some(text),
             &env(None, None),
-            &CliOverrides::default(),
         )
         .unwrap();
         assert_eq!(cfg.model, "qwen/qwen3-coder");
@@ -236,22 +231,18 @@ allow = ["cargo test*", "git status"]
     }
 
     #[test]
-    fn precedence_env_beats_file_cli_beats_env() {
+    fn precedence_env_beats_file() {
         let text = r#"
 model = "from-file"
 base_url = "http://from-file/v1/"
 "#;
         let cfg = Config::layer(
-            None,
+            Some(std::path::Path::new("/tmp/global.toml")),
             Some(text),
             &env(Some("from-env"), Some("http://from-env/v1")),
-            &CliOverrides {
-                model: Some("from-cli".into()),
-                base_url: None,
-            },
         )
         .unwrap();
-        assert_eq!(cfg.model, "from-cli"); // cli > env
+        assert_eq!(cfg.model, "from-env");
         assert_eq!(cfg.base_url, "http://from-env/v1"); // env > file, slash stripped
     }
 
@@ -267,7 +258,6 @@ base_url = "http://from-file/v1/"
             Some(&tmp.path().join(".harness/config.toml")),
             Some(project),
             &env(None, None),
-            &CliOverrides::default(),
         )
         .unwrap();
         assert_eq!(cfg.model, "g");
@@ -283,7 +273,6 @@ base_url = "http://from-file/v1/"
             Some(std::path::Path::new("/tmp/p.toml")),
             Some("model = "),
             &env(None, None),
-            &CliOverrides::default(),
         );
         assert!(matches!(err, Err(ConfigError::Parse { .. })));
     }
@@ -294,7 +283,6 @@ base_url = "http://from-file/v1/"
             Some(std::path::Path::new("/tmp/x.toml")),
             Some("model = "),
             &env(None, None),
-            &CliOverrides::default(),
         );
         assert!(matches!(err, Err(ConfigError::Parse { .. })));
     }

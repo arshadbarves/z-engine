@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { catalogForPicker, catalogStore, fmtLimit } from "$lib/catalog";
   import { setModel } from "$lib/commands";
   import { modelStore } from "$lib/runtime";
@@ -11,13 +12,31 @@
   let open = $state(false);
   let custom = $state("");
   let query = $state("");
+  let searchInput = $state<HTMLInputElement>();
+  let triggerButton = $state<HTMLButtonElement>();
+  let menu = $state<HTMLDivElement>();
 
   $effect(() => {
-    if (open) void catalogStore.ensure();
+    if (open) {
+      void catalogStore.ensure();
+      void focusSearch();
+    }
   });
 
-  async function pick(id: string) {
+  async function focusSearch() {
+    await tick();
+    searchInput?.focus();
+  }
+
+  async function closeMenu(restoreFocus: boolean) {
     open = false;
+    if (!restoreFocus) return;
+    await tick();
+    triggerButton?.focus();
+  }
+
+  async function pick(id: string) {
+    await closeMenu(true);
     query = "";
     if (id === model.current) return;
     try {
@@ -63,9 +82,16 @@
 
 <div class="model-picker">
   {#if open}
-    <div class="popover-backdrop" onclick={() => (open = false)}></div>
+    <button
+      type="button"
+      class="popover-backdrop"
+      aria-label="Close model menu"
+      tabindex="-1"
+      onclick={() => void closeMenu(menu?.contains(document.activeElement) ?? false)}
+    ></button>
   {/if}
   <button
+    bind:this={triggerButton}
     class={`mode model-btn${open ? " is-open" : ""}`}
     onclick={() => (open = !open)}
     title="Switch model"
@@ -75,7 +101,13 @@
     <Icon icon={ChevronDown} size={10} strokeWidth={2} class="model-chevron-icon" />
   </button>
   {#if open}
-    <div class="popover popover-wide model-picker-window" role="menu">
+    <div
+      bind:this={menu}
+      class="popover popover-wide model-picker-window"
+      role="menu"
+      tabindex="-1"
+      onkeydown={(e) => e.key === "Escape" && void closeMenu(true)}
+    >
       <div class="model-picker-header">
         <div class="model-picker-title-row">
           <span class="model-picker-title">Model</span>
@@ -89,11 +121,10 @@
         <div class="model-search-box">
           <Icon icon={Search} size={12} class="model-search-icon" />
           <input
+            bind:this={searchInput}
             bind:value={query}
             placeholder="Search models or providers…"
             spellcheck={false}
-            autofocus
-            onkeydown={(e) => e.key === "Escape" && (open = false)}
           />
           {#if query}
             <button

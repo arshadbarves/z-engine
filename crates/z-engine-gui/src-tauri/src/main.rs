@@ -19,7 +19,7 @@ use event_bridge::forward_events;
 use state::{AppCtx, GuiState, build_loop_config};
 use tauri::Manager;
 use z_engine_core::agent::spawn_with_recorder;
-use z_engine_core::config::{CliOverrides, Config};
+use z_engine_core::config::Config;
 
 fn main() {
     // App-lifetime tokio runtime entered on the main thread so agent
@@ -112,8 +112,7 @@ fn main() {
         .setup(|app| {
             let _ = z_engine_core::config::ensure_user_config();
             let project_root = state::initial_project_root();
-            let cfg = Config::load(&CliOverrides::default(), Some(&project_root))
-                .map_err(|e| e.to_string())?;
+            let cfg = Config::load(Some(&project_root)).map_err(|e| e.to_string())?;
             let lc = build_loop_config(&cfg, &project_root);
 
             let (handle, ev_rx) = spawn_with_recorder(lc, None, None);

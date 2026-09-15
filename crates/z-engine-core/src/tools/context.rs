@@ -36,6 +36,9 @@ pub struct ToolCtx {
     pub checkpoints: Arc<checkpoint::CheckpointStore>,
     /// Live tool output streaming (bash stdout tails etc).
     pub output_tx: Arc<tokio::sync::mpsc::UnboundedSender<ToolOutputChunk>>,
+    /// Task evidence is shared by tools; only the runtime commits completion.
+    pub task: Arc<Mutex<Option<crate::verification::TaskReport>>>,
+    pub evidence_dir: Option<PathBuf>,
 }
 
 /// A chunk of live tool output emitted while a tool is running.
@@ -69,6 +72,8 @@ impl ToolCtx {
             edit_journal: Arc::new(Mutex::new(Vec::new())),
             checkpoints: Arc::new(checkpoint::CheckpointStore::default()),
             output_tx: Arc::new(tokio::sync::mpsc::unbounded_channel().0),
+            task: Arc::new(Mutex::new(None)),
+            evidence_dir: None,
         }
     }
 

@@ -14,6 +14,7 @@
 //! A [`Decision::Gate`] answered `no` becomes a polite refusal message in
 //! the conversation so the model reroutes.
 
+mod effects;
 mod engine;
 mod shell_syntax;
 

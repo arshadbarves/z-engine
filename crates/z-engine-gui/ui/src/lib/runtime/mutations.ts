@@ -1,6 +1,6 @@
 import { parkedEntries } from "../sessionSnaps";
 import { resetShell, startShell } from "../shellStore";
-import type { Msg, MsgKind, Toast } from "../types";
+import type { Msg, MsgKind, Toast, ToastAction } from "../types";
 import {
   attachmentStore,
   draftStore,
@@ -26,16 +26,60 @@ export function tailLines(output: string, n = 10): string[] {
   return lines.slice(Math.max(0, lines.length - n));
 }
 
-export function pushToast(text: string, tone: Toast["tone"] = "info") {
+export function dismissToast(id: number) {
+  const hit = rt.toasts.find((x) => x.id === id);
+  if (hit?.onDismiss) {
+    hit.onDismiss();
+  }
+  rt.toasts = rt.toasts.filter((x) => x.id !== id);
+  emitToasts();
+}
+
+export type ToastInput = string | (Partial<Toast> & { text: string });
+
+export function pushToast(input: ToastInput, toneArg: Toast["tone"] = "info") {
   if (rt.emitPaused) return;
-  const t: Toast = { id: rt.nextToastId++, text, tone };
+
+  let text = "";
+  let title: string | undefined;
+  let tag: string | undefined;
+  let tone: Toast["tone"] = toneArg;
+  let actions: ToastAction[] | undefined;
+  let onDismiss: (() => void) | undefined;
+
+  if (typeof input === "string") {
+    text = input;
+    tone = toneArg;
+
+    if (text.includes(" · ")) {
+      const parts = text.split(" · ");
+      title = parts[0]?.trim();
+      tag = parts[1]?.trim();
+    } else if (text.includes(" ─ ")) {
+      const parts = text.split(" ─ ");
+      title = parts[0]?.trim();
+      tag = parts[1]?.trim();
+    }
+  } else {
+    text = input.text;
+    title = input.title;
+    tag = input.tag;
+    tone = input.tone ?? toneArg;
+    actions = input.actions;
+    onDismiss = input.onDismiss;
+  }
+
+  const id = rt.nextToastId++;
+  const t: Toast = { id, text, title, tag, tone, actions, onDismiss };
   rt.toasts = [...rt.toasts.slice(-3), t];
   emitToasts();
-  const life = tone === "warn" ? 4200 : 2600;
+
+  const life = tone === "warn" || tone === "error" ? 6000 : 4500;
   setTimeout(() => {
     rt.toasts = rt.toasts.filter((x) => x.id !== t.id);
     emitToasts();
   }, life);
+  return id;
 }
 
 export function pushNotice(text: string) {
@@ -111,6 +155,12 @@ export function submitLocal(text: string, images: string[] = []) {
 export function trimTranscript(keepTurn: number) {
   closeThinking();
   endAssistant();
+  if (keepTurn <= 0) {
+    rt.messages = [];
+    rt.runTurnCounter = 0;
+    notify();
+    return;
+  }
   let cut = -1;
   for (let i = 0; i < rt.messages.length; i++) {
     const m = rt.messages[i];
@@ -119,8 +169,22 @@ export function trimTranscript(keepTurn: number) {
       break;
     }
   }
-  if (cut < 0) return;
-  rt.messages = rt.messages.slice(0, cut);
+  if (cut >= 0) {
+    rt.messages = rt.messages.slice(0, cut);
+  } else {
+    rt.messages = rt.messages.filter(
+      (m) => typeof m.runTurn !== "number" || m.runTurn < keepTurn,
+    );
+  }
+  const validTurns = new Set(
+    rt.messages.filter((m) => m.kind === "user").map((m) => m.runTurn),
+  );
+  rt.messages = rt.messages.filter((m) => {
+    if (m.kind === "task") {
+      return typeof m.runTurn === "number" && validTurns.has(m.runTurn);
+    }
+    return true;
+  });
   rt.runTurnCounter = keepTurn;
   notify();
 }

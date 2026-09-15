@@ -19,3 +19,10 @@ pub const SUBAGENT: &str = include_str!("../prompts/subagent.md");
 
 /// Short session-title generator (sidebar labels).
 pub const SESSION_TITLE: &str = include_str!("../prompts/session-title.md");
+
+/// Evidence and requirement coverage protocol for the main task loop.
+pub const TASK_COMPLETION: &str = include_str!("../prompts/task-completion.md");
+
+pub const TASK_SUPERVISION: &str = include_str!("../prompts/task-supervision.md");
+
+pub const CONTEXT_PACKET: &str = include_str!("../prompts/context-packet.md");

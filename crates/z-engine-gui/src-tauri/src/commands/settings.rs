@@ -18,9 +18,8 @@ pub(crate) fn get_config(state: tauri::State<'_, GuiState>) -> Result<serde_json
     let Some(ctx) = ctx_guard.as_ref() else {
         return Err("not initialized".into());
     };
-    let cfg =
-        Config::load(&Default::default(), Some(&ctx.project_root)).map_err(|e| e.to_string())?;
-    let key_st = z_engine_core::config::current_openrouter_status();
+    let cfg = Config::load(Some(&ctx.project_root)).map_err(|e| e.to_string())?;
+    let key_st = z_engine_core::config::current_key_status_for_base_url(&cfg.base_url);
     let pricing = cfg.pricing_for(&model).map(|p| {
         json!({
             "usdPerMtokInput": p.usd_per_mtok_input,
@@ -39,6 +38,8 @@ pub(crate) fn get_config(state: tauri::State<'_, GuiState>) -> Result<serde_json
         "compactAtPercent": cfg.compact_at_percent,
         "baseUrl": cfg.base_url,
         "reviewEnabled": cfg.review_enabled,
+        "maxTaskContinuations": cfg.max_task_continuations,
+        "taskReportView": cfg.task_report_view,
         "hasApiKey": key_st.has_key,
         "apiKeyHint": key_st.hint,
         "pricing": pricing,
@@ -54,6 +55,31 @@ pub(crate) fn get_config(state: tauri::State<'_, GuiState>) -> Result<serde_json
 
 /// Settings → General: persist scalars into `.z-engine/config.toml` and
 /// hot-apply the model to the running agent when one exists.
+fn persist_project_general_if_valid(
+    project_root: Option<&std::path::Path>,
+    over: &z_engine_core::config::GeneralOverrides,
+) -> Result<(), String> {
+    let Some(project_root) = project_root.filter(|root| crate::state::is_valid_project_root(root))
+    else {
+        return Ok(());
+    };
+    z_engine_core::config::persist_general(project_root, over)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+/// `task_report_view` is a global presentation preference: it follows the
+/// reader across workspaces and must never land in a project's shared
+/// `.z-engine/config.toml`.
+fn project_scoped_general(
+    over: &z_engine_core::config::GeneralOverrides,
+) -> z_engine_core::config::GeneralOverrides {
+    z_engine_core::config::GeneralOverrides {
+        task_report_view: None,
+        ..over.clone()
+    }
+}
+
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn save_general(
@@ -61,23 +87,26 @@ pub(crate) fn save_general(
     base_url: Option<String>,
     max_context_tokens: Option<u32>,
     review: Option<bool>,
+    max_task_continuations: Option<u32>,
+    task_report_view: Option<z_engine_core::config::TaskReportView>,
     state: tauri::State<'_, GuiState>,
 ) -> Result<(), String> {
     let over = z_engine_core::config::GeneralOverrides {
         model: model.clone(),
-        base_url,
+        base_url: base_url.clone(),
         max_context_tokens,
         review_enabled: review,
+        max_task_continuations,
+        task_report_view,
     };
     // Persist to global config so default preferences stick across sessions & workspaces.
     z_engine_core::config::persist_global_general(&over).map_err(|e| e.to_string())?;
 
     let ctx_guard = state.ctx.lock().map_err(|_| "state poisoned")?;
     if let Some(ctx) = ctx_guard.as_ref() {
-        if crate::state::is_valid_project_root(&ctx.project_root) {
-            let _ = z_engine_core::config::persist_general(&ctx.project_root, &over);
-        }
+        persist_project_general_if_valid(Some(&ctx.project_root), &project_scoped_general(&over))?;
     }
+    drop(ctx_guard);
 
     if let Some(m) = model {
         if let Ok(h) = state.handle_for(None) {
@@ -85,10 +114,17 @@ pub(crate) fn save_general(
         }
         *state.model.lock().map_err(|_| "state poisoned")? = m;
     }
+    if let Some(base_url) = base_url {
+        let api_key = z_engine_core::config::resolve_api_key_for(&base_url);
+        let loops = state.loops.lock().map_err(|_| "state poisoned")?;
+        for handle in loops.values() {
+            handle.set_provider(base_url.clone(), api_key.clone());
+        }
+    }
     Ok(())
 }
 
-/// Settings → General: persist the OpenRouter key to `auth.json` and
+/// Settings → General: persist the active provider key to `auth.json` and
 /// hot-apply it to every running agent loop.
 #[tauri::command]
 pub(crate) fn save_api_key(
@@ -97,7 +133,18 @@ pub(crate) fn save_api_key(
 ) -> Result<(), String> {
     z_engine_core::config::ensure_user_config().map_err(|e| e.to_string())?;
     let trimmed = key.as_deref().map(str::trim).filter(|s| !s.is_empty());
-    z_engine_core::config::set_current_openrouter_key(trimmed).map_err(|e| e.to_string())?;
+    let ctx_guard = state.ctx.lock().map_err(|_| "state poisoned")?;
+    let base_url = ctx_guard
+        .as_ref()
+        .and_then(|ctx| {
+            Config::load(Some(&ctx.project_root))
+                .ok()
+                .map(|c| c.base_url)
+        })
+        .unwrap_or_else(|| Config::default().base_url);
+    drop(ctx_guard);
+    z_engine_core::config::set_current_key_for_base_url(&base_url, trimmed)
+        .map_err(|e| e.to_string())?;
     let loops = state.loops.lock().map_err(|_| "state poisoned")?;
     for h in loops.values() {
         h.set_api_key(trimmed.map(str::to_string));
@@ -189,8 +236,7 @@ pub(crate) fn list_mcp_servers(
 ) -> Result<Vec<serde_json::Value>, String> {
     let ctx_guard = state.ctx.lock().map_err(|_| "state poisoned")?;
     let ctx = ctx_guard.as_ref().ok_or("not initialized")?;
-    let cfg =
-        Config::load(&Default::default(), Some(&ctx.project_root)).map_err(|e| e.to_string())?;
+    let cfg = Config::load(Some(&ctx.project_root)).map_err(|e| e.to_string())?;
     Ok(cfg
         .mcp_servers
         .iter()
@@ -214,7 +260,7 @@ pub(crate) async fn test_mcp_server(
             .project_root
             .clone()
     };
-    let cfg = Config::load(&Default::default(), Some(&project_root)).map_err(|e| e.to_string())?;
+    let cfg = Config::load(Some(&project_root)).map_err(|e| e.to_string())?;
     let srv = cfg
         .mcp_servers
         .iter()
@@ -229,3 +275,7 @@ pub(crate) async fn test_mcp_server(
         .map(|t| t.name)
         .collect())
 }
+
+#[cfg(test)]
+#[path = "settings_tests.rs"]
+mod tests;

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Catalog } from "$lib/catalog";
+  import type { CatalogData } from "$lib/catalog";
   import Icon, { ArrowUp, CornerDownLeft, Paperclip, Square, Terminal } from "$lib/ui/icons";
   import EffortSelector from "./EffortSelector.svelte";
   import ModePicker from "./ModePicker.svelte";
@@ -10,7 +10,7 @@
     busy: boolean;
     canSend: boolean;
     canSendShell: boolean;
-    catalog: Catalog | null;
+    catalog: CatalogData | null;
     showTerminalBtn: boolean;
     onAttachClick: () => void;
     onShowShell: () => void;
@@ -46,6 +46,7 @@
       <ModePicker />
       <ModelPicker />
       <EffortSelector {catalog} />
+      <span class="composer-bar-divider" aria-hidden="true"></span>
       <button
         type="button"
         class="composer-icon-btn"

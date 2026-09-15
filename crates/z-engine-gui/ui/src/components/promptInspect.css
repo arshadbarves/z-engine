@@ -21,8 +21,9 @@
 /* ── Sidebar Navigation ──────────────────────────────────────────────── */
 
 .prompt-sidebar-island {
-  width: 270px;
+  width: 272px;
   gap: 10px;
+  padding: 10px 8px 8px 8px;
 }
 
 .prompt-sidebar-heading {
@@ -33,13 +34,13 @@
 }
 
 .prompt-parts-count {
-  font-size: 10.5px;
+  font-size: 10px;
   font-family: var(--mono);
   color: var(--text-3);
   padding: 1px 6px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 999px;
+  border-radius: 9999px;
 }
 
 .prompt-filter-bar {
@@ -64,22 +65,22 @@
 
 .prompt-search-input {
   width: 100%;
-  height: 28px;
+  height: 30px;
   padding: 0 24px 0 28px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 9999px;
+  border-radius: var(--radius-s);
   color: var(--text);
   font-size: 11.5px;
   outline: none;
-  transition: all 0.15s ease;
+  transition: all var(--dur-fast) var(--ease-out);
   box-sizing: border-box;
 }
 
 .prompt-search-input:focus {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 255, 255, 0.2);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 .prompt-search-clear {
@@ -102,7 +103,7 @@
   display: flex;
   background: rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 7px;
+  border-radius: var(--radius-s);
   padding: 2px;
   gap: 2px;
 }
@@ -118,7 +119,7 @@
   border-radius: 5px;
   text-align: center;
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: all var(--dur-fast) var(--ease-out);
   user-select: none;
 }
 
@@ -158,13 +159,13 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 6px 9px;
+  padding: 6px 8px;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: 6px;
   text-align: left;
   cursor: pointer;
-  transition: all 0.14s ease;
+  transition: all var(--dur-fast) var(--ease-out);
   box-sizing: border-box;
 }
 
@@ -174,8 +175,7 @@
 
 .prompt-item-btn.active {
   background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 .prompt-item-icon {

@@ -1,6 +1,6 @@
 //! Client-side handles: command sender, event receiver, and task spawning.
 
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
@@ -24,6 +24,7 @@ pub struct AgentHandle {
     /// Shared with the agent task so the UI can query chat-scoped diffs.
     checkpoints: Arc<CheckpointStore>,
     project_root: std::path::PathBuf,
+    abort_flag: Arc<AtomicBool>,
 }
 
 type PromptSlot = Arc<Mutex<Option<PromptInspect>>>;
@@ -50,6 +51,7 @@ impl AgentHandle {
     }
 
     pub fn abort(&self) {
+        self.abort_flag.store(true, Ordering::Relaxed);
         let _ = self.cmd_tx.send(Command::Abort);
     }
 
@@ -63,9 +65,14 @@ impl AgentHandle {
         let _ = self.cmd_tx.send(Command::SetModel(model.into()));
     }
 
-    /// Hot-apply a new OpenRouter API key (Settings).
+    /// Hot-apply a new provider API key (Settings).
     pub fn set_api_key(&self, key: Option<String>) {
         let _ = self.cmd_tx.send(Command::SetApiKey(key));
+    }
+
+    /// Hot-switch the OpenAI-compatible gateway and its matching key.
+    pub fn set_provider(&self, base_url: String, api_key: Option<String>) {
+        let _ = self.cmd_tx.send(Command::SetProvider { base_url, api_key });
     }
 
     /// Pick the reasoning effort for reasoning-capable models; `None`
@@ -102,6 +109,7 @@ impl AgentHandle {
 
     /// Ask the loop task to finish gracefully.
     pub fn shutdown(&self) {
+        self.abort_flag.store(true, Ordering::Relaxed);
         let _ = self.cmd_tx.send(Command::Shutdown);
     }
 
@@ -142,7 +150,7 @@ pub fn spawn(cfg: LoopConfig) -> (AgentHandle, EventRx) {
     spawn_with_recorder(cfg, None, None)
 }
 
-/// Preloaded conversation state for `--resume`.
+/// Preloaded conversation state when the GUI reopens a saved session.
 #[derive(Debug, Default)]
 pub struct ResumeState {
     pub working: Vec<ChatMessage>,
@@ -179,6 +187,7 @@ pub fn spawn_with_recorder(
                     last_prompt: empty_prompt_slot(),
                     checkpoints: Arc::new(CheckpointStore::default()),
                     project_root: cfg.project_root.clone(),
+                    abort_flag,
                 },
                 EventRx { rx: ev_rx },
             );
@@ -229,7 +238,7 @@ pub fn spawn_with_recorder(
         resume,
         recorder,
         runner,
-        abort_flag,
+        Arc::clone(&abort_flag),
         Arc::clone(&last_prompt),
         Arc::clone(&checkpoints),
     ));
@@ -239,6 +248,7 @@ pub fn spawn_with_recorder(
             last_prompt,
             checkpoints,
             project_root: handle_root,
+            abort_flag,
         },
         EventRx { rx: ev_rx },
     )

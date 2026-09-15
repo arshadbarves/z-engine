@@ -76,6 +76,11 @@ pub(super) async fn consume_stream(
                         abort_flag.store(true, Ordering::Relaxed);
                         return StreamOutcome::Aborted;
                     }
+                    Some(Command::Shutdown) => {
+                        cmd_rx.close();
+                        abort_flag.store(true, Ordering::Relaxed);
+                        return StreamOutcome::Aborted;
+                    }
                     Some(_) => {} // approvals/submits are meaningless mid-stream
                 }
             }
