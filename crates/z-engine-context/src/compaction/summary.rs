@@ -15,22 +15,31 @@ pub struct SummaryPlan {
     pub split: usize,
 }
 
-/// The latest split that keeps at least `keep_recent_messages` messages
-/// verbatim and lands on the start of a real user turn: a user message
-/// holding no tool results (tool-round messages may also carry steering or
-/// reminder text, so "not tool-results-only" is not enough). A split never
-/// separates a tool_use from its tool_result. `None` when no split leaves
-/// anything to summarize.
+/// Fewer summarized messages than this is not worth a summary request.
+const MIN_SUMMARIZED: usize = 2;
+
+/// Where to cut the history so `messages[split..]` stays verbatim.
+///
+/// A split may land on the start of a real user turn (a user message
+/// holding no tool results; tool-round messages also carry steering and
+/// reminder text, so "not tool-results-only" is not enough) or on any
+/// assistant message, which lets a single long agentic turn be compacted.
+/// Either way no tool_use and its tool_result end up on opposite sides.
+///
+/// Picks the latest such split that keeps at least `keep_recent_messages`
+/// messages verbatim; when none does, the latest split overall. `None`
+/// when no split summarizes at least two messages.
 pub fn plan_summary(messages: &[Message], keep_recent_messages: usize) -> Option<SummaryPlan> {
-    let latest = messages
-        .len()
-        .checked_sub(keep_recent_messages)?
-        .min(messages.len().saturating_sub(1));
     let crossed = crossed_splits(messages);
-    (1..=latest)
+    let mut splits = (MIN_SUMMARIZED..messages.len())
         .rev()
-        .find(|&split| !crossed[split] && starts_user_turn(&messages[split]))
-        .map(|split| SummaryPlan { split })
+        .filter(|&split| !crossed[split] && is_split_point(&messages[split]));
+    let latest = splits.next()?;
+    let split = std::iter::once(latest)
+        .chain(splits)
+        .find(|&split| messages.len() - split >= keep_recent_messages)
+        .unwrap_or(latest);
+    Some(SummaryPlan { split })
 }
 
 /// A user message whose text is [`COMPACTION_SUMMARY`] around `summary`.
@@ -50,13 +59,18 @@ pub fn apply_summary(messages: &[Message], plan: &SummaryPlan, summary: &Message
     out
 }
 
-fn starts_user_turn(message: &Message) -> bool {
-    message.role == Role::User
-        && !message.content.is_empty()
-        && !message
-            .content
-            .iter()
-            .any(|block| matches!(block, ContentBlock::ToolResult { .. }))
+/// An assistant message, or a user message that starts a real turn.
+fn is_split_point(message: &Message) -> bool {
+    match message.role {
+        Role::Assistant => true,
+        Role::User => {
+            !message.content.is_empty()
+                && !message
+                    .content
+                    .iter()
+                    .any(|block| matches!(block, ContentBlock::ToolResult { .. }))
+        }
+    }
 }
 
 /// `crossed[s]` is true when a tool_use and its tool_result sit on

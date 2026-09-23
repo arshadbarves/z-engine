@@ -56,27 +56,34 @@ fn history() -> Vec<Message> {
 }
 
 #[test]
-fn short_or_single_turn_histories_have_nothing_to_summarize() {
+fn nothing_to_summarize_without_two_messages_before_a_split() {
     assert_eq!(plan_summary(&[], 0), None);
-    let messages = history();
-    assert_eq!(plan_summary(&messages, messages.len()), None);
-    assert_eq!(plan_summary(&messages, messages.len() + 3), None);
-    let single_turn = &messages[..4];
-    assert_eq!(plan_summary(single_turn, 0), None);
+    assert_eq!(plan_summary(&[Message::user_text("hi")], 0), None);
+    let two = [Message::user_text("hi"), Message::assistant_text("hello")];
+    assert_eq!(plan_summary(&two, 0), None);
+    // The only later message is an open tool round's result.
+    let open = [Message::user_text("task"), call("a"), result("a")];
+    assert_eq!(plan_summary(&open, 0), None);
 }
 
 #[test]
-fn split_is_the_latest_real_user_turn_that_keeps_enough_messages() {
+fn split_is_the_latest_turn_start_or_assistant_that_keeps_enough() {
     let messages = history();
-    assert_eq!(plan_summary(&messages, 0), Some(SummaryPlan { split: 8 }));
-    assert_eq!(plan_summary(&messages, 2), Some(SummaryPlan { split: 8 }));
-    assert_eq!(plan_summary(&messages, 3), Some(SummaryPlan { split: 4 }));
-    assert_eq!(plan_summary(&messages, 6), Some(SummaryPlan { split: 4 }));
-    assert_eq!(plan_summary(&messages, 7), None);
+    let split = |keep| plan_summary(&messages, keep).map(|plan| plan.split);
+    assert_eq!(split(0), Some(9));
+    assert_eq!(split(2), Some(8));
+    assert_eq!(split(3), Some(7));
+    assert_eq!(split(5), Some(5), "assistant opening a closed round");
+    assert_eq!(split(6), Some(4));
+    assert_eq!(split(7), Some(3));
+    // Index 2 closes round `a` but is a tool-result message, so keeping 8
+    // cannot be honoured; fall back to the latest valid split.
+    assert_eq!(split(8), Some(9));
+    assert_eq!(split(messages.len() + 3), Some(9));
 }
 
 #[test]
-fn tool_rounds_with_reminder_text_are_not_turn_starts() {
+fn tool_rounds_with_reminder_text_are_not_split_points() {
     let messages = vec![
         Message::user_text("task"),
         call("a"),
@@ -87,12 +94,14 @@ fn tool_rounds_with_reminder_text_are_not_turn_starts() {
         !messages[2].is_tool_results(),
         "precondition: mixed content"
     );
-    assert_eq!(plan_summary(&messages, 0), None);
+    assert_eq!(plan_summary(&messages, 0), Some(SummaryPlan { split: 3 }));
+    assert_eq!(plan_summary(&messages, 2), Some(SummaryPlan { split: 3 }));
 }
 
 #[test]
-fn pairs_split_across_a_user_turn_block_that_split() {
-    // A result delivered after a later user message still pins its call.
+fn late_results_keep_their_call_on_the_same_side() {
+    // A result delivered after a later user message still pins its call,
+    // so neither the user message (2) nor the result (3) can start the tail.
     let messages = vec![
         Message::user_text("task"),
         call("late"),
@@ -100,7 +109,8 @@ fn pairs_split_across_a_user_turn_block_that_split() {
         result("late"),
         Message::assistant_text("done"),
     ];
-    assert_eq!(plan_summary(&messages, 0), None);
+    assert_eq!(plan_summary(&messages, 0), Some(SummaryPlan { split: 4 }));
+    assert_eq!(plan_summary(&messages, 3), Some(SummaryPlan { split: 4 }));
 }
 
 #[test]
