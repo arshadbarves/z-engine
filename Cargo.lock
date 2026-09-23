@@ -6302,6 +6302,7 @@ dependencies = [
  "futures",
  "globset",
  "regex",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
  "tempfile",
@@ -6313,7 +6314,6 @@ dependencies = [
  "z-engine-config",
  "z-engine-context",
  "z-engine-host",
- "z-engine-integrations",
  "z-engine-llm",
  "z-engine-policy",
  "z-engine-prompts",
@@ -6321,7 +6321,6 @@ dependencies = [
  "z-engine-store",
  "z-engine-testkit",
  "z-engine-tools",
- "z-engine-verify",
 ]
 
 [[package]]
@@ -6353,14 +6352,12 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "dirs",
- "futures",
  "globset",
  "htmd",
  "ignore",
  "pdf-extract",
  "regex",
  "reqwest 0.12.28",
- "serde",
  "serde_json",
  "sha2",
  "tempfile",
@@ -6515,6 +6512,7 @@ name = "z-engine-tools"
 version = "1.4.6"
 dependencies = [
  "async-trait",
+ "axum",
  "base64 0.22.1",
  "globset",
  "regex",
@@ -6527,6 +6525,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "ulid",
  "z-engine-host",
  "z-engine-policy",
  "z-engine-prompts",
@@ -6542,8 +6541,11 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
  "toml 0.9.12+spec-1.1.0",
  "tracing",
+ "ulid",
  "z-engine-host",
  "z-engine-protocol",
 ]

@@ -1,0 +1,50 @@
+//! Built-in tools, one file each.
+
+mod agent;
+mod apply_agent_changes;
+mod ask_user_question;
+mod bash;
+mod edit;
+mod exit_plan_mode;
+mod glob;
+mod grep;
+mod job_kill;
+mod job_output;
+mod list;
+mod list_mcp_resources;
+mod lsp;
+mod multi_edit;
+mod notebook_edit;
+mod read;
+mod read_mcp_resource;
+mod skill;
+mod todo_write;
+mod verify;
+mod web_fetch;
+mod web_search;
+mod write;
+
+pub use agent::AgentTool;
+pub use apply_agent_changes::ApplyAgentChangesTool;
+pub use ask_user_question::AskUserQuestionTool;
+pub use bash::BashTool;
+pub use edit::EditTool;
+pub use exit_plan_mode::ExitPlanModeTool;
+pub use glob::GlobTool;
+pub use grep::GrepTool;
+pub use job_kill::JobKillTool;
+pub use job_output::JobOutputTool;
+pub use list_mcp_resources::ListMcpResourcesTool;
+pub use lsp::LspTool;
+pub use multi_edit::MultiEditTool;
+pub use notebook_edit::NotebookEditTool;
+pub use read::ReadTool;
+pub use read_mcp_resource::ReadMcpResourceTool;
+pub use skill::SkillTool;
+pub use todo_write::TodoWriteTool;
+pub use verify::VerifyTool;
+pub use web_fetch::WebFetchTool;
+pub use web_search::WebSearchTool;
+pub use write::WriteTool;
+
+pub(crate) use list::builtin_tools;
