@@ -115,7 +115,7 @@ pub struct SessionSummary {
     pub message_count: u32,
     pub cost_usd: f64,
     pub last_outcome: Option<TurnOutcome>,
-    /// A v1 file not yet imported.
+    /// Originated from a v1 session file (imported, or imported on open).
     pub legacy: bool,
 }
 

@@ -4,6 +4,6 @@ import type { TurnOutcome } from "./TurnOutcome";
 
 export type SessionSummary = { sessionId: SessionId, title: string | null, projectRoot: string, createdAt: number, updatedAt: number, messageCount: number, costUsd: number, lastOutcome: TurnOutcome | null, 
 /**
- * A v1 file not yet imported.
+ * Originated from a v1 session file (imported, or imported on open).
  */
 legacy: boolean, };
