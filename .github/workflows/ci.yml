@@ -20,6 +20,19 @@ jobs:
       - name: Generated protocol TypeScript is committed
         run: git diff --exit-code -- crates/z-engine-gui/ui/src/lib/protocol
 
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Windows-only code paths compile
+        run: >-
+          cargo check --all-targets
+          -p z-engine-protocol -p z-engine-llm -p z-engine-config -p z-engine-policy
+          -p z-engine-host -p z-engine-integrations -p z-engine-context -p z-engine-verify
+          -p z-engine-store -p z-engine-tools -p z-engine-engine
+
   ui:
     runs-on: ubuntu-latest
     steps:
