@@ -1,0 +1,139 @@
+//! `SessionCore`: the state and services one session shares between its
+//! actor, its agent runs, and the tool ports. Locks are short-lived and
+//! never held across an `.await`.
+
+use std::collections::HashSet;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex, RwLock};
+
+use serde_json::Value;
+use tokio_util::sync::CancellationToken;
+use z_engine_config::{EnvOverrides, Paths};
+use z_engine_context::GitInfo;
+use z_engine_host::{FileTracker, PathLocks, WebClient};
+use z_engine_llm::{ModelCatalog, ModelClient};
+use z_engine_policy::Policy;
+use z_engine_protocol::{PermissionMode, SessionId};
+use z_engine_store::SessionStore;
+use z_engine_tools::ToolRegistry;
+
+use super::checkpoint::Checkpoints;
+use crate::broker::Broker;
+use crate::hooks::HookEnv;
+use crate::options::ClientFactory;
+use crate::session::{Emitter, JobHub, Journal, ReminderBox, SessionState, StatusTracker};
+use crate::settings::SessionSettings;
+use crate::sync::{lock, read};
+use crate::verify::Verifier;
+
+/// The engine-wide model catalog, replaced whole on refresh.
+pub(crate) type CatalogHandle = Arc<RwLock<Option<Arc<ModelCatalog>>>>;
+
+/// Per-agent working context that survives across turns.
+#[derive(Debug, Clone)]
+pub(crate) struct AgentResources {
+    /// Read-before-edit tracking of this agent.
+    pub files: FileTracker,
+    /// The agent's persistent shell working directory.
+    pub cwd: Arc<Mutex<PathBuf>>,
+    /// Nested instruction files already shown to this agent.
+    pub seen_instructions: Arc<Mutex<HashSet<String>>>,
+}
+
+impl AgentResources {
+    pub(crate) fn new(cwd: PathBuf) -> Self {
+        Self {
+            files: FileTracker::new(),
+            cwd: Arc::new(Mutex::new(cwd)),
+            seen_instructions: Arc::default(),
+        }
+    }
+
+    pub(crate) fn cwd(&self) -> PathBuf {
+        lock(&self.cwd).clone()
+    }
+}
+
+/// Engine-wide services every session shares.
+#[derive(Debug, Clone)]
+pub(crate) struct Shared {
+    pub paths: Paths,
+    pub store: SessionStore,
+    pub env: EnvOverrides,
+    pub factory: Option<Arc<dyn ClientFactory>>,
+    pub catalog: CatalogHandle,
+    pub web: WebClient,
+}
+
+#[derive(Debug)]
+pub(crate) struct SessionCore {
+    pub id: SessionId,
+    /// Canonical project root.
+    pub root: PathBuf,
+    pub shared: Shared,
+    pub events: Arc<Emitter>,
+    pub journal: Arc<Journal>,
+    pub status: Arc<StatusTracker>,
+    pub broker: Broker,
+    pub reminders: Arc<ReminderBox>,
+    pub jobs: Arc<JobHub>,
+    pub settings: RwLock<Arc<SessionSettings>>,
+    pub client: RwLock<Arc<dyn ModelClient>>,
+    pub tools: RwLock<Arc<ToolRegistry>>,
+    pub policy: Mutex<Policy>,
+    pub state: Mutex<SessionState>,
+    /// Git snapshot for the environment section, taken at open and reload.
+    pub git: Mutex<Option<GitInfo>>,
+    pub main: AgentResources,
+    pub locks: PathLocks,
+    pub checkpoints: Checkpoints,
+    pub verifier: Arc<dyn Verifier>,
+    /// The last main-agent request, for the prompt inspector.
+    pub last_request: Mutex<Option<Value>>,
+    /// Cancelled when the session closes; background work hangs off it.
+    pub cancel: CancellationToken,
+}
+
+impl SessionCore {
+    pub(crate) fn settings(&self) -> Arc<SessionSettings> {
+        Arc::clone(&read(&self.settings))
+    }
+
+    pub(crate) fn client(&self) -> Arc<dyn ModelClient> {
+        Arc::clone(&read(&self.client))
+    }
+
+    pub(crate) fn catalog(&self) -> Option<Arc<ModelCatalog>> {
+        read(&self.shared.catalog).clone()
+    }
+
+    pub(crate) fn tools(&self) -> Arc<ToolRegistry> {
+        Arc::clone(&read(&self.tools))
+    }
+
+    pub(crate) fn with_state<R>(&self, change: impl FnOnce(&mut SessionState) -> R) -> R {
+        change(&mut lock(&self.state))
+    }
+
+    pub(crate) fn mode(&self) -> PermissionMode {
+        lock(&self.state).mode
+    }
+
+    pub(crate) fn main_model(&self) -> String {
+        lock(&self.state).model.clone()
+    }
+
+    pub(crate) fn git_info(&self) -> Option<GitInfo> {
+        lock(&self.git).clone()
+    }
+
+    pub(crate) fn hook_env(&self) -> HookEnv {
+        HookEnv {
+            settings: self.settings(),
+            session_id: self.id.clone(),
+            transcript_path: self.journal.path().to_path_buf(),
+            cwd: self.root.clone(),
+            mode: self.mode(),
+        }
+    }
+}
