@@ -1,7 +1,7 @@
 mod support;
 
 use support::{check, task};
-use z_engine_context::{
+use z_engine_context_v1::{
     CheckOutcome, ContextError, ContextPacket, Freshness, ModelNote, NoteKind, NoteSource,
     NoteTrust, ObservationSource, TaskStatus, build_packet,
 };
@@ -17,7 +17,7 @@ fn source_references_and_versions_are_copied_not_invented_or_refreshed() {
     let reference = &packet.harness.evidence_refs[0];
     assert_eq!(
         packet.schema_version,
-        z_engine_context::CONTEXT_PACKET_SCHEMA_VERSION
+        z_engine_context_v1::CONTEXT_PACKET_SCHEMA_VERSION
     );
     assert_eq!(
         packet.provenance.source,
@@ -67,7 +67,7 @@ fn packet_kind_is_explicit_and_older_untagged_packets_remain_readable() {
     assert_eq!(json["kind"], "task_context");
     json.as_object_mut().unwrap().remove("kind");
     let legacy: ContextPacket = serde_json::from_value(json.clone()).unwrap();
-    assert_eq!(legacy.kind, z_engine_context::PacketKind::TaskContext);
+    assert_eq!(legacy.kind, z_engine_context_v1::PacketKind::TaskContext);
     json["kind"] = serde_json::json!("user_request");
     assert!(serde_json::from_value::<ContextPacket>(json).is_err());
 }

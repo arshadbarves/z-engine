@@ -1,7 +1,7 @@
 mod support;
 
 use support::{check, task};
-use z_engine_context::{
+use z_engine_context_v1::{
     CheckOutcome, ContextPacket, ModelNote, NoteKind, NoteTrust, TaskStatus, build_packet,
 };
 

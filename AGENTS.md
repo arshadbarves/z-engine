@@ -17,6 +17,61 @@ The desktop GUI is the only product frontend. Do not add a terminal or
 headless replacement. The agent's shell tool and private integration-test
 fixtures remain supported; neither is a public command-line product.
 
+## v2 structure (branch `v2`; authoritative for the new crates)
+
+v2 is a from-scratch rewrite that lives beside the v1 crates until the GUI
+cutover, when v1 (`z-engine-core`, `-provider`, `-runtime`, `-project`,
+`crates/legacy/z-engine-context`) is deleted and this section replaces the
+v1 layout below. The golden rules (file budget, SRP, composition-root
+`lib.rs`/`mod.rs`, typed `thiserror` errors, tests beside code) apply
+unchanged. v2 must never import a v1 crate.
+
+```
+crates/
+├── z-engine-protocol/     # leaf: ids, conversation model, Event/Command (ts-rs -> ui/src/lib/protocol/)
+├── z-engine-prompts/      # leaf: ALL prompt prose as markdown under prompts/<area>/*.md
+├── z-engine-llm/          # ModelClient seam, openai_chat + anthropic adapters, retry, fallback, catalog, cost
+├── z-engine-config/       # settings v2 layering + v1 migration, credentials, trust, extension discovery
+├── z-engine-policy/       # pure permission engine: rules, modes, shell analysis
+├── z-engine-host/         # the ONLY OS/network adapter: fs, processes, jobs, search, git, checkpoints, web
+├── z-engine-integrations/ # MCP (stdio + HTTP) and LSP clients over one JSON-RPC core
+├── z-engine-context/      # pure prompt assembly, reminders, repo map, tokens, compaction planning
+├── z-engine-verify/       # check discovery, records, output parsing, freshness, outcome
+├── z-engine-store/        # session v2 logs, subagent transcripts, artifacts, index, v1 import
+├── z-engine-tools/        # Tool trait, capability ports, registry, builtin/<tool>.rs (one file per tool)
+├── z-engine-engine/       # orchestrator: sessions, agent runs, gating, hooks, jobs, commands
+└── z-engine-testkit/      # dev-only: ScriptedModel, FixtureRepo, EventRecorder
+```
+
+Dependency rules (arrows mean "may import"):
+
+```
+z-engine-gui -> engine, protocol
+engine       -> every v2 crate below
+tools        -> host, policy
+integrations -> host
+verify       -> host
+context      -> (leaf crates only)
+llm, config, policy, host, store -> (leaf crates only)
+every crate  -> protocol, prompts
+testkit      -> llm (dev-dependency of other crates only)
+```
+
+- Only `engine` knows concrete implementations; tools reach engine
+  services through capability traits in `z-engine-tools::ports`.
+- Only `host` touches the OS or network (processes, git, HTTP). `config`
+  and `store` read/write their own files; `context` and `policy` do no I/O.
+- Prompt prose lives only in `crates/z-engine-prompts/prompts/<area>/`,
+  one `pub const` per file in `src/<area>.rs`. Tool descriptions are
+  `prompts/tools/<tool>.md`.
+- Protocol types are the GUI contract: change them only in
+  `z-engine-protocol`, then run `cargo test -p z-engine-protocol` and commit
+  the regenerated `ui/src/lib/protocol/*.ts` in the same change.
+- Tool names and input schemas follow Claude Code (`Read`, `Edit`, `Bash`,
+  `Grep`, `TodoWrite`, `Agent`, ...). Custom agents, commands and skills are
+  markdown with YAML frontmatter; `.claude/` folders are read for
+  compatibility.
+
 ## Golden rules
 
 1. **File budget:** target ≤300 lines; hard cap 400. When a file would

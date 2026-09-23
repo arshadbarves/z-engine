@@ -10,7 +10,7 @@ authors.workspace = true
 [dependencies]
 z-engine-provider = { path = "../z-engine-provider" }
 z-engine-runtime = { path = "../z-engine-runtime" }
-z-engine-context = { path = "../z-engine-context" }
+z-engine-context = { package = "z-engine-context-v1", path = "../legacy/z-engine-context" }
 z-engine-project = { path = "../z-engine-project" }
 tokio.workspace = true
 serde.workspace = true

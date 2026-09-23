@@ -1,7 +1,7 @@
 mod support;
 
 use support::{check, task};
-use z_engine_context::{CheckOutcome, ModelNote, NoteKind, build_packet};
+use z_engine_context_v1::{CheckOutcome, ModelNote, NoteKind, build_packet};
 
 #[test]
 fn protected_content_is_never_truncated_even_with_zero_budget() {
@@ -57,7 +57,7 @@ fn replacement_summaries_survive_even_when_protected_task_data_overflows() {
         assert_eq!(packet.model_notes[0], summary);
         assert_eq!(
             packet.model_notes[0].trust,
-            z_engine_context::NoteTrust::Unverified
+            z_engine_context_v1::NoteTrust::Unverified
         );
         assert_eq!(
             packet.budget.serialized_bytes,
@@ -91,7 +91,7 @@ fn long_request_and_duplicated_goal_requirement_have_no_fixed_protected_cap() {
     assert_eq!(large.harness.active_requirements, report.requirements);
     assert_eq!(
         large.model_notes[0].trust,
-        z_engine_context::NoteTrust::Unverified
+        z_engine_context_v1::NoteTrust::Unverified
     );
     let json = large.to_json().unwrap();
     assert_eq!(json.len(), large.budget.serialized_bytes);
