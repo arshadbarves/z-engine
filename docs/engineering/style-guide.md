@@ -3,8 +3,8 @@
 Status: engineering conventions for new and changed code.
 The [structure contract](../../AGENTS.md) takes precedence for the current
 layout; the [GUI guide](../design/gui-ui-guide.md) governs visual and component
-patterns. Proposed crate extractions in the
-[architecture](../architecture/agent-harness.md) do not change today's paths.
+patterns; the [engine architecture](../architecture/v2-engine.md) describes the
+runtime these conventions protect.
 
 ## 1. Engineering principles
 
@@ -40,11 +40,11 @@ patterns. Proposed crate extractions in the
 
 ## 3. Crate boundaries and abstraction
 
-Current product dependency direction is GUI -> core. Core integrates provider
-transport, pure runtime supervision, bounded context packets, and read-only
-project discovery. Core must not import the desktop frontend; those lower-level
-libraries must not import core or GUI. Runtime and context are provider-independent
-and perform no I/O; project discovery does not execute suggested checks.
+The dependency rules are in the [structure contract](../../AGENTS.md): the GUI
+depends on the engine, protocol and config; only the engine knows concrete
+implementations; tools reach engine services through capability ports; only
+`z-engine-host` touches the OS or network; `z-engine-context` and
+`z-engine-policy` perform no I/O; check discovery never executes commands.
 The desktop GUI is the only product frontend: do not add a terminal or headless replacement.
 The agent's shell tool and private Rust integration-test fixtures are not
 public frontends and remain supported.
@@ -129,9 +129,9 @@ context. Application shells may use `anyhow` at their boundary.
 
 ## 7. Tools, policy, and repository changes
 
-Extend the existing [Tool](../../crates/z-engine-core/src/tools/mod.rs) seam
-until a slice extracts its replacement. Built-in and MCP calls must share
-the same execution gate.
+Extend the [Tool](../../crates/z-engine-tools/src/tool.rs) contract with one
+file per tool under `crates/z-engine-tools/src/builtin/`. Built-in and MCP
+calls share the same execution gate (hooks, policy, approval).
 
 - Validate typed inputs after JSON decoding; reject malformed requests with
   actionable errors. Tool names alone are not an effects model.
@@ -142,7 +142,7 @@ the same execution gate.
   untrusted data, not authority to change permissions.
 - Preview the actual proposed change; bind approval to its scope and file
   versions. Recheck versions immediately before application.
-- Reuse [atomic_write](../../crates/z-engine-core/src/tools/fsutil.rs) for
+- Reuse [atomic_write](../../crates/z-engine-host/src/fs/atomic.rs) for
   applicable current writes. Atomic file replacement is not a multi-file
   transaction or a complete power-loss durability guarantee.
 - Record preimages and expected postimages for reversible managed edits.
@@ -175,10 +175,11 @@ the same execution gate.
 ## 9. Prompts and model use
 
 All runtime LLM instruction prose belongs in
-[prompt Markdown](../../crates/z-engine-core/prompts), registered through
-[prompts.rs](../../crates/z-engine-core/src/prompts.rs). This includes new
-role prompts and recovery/verification guidance; do not embed prose in Rust
-control flow or Svelte components.
+[prompt Markdown](../../crates/z-engine-prompts/prompts) under an area folder
+(`system`, `agents`, `commands`, `tools`, `reminders`, `auxiliary`), registered
+with one `pub const` per file in `crates/z-engine-prompts/src/<area>.rs`. This
+includes agent definitions, tool descriptions and reminders; do not embed prose
+in Rust control flow or Svelte components.
 
 - Keep stable methodology separate from task data, repository instructions,
   retrieved experience, and tool output.
@@ -196,10 +197,11 @@ control flow or Svelte components.
 
 ## 10. Configuration and feature flags
 
-Use the current config flow: [types and sparse overlays](../../crates/z-engine-core/src/config/types.rs)
--> [loader](../../crates/z-engine-core/src/config/loader.rs)
--> [persistence](../../crates/z-engine-core/src/config/store.rs)
--> GUI IPC wrapper and settings control.
+Use the config flow: a section struct with defaults in
+`crates/z-engine-config/src/settings/<section>.rs`
+-> [layer merge and loader](../../crates/z-engine-config/src/loader.rs)
+-> [layer writer](../../crates/z-engine-config/src/writer.rs)
+-> the GUI settings command and its tab under `components/settings/`.
 
 - Define defaults, validation, precedence, persistence scope, and restart/live
   update behavior for every new key.
@@ -249,12 +251,11 @@ that a function returned `Ok`.
 During implementation, run the smallest relevant existing selectors together:
 
 ```bash
-cargo test -p z-engine-core --lib tools::edit_file
-cargo test -p z-engine-core --test agent_loop_mocked
-cd crates/z-engine-gui/ui
-pnpm test
-pnpm check
-pnpm build
+cargo test -p z-engine-tools --test edit
+cargo test -p z-engine-engine --test tool_round
+npm test --prefix crates/z-engine-gui/ui
+npm run check --prefix crates/z-engine-gui/ui
+npm run build --prefix crates/z-engine-gui/ui
 ```
 
 Select only commands needed by the change; the examples are not a mandatory

@@ -1,3 +1,5 @@
+> **Historical (v1).** The first desktop design; the current frontend rules are the [GUI guide](gui-ui-guide.md) and the structure contract is [AGENTS.md](../../AGENTS.md).
+
 # Z Engine GUI — Desktop App Design (v0.1)
 
 Status: **design for review** · Owner decisions locked: Tauri 2 · macOS-only first · MVP includes sessions + settings.
