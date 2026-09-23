@@ -24,18 +24,13 @@ pub(crate) fn lock() -> MutexGuard<'static, ()> {
     FILE_LOCK.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-pub(crate) struct RawFile {
-    pub(crate) text: String,
-    pub(crate) table: Table,
-}
-
 /// The parsed file, or `None` when it does not exist.
-pub(crate) fn read(path: &Path) -> Result<Option<RawFile>, ConfigError> {
+pub(crate) fn read(path: &Path) -> Result<Option<Table>, ConfigError> {
     let Some(text) = read_data_file(path)? else {
         return Ok(None);
     };
     let table = toml::from_str(&text).map_err(|error| ConfigError::parse(path, error))?;
-    Ok(Some(RawFile { text, table }))
+    Ok(Some(table))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,11 +72,16 @@ pub(crate) fn deserialize(table: Table) -> Result<Settings, String> {
 }
 
 pub(crate) fn render(table: &Table) -> Result<String, ConfigError> {
+    render_with("", table)
+}
+
+/// Like [`render`], with `preface` comment lines before the standard header.
+pub(crate) fn render_with(preface: &str, table: &Table) -> Result<String, ConfigError> {
     let body = toml::to_string(table).map_err(|error| ConfigError::Serialize {
         what: "settings",
         message: error.to_string(),
     })?;
-    Ok(format!("{HEADER}{body}"))
+    Ok(format!("{preface}{HEADER}{body}"))
 }
 
 #[cfg(test)]

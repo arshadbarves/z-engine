@@ -1,22 +1,27 @@
 //! On-disk locations. The user config directory is shared with v1
 //! (`~/.config/z-engine`, `%APPDATA%\z-engine` on Windows) and data lives in
 //! the platform data directory, so v1 files are found where v1 left them.
+//! v2 settings live in `settings.toml` files; v1 `config.toml` files are
+//! only ever read, as import sources.
 
 use std::ffi::OsString;
 use std::fs;
-use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::error::ConfigError;
-use crate::files::write_atomic;
-use crate::migrate::{MigrationOutcome, migrate_file};
+use crate::files::{exists, write_atomic};
+use crate::migrate::{MigrationOutcome, import_v1_file};
 
 pub const APP_DIR: &str = "z-engine";
 pub const PROJECT_DIR: &str = ".z-engine";
 pub const CONFIG_DIR_ENV: &str = "ZENGINE_CONFIG_DIR";
 pub const DATA_DIR_ENV: &str = "ZENGINE_DATA_DIR";
+pub const SETTINGS_FILE: &str = "settings.toml";
+pub const LOCAL_SETTINGS_FILE: &str = "settings.local.toml";
+/// v1's settings file name, read only for import.
+pub const LEGACY_CONFIG_FILE: &str = "config.toml";
 
-const DEFAULT_USER_CONFIG: &str = include_str!("default_config.toml");
+const DEFAULT_USER_SETTINGS: &str = include_str!("default_config.toml");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Paths {
@@ -26,6 +31,9 @@ pub struct Paths {
     pub sessions_dir: PathBuf,
     pub checkpoints_dir: PathBuf,
     pub cache_dir: PathBuf,
+    /// v2 user settings, `settings.toml`.
+    pub user_settings_file: PathBuf,
+    /// v1 user `config.toml`: the legacy import source, never written.
     pub user_config_file: PathBuf,
     pub auth_file: PathBuf,
     pub trust_file: PathBuf,
@@ -81,7 +89,8 @@ impl Paths {
             sessions_dir: data_dir.join("sessions"),
             checkpoints_dir: data_dir.join("checkpoints"),
             cache_dir: data_dir.join("cache"),
-            user_config_file: config_dir.join("config.toml"),
+            user_settings_file: config_dir.join(SETTINGS_FILE),
+            user_config_file: config_dir.join(LEGACY_CONFIG_FILE),
             auth_file: config_dir.join("auth.json"),
             trust_file: config_dir.join("trust.json"),
             models_file: config_dir.join("models.json"),
@@ -96,10 +105,11 @@ impl Paths {
         self.home_dir.as_ref().map(|home| home.join(".claude"))
     }
 
-    /// Creates the directories and a commented default user config. An
-    /// existing v1 user config is migrated in place with a backup; a failed
-    /// migration is reported in the outcome's notes, not as an error, and
-    /// [`crate::load`] then reads the file as v1 and reports it again.
+    /// Creates the directories and, when `settings.toml` is missing, writes
+    /// it: imported from the v1 `config.toml` if one exists, else the
+    /// commented default. The v1 file is never modified. A v1 file that
+    /// cannot be imported is reported in the notes and `settings.toml` is
+    /// not created, so [`crate::load`] reports the problem too.
     pub fn ensure(&self) -> Result<MigrationOutcome, ConfigError> {
         let dirs = [
             &self.config_dir,
@@ -111,22 +121,25 @@ impl Paths {
         for dir in dirs {
             fs::create_dir_all(dir).map_err(|error| ConfigError::io(dir, error))?;
         }
-        let file = &self.user_config_file;
-        match fs::symlink_metadata(file) {
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                write_atomic(file, DEFAULT_USER_CONFIG.as_bytes(), false)?;
-                return Ok(MigrationOutcome::default());
-            }
-            Err(error) => return Err(ConfigError::io(file, error)),
-            Ok(_) => {}
+        if exists(&self.user_settings_file)? {
+            return Ok(MigrationOutcome::default());
         }
-        Ok(migrate_file(file).unwrap_or_else(|error| {
-            tracing::warn!(path = %file.display(), %error, "user settings were not migrated");
-            MigrationOutcome {
-                notes: vec![format!("not migrated: {error}")],
-                ..MigrationOutcome::default()
+        match import_v1_file(&self.user_config_file, &self.user_settings_file) {
+            Ok(outcome) if outcome.migrated => Ok(outcome),
+            Ok(outcome) => {
+                let default = DEFAULT_USER_SETTINGS.as_bytes();
+                write_atomic(&self.user_settings_file, default, false)?;
+                Ok(outcome)
             }
-        }))
+            Err(error) => {
+                let source = self.user_config_file.display();
+                tracing::warn!(path = %source, %error, "v1 user settings were not imported");
+                Ok(MigrationOutcome {
+                    notes: vec![format!("{source} was not imported: {error}")],
+                    ..MigrationOutcome::default()
+                })
+            }
+        }
     }
 }
 
@@ -135,14 +148,25 @@ pub fn project_dir(root: &Path) -> PathBuf {
     root.join(PROJECT_DIR)
 }
 
-/// `<root>/.z-engine/config.toml`, shared with the team.
-pub fn project_config_file(root: &Path) -> PathBuf {
-    project_dir(root).join("config.toml")
+/// `<root>/.z-engine/settings.toml`, shared with the team.
+pub fn project_settings_file(root: &Path) -> PathBuf {
+    project_dir(root).join(SETTINGS_FILE)
 }
 
-/// `<root>/.z-engine/config.local.toml`, personal and not committed.
+/// `<root>/.z-engine/settings.local.toml`, personal and git-ignored.
 pub fn project_local_file(root: &Path) -> PathBuf {
-    project_dir(root).join("config.local.toml")
+    project_dir(root).join(LOCAL_SETTINGS_FILE)
+}
+
+/// `<root>/.z-engine/config.toml`, v1's project file: read only for import.
+pub fn legacy_project_config_file(root: &Path) -> PathBuf {
+    project_dir(root).join(LEGACY_CONFIG_FILE)
+}
+
+/// The v1 file a v2 `settings.toml` imports from (`config.toml` beside it).
+pub(crate) fn legacy_source_of(settings_file: &Path) -> Option<PathBuf> {
+    let name = settings_file.file_name()?;
+    (name == SETTINGS_FILE).then(|| settings_file.with_file_name(LEGACY_CONFIG_FILE))
 }
 
 #[cfg(windows)]
@@ -165,6 +189,7 @@ mod tests {
     #[test]
     fn roots_lay_out_every_file() {
         let paths = Paths::with_roots("/c", "/d");
+        assert_eq!(paths.user_settings_file, Path::new("/c/settings.toml"));
         assert_eq!(paths.user_config_file, Path::new("/c/config.toml"));
         assert_eq!(paths.auth_file, Path::new("/c/auth.json"));
         assert_eq!(paths.trust_file, Path::new("/c/trust.json"));
@@ -173,10 +198,24 @@ mod tests {
         assert_eq!(paths.checkpoints_dir, Path::new("/d/checkpoints"));
         assert_eq!(paths.cache_dir, Path::new("/d/cache"));
         assert!(paths.claude_user_dir().is_none());
+        let root = Path::new("/p");
         assert_eq!(
-            project_local_file(Path::new("/p")),
-            Path::new("/p/.z-engine/config.local.toml")
+            project_settings_file(root),
+            Path::new("/p/.z-engine/settings.toml")
         );
+        assert_eq!(
+            project_local_file(root),
+            Path::new("/p/.z-engine/settings.local.toml")
+        );
+        assert_eq!(
+            legacy_project_config_file(root),
+            Path::new("/p/.z-engine/config.toml")
+        );
+        assert_eq!(
+            legacy_source_of(&project_settings_file(root)),
+            Some(legacy_project_config_file(root))
+        );
+        assert_eq!(legacy_source_of(&project_local_file(root)), None);
     }
 
     #[test]
@@ -206,27 +245,21 @@ mod tests {
     }
 
     #[test]
-    fn ensure_creates_a_default_config_that_loads_as_defaults() {
+    fn ensure_creates_default_settings_that_load_as_defaults() {
         let tmp = tempfile::tempdir().unwrap();
         let paths = Paths::with_roots(tmp.path().join("config"), tmp.path().join("data"));
         let outcome = paths.ensure().unwrap();
-        assert!(!outcome.migrated);
+        assert!(!outcome.migrated && outcome.source.is_none());
         assert!(paths.sessions_dir.is_dir() && paths.cache_dir.is_dir());
-        let text = fs::read_to_string(&paths.user_config_file).unwrap();
+        let text = fs::read_to_string(&paths.user_settings_file).unwrap();
         assert!(text.contains("schema = 2"));
+        assert!(!paths.user_config_file.exists());
         let loaded = load_with_env(&paths, None, &EnvOverrides::default());
         assert_eq!(loaded.settings, Settings::default());
         assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
-        fs::write(
-            &paths.user_config_file,
-            "schema = 2\n[model]\nmain = \"kept\"\n",
-        )
-        .unwrap();
+        let kept = "schema = 2\n[model]\nmain = \"kept\"\n";
+        fs::write(&paths.user_settings_file, kept).unwrap();
         paths.ensure().unwrap();
-        assert!(
-            fs::read_to_string(&paths.user_config_file)
-                .unwrap()
-                .contains("kept")
-        );
+        assert_eq!(fs::read_to_string(&paths.user_settings_file).unwrap(), kept);
     }
 }

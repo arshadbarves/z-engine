@@ -2,7 +2,8 @@
 //!
 //! Layers merge as raw TOML (see `merge.rs`) and the result is deserialized
 //! after every layer, so a layer that does not fit the schema is skipped and
-//! reported instead of failing the load. v1 files are migrated on the way.
+//! reported instead of failing the load. Loading never writes: when a v2
+//! `settings.toml` is missing, its v1 `config.toml` is imported in memory.
 
 use std::path::{Path, PathBuf};
 
@@ -10,11 +11,11 @@ use serde::{Deserialize, Serialize};
 use toml::{Table, Value};
 use ts_rs::TS;
 
-use crate::document::{self, RawFile, Schema};
+use crate::document::{self, Schema};
 use crate::error::ConfigError;
 use crate::merge::{merge_layer, nested};
-use crate::migrate::{convert_v1, persist};
-use crate::paths::{Paths, project_config_file, project_local_file};
+use crate::migrate::{as_v2, read_legacy};
+use crate::paths::{Paths, legacy_project_config_file, project_local_file, project_settings_file};
 use crate::settings::{Settings, normalize, unknown_keys};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -38,6 +39,8 @@ pub struct LayerInfo {
     pub exists: bool,
     /// Why the layer was skipped.
     pub error: Option<String>,
+    /// Set when a v1 file was imported in memory for this layer.
+    pub note: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -113,11 +116,18 @@ pub fn load_with_env(
         path: None,
         exists: true,
         error: None,
+        note: None,
     });
-    layering.file(LayerScope::User, &paths.user_config_file);
+    let user_legacy = Some(paths.user_config_file.as_path());
+    layering.file(LayerScope::User, &paths.user_settings_file, user_legacy);
     if let Some(root) = project_root {
-        layering.file(LayerScope::Project, &project_config_file(root));
-        layering.file(LayerScope::ProjectLocal, &project_local_file(root));
+        let legacy = legacy_project_config_file(root);
+        layering.file(
+            LayerScope::Project,
+            &project_settings_file(root),
+            Some(&legacy),
+        );
+        layering.file(LayerScope::ProjectLocal, &project_local_file(root), None);
     }
     let table = env.table();
     let exists = !table.is_empty();
@@ -136,6 +146,7 @@ pub fn load_with_env(
         path: None,
         exists,
         error,
+        note: None,
     });
     layering.finish()
 }
@@ -149,14 +160,20 @@ struct Layering {
 }
 
 impl Layering {
-    fn file(&mut self, scope: LayerScope, path: &Path) {
+    /// Reads the v2 file, or when it is missing imports `legacy` in memory.
+    fn file(&mut self, scope: LayerScope, path: &Path, legacy: Option<&Path>) {
         let mut info = LayerInfo {
             scope,
             path: Some(path.to_path_buf()),
             exists: false,
             error: None,
+            note: None,
         };
-        match self.read(path) {
+        let mut read = self.read(path);
+        if let (Ok(None), Some(legacy)) = (&read, legacy) {
+            read = self.read_legacy(legacy, path, &mut info);
+        }
+        match read {
             Ok(None) => {}
             Ok(Some(table)) => {
                 info.exists = true;
@@ -167,55 +184,57 @@ impl Layering {
                 info.error = Some(without_path(error));
             }
         }
-        if let Some(error) = &info.error {
-            self.warnings
-                .push(format!("{} was skipped: {error}", path.display()));
+        if let (Some(error), Some(shown)) = (&info.error, &info.path) {
+            let shown = shown.display();
+            self.warnings.push(format!("{shown} was skipped: {error}"));
         }
         self.layers.push(info);
     }
 
     fn read(&mut self, path: &Path) -> Result<Option<Table>, ConfigError> {
-        let table = {
-            let _guard = document::lock();
-            let Some(raw) = document::read(path)? else {
-                return Ok(None);
-            };
-            match document::schema_of(&raw.table) {
-                Schema::V1 => self.migrate(path, raw),
-                Schema::Invalid => return Err(document::invalid_schema(path)),
-                Schema::Newer(version) => {
-                    self.warnings.push(format!(
-                        "{}: written for settings schema {version}; unknown keys are ignored",
-                        path.display()
-                    ));
-                    raw.table
-                }
-                Schema::Current => raw.table,
-            }
+        let Some(table) = document::read(path)? else {
+            return Ok(None);
         };
+        if let Schema::Newer(version) = document::schema_of(&table) {
+            self.warnings.push(format!(
+                "{}: written for settings schema {version}; unknown keys are ignored",
+                path.display()
+            ));
+        }
+        let (table, notes) = as_v2(path, table)?;
+        Ok(Some(self.accept(path, table, notes)))
+    }
+
+    /// Never writes: the import is saved to `target` by the first edit.
+    fn read_legacy(
+        &mut self,
+        legacy: &Path,
+        target: &Path,
+        info: &mut LayerInfo,
+    ) -> Result<Option<Table>, ConfigError> {
+        info.path = Some(legacy.to_path_buf());
+        let Some((table, notes)) = read_legacy(legacy)? else {
+            info.path = Some(target.to_path_buf());
+            return Ok(None);
+        };
+        let note = format!(
+            "imported from the v1 file {} in memory; saved to {} on the first change",
+            legacy.display(),
+            target.display()
+        );
+        self.warnings.push(note.clone());
+        info.note = Some(note);
+        Ok(Some(self.accept(legacy, table, notes)))
+    }
+
+    /// Records conversion notes and unknown keys for a layer's table.
+    fn accept(&mut self, path: &Path, table: Table, notes: Vec<String>) -> Table {
         let shown = path.display();
+        self.warnings
+            .extend(notes.into_iter().map(|note| format!("{shown}: {note}")));
         let unknown = unknown_keys(&table).into_iter();
         self.warnings
             .extend(unknown.map(|key| format!("{shown}: unknown key `{key}`")));
-        Ok(Some(table))
-    }
-
-    /// Converts a v1 layer and saves the result; if saving fails the
-    /// converted table is still used for this load.
-    fn migrate(&mut self, path: &Path, raw: RawFile) -> Table {
-        let (table, notes) = convert_v1(raw.table);
-        let shown = path.display();
-        match persist(path, &raw.text, &table) {
-            Ok(backup) => self.warnings.push(format!(
-                "{shown}: migrated from v1; the original is saved as {}",
-                backup.display()
-            )),
-            Err(error) => self.warnings.push(format!(
-                "{shown}: read as v1 settings; the migrated file could not be saved: {error}"
-            )),
-        }
-        self.warnings
-            .extend(notes.into_iter().map(|note| format!("{shown}: {note}")));
         table
     }
 

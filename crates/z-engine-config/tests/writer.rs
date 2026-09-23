@@ -1,5 +1,6 @@
 //! GUI edits of one layer file: creation, round trips, preserved keys,
-//! refused invalid writes, and v1 files migrated before editing.
+//! refused invalid writes, seeding from untouched v1 files, and the local
+//! `.gitignore`.
 
 #[allow(dead_code)]
 mod support;
@@ -8,8 +9,8 @@ use support::{fixture, read, write};
 use toml::Value;
 use z_engine_config::{
     ConfigError, HookConfig, McpServerConfig, RuleKind, add_permission_rule, add_to_array,
-    project_local_file, remove_from_array, remove_mcp_server, remove_permission_rule, remove_value,
-    set_hooks, set_mcp_server, set_value,
+    legacy_project_config_file, project_local_file, project_settings_file, remove_from_array,
+    remove_mcp_server, remove_permission_rule, remove_value, set_hooks, set_mcp_server, set_value,
 };
 
 #[test]
@@ -25,7 +26,7 @@ fn a_missing_file_is_created_with_the_schema() {
 #[test]
 fn edits_keep_unrelated_keys() {
     let f = fixture();
-    let file = f.paths.user_config_file.clone();
+    let file = f.paths.user_settings_file.clone();
     let original = "schema = 2\nexperimental = { flag = true }\n[model]\nmain = \"m\"\n[mcp.servers.fs]\ncommand = \"npx\"\n[[hooks.Stop]]\ncommand = \"done\"\n";
     write(&file, original);
     set_value(&file, &["context", "repo_map"], Value::Boolean(false)).unwrap();
@@ -44,7 +45,7 @@ fn edits_keep_unrelated_keys() {
 #[test]
 fn arrays_deduplicate_and_keep_emptied_lists() {
     let f = fixture();
-    let file = f.paths.user_config_file.clone();
+    let file = f.paths.user_settings_file.clone();
     add_to_array(&file, &["model", "fallbacks"], "a").unwrap();
     add_to_array(&file, &["model", "fallbacks"], "b").unwrap();
     add_to_array(&file, &["model", "fallbacks"], "a").unwrap();
@@ -73,7 +74,7 @@ fn permission_rules_round_trip() {
 #[test]
 fn mcp_servers_round_trip_and_invalid_servers_are_refused() {
     let f = fixture();
-    let file = f.paths.user_config_file.clone();
+    let file = f.paths.user_settings_file.clone();
     let stdio = McpServerConfig {
         command: Some("npx".into()),
         args: vec!["-y".into(), "fs".into()],
@@ -134,7 +135,7 @@ fn hooks_round_trip() {
 #[test]
 fn invalid_edits_are_refused_without_touching_the_file() {
     let f = fixture();
-    let file = f.paths.user_config_file.clone();
+    let file = f.paths.user_settings_file.clone();
     write(&file, "schema = 2\n[model]\nmain = \"m\"\n");
     let before = read(&file);
     let bad_value = set_value(&file, &["model", "effort"], Value::String("extreme".into()));
@@ -170,17 +171,74 @@ fn removals_from_a_missing_file_do_not_create_it() {
     assert!(!file.exists());
 }
 
+const V1_PROJECT: &str = "model = \"old\"\n[permissions]\nallow = [\"ls*\"]\n";
+
 #[test]
-fn a_v1_file_is_migrated_before_editing() {
+fn the_first_project_edit_seeds_from_the_untouched_v1_file() {
     let f = fixture();
-    let file = f.paths.user_config_file.clone();
-    write(&file, "model = \"old\"\n[permissions]\nallow = [\"ls*\"]\n");
+    let legacy = legacy_project_config_file(&f.project);
+    write(&legacy, V1_PROJECT);
+    let file = project_settings_file(&f.project);
     add_permission_rule(&file, RuleKind::Allow, "Read").unwrap();
+    assert_eq!(read(&legacy), V1_PROJECT);
+    assert!(read(&file).contains("schema = 2"));
+    let loaded = f.load();
+    assert_eq!(loaded.settings.model.main, "old");
+    assert_eq!(loaded.settings.permissions.allow, ["Bash(ls:*)", "Read"]);
+    assert!(loaded.layers[2].note.is_none(), "the v2 file is used now");
+    assert_eq!(loaded.layers[2].path.as_deref(), Some(file.as_path()));
+}
+
+#[test]
+fn removing_an_imported_value_writes_the_seeded_file() {
+    let f = fixture();
+    let legacy = legacy_project_config_file(&f.project);
+    write(&legacy, V1_PROJECT);
+    let file = project_settings_file(&f.project);
+    remove_value(&file, &["model", "not_there"]).unwrap();
+    assert!(!file.exists(), "nothing changed, nothing written");
+    remove_permission_rule(&file, RuleKind::Allow, "Bash(ls:*)").unwrap();
+    assert!(f.load().settings.permissions.allow.is_empty());
+    assert_eq!(read(&legacy), V1_PROJECT);
+}
+
+#[test]
+fn v1_config_files_are_read_only() {
+    let f = fixture();
+    let legacy = legacy_project_config_file(&f.project);
+    write(&legacy, V1_PROJECT);
+    let edit = set_value(&legacy, &["model", "main"], Value::String("x".into()));
+    assert!(matches!(edit, Err(ConfigError::Invalid { .. })));
+    assert_eq!(read(&legacy), V1_PROJECT);
+}
+
+#[test]
+fn local_writes_keep_the_gitignore_current() {
+    let f = fixture();
+    let ignore = f.project.join(".z-engine/.gitignore");
+    write(&ignore, "# mine\nnotes/");
+    add_permission_rule(&project_local_file(&f.project), RuleKind::Allow, "Read").unwrap();
     assert_eq!(
-        read(&f.paths.config_dir.join("config.v1.toml")),
-        "model = \"old\"\n[permissions]\nallow = [\"ls*\"]\n"
+        read(&ignore),
+        "# mine\nnotes/\nsettings.local.toml\nworktrees/\n"
     );
-    let settings = f.load().settings;
-    assert_eq!(settings.model.main, "old");
-    assert_eq!(settings.permissions.allow, ["Bash(ls:*)", "Read"]);
+    add_permission_rule(&project_local_file(&f.project), RuleKind::Deny, "Write").unwrap();
+    assert_eq!(
+        read(&ignore),
+        "# mine\nnotes/\nsettings.local.toml\nworktrees/\n"
+    );
+
+    let fresh = fixture();
+    let fresh_ignore = fresh.project.join(".z-engine/.gitignore");
+    let shared = project_settings_file(&fresh.project);
+    set_value(&shared, &["model", "main"], Value::String("m".into())).unwrap();
+    assert!(!fresh_ignore.exists(), "shared settings are committed");
+    let local = project_local_file(&fresh.project);
+    set_value(
+        &local,
+        &["ui", "output_style"],
+        Value::String("terse".into()),
+    )
+    .unwrap();
+    assert_eq!(read(&fresh_ignore), "settings.local.toml\nworktrees/\n");
 }

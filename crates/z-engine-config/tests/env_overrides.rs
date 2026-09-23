@@ -33,7 +33,7 @@ fn env_overrides_beat_every_file() {
 fn an_invalid_env_override_is_reported_and_files_still_apply() {
     let f = fixture();
     write(
-        &f.paths.user_config_file,
+        &f.paths.user_settings_file,
         "schema = 2\n[model]\nmain = \"user\"\n",
     );
     let env = EnvOverrides {

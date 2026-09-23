@@ -5,7 +5,7 @@
 mod support;
 
 use support::{fixture, write};
-use z_engine_config::{LayerScope, Settings, project_config_file, project_local_file};
+use z_engine_config::{LayerScope, Settings, project_local_file, project_settings_file};
 use z_engine_protocol::{CheckKind, Effort, PermissionMode, VerificationMode};
 
 #[test]
@@ -35,9 +35,9 @@ fn defaults_apply_when_no_file_exists() {
 fn later_layers_override_scalars() {
     let f = fixture();
     let user = "schema = 2\n[model]\nmain = \"user\"\nfast = \"cheap\"\n[provider]\nbase_url = \"http://user/v1\"\n";
-    write(&f.paths.user_config_file, user);
+    write(&f.paths.user_settings_file, user);
     let project = "schema = 2\n[model]\nmain = \"project\"\n";
-    write(&project_config_file(&f.project), project);
+    write(&project_settings_file(&f.project), project);
     let local = "schema = 2\n[model]\nmain = \"local\"\n";
     write(&project_local_file(&f.project), local);
     let settings = f.load().settings;
@@ -70,8 +70,8 @@ command = "project-stop"
 matcher = "Bash"
 command = "guard"
 "#;
-    write(&f.paths.user_config_file, user);
-    write(&project_config_file(&f.project), project);
+    write(&f.paths.user_settings_file, user);
+    write(&project_settings_file(&f.project), project);
     write(
         &project_local_file(&f.project),
         "schema = 2\n[permissions]\nallow = [\"Edit\", \"Write\"]\n",
@@ -126,8 +126,8 @@ url = "http://localhost:3000/mcp"
 [lsp.servers.rust]
 command = "ra-multiplex"
 "#;
-    write(&f.paths.user_config_file, user);
-    write(&project_config_file(&f.project), project);
+    write(&f.paths.user_settings_file, user);
+    write(&project_settings_file(&f.project), project);
     let settings = f.load().settings;
     let checks: Vec<_> = settings
         .verification
@@ -159,10 +159,10 @@ command = "ra-multiplex"
 fn broken_layers_are_skipped_and_reported() {
     let f = fixture();
     write(
-        &f.paths.user_config_file,
+        &f.paths.user_settings_file,
         "schema = 2\n[model]\nmain = \"user\"\n",
     );
-    let project = project_config_file(&f.project);
+    let project = project_settings_file(&f.project);
     write(&project, "schema = 2\n[model\nmain = ");
     let local = project_local_file(&f.project);
     write(
@@ -204,7 +204,7 @@ max_continuations = 50
 [permissions]
 mode = "bypassPermissions"
 "#;
-    write(&f.paths.user_config_file, user);
+    write(&f.paths.user_settings_file, user);
     let loaded = f.load();
     let settings = &loaded.settings;
     assert_eq!(settings.model.max_output_tokens, 200_000);
@@ -233,7 +233,7 @@ args = ["x"]
 [web]
 search_backend = "searxng"
 "#;
-    write(&f.paths.user_config_file, user);
+    write(&f.paths.user_settings_file, user);
     let loaded = f.load();
     assert!(loaded.settings.mcp.servers.is_empty());
     for expected in [
@@ -256,7 +256,7 @@ search_backend = "searxng"
 fn newer_schema_loads_known_keys_with_a_warning() {
     let f = fixture();
     write(
-        &f.paths.user_config_file,
+        &f.paths.user_settings_file,
         "schema = 3\n[model]\nmain = \"future\"\n",
     );
     let loaded = f.load();

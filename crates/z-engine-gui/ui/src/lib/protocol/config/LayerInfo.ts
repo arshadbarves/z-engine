@@ -9,4 +9,8 @@ exists: boolean,
 /**
  * Why the layer was skipped.
  */
-error: string | null, };
+error: string | null, 
+/**
+ * Set when a v1 file was imported in memory for this layer.
+ */
+note: string | null, };

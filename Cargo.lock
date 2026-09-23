@@ -6222,6 +6222,7 @@ dependencies = [
 name = "z-engine-config"
 version = "1.4.6"
 dependencies = [
+ "chrono",
  "dirs",
  "globset",
  "serde",

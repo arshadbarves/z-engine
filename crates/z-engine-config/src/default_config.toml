@@ -1,6 +1,7 @@
-# Z Engine settings. Every key is optional: commented lines show the
-# default or an example. Project settings live in <project>/.z-engine/config.toml
-# and personal project overrides in <project>/.z-engine/config.local.toml.
+# Z Engine settings (v2). Every key is optional: commented lines show the
+# default or an example. Project settings live in <project>/.z-engine/settings.toml
+# and personal project overrides in <project>/.z-engine/settings.local.toml.
+# A v1 config.toml beside this file is only read for import, never changed.
 # API keys are stored in auth.json next to this file, never here.
 schema = 2
 

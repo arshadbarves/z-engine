@@ -1,20 +1,24 @@
 //! Targeted edits of one settings layer file for the GUI settings screens.
 //!
-//! Each edit re-reads the file (migrating a v1 file first), applies the
-//! change, checks the result still loads, and replaces the file atomically.
-//! Unrelated keys are kept; comments are not, because the file is rendered
-//! again from its parsed table. A missing file is created with
-//! `schema = 2`; removals from a missing file do nothing.
+//! Each edit re-reads the file, applies the change, checks the result still
+//! loads, and replaces the file atomically. Unrelated keys are kept;
+//! comments are not, because the file is rendered again from its parsed
+//! table. A missing `settings.toml` is seeded from the v1 `config.toml`
+//! beside it (which is never written), else created with `schema = 2`;
+//! removals from a missing file with nothing to seed do nothing. Writing
+//! `settings.local.toml` keeps `.z-engine/.gitignore` covering it.
 
 use std::path::Path;
 
 use serde::Serialize;
 use toml::{Table, Value};
 
-use crate::document::{self, Schema};
+use crate::document;
 use crate::error::ConfigError;
 use crate::files::write_atomic;
-use crate::migrate::{convert_v1, persist};
+use crate::gitignore::ensure_local_gitignore;
+use crate::migrate::{as_v2, read_legacy};
+use crate::paths::{LEGACY_CONFIG_FILE, LOCAL_SETTINGS_FILE, legacy_source_of};
 use crate::settings::{HookConfig, McpServerConfig, RuleKind, is_hook_event};
 
 pub fn set_value(file: &Path, key_path: &[&str], value: Value) -> Result<(), ConfigError> {
@@ -123,35 +127,51 @@ pub fn remove_permission_rule(file: &Path, kind: RuleKind, rule: &str) -> Result
 }
 
 /// `change` returns whether it modified the table; unchanged files are not
-/// rewritten.
+/// rewritten. A missing `settings.toml` starts from its v1 `config.toml`
+/// (converted in memory) so imported settings are kept.
 fn edit(
     file: &Path,
     create: bool,
     change: impl FnOnce(&mut Table) -> Result<bool, ConfigError>,
 ) -> Result<(), ConfigError> {
+    if file
+        .file_name()
+        .is_some_and(|name| name == LEGACY_CONFIG_FILE)
+    {
+        return Err(ConfigError::Invalid {
+            path: file.to_path_buf(),
+            message: "v1 config.toml files are read-only; edit settings.toml".to_string(),
+        });
+    }
     let _guard = document::lock();
     let (mut table, existed) = match document::read(file)? {
-        None if !create => return Ok(()),
-        None => (document::new_table(), false),
-        Some(raw) => match document::schema_of(&raw.table) {
-            Schema::V1 => {
-                let (table, notes) = convert_v1(raw.table);
-                persist(file, &raw.text, &table)?;
-                tracing::info!(path = %file.display(), ?notes, "migrated v1 settings before editing");
-                (table, true)
-            }
-            Schema::Invalid => return Err(document::invalid_schema(file)),
-            Schema::Current | Schema::Newer(_) => (raw.table, true),
+        Some(table) => (as_v2(file, table)?.0, true),
+        None => match legacy_source_of(file)
+            .map(|legacy| read_legacy(&legacy))
+            .transpose()?
+        {
+            Some(Some((table, _))) => (table, false),
+            _ if create => (document::new_table(), false),
+            _ => return Ok(()),
         },
     };
-    if !change(&mut table)? && existed {
+    if !change(&mut table)? && (existed || !create) {
         return Ok(());
     }
     document::deserialize(table.clone()).map_err(|message| ConfigError::Invalid {
         path: file.to_path_buf(),
         message,
     })?;
-    write_atomic(file, document::render(&table)?.as_bytes(), false)
+    write_atomic(file, document::render(&table)?.as_bytes(), false)?;
+    if file
+        .file_name()
+        .is_some_and(|name| name == LOCAL_SETTINGS_FILE)
+    {
+        if let Some(dir) = file.parent() {
+            ensure_local_gitignore(dir)?;
+        }
+    }
+    Ok(())
 }
 
 fn check_key_path(key_path: &[&str]) -> Result<(), ConfigError> {

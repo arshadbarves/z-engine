@@ -42,6 +42,15 @@ pub(crate) fn read_data_file(path: &Path) -> Result<Option<String>, ConfigError>
         .map_err(|error| ConfigError::parse(path, error))
 }
 
+/// Whether anything (even a dangling symlink) exists at `path`.
+pub(crate) fn exists(path: &Path) -> Result<bool, ConfigError> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(ConfigError::io(path, error)),
+    }
+}
+
 /// Decodes user-authored text, dropping a character cut off by truncation.
 pub(crate) fn lossy_text(mut bytes: Vec<u8>) -> String {
     while let Err(error) = std::str::from_utf8(&bytes) {
