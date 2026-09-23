@@ -16,6 +16,9 @@ toml.workspace = true
 thiserror.workspace = true
 regex.workspace = true
 tracing.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+ulid.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
