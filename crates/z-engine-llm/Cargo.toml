@@ -19,6 +19,7 @@ async-trait.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 ulid.workspace = true
+ts-rs.workspace = true
 
 [dev-dependencies]
 axum.workspace = true

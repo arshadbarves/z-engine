@@ -6407,6 +6407,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "ts-rs",
  "ulid",
  "z-engine-protocol",
 ]
@@ -6440,6 +6441,9 @@ dependencies = [
 [[package]]
 name = "z-engine-prompts"
 version = "1.4.6"
+dependencies = [
+ "serde_yaml_ng",
+]
 
 [[package]]
 name = "z-engine-protocol"
