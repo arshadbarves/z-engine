@@ -1,22 +1,13 @@
 import { fetchModelCatalog } from "./commands";
+import type { ModelInfo } from "./protocol/ModelInfo";
 import { detectProviderId, PROVIDERS, requiresApiKey } from "./providers";
 
-/** Trimmed models.dev entry (plus local models.json overrides). */
-export interface CatalogModel {
-  name: string;
-  reasoning: boolean;
-  attachment: boolean;
-  context?: number;
-  output?: number;
-}
+/** The model catalog (models.dev plus local overrides), in lookup-preference order. */
+export type CatalogData = ModelInfo[];
 
-export interface CatalogProvider {
-  name: string;
-  models: Record<string, CatalogModel>;
-}
-
-export interface CatalogData {
-  [providerId: string]: CatalogProvider;
+export interface ModelGroup {
+  provider: string;
+  items: ModelInfo[];
 }
 
 /** Restrict the picker to the active provider and hide keyed providers after
@@ -26,13 +17,31 @@ export function catalogForPicker(
   baseUrl: string | null | undefined,
   hasApiKey: boolean,
 ): CatalogData {
-  if (!catalog) return {};
-  const providerId = detectProviderId(baseUrl);
-  const preset = PROVIDERS.find((provider) => provider.id === providerId);
-  if (!preset || (requiresApiKey(preset) && !hasApiKey)) return {};
-  const prov = catalog[providerId];
-  if (!prov) return {};
-  return { [providerId]: prov };
+  if (!catalog) return [];
+  const preset = PROVIDERS.find((provider) => provider.id === detectProviderId(baseUrl));
+  if (!preset || (requiresApiKey(preset) && !hasApiKey)) return [];
+  return catalog.filter((model) => model.provider === preset.catalogProvider);
+}
+
+function providerName(id: string): string {
+  return PROVIDERS.find((provider) => provider.catalogProvider === id)?.name ?? id;
+}
+
+/** Models matching `query` by id, name or provider, grouped by provider, at most `limit` per group. */
+export function groupModels(models: CatalogData, query: string, limit = 40): ModelGroup[] {
+  const q = query.trim().toLowerCase();
+  const groups = new Map<string, ModelInfo[]>();
+  for (const model of models) {
+    const name = providerName(model.provider);
+    const hit = !q || [model.id, model.name, name].some((text) => text.toLowerCase().includes(q));
+    if (!hit) continue;
+    const items = groups.get(name) ?? [];
+    if (items.length < limit) items.push(model);
+    groups.set(name, items);
+  }
+  return [...groups]
+    .map(([provider, items]) => ({ provider, items }))
+    .sort((a, b) => a.provider.localeCompare(b.provider));
 }
 
 let data: CatalogData | null = null;
@@ -84,22 +93,30 @@ export const catalogStore = {
   },
 };
 
-/** Find a model entry for ids like "anthropic/claude-sonnet-4" — tries the
- * full id, then suffix matches after each slash, across all providers. */
+function unprefixed(id: string): string {
+  const slash = id.indexOf("/");
+  return slash >= 0 ? id.slice(slash + 1) : id;
+}
+
+/** Find a model like the engine does: exact id, then ignoring a `vendor/`
+ * prefix on either side, then both again ignoring case. */
 export function lookupModel(
   catalog: CatalogData | null,
   modelId: string,
-): { providerId: string; id: string; model: CatalogModel } | null {
-  if (!catalog || !modelId) return null;
-  const parts = modelId.split("/");
-  const candidates = [modelId];
-  for (let i = 1; i < parts.length; i++) candidates.push(parts.slice(i).join("/"));
-  for (const candidate of candidates) {
-    for (const [pid, prov] of Object.entries(catalog)) {
-      if (prov.models[candidate]) {
-        return { providerId: pid, id: candidate, model: prov.models[candidate] };
-      }
-    }
+): { providerId: string; id: string; model: ModelInfo } | null {
+  const wanted = modelId.trim();
+  if (!catalog || !wanted) return null;
+  const bare = unprefixed(wanted);
+  const lower = (text: string) => text.toLowerCase();
+  const tests: Array<(id: string) => boolean> = [
+    (id) => id === wanted,
+    (id) => unprefixed(id) === bare,
+    (id) => lower(id) === lower(wanted),
+    (id) => lower(unprefixed(id)) === lower(bare),
+  ];
+  for (const test of tests) {
+    const model = catalog.find((entry) => test(entry.id));
+    if (model) return { providerId: model.provider, id: model.id, model };
   }
   return null;
 }

@@ -1,120 +1,44 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { getConfig } from "$lib/commands";
-  import { configStore } from "$lib/configStore";
-  import { shouldApplyConfigResponse } from "$lib/domain/configRequest";
+  import { activeProjectRoot } from "$lib/runtime";
+  import { settingsStore } from "$lib/stores/settings.svelte";
+  import type { SettingsTab } from "$lib/stores/ui.svelte";
   import { bindStore } from "$lib/svelte/bind.svelte";
   import { updateStore } from "$lib/updateStore";
-  import Icon, {
-    ChevronLeft,
-    Eye,
-    Info,
-    Search,
-    Server,
-    Shield,
-    Sliders,
-    Sparkles,
-  } from "$lib/ui/icons";
+  import Icon, { ChevronLeft } from "$lib/ui/icons";
   import WindowControlsMaybe from "../chrome/WindowControlsMaybe.svelte";
   import AboutTab from "./AboutTab.svelte";
+  import AdvancedTab from "./AdvancedTab.svelte";
   import AppearanceTab from "./AppearanceTab.svelte";
-  import GeneralTab from "./GeneralTab.svelte";
+  import ExtensionsTab from "./ExtensionsTab.svelte";
+  import HooksTab from "./HooksTab.svelte";
   import McpTab from "./McpTab.svelte";
+  import MemoryTab from "./MemoryTab.svelte";
+  import ModelsTab from "./ModelsTab.svelte";
   import PermissionsTab from "./PermissionsTab.svelte";
   import ProvidersTab from "./ProvidersTab.svelte";
+  import ScopeBar from "./ScopeBar.svelte";
+  import SettingsNav, { SETTINGS_TABS } from "./SettingsNav.svelte";
+  import SettingsNotices from "./SettingsNotices.svelte";
+  import VerificationTab from "./VerificationTab.svelte";
   import "../../settings.css";
 
-  type Tab = "providers" | "general" | "appearance" | "permissions" | "mcp" | "about";
-  type Props = { isClosing?: boolean; initialTab?: Tab; onClose: () => void };
+  type Props = { isClosing?: boolean; initialTab?: SettingsTab; onClose: () => void };
 
   let { isClosing = false, initialTab = "providers", onClose }: Props = $props();
-  let tab = $state<Tab>(untrack(() => initialTab));
-  let search = $state("");
-  const config = bindStore(configStore);
+  let tab = $state<SettingsTab>(untrack(() => initialTab));
   const update = bindStore(updateStore);
-  const cfg = $derived(config.current);
-
-  const tabs: Array<{
-    id: Tab;
-    label: string;
-    hint: string;
-    toneClass: string;
-    icon: typeof Sliders;
-  }> = [
-    {
-      id: "providers",
-      label: "Providers",
-      hint: "AI models & API keys",
-      toneClass: "settings-tone-shell",
-      icon: Sparkles,
-    },
-    {
-      id: "general",
-      label: "General & Agent",
-      hint: "Code review & context limits",
-      toneClass: "settings-tone-working",
-      icon: Sliders,
-    },
-    {
-      id: "appearance",
-      label: "Appearance",
-      hint: "Task report detail",
-      toneClass: "settings-tone-accent",
-      icon: Eye,
-    },
-    {
-      id: "permissions",
-      label: "Permissions",
-      hint: "Terminal approvals & safety",
-      toneClass: "settings-tone-shell",
-      icon: Shield,
-    },
-    {
-      id: "mcp",
-      label: "Integrations",
-      hint: "External MCP tool servers",
-      toneClass: "settings-tone-attention",
-      icon: Server,
-    },
-    {
-      id: "about",
-      label: "About & Updates",
-      hint: "Version, updates & storage",
-      toneClass: "settings-tone-attention",
-      icon: Info,
-    },
-  ];
-
-  const filteredTabs = $derived(
-    search.trim()
-      ? tabs.filter(
-          (t) =>
-            t.label.toLowerCase().includes(search.toLowerCase()) ||
-            t.hint.toLowerCase().includes(search.toLowerCase()),
-        )
-      : tabs,
-  );
-
-  const active = $derived(tabs.find((t) => t.id === tab) ?? tabs[0]);
+  const active = $derived(SETTINGS_TABS.find((t) => t.id === tab) ?? SETTINGS_TABS[0]);
+  const settings = $derived(settingsStore.settings);
 
   $effect(() => {
-    let alive = true;
-    const requestSnapshot = configStore.getSnapshot();
-    getConfig()
-      .then((c) => {
-        if (shouldApplyConfigResponse(alive, requestSnapshot, configStore.getSnapshot())) {
-          configStore.set(c);
-        }
-      })
-      .catch(console.error);
-    return () => {
-      alive = false;
-    };
+    const root = activeProjectRoot();
+    untrack(() => void settingsStore.open(root));
   });
 
   $effect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && !e.defaultPrevented) {
         e.preventDefault();
         onClose();
       }
@@ -124,26 +48,11 @@
   });
 </script>
 
-<div
-  class={`settings-overlay${isClosing ? " is-closing" : ""}`}
-  role="presentation"
->
-  <div
-    class={`settings-page${isClosing ? " is-closing" : ""}`}
-    role="dialog"
-    tabindex="-1"
-    aria-label="Settings"
-  >
-    <!-- Topbar (App & Prompt Inspector UX/UI Style: No Duplicate Center Pill) -->
+<div class={`settings-overlay${isClosing ? " is-closing" : ""}`} role="presentation">
+  <div class={`settings-page${isClosing ? " is-closing" : ""}`} role="dialog" tabindex="-1" aria-label="Settings">
     <header class="app-topbar settings-topbar" data-tauri-drag-region>
       <div class="topbar-left" data-tauri-drag-region>
-        <button
-          type="button"
-          class="icon-btn settings-back-btn"
-          title="Back (Esc)"
-          onclick={onClose}
-          aria-label="Back"
-        >
+        <button type="button" class="icon-btn settings-back-btn" title="Back (Esc)" onclick={onClose} aria-label="Back">
           <Icon icon={ChevronLeft} size={15} strokeWidth={1.8} />
         </button>
         <div class="settings-breadcrumb">
@@ -152,70 +61,24 @@
           <span class="settings-breadcrumb-leaf">{active.label}</span>
         </div>
       </div>
-
-      <!-- Clean empty center drag region: Zero Duplicate Topbar Pill! -->
       <div class="topbar-center" data-tauri-drag-region></div>
-
       <div class="topbar-right" data-tauri-drag-region>
         <WindowControlsMaybe />
       </div>
     </header>
 
-    <!-- App Body: Left Sidebar Island + Right Canvas Pane -->
     <div class="app-body settings-body">
-      <!-- Left Navigation Sidebar Island -->
-      <aside class="sidebar settings-nav-island" aria-label="Settings navigation">
-        <div class="prefs-search-wrap">
-          <Icon icon={Search} size={13} class="prefs-search-icon" />
-          <input
-            type="text"
-            bind:value={search}
-            placeholder="Search settings…"
-            spellcheck={false}
-          />
-          {#if search}
-            <button
-              type="button"
-              class="prefs-search-clear"
-              onclick={() => (search = "")}
-              aria-label="Clear search"
-            >
-              ✕
-            </button>
-          {/if}
-        </div>
+      <SettingsNav
+        {tab}
+        version={settingsStore.info?.version ?? null}
+        updateAvailable={Boolean(update.current.info?.available)}
+        onSelect={(next) => (tab = next)}
+      />
 
-        <nav class="settings-nav">
-          {#each filteredTabs as t}
-            <button
-              type="button"
-              class={`settings-nav-btn${tab === t.id ? " active" : ""}`}
-              onclick={() => (tab = t.id)}
-            >
-              <span class={`settings-nav-icon ${t.toneClass}`}>
-                <Icon icon={t.icon} size={15} />
-              </span>
-              <span class="settings-nav-copy">
-                <em>{t.label}</em>
-                <small>{t.hint}</small>
-              </span>
-              {#if t.id === "about" && update.current.info?.available}
-                <span class="update-dot" role="status" aria-label="Update available"></span>
-              {/if}
-            </button>
-          {/each}
-        </nav>
-
-        <div class="settings-rail-foot">
-          <span>{cfg?.version ? `v${cfg.version}` : "Z Engine"}</span>
-        </div>
-      </aside>
-
-      <!-- Right Canvas Island -->
       <section class="canvas-pane settings-canvas-pane">
         <div class="settings-pane-head">
           <div class="head-left">
-            <div class={`settings-head-badge ${active.toneClass}`}>
+            <div class={`settings-head-badge ${active.tone}`}>
               <Icon icon={active.icon} size={15} />
             </div>
             <div class="settings-head-text">
@@ -227,20 +90,36 @@
 
         <div class="settings-content-wrap">
           <div class="settings-content-body">
-            {#if !cfg}
-              <div class="settings-loading">Loading preferences…</div>
-            {:else if tab === "providers"}
-              <ProvidersTab {cfg} />
-            {:else if tab === "general"}
-              <GeneralTab {cfg} />
-            {:else if tab === "appearance"}
-              <AppearanceTab {cfg} />
-            {:else if tab === "permissions"}
-              <PermissionsTab />
-            {:else if tab === "mcp"}
-              <McpTab />
+            {#if tab !== "about"}<SettingsNotices />{/if}
+            {#if tab === "about"}
+              <AboutTab />
+            {:else if !settings}
+              <div class="settings-loading">
+                {settingsStore.loadError ? "Settings are unavailable." : "Loading preferences…"}
+              </div>
             {:else}
-              <AboutTab {cfg} />
+              {#if active.scoped}<ScopeBar />{/if}
+              {#if tab === "models"}
+                <ModelsTab {settings} />
+              {:else if tab === "providers"}
+                <ProvidersTab {settings} />
+              {:else if tab === "permissions"}
+                <PermissionsTab {settings} />
+              {:else if tab === "hooks"}
+                <HooksTab />
+              {:else if tab === "extensions"}
+                <ExtensionsTab />
+              {:else if tab === "mcp"}
+                <McpTab />
+              {:else if tab === "verification"}
+                <VerificationTab {settings} />
+              {:else if tab === "memory"}
+                <MemoryTab />
+              {:else if tab === "advanced"}
+                <AdvancedTab {settings} />
+              {:else}
+                <AppearanceTab {settings} />
+              {/if}
             {/if}
           </div>
         </div>
@@ -248,21 +127,3 @@
     </div>
   </div>
 </div>
-
-<style>
-  .settings-tone-accent {
-    color: var(--accent);
-  }
-
-  .settings-tone-working {
-    color: var(--tone-working);
-  }
-
-  .settings-tone-shell {
-    color: var(--tone-shell);
-  }
-
-  .settings-tone-attention {
-    color: var(--tone-attention);
-  }
-</style>

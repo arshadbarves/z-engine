@@ -1,16 +1,16 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { catalogForPicker, catalogStore, fmtLimit } from "$lib/catalog";
-  import { configStore } from "$lib/configStore";
+  import { catalogForPicker, catalogStore, fmtLimit, groupModels } from "$lib/catalog";
   import { detectProviderId, PROVIDERS } from "$lib/providers";
-  import { sessions, setModel } from "$lib/runtime";
+  import { activeProjectRoot, sessions, setModel } from "$lib/runtime";
+  import { settingsStore } from "$lib/stores/settings.svelte";
   import { bindStore } from "$lib/svelte/bind.svelte";
   import Icon, { Brain, Check, ChevronDown, Search, Sparkles, X } from "$lib/ui/icons";
   import { shortModel } from "$lib/util";
 
   const catalog = bindStore(catalogStore);
-  const config = bindStore(configStore);
-  const model = $derived({ current: sessions.active?.model || config.current?.model || "" });
+  const provider = $derived(settingsStore.activeProvider);
+  const model = $derived({ current: sessions.active?.model || settingsStore.settings?.model.main || "" });
   let open = $state(false);
   let custom = $state("");
   let query = $state("");
@@ -21,6 +21,8 @@
   $effect(() => {
     if (open) {
       void catalogStore.ensure();
+      void settingsStore.loadCredentials();
+      void settingsStore.ensure(activeProjectRoot());
       void focusSearch();
     }
   });
@@ -44,45 +46,12 @@
     await setModel(id);
   }
 
-  const groups = $derived.by(() => {
-    const q = query.trim().toLowerCase();
-    const out: {
-      provider: string;
-      items: { id: string; name: string; context?: number; output?: number; reasoning: boolean }[];
-    }[] = [];
-    if (!catalog.current) return out;
-    const filtered = catalogForPicker(
-      catalog.current,
-      config.current?.baseUrl,
-      Boolean(config.current?.hasApiKey),
-    );
-    for (const [pid, prov] of Object.entries(filtered)) {
-      const items = Object.entries(prov.models)
-        .filter(([id, m]) => {
-          if (!q) return true;
-          return (
-            id.toLowerCase().includes(q) ||
-            m.name.toLowerCase().includes(q) ||
-            prov.name.toLowerCase().includes(q)
-          );
-        })
-        .slice(0, 40)
-        .map(([id, m]) => ({
-          id,
-          name: m.name,
-          context: m.context,
-          output: m.output,
-          reasoning: m.reasoning,
-        }));
-      if (items.length > 0) out.push({ provider: prov.name || pid, items });
-    }
-    out.sort((a, b) => a.provider.localeCompare(b.provider));
-    return out;
-  });
+  const groups = $derived(
+    groupModels(catalogForPicker(catalog.current, provider?.baseUrl, provider?.hasKey ?? false), query),
+  );
 
   const activeProviderName = $derived(
-    PROVIDERS.find((provider) => provider.id === detectProviderId(config.current?.baseUrl))?.name ??
-      "active provider",
+    PROVIDERS.find((preset) => preset.id === detectProviderId(provider?.baseUrl))?.name ?? "active provider",
   );
 </script>
 
@@ -180,9 +149,9 @@
                   </div>
                 </div>
                 <div class="model-row-right">
-                  {#if m.context || m.output}
+                  {#if m.contextWindow || m.maxOutput}
                     <span class="model-chip-spec">
-                      {[fmtLimit(m.context), fmtLimit(m.output)].filter(Boolean).join(" / ")}
+                      {[fmtLimit(m.contextWindow), fmtLimit(m.maxOutput)].filter(Boolean).join(" / ")}
                     </span>
                   {/if}
                   {#if m.id === model.current}

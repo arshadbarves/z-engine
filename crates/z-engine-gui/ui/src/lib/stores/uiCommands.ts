@@ -43,7 +43,7 @@ export async function runUiCommand(name: string, args: string): Promise<void> {
     case "permissions":
       return ui.openSettings("permissions");
     case "config":
-      return ui.openSettings("general");
+      return ui.openSettings("models");
     case "hooks":
       return showLocal("hooks", hookReport());
     case "memory":

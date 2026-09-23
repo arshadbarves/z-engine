@@ -1,169 +1,87 @@
 <script lang="ts">
-  import {
-    getConfig,
-    saveGeneral,
-    type HarnessConfig,
-    type TaskReportView,
-  } from "$lib/commands";
-  import {
-    APPEARANCE_OPTIONS,
-    beginTaskReportViewUpdate,
-    mergeTaskReportView,
-    resolveTaskReportViewRecovery,
-    type CompensationOutcome,
-  } from "$lib/domain/appearanceSettings";
-  import { configStore } from "$lib/configStore";
-  import { pushToast } from "$lib/runtime";
-  import { SegmentedChoice } from "$lib/ui";
+  import { untrack } from "svelte";
+  import { listExtensions } from "$lib/commands";
+  import { APPEARANCE_OPTIONS } from "$lib/domain/appearanceSettings";
+  import type { OutputStyleDef } from "$lib/protocol/config/OutputStyleDef";
+  import type { Settings } from "$lib/protocol/config/Settings";
+  import { settingsStore } from "$lib/stores/settings.svelte";
   import AppearancePreview from "./AppearancePreview.svelte";
+  import ChoiceSetting from "./ChoiceSetting.svelte";
+  import SettingRow from "./SettingRow.svelte";
   import SettingsCard from "./SettingsCard.svelte";
-  import SettingsField from "./SettingsField.svelte";
   import SettingsGroup from "./SettingsGroup.svelte";
 
-  type Props = { cfg: HarnessConfig };
-  let { cfg }: Props = $props();
+  type Props = { settings: Settings };
+  let { settings }: Props = $props();
 
-  let current = $state<TaskReportView>("quiet");
+  let styles = $state.raw<OutputStyleDef[] | null>(null);
+  let styleError = $state<string | null>(null);
   let saving = $state(false);
-  const selected = $derived(
-    APPEARANCE_OPTIONS.find((option) => option.value === current) ?? APPEARANCE_OPTIONS[0],
-  );
+  const view = $derived(settings.ui.task_report_view);
+  const current = $derived(settings.ui.output_style);
+  const selected = $derived(APPEARANCE_OPTIONS.find((option) => option.value === view) ?? APPEARANCE_OPTIONS[0]);
+  const missing = $derived(current !== null && styles !== null && !styles.some((style) => style.name === current));
 
   $effect(() => {
-    current = cfg.taskReportView;
+    const root = settingsStore.root;
+    untrack(() => {
+      listExtensions(root)
+        .then((extensions) => (styles = extensions.outputStyles))
+        .catch(() => (styles = []));
+    });
   });
 
-  function applyTaskReportView(taskReportView: TaskReportView) {
-    current = taskReportView;
-    configStore.set(
-      mergeTaskReportView(configStore.getSnapshot(), cfg, taskReportView),
-    );
-  }
-
-  function viewLabel(view: TaskReportView) {
-    return APPEARANCE_OPTIONS.find((option) => option.value === view)?.label ?? view;
-  }
-
-  async function recoverFailedUpdate(
-    update: ReturnType<typeof beginTaskReportViewUpdate>,
-    persisted: boolean,
-    updateError: unknown,
-  ) {
-    let compensation: CompensationOutcome = "not-needed";
-    let compensationError: unknown;
-    let reconciliationError: unknown;
-    let reconciled: HarnessConfig | null = null;
-
-    if (persisted) {
-      try {
-        await saveGeneral({ taskReportView: update.previous.taskReportView });
-        compensation = "succeeded";
-      } catch (error) {
-        compensation = "failed";
-        compensationError = error;
-      }
-    }
-
-    try {
-      reconciled = await getConfig();
-    } catch (error) {
-      reconciliationError = error;
-    }
-
-    const recovery = resolveTaskReportViewRecovery(update, {
-      initialSavePersisted: persisted,
-      compensation,
-      reconciled,
-    });
-    applyTaskReportView(recovery.config.taskReportView);
-
-    if (compensation === "failed") {
-      const confirmation = recovery.durabilityConfirmed
-        ? `Reloaded saved setting: ${viewLabel(recovery.config.taskReportView)}.`
-        : `Durable rollback could not be confirmed; showing ${viewLabel(recovery.config.taskReportView)} as the best known saved setting.`;
-      pushToast(
-        `Report detail update failed. Rollback also failed: ${String(compensationError)}. ${confirmation}`,
-        "warn",
-      );
-      return;
-    }
-    if (!recovery.durabilityConfirmed) {
-      pushToast(
-        `Report detail update failed. Durable rollback could not be confirmed (${String(reconciliationError)}); showing ${viewLabel(recovery.config.taskReportView)} as the best known saved setting.`,
-        "warn",
-      );
-      return;
-    }
-    if (!recovery.restoredPrevious) {
-      pushToast(
-        `Report detail update reported an error; reloaded saved setting: ${viewLabel(recovery.config.taskReportView)}.`,
-        "warn",
-      );
-      return;
-    }
-    pushToast(`Could not update report detail: ${String(updateError)}`, "warn");
-  }
-
-  async function selectView(next: TaskReportView) {
-    if (saving || next === current) return;
-    const update = beginTaskReportViewUpdate(
-      configStore.getSnapshot() ?? cfg,
-      next,
-    );
-    current = next;
-    configStore.set(update.optimistic);
+  async function pickStyle(name: string | null) {
+    if (saving || name === current) return;
     saving = true;
-    let persisted = false;
-
-    try {
-      await saveGeneral({ taskReportView: next });
-      persisted = true;
-      const refreshed = await getConfig();
-      applyTaskReportView(refreshed.taskReportView);
-    } catch (error) {
-      await recoverFailedUpdate(update, persisted, error);
-    } finally {
-      saving = false;
-    }
+    styleError = await settingsStore.setValue(["ui", "output_style"], name);
+    saving = false;
   }
 </script>
 
 <div class="tab-body appearance-tab">
-  <SettingsGroup
-    title="Task report detail"
-    description="Choose how much verification information completed tasks show"
-  >
+  <SettingsGroup title="Task report detail" description="Choose how much verification information completed tasks show">
     <SettingsCard>
-      <SettingsField
+      <ChoiceSetting
         title="Information density"
         description="This changes report presentation everywhere. It does not change how the agent works or what it verifies."
-      >
-        <SegmentedChoice
-          label="Task report information density"
-          options={APPEARANCE_OPTIONS}
-          value={current}
-          busy={saving}
-          onSelect={(value) => void selectView(value)}
-        />
-        <p class="selection-description" aria-live="polite">{selected.description}</p>
-      </SettingsField>
+        keyPath={["ui", "task_report_view"]}
+        options={APPEARANCE_OPTIONS}
+        value={view}
+      />
     </SettingsCard>
   </SettingsGroup>
 
-  <SettingsGroup
-    title="Preview"
-    description="An illustration of the layout only — no task or session data is used"
-  >
-    <AppearancePreview view={current} label={selected.label} />
+  <SettingsGroup title="Preview" description="An illustration of the layout only — no task or session data is used">
+    <AppearancePreview {view} label={selected.label} />
+  </SettingsGroup>
+
+  <SettingsGroup title="Response style" description="How the assistant writes its answers. Styles come from output-styles/ folders.">
+    <SettingsCard>
+      <SettingRow title="Output style" keyPath={["ui", "output_style"]} error={styleError}>
+        <div class="style-options" role="radiogroup" aria-label="Output style" aria-busy={saving}>
+          <button type="button" role="radio" class="style-option" aria-checked={current === null} onclick={() => void pickStyle(null)}>
+            <strong>Default</strong>
+            <span>Z Engine's built-in response style.</span>
+          </button>
+          {#each styles ?? [] as style (style.source.path)}
+            <button
+              type="button"
+              role="radio"
+              class="style-option"
+              aria-checked={current === style.name}
+              onclick={() => void pickStyle(style.name)}
+            >
+              <strong>{style.name}</strong>
+              <span>{style.description || style.source.path}</span>
+            </button>
+          {/each}
+        </div>
+        {#if missing}<p class="setting-note">No output style named {current} was found, so the default style is used.</p>{/if}
+        {#if styles?.length === 0}
+          <p class="setting-note">Add styles under Agents &amp; Commands → Output styles.</p>
+        {/if}
+      </SettingRow>
+    </SettingsCard>
   </SettingsGroup>
 </div>
-
-<style>
-  .selection-description {
-    min-height: 36px;
-    margin: 0;
-    color: var(--text-2);
-    font-size: 12px;
-    line-height: 1.5;
-  }
-</style>

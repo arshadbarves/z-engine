@@ -13,8 +13,6 @@
   import WorktreePanel from "./components/overlays/WorktreePanel.svelte";
   import SettingsPage from "./components/settings/SettingsPage.svelte";
   import AppSidebar from "./components/sidebar/AppSidebar.svelte";
-  import { getConfig } from "./lib/commands";
-  import { configStore } from "./lib/configStore";
   import { workCounts } from "./lib/domain/agentTree";
   import { sessionLabel, viewTitle } from "./lib/domain/sessionList";
   import { lastPromptId } from "./lib/domain/timeline/blocks";
@@ -28,6 +26,7 @@
     removeWorkspace,
     startNewChat,
   } from "./lib/stores/app-actions";
+  import { settingsStore } from "./lib/stores/settings.svelte";
   import { ui } from "./lib/stores/ui.svelte";
   import { bindStore } from "./lib/svelte/bind.svelte";
   import { presence } from "./lib/ui/presence.svelte";
@@ -35,7 +34,6 @@
   import { updateStore } from "./lib/updateStore";
   import { workspaceStore, wsBasename } from "./lib/workspaces";
 
-  const config = bindStore(configStore);
   const workspaces = bindStore(workspaceStore);
   const scroller = createScrollController({ bottomThreshold: 24 });
 
@@ -55,21 +53,24 @@
   const workBadge = $derived(counts ? counts.runningAgents + counts.runningJobs + counts.pendingWorktrees : 0);
   const chatTitle = $derived(view ? sessionLabel(viewTitle(view)) : "New Chat");
   const projectRoot = $derived(view?.info?.projectRoot ?? workspaces.current.active);
-  const workspaceName = $derived(projectRoot ? wsBasename(projectRoot) : config.current?.projectName || null);
+  const workspaceName = $derived(projectRoot ? wsBasename(projectRoot) : null);
   const lastPrompt = $derived(lastPromptId(view?.messages));
+  let booted = $state(false);
 
   $effect(() => {
     void (async () => {
       await initEvents();
       await workspaceStore.load();
       await sessionList.refresh();
-      try {
-        configStore.set(await getConfig());
-      } catch (e) {
-        console.warn("get_config unavailable", e);
-      }
+      await settingsStore.init(projectRoot ?? null);
+      booted = true;
       void updateStore.check();
     })();
+  });
+
+  $effect(() => {
+    const root = projectRoot ?? null;
+    if (booted) void settingsStore.ensure(root);
   });
 
   $effect(() => scroller.bindContainer(transcriptEl));
@@ -144,7 +145,7 @@
       activeSessionId={sessions.activeId}
       activity={sessions.activity}
       unread={sessions.unread}
-      version={config.current?.version}
+      version={settingsStore.info?.version}
       onOpen={(id, root) => void openChat(id, root)}
       onDelete={(id) => void removeChat(id)}
       onAddWorkspace={() => void addWorkspace()}

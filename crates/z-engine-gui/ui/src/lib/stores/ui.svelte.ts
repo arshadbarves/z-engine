@@ -1,4 +1,15 @@
-export type SettingsTab = "providers" | "general" | "appearance" | "permissions" | "mcp" | "about";
+export type SettingsTab =
+  | "models"
+  | "providers"
+  | "permissions"
+  | "hooks"
+  | "extensions"
+  | "mcp"
+  | "verification"
+  | "memory"
+  | "advanced"
+  | "appearance"
+  | "about";
 export type WorkTab = "agents" | "jobs";
 
 /** App chrome state (overlays, panels, sidebar). UI-only; no engine I/O. */

@@ -1,10 +1,9 @@
 <script lang="ts">
-  import { configStore } from "$lib/configStore";
   import { contextMeter } from "$lib/domain/contextMeter";
   import { usageLine } from "$lib/domain/usage";
   import { compact, pushToast, requestContextReport, sessions } from "$lib/runtime";
+  import { settingsStore } from "$lib/stores/settings.svelte";
   import { ui } from "$lib/stores/ui.svelte";
-  import { bindStore } from "$lib/svelte/bind.svelte";
   import Icon, {
     AlertOctagon,
     AlertTriangle,
@@ -22,7 +21,6 @@
   const RING_R = 7;
   const RING_C = 2 * Math.PI * RING_R;
 
-  const cfg = bindStore(configStore);
   let compacting = $state(false);
   let root: HTMLDivElement | undefined = $state();
 
@@ -36,7 +34,7 @@
   );
   const cost = $derived(view?.costUsd ?? 0);
   const usage = $derived(view ? usageLine(view.usage) : "");
-  const compactAt = $derived(cfg.current?.compactAtPercent ?? 92);
+  const compactAt = $derived(settingsStore.settings?.context.compact_at_percent ?? 92);
   const statusText = $derived(
     meter.level === "ok"
       ? "Memory Healthy · Plenty of space"
