@@ -3,6 +3,7 @@
 //! touch it; nothing here performs I/O.
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use z_engine_protocol::{
     AgentId, AgentInfo, CheckRecord, CheckpointInfo, CompactionMarker, Effort, Message,
@@ -50,6 +51,10 @@ pub(crate) struct SessionState {
     pub external_mutation: bool,
     /// What the current (or last) main-agent turn changed.
     pub mutation: Mutation,
+    /// Directories added with `/add-dir` for this session.
+    pub added_dirs: Vec<PathBuf>,
+    /// A prompt command's `model`, for its turn only.
+    pub turn_model: Option<String>,
 }
 
 impl SessionState {
@@ -100,6 +105,8 @@ impl SessionState {
             interrupted,
             external_mutation: false,
             mutation: Mutation::default(),
+            added_dirs: Vec::new(),
+            turn_model: None,
         }
     }
 

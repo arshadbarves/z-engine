@@ -56,7 +56,14 @@ fn live(weak: &Weak<SessionCore>) -> Option<Arc<SessionCore>> {
 /// and the registry when the tools changed; returns whether they did.
 pub(super) async fn refresh(core: &SessionCore) -> bool {
     let mut tools: Vec<CatalogTool> = Vec::new();
+    let mut prompts = Vec::new();
     for Server { plan, manager } in core.mcp.servers() {
+        match manager.prompts().await {
+            Ok(listed) => prompts.extend(listed),
+            Err(error) => {
+                tracing::debug!(server = %plan.spec.name, %error, "MCP prompts not listed")
+            }
+        }
         for (server, info) in manager.tools().await {
             if plan.disabled_tools.contains(&info.name) {
                 continue;
@@ -69,6 +76,7 @@ pub(super) async fn refresh(core: &SessionCore) -> bool {
             tools.push(CatalogTool { server, name, info });
         }
     }
+    core.mcp.set_prompts(prompts);
     let changed = core.mcp.install(tools);
     if changed {
         rebuild_tools(core);
@@ -118,10 +126,12 @@ async fn watch(
             .filter(|change| change.kind == McpChangeKind::Tools)
             .map(|change| change.server.clone())
             .collect();
-        if !burst
-            .iter()
-            .any(|change| matches!(change.kind, McpChangeKind::Tools | McpChangeKind::Status))
-        {
+        if !burst.iter().any(|change| {
+            matches!(
+                change.kind,
+                McpChangeKind::Tools | McpChangeKind::Status | McpChangeKind::Prompts
+            )
+        }) {
             continue;
         }
         let Some(core) = live(&weak) else { return };

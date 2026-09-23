@@ -6,10 +6,10 @@ use std::time::Duration;
 
 use serde::Serialize;
 use z_engine_config::McpServerConfig;
-use z_engine_host::{expand_tilde, resolve};
-use z_engine_integrations::{McpClient, McpServerSpec, McpTransport};
+use z_engine_integrations::{McpClient, McpServerSpec};
 
 use crate::engine::Engine;
+use crate::mcp::server_spec;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -76,48 +76,26 @@ fn timed_out(limit: Duration) -> String {
     format!("the server did not answer within {} s", limit.as_secs())
 }
 
+/// The session's spec builder; a nameless or disabled entry still tests.
 fn spec(
     name: &str,
     server: &McpServerConfig,
     project_root: Option<&Path>,
     home: Option<&Path>,
 ) -> Result<McpServerSpec, String> {
-    if let Some(problem) = server.transport_error() {
-        return Err(problem.to_string());
-    }
     let name = match name.trim() {
         "" => "test",
         name => name,
     };
-    let transport = match (&server.command, &server.url) {
-        (Some(command), _) if !command.trim().is_empty() => McpTransport::Stdio {
-            command: command.trim().to_string(),
-            args: server.args.clone(),
-            env: server.env.clone(),
-            cwd: server.cwd.as_deref().map(|cwd| {
-                let cwd = expand_tilde(cwd, home);
-                match project_root {
-                    Some(root) => resolve(root, cwd),
-                    None => cwd,
-                }
-            }),
-        },
-        (_, Some(url)) => McpTransport::Http {
-            url: url.trim().to_string(),
-            headers: server.headers.clone(),
-        },
-        _ => return Err("set `command` or `url`".to_string()),
-    };
-    Ok(McpServerSpec {
-        name: name.to_string(),
-        transport,
-        timeout: Duration::from_secs(server.timeout_secs.max(1)),
-        enabled: true,
-    })
+    let mut spec = server_spec(name, server, project_root, home)?;
+    spec.enabled = true;
+    Ok(spec)
 }
 
 #[cfg(test)]
 mod tests {
+    use z_engine_integrations::McpTransport;
+
     use super::super::testing::engine;
     use super::*;
 

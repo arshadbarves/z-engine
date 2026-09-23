@@ -2,7 +2,8 @@
 //! values can union, concatenate, or merge by identity.
 //!
 //! Tables merge recursively and scalars and other arrays override, except:
-//! rule lists and `shell.env_passthrough` union (deduplicated, in order);
+//! rule lists, `shell.env_passthrough` and `shell.sandbox.extra_writable`
+//! union (deduplicated, in order);
 //! `hooks.<event>` lists concatenate; `verification.checks` merge by `id`,
 //! a later check replacing the earlier one with that id in place; and a
 //! later `mcp.servers.<name>` or `lsp.servers.<name>` replaces the earlier
@@ -10,12 +11,13 @@
 
 use toml::{Table, Value};
 
-const UNION_ARRAYS: [[&str; 2]; 5] = [
-    ["permissions", "allow"],
-    ["permissions", "ask"],
-    ["permissions", "deny"],
-    ["permissions", "additional_directories"],
-    ["shell", "env_passthrough"],
+const UNION_ARRAYS: [&[&str]; 6] = [
+    &["permissions", "allow"],
+    &["permissions", "ask"],
+    &["permissions", "deny"],
+    &["permissions", "additional_directories"],
+    &["shell", "env_passthrough"],
+    &["shell", "sandbox", "extra_writable"],
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,7 +31,7 @@ enum Rule {
 
 fn rule_for(path: &[String]) -> Rule {
     match path {
-        [section, key] if UNION_ARRAYS.iter().any(|[s, k]| s == section && k == key) => Rule::Union,
+        _ if UNION_ARRAYS.iter().any(|union| union.iter().eq(path)) => Rule::Union,
         [section, _] if section == "hooks" => Rule::Concat,
         [section, key] if section == "verification" && key == "checks" => Rule::ById,
         [section, servers, _] if (section == "mcp" || section == "lsp") && servers == "servers" => {
@@ -155,6 +157,23 @@ mod tests {
         ]);
         assert_eq!(strings(&t, "permissions", "allow"), ["Read", "Bash(ls)"]);
         assert_eq!(strings(&t, "model", "fallbacks"), ["y"]);
+    }
+
+    #[test]
+    fn sandbox_extra_writable_unions() {
+        let t = merged(&[
+            "[shell.sandbox]\nextra_writable = [\"a\"]\nenabled = true",
+            "[shell.sandbox]\nextra_writable = [\"b\", \"a\"]",
+        ]);
+        let sandbox = &t["shell"]["sandbox"];
+        let items: Vec<_> = sandbox["extra_writable"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        assert_eq!(items, ["a", "b"]);
+        assert_eq!(sandbox["enabled"].as_bool(), Some(true));
     }
 
     #[test]

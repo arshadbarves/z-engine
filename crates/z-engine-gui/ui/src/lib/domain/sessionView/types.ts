@@ -88,6 +88,13 @@ export interface ErrorView {
   at: number;
 }
 
+/** An untrusted project asked for trust (`trustRequired`); cleared by a snapshot or an answer. */
+export interface TrustRequestView {
+  projectRoot: string;
+  /** What stays off until trusted, e.g. `hooks`, `MCP servers`, `checks`. */
+  defines: string[];
+}
+
 export interface RetryingView {
   attempt: number;
   delayMs: number;
@@ -137,6 +144,7 @@ export interface SessionView {
   errors: ErrorView[];
   lastError: string | null;
   retrying: RetryingView | null;
+  trustRequest: TrustRequestView | null;
   nextLocalId: number;
 }
 
@@ -190,6 +198,7 @@ export function emptyView(sessionId: string): SessionView {
     errors: [],
     lastError: null,
     retrying: null,
+    trustRequest: null,
     nextLocalId: 1,
   };
 }

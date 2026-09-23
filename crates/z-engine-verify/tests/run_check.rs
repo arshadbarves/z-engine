@@ -29,6 +29,7 @@ impl Setup {
             agent_id: AgentId::main(),
             artifacts_dir: self.session.path().join("artifacts"),
             project_root: self.project.path().to_path_buf(),
+            sandbox: None,
         }
     }
 }

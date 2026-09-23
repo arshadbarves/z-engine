@@ -3,20 +3,28 @@
 
 use serde_json::Value;
 use tauri::State;
+use z_engine_engine::{AgentCard, SlashCommandInfo};
 
 use crate::ipc::{IpcResult, fail, json};
 use crate::state::AppState;
 
+/// Engine built-ins, prompt commands (built-in, custom, MCP) and GUI commands.
 #[tauri::command]
-pub(crate) fn list_commands(project_root: String, state: State<'_, AppState>) -> IpcResult<Value> {
+pub(crate) fn list_commands(
+    project_root: String,
+    state: State<'_, AppState>,
+) -> IpcResult<Vec<SlashCommandInfo>> {
     let root = AppState::root_arg(&project_root)?;
-    json(state.engine.slash_commands(&root))
+    Ok(state.engine.slash_commands(&root))
 }
 
 #[tauri::command]
-pub(crate) fn list_agents(project_root: String, state: State<'_, AppState>) -> IpcResult<Value> {
+pub(crate) fn list_agents(
+    project_root: String,
+    state: State<'_, AppState>,
+) -> IpcResult<Vec<AgentCard>> {
     let root = AppState::root_arg(&project_root)?;
-    json(state.engine.agent_cards(&root))
+    Ok(state.engine.agent_cards(&root))
 }
 
 #[tauri::command]

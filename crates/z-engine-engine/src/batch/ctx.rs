@@ -11,7 +11,7 @@ use z_engine_tools::{ShellConfig, SpillFn, ToolCtx, ToolLimits, WebOptions};
 use crate::ports::run_ports;
 use crate::run::RunContext;
 use crate::session::SessionCore;
-use crate::settings::models;
+use crate::settings::{models, sandbox};
 
 pub(crate) fn tool_ctx(
     ctx: &RunContext,
@@ -22,7 +22,8 @@ pub(crate) fn tool_ctx(
     let settings = core.settings();
     let catalog = core.catalog();
     let web = &settings.settings.web;
-    let mut additional_dirs = settings.additional_dirs.clone();
+    let mut additional_dirs = core.additional_dirs();
+    let sandbox = sandbox::profile_for(&settings, &ctx.spec.root, &additional_dirs);
     additional_dirs.extend(
         ctx.spec
             .worktree
@@ -43,6 +44,7 @@ pub(crate) fn tool_ctx(
         shell: Arc::new(ShellConfig {
             spec: settings.shell.clone(),
             env: settings.env.clone(),
+            sandbox,
         }),
         web: core.shared.web.clone(),
         web_options: WebOptions {

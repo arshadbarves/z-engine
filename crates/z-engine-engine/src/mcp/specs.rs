@@ -24,7 +24,7 @@ pub(super) fn server_plans(
     let mut plans = Vec::new();
     let mut problems = Vec::new();
     for (name, config) in &settings.servers {
-        match spec(name, config, root, home) {
+        match server_spec(name, config, Some(root), home) {
             Ok(spec) => plans.push(ServerPlan {
                 spec,
                 disabled_tools: config.disabled_tools.clone(),
@@ -35,10 +35,12 @@ pub(super) fn server_plans(
     (plans, problems)
 }
 
-fn spec(
+/// One server's spec. A stdio server runs in its `cwd` resolved against
+/// `root`, else in `root` itself (the process's directory without one).
+pub(crate) fn server_spec(
     name: &str,
     config: &McpServerConfig,
-    root: &Path,
+    root: Option<&Path>,
     home: Option<&Path>,
 ) -> Result<McpServerSpec, String> {
     if name.trim().is_empty() {
@@ -52,10 +54,13 @@ fn spec(
             command: command.trim().to_string(),
             args: config.args.clone(),
             env: config.env.clone(),
-            cwd: Some(match config.cwd.as_deref().map(str::trim) {
-                Some(cwd) if !cwd.is_empty() => resolve(root, expand_tilde(cwd, home)),
-                _ => root.to_path_buf(),
-            }),
+            cwd: match (config.cwd.as_deref().map(str::trim), root) {
+                (Some(cwd), Some(root)) if !cwd.is_empty() => {
+                    Some(resolve(root, expand_tilde(cwd, home)))
+                }
+                (Some(cwd), None) if !cwd.is_empty() => Some(expand_tilde(cwd, home)),
+                (_, root) => root.map(Path::to_path_buf),
+            },
         },
         (_, Some(url)) => McpTransport::Http {
             url: url.trim().to_string(),

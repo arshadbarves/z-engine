@@ -31,7 +31,8 @@ pub(super) fn decide(ctx: &RunContext, tool: &str, action: &Action) -> Decision 
         _ => {
             let granted = lock(&core.policy).session_rules();
             let home = core.shared.paths.home_dir.as_deref();
-            let (policy, _) = build_policy(&core.settings(), worktree, home, &granted);
+            let added = core.with_state(|state| state.added_dirs.clone());
+            let (policy, _) = build_policy(&core.settings(), worktree, home, &granted, &added);
             policy.decide(tool, action, mode)
         }
     }

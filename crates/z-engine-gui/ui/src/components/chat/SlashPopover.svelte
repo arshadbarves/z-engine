@@ -1,9 +1,10 @@
 <script lang="ts">
   import type { SlashCommandInfo } from "$lib/commands";
-  import { sourceTag } from "$lib/domain/slashCommands";
+  import { groupCommands, kindTag, sourceTag } from "$lib/domain/slashCommands";
   import Icon, { Plug, Search, Sliders, Sparkles, Zap, type IconSvgElement } from "$lib/ui/icons";
 
   type Props = {
+    /** Already in menu order (see `menuOrder`), so indexes match the groups. */
     items: SlashCommandInfo[];
     selected: number;
     onPick: (command: SlashCommandInfo) => void;
@@ -12,6 +13,7 @@
   let { items, selected, onPick, onHover }: Props = $props();
 
   let listEl: HTMLDivElement | undefined = $state();
+  const groups = $derived(groupCommands(items));
 
   $effect(() => {
     void selected;
@@ -42,29 +44,36 @@
         <span>No matching commands</span>
       </div>
     {/if}
-    {#each items as command, i (command.name)}
-      {@const look = iconFor(command)}
-      <button
-        type="button"
-        role="option"
-        aria-selected={i === selected}
-        class={`cmd-pop-item ${look.tone}${i === selected ? " sel" : ""}`}
-        onmouseenter={() => onHover(i)}
-        onclick={() => onPick(command)}
-      >
-        <div class="cmd-icon-box"><Icon icon={look.icon} size={13} strokeWidth={1.8} /></div>
-        <div class="cmd-info-col">
-          <div class="cmd-title-row">
-            <span class="cmd-name">/{command.name}</span>
-            {#if command.argumentHint}<span class="cmd-arg-hint">{command.argumentHint}</span>{/if}
-            <span class="cmd-cat-tag">{sourceTag(command)}</span>
+    {#each groups as group (group.kind)}
+      <div class="cmd-group-label" role="presentation">{group.label}</div>
+      {#each group.commands as command (command.name)}
+        {@const i = items.indexOf(command)}
+        {@const look = iconFor(command)}
+        <button
+          type="button"
+          role="option"
+          aria-selected={i === selected}
+          class={`cmd-pop-item ${look.tone}${i === selected ? " sel" : ""}`}
+          onmouseenter={() => onHover(i)}
+          onclick={() => onPick(command)}
+        >
+          <div class="cmd-icon-box"><Icon icon={look.icon} size={13} strokeWidth={1.8} /></div>
+          <div class="cmd-info-col">
+            <div class="cmd-title-row">
+              <span class="cmd-name">/{command.name}</span>
+              {#if command.argumentHint}<span class="cmd-arg-hint">{command.argumentHint}</span>{/if}
+              <span class="cmd-cat-tag" title="What running it does">{kindTag(command)}</span>
+              {#if command.kind !== "ui"}
+                <span class="cmd-cat-tag" title="Where it is defined">{sourceTag(command)}</span>
+              {/if}
+            </div>
+            <span class="cmd-desc">{command.description}</span>
           </div>
-          <span class="cmd-desc">{command.description}</span>
-        </div>
-        {#if i === selected}
-          <div class="cmd-enter-pill"><kbd>↵</kbd></div>
-        {/if}
-      </button>
+          {#if i === selected}
+            <div class="cmd-enter-pill"><kbd>↵</kbd></div>
+          {/if}
+        </button>
+      {/each}
     {/each}
   </div>
 
@@ -77,3 +86,14 @@
     <span class="footer-hint"><kbd>Esc</kbd> close</span>
   </div>
 </div>
+
+<style>
+  .cmd-group-label {
+    padding: 8px 12px 3px;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+</style>

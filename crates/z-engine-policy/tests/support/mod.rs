@@ -44,6 +44,7 @@ pub fn config(allow: &[&str], ask: &[&str], deny: &[&str]) -> PolicyConfig {
         ask: strings(ask),
         deny: strings(deny),
         auto_allow_read_only_bash: true,
+        sandbox_auto_allow: false,
     }
 }
 

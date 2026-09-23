@@ -21,6 +21,7 @@ use super::reload::reload;
 use super::rewind::rewind;
 use super::shell::spawn_shell;
 use super::slash::{Slash, run_command};
+use super::trust::trust_workspace;
 use super::turn::run_turn;
 use crate::hooks::{HookEvent, HookInput, run_hooks};
 use crate::orchestration::{apply_command, discard_command};
@@ -115,7 +116,7 @@ impl Actor {
     async fn handle(&mut self, command: Command) {
         let core = &self.core;
         match command {
-            Command::Submit { text, attachments } => self.submit(TurnInput { text, attachments }),
+            Command::Submit { text, attachments } => self.submit(TurnInput::new(text, attachments)),
             Command::Steer { text } => self.submit(TurnInput::text(text)),
             Command::Interrupt { text } => self.interrupt(text),
             Command::Cancel => self.cancel(),
@@ -139,14 +140,18 @@ impl Actor {
             Command::KillJob { job_id } => control::kill_job(core, job_id),
             Command::ApplyAgentChanges { agent_id } => apply_command(core, agent_id),
             Command::DiscardAgentChanges { agent_id } => discard_command(core, agent_id),
-            Command::RunCommand { name, args } => {
-                if let Slash::Compact(instructions) = run_command(core, &name, &args).await {
-                    self.compact(instructions);
+            Command::RunCommand { name, args } => match run_command(core, &name, &args).await {
+                Slash::Compact(instructions) => self.compact(instructions),
+                Slash::Prompt(call) if self.activity.is_none() => {
+                    self.start_turn(TurnInput::command(call));
                 }
-            }
+                Slash::Prompt(call) => control::command_waits(core, &call.name),
+                Slash::Handled => {}
+            },
             Command::Shell { command } => spawn_shell(Arc::clone(core), command),
             Command::EditQueue { queued } => control::edit_queue(core, queued),
             Command::ReloadExtensions => reload(core).await,
+            Command::TrustWorkspace { trusted } => trust_workspace(core, trusted).await,
             Command::Shutdown => {}
         }
     }

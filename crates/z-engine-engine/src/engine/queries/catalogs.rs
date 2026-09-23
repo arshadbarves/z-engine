@@ -1,6 +1,5 @@
-//! What the composer offers: agents for `@` mentions and slash commands.
-//! Slash commands are the ones the engine handles today plus the GUI's
-//! own; prompt and custom commands arrive with the commands phase.
+//! What the composer offers: agents for `@` mentions and slash commands
+//! (engine built-ins, prompt commands from every source, GUI commands).
 
 use std::path::Path;
 
@@ -8,8 +7,10 @@ use serde::Serialize;
 use z_engine_config::{
     AgentDef, ExtensionScope, ExtensionSource, discover_extensions, parse_agent,
 };
+use z_engine_integrations::McpPromptInfo;
 use z_engine_prompts::agents::BUILTIN;
 
+use crate::commands::{CommandEntry, Target, listed_commands};
 use crate::engine::Engine;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -26,8 +27,10 @@ pub struct AgentCard {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SlashKind {
-    /// Sent to the session as `runCommand`.
+    /// Answered by the engine without the model; sent as `runCommand`.
     Engine,
+    /// Expanded into a prompt for the model; sent as `runCommand`.
+    Prompt,
     /// Handled by the GUI.
     Ui,
 }
@@ -38,44 +41,10 @@ pub struct SlashCommandInfo {
     pub name: String,
     pub description: String,
     pub argument_hint: Option<String>,
+    /// `builtin`, `user`, `project` or `mcp`.
     pub source: String,
     pub kind: SlashKind,
 }
-
-/// `(name, description, argument hint)` of the commands in `session/slash.rs`.
-const ENGINE_COMMANDS: &[(&str, &str, Option<&str>)] = &[
-    (
-        "compact",
-        "Summarize older history to free context",
-        Some("[instructions]"),
-    ),
-    ("cost", "Show token usage and cost of this chat", None),
-    ("status", "Show model, mode, and session status", None),
-    (
-        "remember",
-        "Save a note to AGENTS.md",
-        Some("<project|local|user> <text>"),
-    ),
-];
-
-const UI_COMMANDS: &[(&str, &str, Option<&str>)] = &[
-    ("help", "Show commands and keyboard shortcuts", None),
-    ("agents", "Open the agents panel", None),
-    ("jobs", "Open background jobs", None),
-    ("mcp", "Manage MCP servers", None),
-    ("permissions", "Manage permission rules", None),
-    ("hooks", "Show recent hook runs", None),
-    ("memory", "Remember something in AGENTS.md", None),
-    ("config", "Open settings", None),
-    ("resume", "Switch to another chat", None),
-    (
-        "export",
-        "Copy the transcript to the clipboard",
-        Some("[markdown|json]"),
-    ),
-    ("clear", "Start a new chat", None),
-    ("context", "Show context usage by prompt layer", None),
-];
 
 impl Engine {
     /// Built-in agents, then custom agents of `project_root` (a custom
@@ -104,23 +73,41 @@ impl Engine {
         cards
     }
 
-    /// Slash commands for `project_root`: engine-handled, then GUI ones.
-    pub fn slash_commands(&self, _project_root: &Path) -> Vec<SlashCommandInfo> {
-        let list = |commands: &[(&str, &str, Option<&str>)], kind| {
-            commands
-                .iter()
-                .map(move |(name, description, hint)| SlashCommandInfo {
-                    name: name.to_string(),
-                    description: description.to_string(),
-                    argument_hint: hint.map(str::to_string),
-                    source: "builtin".to_string(),
-                    kind,
-                })
-                .collect::<Vec<_>>()
-        };
-        let mut commands = list(ENGINE_COMMANDS, SlashKind::Engine);
-        commands.extend(list(UI_COMMANDS, SlashKind::Ui));
-        commands
+    /// Slash commands for `project_root`: engine built-ins, custom and
+    /// built-in prompt commands, the MCP prompts of a live session of the
+    /// project, then GUI commands.
+    pub fn slash_commands(&self, project_root: &Path) -> Vec<SlashCommandInfo> {
+        let compat = self.settings(Some(project_root)).settings.compat.claude;
+        let custom = discover_extensions(self.paths(), project_root, compat).commands;
+        let prompts = self.live_mcp_prompts(project_root);
+        listed_commands(&custom, &prompts)
+            .into_iter()
+            .map(info)
+            .collect()
+    }
+
+    fn live_mcp_prompts(&self, project_root: &Path) -> Vec<(String, McpPromptInfo)> {
+        let root = std::fs::canonicalize(project_root).unwrap_or_else(|_| project_root.into());
+        self.handles()
+            .iter()
+            .find(|handle| handle.core.root == root)
+            .map(|handle| handle.core.mcp.prompts().to_vec())
+            .unwrap_or_default()
+    }
+}
+
+fn info(entry: CommandEntry) -> SlashCommandInfo {
+    let kind = match entry.target {
+        Target::Engine => SlashKind::Engine,
+        Target::Template(_) | Target::Mcp { .. } => SlashKind::Prompt,
+        Target::Ui => SlashKind::Ui,
+    };
+    SlashCommandInfo {
+        name: entry.name,
+        description: entry.description,
+        argument_hint: entry.argument_hint,
+        source: entry.origin.label().to_string(),
+        kind,
     }
 }
 
@@ -164,19 +151,43 @@ mod tests {
     }
 
     #[test]
-    fn slash_commands_are_the_engine_and_gui_ones() {
+    fn slash_commands_list_every_source() {
         let dir = tempfile::tempdir().unwrap();
-        let commands = engine(dir.path()).slash_commands(dir.path());
-        let engine_names: Vec<&str> = commands
-            .iter()
-            .filter(|command| command.kind == SlashKind::Engine)
-            .map(|command| command.name.as_str())
-            .collect();
-        assert_eq!(engine_names, ["compact", "cost", "status", "remember"]);
-        assert_eq!(commands.len(), ENGINE_COMMANDS.len() + UI_COMMANDS.len());
-        let json = serde_json::to_value(&commands[0]).unwrap();
-        assert_eq!(json["argumentHint"], "[instructions]");
-        assert_eq!(json["kind"], "engine");
-        assert_eq!(json["source"], "builtin");
+        let root = dir.path().join("project");
+        let commands_dir = root.join(".z-engine").join("commands");
+        std::fs::create_dir_all(&commands_dir).unwrap();
+        std::fs::write(
+            commands_dir.join("ship.md"),
+            "---\ndescription: Ship it\nargument-hint: <version>\n---\nShip $1.\n",
+        )
+        .unwrap();
+        let commands = engine(dir.path()).slash_commands(&root);
+        let names = |kind: SlashKind| -> Vec<&str> {
+            commands
+                .iter()
+                .filter(|command| command.kind == kind)
+                .map(|command| command.name.as_str())
+                .collect()
+        };
+        assert_eq!(
+            names(SlashKind::Engine),
+            [
+                "compact", "cost", "status", "remember", "model", "mode", "effort", "mcp", "todos",
+                "doctor", "add-dir"
+            ]
+        );
+        assert_eq!(
+            names(SlashKind::Prompt),
+            ["ship", "init", "review", "security-review", "commit"]
+        );
+        assert!(names(SlashKind::Ui).contains(&"context"));
+        let ship = commands.iter().find(|c| c.name == "ship").unwrap();
+        assert_eq!(ship.source, "project");
+        let json = serde_json::to_value(ship).unwrap();
+        assert_eq!(json["argumentHint"], "<version>");
+        assert_eq!(json["kind"], "prompt");
+        let compact = serde_json::to_value(&commands[0]).unwrap();
+        assert_eq!(compact["kind"], "engine");
+        assert_eq!(compact["source"], "builtin");
     }
 }

@@ -103,6 +103,11 @@ pub enum Command {
         queued: Vec<String>,
     },
     ReloadExtensions,
+    /// Answer to `TrustRequired`: `true` trusts the project root and
+    /// reloads its settings; `false` dismisses the request for this session.
+    TrustWorkspace {
+        trusted: bool,
+    },
     Shutdown,
 }
 
@@ -128,6 +133,19 @@ mod tests {
                 text: "hi".into(),
                 attachments: vec![]
             }
+        );
+    }
+
+    #[test]
+    fn trust_workspace_uses_camel_case() {
+        let cmd: Command =
+            serde_json::from_value(serde_json::json!({"type": "trustWorkspace", "trusted": true}))
+                .unwrap();
+        assert_eq!(cmd, Command::TrustWorkspace { trusted: true });
+        let json = serde_json::to_value(Command::TrustWorkspace { trusted: false }).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "trustWorkspace", "trusted": false})
         );
     }
 }

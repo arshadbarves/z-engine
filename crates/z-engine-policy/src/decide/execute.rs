@@ -1,10 +1,11 @@
-//! Execute actions: shell rules per command, read-only and acceptEdits
-//! defaults, and the suggested "always allow" rule.
+//! Execute actions: shell rules per command, read-only, acceptEdits and
+//! sandbox defaults, and the suggested "always allow" rule.
 
 use std::path::{Path, PathBuf};
 
 use z_engine_protocol::PermissionMode;
 
+use super::sandbox;
 use crate::engine::{Decision, Policy};
 use crate::paths::resolve;
 use crate::rules::Rule;
@@ -107,6 +108,9 @@ pub(super) fn decide(
         && shell::is_common_fs_command(&facts.command, &policy.ctx.project_root)
     {
         return Decision::allow("acceptEdits mode allows filesystem commands inside the project");
+    }
+    if sandbox::allows(policy, &facts.parsed, &facts.candidates, facts.truncated) {
+        return Decision::allow(sandbox::REASON);
     }
     Decision::ask(ask_reason(policy, facts), suggestion(policy, facts), true)
 }

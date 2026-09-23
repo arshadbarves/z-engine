@@ -58,6 +58,9 @@ pub const MCP_TOOLS_DEFERRED: &str = include_str!("../prompts/reminders/mcp-tool
 /// root-relative path, `{{diagnostics}}` one line per error.
 pub const LSP_ERRORS: &str = include_str!("../prompts/reminders/lsp-errors.md");
 
+/// The user mentioned `@agent-<name>`; `{{agent}}` is the agent type.
+pub const AGENT_MENTION: &str = include_str!("../prompts/reminders/agent-mention.md");
+
 /// The user interrupted the previous response.
 pub const INTERRUPTED: &str = include_str!("../prompts/reminders/interrupted.md");
 

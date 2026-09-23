@@ -7,8 +7,9 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 use tauri::State;
 use z_engine_config::{ConfigError, HookConfig, LoadedSettings, McpServerConfig, RuleKind, writer};
+use z_engine_engine::McpTestReport;
 
-use crate::ipc::{IpcResult, fail, json};
+use crate::ipc::{IpcResult, fail};
 use crate::layers::{LayerFile, Scope, layer_file, read_layer, toml_value};
 use crate::state::AppState;
 
@@ -129,14 +130,12 @@ pub(crate) async fn test_mcp_server(
     server: McpServerConfig,
     project_root: Option<String>,
     state: State<'_, AppState>,
-) -> IpcResult<Value> {
+) -> IpcResult<McpTestReport> {
     let root = project_root.map(PathBuf::from);
-    json(
-        state
-            .engine
-            .test_mcp_server("test", &server, root.as_deref())
-            .await,
-    )
+    Ok(state
+        .engine
+        .test_mcp_server("test", &server, root.as_deref())
+        .await)
 }
 
 fn keys(key_path: &[String]) -> Vec<&str> {

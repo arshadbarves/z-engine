@@ -1,12 +1,12 @@
 //! Informational commands rendered as markdown: `/context` (with a
-//! `ContextReport`), `/cost`, and `/status`.
+//! `ContextReport`), `/cost`, `/todos`, and `/status`.
 
 use std::sync::Arc;
 
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 use z_engine_context::{context_breakdown, estimate_text, estimate_tools, render_instructions};
-use z_engine_protocol::{ContextBreakdown, Event, JobStatus, Usage};
+use z_engine_protocol::{AgentId, ContextBreakdown, Event, JobStatus, TodoStatus, Usage};
 
 use crate::batch::ToolSet;
 use crate::run::{AgentSpec, RunContext, prepare_request};
@@ -100,6 +100,24 @@ pub(crate) fn cost(core: &SessionCore) -> String {
         }
     }
     out
+}
+
+/// The main agent's todo list as a checklist.
+pub(crate) fn todos(core: &SessionCore) -> String {
+    let todos = core.with_state(|state| state.todos_of(&AgentId::main()).to_vec());
+    if todos.is_empty() {
+        return "No todos yet. The agent keeps a list with `TodoWrite` for multi-step work."
+            .to_string();
+    }
+    todos
+        .iter()
+        .map(|todo| match todo.status {
+            TodoStatus::Completed => format!("- [x] {}", todo.content),
+            TodoStatus::InProgress => format!("- [ ] **{}** (in progress)", todo.content),
+            TodoStatus::Pending => format!("- [ ] {}", todo.content),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 pub(crate) fn status(core: &SessionCore) -> String {

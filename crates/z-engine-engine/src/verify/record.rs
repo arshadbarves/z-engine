@@ -12,6 +12,7 @@ use z_engine_verify::{CheckEnv, CheckSpec, run_check};
 
 use super::outcome::publish_outcome;
 use crate::session::SessionCore;
+use crate::settings::sandbox;
 
 /// Who runs a check, where, and where its output streams.
 pub(crate) struct CheckRun {
@@ -28,12 +29,14 @@ pub(crate) async fn run_recorded(
     run: CheckRun,
 ) -> Result<CheckRecord, String> {
     let settings = core.settings();
+    let sandbox = sandbox::profile_for(&settings, &run.root, &core.additional_dirs());
     let env = CheckEnv {
         shell: settings.shell.clone(),
         env: settings.env.clone(),
         agent_id: run.agent_id,
         artifacts_dir: core.shared.store.artifacts(&core.id).dir().to_path_buf(),
         project_root: run.root,
+        sandbox,
     };
     let record = run_check(spec, &env, run.cancel, run.progress)
         .await

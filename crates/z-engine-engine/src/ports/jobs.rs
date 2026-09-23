@@ -36,7 +36,10 @@ impl JobPort for Jobs {
         let spec = BackgroundSpec {
             command,
             cwd: ctx.current_cwd(),
-            shell: ctx.shell.spec.clone(),
+            shell: ctx
+                .shell
+                .effective_spec()
+                .map_err(|error| error.to_string())?,
             env: ctx.shell.env.clone(),
             label,
             owner: ctx.agent_id.to_string(),

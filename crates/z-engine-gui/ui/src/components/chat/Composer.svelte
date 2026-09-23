@@ -9,7 +9,7 @@
   import { planSubmission } from "$lib/domain/composerSubmit";
   import { nextMode } from "$lib/domain/modes";
   import { REMEMBER_TARGETS, type RememberScope } from "$lib/domain/remember";
-  import { filterCommands } from "$lib/domain/slashCommands";
+  import { filterCommands, menuOrder } from "$lib/domain/slashCommands";
   import { modLabel } from "$lib/platform";
   import { cancelTurn, catalogs, editQueue, searchFiles, sessions, setMode } from "$lib/runtime";
   import { hideShell, shellStore, showShell } from "$lib/shellStore";
@@ -45,7 +45,7 @@
   const text = $derived(composer.draft);
   const shellMode = $derived(text.startsWith("!"));
   const popover = $derived(dismissed ? null : activePopover(text, caret));
-  const slashItems = $derived(popover?.kind === "slash" ? filterCommands(commands, popover.query) : []);
+  const slashItems = $derived(popover?.kind === "slash" ? menuOrder(filterCommands(commands, popover.query)) : []);
   const mentionQuery = $derived(popover?.kind === "mention" ? popover.query : null);
   const mentionItems: MentionItem[] = $derived(
     mentionQuery === null

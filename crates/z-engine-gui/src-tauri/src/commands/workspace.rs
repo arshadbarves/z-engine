@@ -4,10 +4,10 @@
 
 use std::path::{Path, PathBuf};
 
-use serde_json::Value;
 use tauri::State;
+use z_engine_engine::GitChangedFile;
 
-use crate::ipc::{IpcResult, fail, json};
+use crate::ipc::{IpcResult, fail};
 use crate::state::AppState;
 
 #[tauri::command]
@@ -54,9 +54,11 @@ pub(crate) async fn remove_workspace(path: String, state: State<'_, AppState>) -
 }
 
 #[tauri::command]
-pub(crate) async fn list_changed_files(state: State<'_, AppState>) -> IpcResult<Value> {
+pub(crate) async fn list_changed_files(
+    state: State<'_, AppState>,
+) -> IpcResult<Vec<GitChangedFile>> {
     let root = state.active_root();
-    json(state.engine.git_changed_files(&root).await.map_err(fail)?)
+    state.engine.git_changed_files(&root).await.map_err(fail)
 }
 
 #[tauri::command]

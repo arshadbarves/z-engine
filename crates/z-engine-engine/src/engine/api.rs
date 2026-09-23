@@ -226,7 +226,7 @@ impl Engine {
         lock(&self.inner.sessions).get(id).cloned()
     }
 
-    fn handles(&self) -> Vec<Arc<SessionHandle>> {
+    pub(super) fn handles(&self) -> Vec<Arc<SessionHandle>> {
         lock(&self.inner.sessions).values().cloned().collect()
     }
 

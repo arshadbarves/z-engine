@@ -193,4 +193,36 @@ stderr as the reason; other codes warn. JSON stdout may set `decision`
 (`block`/`approve`), `reason`, `continue: false` with `stopReason`, and
 `hookSpecificOutput` (`permissionDecision`, `permissionDecisionReason`,
 `updatedInput`, `additionalContext`). Project-defined hooks, MCP servers
-and checks run only after the user trusts the workspace.
+and checks run only after the user trusts the workspace. Opening a session
+of an untrusted project that defines any of them emits `trustRequired`;
+`trustWorkspace { trusted: true }` records the root in `trust.json` and
+reloads the session (`false` only dismisses the request).
+
+## Commands
+
+`runCommand { name, args }` resolves against one catalog (`engine/src/
+commands/`), first name wins: engine built-ins (`compact`, `context`,
+`cost`, `status`, `remember`, `model`, `mode`, `effort`, `mcp`, `todos`,
+`doctor`, `add-dir`), custom commands (discovery already layers project >
+`.claude` project > user > `.claude` user; they may shadow a prompt built-in
+but never an engine built-in), prompt built-ins
+(`z_engine_prompts::commands::BUILTIN`), and MCP prompts of ready servers as
+`mcp__<server>__<prompt>`. The GUI's own commands (`help`, `agents`, ...)
+are listed by `Engine::slash_commands` with kind `ui` and never resolved.
+
+- Engine built-ins answer without the model; informational ones emit
+  `commandOutput { name, markdown }`. `/add-dir` extends the session policy
+  (with `--save` also `permissions.additional_directories` in
+  `settings.local.toml`).
+- Prompt commands start a turn whose user message has two text blocks: the
+  visible `/name args`, then the body in `<command name="name">…</command>`.
+  Templates substitute `$ARGUMENTS` and `$1`..`$9` (shell-style words),
+  inline `@path` files the policy lets the model read (256 KiB per file,
+  1 MiB total), and run `` !`cmd` `` in the project root only when the
+  command's `allowed-tools` or the session policy allow it. `allowed-tools`
+  become session rules for that turn only; `model` overrides the model for
+  that turn only. MCP prompt arguments map positionally or as `key=value`;
+  missing required ones produce a notice instead of a turn.
+- `@agent-<name>` of a known agent type adds a reminder to use the `Agent`
+  tool with that `subagent_type`. Unknown commands get a notice with close
+  matches.

@@ -70,7 +70,29 @@ pub(crate) fn normalize(settings: &mut Settings) -> Vec<String> {
     normalize_hooks(settings, w);
     normalize_checks(settings, w);
     normalize_servers(settings, w);
+    normalize_sandbox(settings, w);
     warnings
+}
+
+fn normalize_sandbox(settings: &mut Settings, w: &mut Vec<String>) {
+    let sandbox = &mut settings.shell.sandbox;
+    sandbox.extra_writable.retain(|entry| {
+        warn_unless(w, !entry.trim().is_empty(), || {
+            "shell.sandbox.extra_writable: an empty entry was skipped".to_string()
+        })
+    });
+    for entry in &mut sandbox.extra_writable {
+        *entry = entry.trim().to_string();
+    }
+    let broad = sandbox
+        .extra_writable
+        .iter()
+        .filter(|entry| matches!(entry.trim_end_matches(['/', '\\']), "" | "~"));
+    for entry in broad {
+        w.push(format!(
+            "shell.sandbox.extra_writable: \"{entry}\" makes most of the disk writable inside the sandbox"
+        ));
+    }
 }
 
 fn normalize_hooks(settings: &mut Settings, w: &mut Vec<String>) {
@@ -211,5 +233,16 @@ mod tests {
         assert!(settings.mcp.servers.is_empty() && settings.lsp.servers.is_empty());
         assert!(settings.verification.checks.is_empty());
         assert_eq!(warnings.len(), 6, "{warnings:?}");
+    }
+
+    #[test]
+    fn sandbox_entries_are_trimmed_and_broad_ones_flagged() {
+        let mut settings = Settings::default();
+        settings.shell.sandbox.extra_writable =
+            vec![" out ".into(), "  ".into(), "/".into(), "~/".into()];
+        let warnings = normalize(&mut settings);
+        assert_eq!(settings.shell.sandbox.extra_writable, ["out", "/", "~/"]);
+        assert_eq!(warnings.len(), 3, "{warnings:?}");
+        assert!(warnings[1].contains("\"/\" makes most of the disk writable"));
     }
 }

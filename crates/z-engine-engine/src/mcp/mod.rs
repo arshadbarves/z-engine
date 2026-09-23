@@ -14,3 +14,4 @@ pub(crate) use deferred::McpRunState;
 pub(crate) use format::{call_parts, resource_listing, resource_parts};
 pub(crate) use hub::McpHub;
 pub(crate) use lifecycle::sync_servers;
+pub(crate) use specs::server_spec;

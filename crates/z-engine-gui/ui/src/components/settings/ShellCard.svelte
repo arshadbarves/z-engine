@@ -4,6 +4,7 @@
   import { settingsStore } from "$lib/stores/settings.svelte";
   import KeyValueSetting from "./KeyValueSetting.svelte";
   import ListSetting from "./ListSetting.svelte";
+  import SandboxCard from "./SandboxCard.svelte";
   import SettingsCard from "./SettingsCard.svelte";
   import SettingsGroup from "./SettingsGroup.svelte";
   import TextSetting from "./TextSetting.svelte";
@@ -21,7 +22,7 @@
   const nameError = (name: string) => (/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ? null : `${name} is not a variable name.`);
 </script>
 
-<SettingsGroup title="Shell" description="The shell that runs commands and the environment it sees.">
+<SettingsGroup title="Shell" description="The shell that runs commands, the environment it sees, and the sandbox around it.">
   <SettingsCard>
     <TextSetting
       title="Shell"
@@ -48,4 +49,5 @@
       effective={shell.env}
     />
   </SettingsCard>
+  <SandboxCard sandbox={shell.sandbox} />
 </SettingsGroup>

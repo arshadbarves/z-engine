@@ -19,6 +19,9 @@ export interface ToolResultInfo {
 
 const REMINDER = /^\s*<system-reminder>[\s\S]*<\/system-reminder>\s*$/;
 
+/** A prompt command's expanded body: `<command name="...">body</command>` (groups: name, body). */
+export const COMMAND_WRAPPER = /^\s*<command name="([^"]+)">\n?([\s\S]*?)\n?<\/command>\s*$/;
+
 /** Engine reminders ride along in user messages; they are model context, not chat. */
 export function isReminderText(text: string): boolean {
   return REMINDER.test(text);
@@ -28,11 +31,16 @@ export function hasToolResults(message: Message): boolean {
   return message.content.some((block) => block.type === "toolResult");
 }
 
-/** Text the user typed (reminders and tool payloads excluded). */
+/** Text the user typed (reminders, command bodies and tool payloads excluded). */
 export function visibleText(message: Message): string {
   const parts: string[] = [];
   for (const block of message.content) {
-    if (block.type === "text" && block.text.trim() && !isReminderText(block.text)) {
+    if (
+      block.type === "text" &&
+      block.text.trim() &&
+      !isReminderText(block.text) &&
+      !COMMAND_WRAPPER.test(block.text)
+    ) {
       parts.push(block.text);
     }
   }

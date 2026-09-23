@@ -21,6 +21,9 @@ pub(crate) struct SessionSettings {
     /// Project hooks, MCP servers and checks are removed when untrusted.
     pub settings: Settings,
     pub trusted: bool,
+    /// What an untrusted project defines that stays off (`hooks`,
+    /// `MCP servers`, `checks`); empty when trusted.
+    pub withheld: Vec<String>,
     pub extensions: Extensions,
     pub instructions: Vec<InstructionDoc>,
     pub shell: ShellSpec,
@@ -55,13 +58,21 @@ pub(crate) fn load_session_settings(paths: &Paths, root: &Path, env: &EnvOverrid
             false
         }
     };
-    if !trusted && restrict_to_user_level(paths, env, &mut settings) {
+    let withheld = if trusted {
+        Vec::new()
+    } else {
+        restrict_to_user_level(paths, env, &mut settings)
+    };
+    if !withheld.is_empty() {
         notices.push((
             NoticeLevel::Warn,
             "This workspace is not trusted: hooks, MCP servers and checks defined by the \
              project are disabled until you trust it."
                 .to_string(),
         ));
+    }
+    if let Some(reason) = super::sandbox::unavailable_reason(&settings) {
+        notices.push((NoticeLevel::Warn, reason));
     }
     let compat = settings.compat.claude;
     let extensions = discover_extensions(paths, root, compat);
@@ -86,6 +97,7 @@ pub(crate) fn load_session_settings(paths: &Paths, root: &Path, env: &EnvOverrid
         settings: SessionSettings {
             settings,
             trusted,
+            withheld,
             extensions,
             instructions,
             shell,
@@ -136,14 +148,27 @@ fn web_search(
 }
 
 /// Takes hooks, MCP servers and checks from the user layer only; returns
-/// whether the project had defined any of them differently.
-fn restrict_to_user_level(paths: &Paths, env: &EnvOverrides, settings: &mut Settings) -> bool {
+/// which of them the project had defined differently.
+fn restrict_to_user_level(
+    paths: &Paths,
+    env: &EnvOverrides,
+    settings: &mut Settings,
+) -> Vec<String> {
     let user = load_with_env(paths, None, env).settings;
-    let changed = settings.hooks != user.hooks
-        || settings.mcp != user.mcp
-        || settings.verification.checks != user.verification.checks;
+    let differs = [
+        ("hooks", settings.hooks != user.hooks),
+        ("MCP servers", settings.mcp != user.mcp),
+        (
+            "checks",
+            settings.verification.checks != user.verification.checks,
+        ),
+    ];
     settings.hooks = user.hooks;
     settings.mcp = user.mcp;
     settings.verification.checks = user.verification.checks;
-    changed
+    differs
+        .into_iter()
+        .filter(|(_, differs)| *differs)
+        .map(|(what, _)| what.to_string())
+        .collect()
 }

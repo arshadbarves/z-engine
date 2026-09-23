@@ -19,6 +19,7 @@ use super::handle::SessionHandle;
 use super::reload::git_info;
 use super::resume::repair;
 use super::snapshot::emit_snapshot;
+use super::trust::request_trust;
 use crate::broker::Broker;
 use crate::error::EngineError;
 use crate::hooks::{HookEvent, HookInput, run_hooks};
@@ -81,6 +82,7 @@ pub(crate) async fn open_session(
     for (level, text) in notices {
         core.events.notice(level, text);
     }
+    request_trust(&core);
     sync_servers(&core);
     session_start(&core, fresh).await;
     Ok(handle)
@@ -193,7 +195,7 @@ async fn assemble(
         settings,
     } = parts;
     let home = shared.paths.home_dir.as_deref();
-    let (policy, errors) = build_policy(&settings, &root, home, &[]);
+    let (policy, errors) = build_policy(&settings, &root, home, &[], &[]);
     notices.extend(errors.into_iter().map(|error| {
         (
             NoticeLevel::Warn,

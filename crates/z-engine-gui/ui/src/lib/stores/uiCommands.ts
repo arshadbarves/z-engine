@@ -38,8 +38,6 @@ export async function runUiCommand(name: string, args: string): Promise<void> {
       return ui.openWork("agents");
     case "jobs":
       return ui.openWork("jobs");
-    case "mcp":
-      return ui.openSettings("mcp");
     case "permissions":
       return ui.openSettings("permissions");
     case "config":

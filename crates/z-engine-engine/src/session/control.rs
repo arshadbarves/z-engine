@@ -137,6 +137,14 @@ pub(crate) fn steer(core: &SessionCore, text: String) {
     core.events.emit(Event::QueueChanged { queued });
 }
 
+/// A prompt command sent while a turn runs is not queued.
+pub(crate) fn command_waits(core: &SessionCore, name: &str) {
+    core.events.notice(
+        NoticeLevel::Warn,
+        format!("/{name} waits for an idle session; run it when this turn ends."),
+    );
+}
+
 pub(crate) fn edit_queue(core: &SessionCore, queued: Vec<String>) {
     let queued: Vec<String> = queued
         .into_iter()

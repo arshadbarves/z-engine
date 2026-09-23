@@ -109,6 +109,8 @@ export function reduce(view: SessionView, event: Event, now: number): SessionVie
       return { ...view, title: event.title, info: patchInfo(view.info, { title: event.title }) };
     case "queueChanged":
       return { ...view, queue: event.queued };
+    case "trustRequired":
+      return { ...view, trustRequest: { projectRoot: event.projectRoot, defines: event.defines } };
     case "error":
       return addError(view, event.message, now);
     default:

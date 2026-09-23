@@ -7,6 +7,7 @@
 #![allow(dead_code, unused_imports)]
 
 mod agents;
+mod commands;
 mod fakes;
 mod hooks;
 mod transcript;
@@ -23,6 +24,7 @@ pub use agents::{
     SUBAGENT_NEEDLE, agent_call, first_user_text, is_subagent, route_task, task_requests,
     tool_names, write_agent,
 };
+pub use commands::user_blocks;
 pub use fakes::{fake_lsp_bin, fake_mcp_bin, fake_mcp_toml, py_mcp_toml, skip};
 pub use hooks::{hook_script, hook_toml};
 pub use transcript::{all_text, assert_valid_transcript, last_user_text, results};

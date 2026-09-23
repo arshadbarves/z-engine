@@ -30,6 +30,9 @@ pub enum HostError {
     Invalid(String),
     #[error("not found: {0}")]
     NotFound(String),
+    /// The command sandbox cannot run on this machine or with this shell.
+    #[error("sandbox unavailable: {0}")]
+    SandboxUnavailable(String),
 }
 
 impl HostError {

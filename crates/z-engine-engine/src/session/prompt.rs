@@ -1,16 +1,19 @@
 //! The user message that opens a turn: steering left over from an ended
-//! turn, the typed text, attachments, hook context, and the reminders due
-//! at a turn start (interruption, plan mode, finished jobs, changed files).
+//! turn, the typed text (or a command's invocation and body), attachments,
+//! `@agent-` mentions, hook context, and the reminders due at a turn start
+//! (interruption, plan mode, finished jobs, changed files).
 
-use z_engine_context::{interrupted, plan_mode_active, wrap_reminder};
+use z_engine_context::{interrupted, plan_mode_active, render_template, wrap_reminder};
 use z_engine_host::{
     DEFAULT_MAX_IMAGE_BYTES, FileKind, HostError, expand_tilde, read_image, read_pdf_base64,
     read_text, relative_display, resolve, sniff,
 };
+use z_engine_prompts::reminders::AGENT_MENTION;
 use z_engine_protocol::{
     Attachment, ContentBlock, Event, MediaSource, NoticeLevel, PermissionMode,
 };
 
+use crate::commands::{CommandCall, agent_mentions};
 use crate::run::{RunContext, collect_reminders};
 use crate::session::SessionCore;
 
@@ -21,13 +24,30 @@ const MAX_ATTACHED_PDF: u64 = 32 * 1024 * 1024;
 pub(crate) struct TurnInput {
     pub text: String,
     pub attachments: Vec<Attachment>,
+    /// A prompt command; its expansion replaces `text`.
+    pub command: Option<CommandCall>,
 }
 
 impl TurnInput {
+    pub(crate) fn new(text: String, attachments: Vec<Attachment>) -> Self {
+        Self {
+            text,
+            attachments,
+            command: None,
+        }
+    }
+
     pub(crate) fn text(text: String) -> Self {
         Self {
             text,
-            attachments: Vec::new(),
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn command(call: CommandCall) -> Self {
+        Self {
+            command: Some(call),
+            ..Self::default()
         }
     }
 }
@@ -47,15 +67,23 @@ pub(crate) fn prompt_text(core: &SessionCore, input: &TurnInput) -> String {
         .join("\n\n")
 }
 
+/// One text block per non-empty entry of `texts`, then attachments and
+/// reminders.
 pub(crate) async fn compose(
     ctx: &RunContext,
-    text: &str,
+    texts: &[String],
     attachments: &[Attachment],
     hook_context: Vec<String>,
 ) -> Vec<ContentBlock> {
-    let mut content = Vec::new();
-    if !text.is_empty() {
-        content.push(ContentBlock::text(text));
+    let mut content: Vec<ContentBlock> = texts
+        .iter()
+        .filter(|text| !text.is_empty())
+        .map(ContentBlock::text)
+        .collect();
+    let known = ctx.core.agents.registry();
+    for agent in agent_mentions(&texts.join("\n"), &known.names()) {
+        let note = render_template(AGENT_MENTION, &[("agent", &agent)]);
+        content.push(ContentBlock::text(wrap_reminder(&note)));
     }
     for attachment in attachments {
         match attach(ctx, attachment).await {

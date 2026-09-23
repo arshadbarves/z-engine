@@ -131,8 +131,21 @@ impl SessionCore {
         lock(&self.state).mode
     }
 
+    /// The session model, or a prompt command's model during its turn.
     pub(crate) fn main_model(&self) -> String {
-        lock(&self.state).model.clone()
+        let state = lock(&self.state);
+        state.turn_model.as_ref().unwrap_or(&state.model).clone()
+    }
+
+    /// The settings' additional directories plus those added with `/add-dir`.
+    pub(crate) fn additional_dirs(&self) -> Vec<PathBuf> {
+        let mut dirs = self.settings().additional_dirs.clone();
+        for dir in &lock(&self.state).added_dirs {
+            if !dirs.contains(dir) {
+                dirs.push(dir.clone());
+            }
+        }
+        dirs
     }
 
     pub(crate) fn git_info(&self) -> Option<GitInfo> {

@@ -6,3 +6,6 @@ mod export;
 mod queries;
 
 pub use api::Engine;
+pub use queries::{
+    AgentCard, ChangedKind, ChangedPath, GitChangedFile, McpTestReport, SlashCommandInfo, SlashKind,
+};

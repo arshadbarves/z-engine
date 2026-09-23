@@ -5,6 +5,7 @@ import {
   activityMap,
   applyEnvelope,
   applyLocalEvent,
+  dismissTrustRequest,
   emptySessionsState,
   eventEffects,
   forgetSession,
@@ -65,6 +66,10 @@ class SessionsStore {
 
   applyLocal(sessionId: string, event: Event, now = Date.now()) {
     this.#state = applyLocalEvent(this.#state, sessionId, event, now);
+  }
+
+  dismissTrust(sessionId: string) {
+    this.#state = dismissTrustRequest(this.#state, sessionId);
   }
 
   activate(sessionId: string | null) {

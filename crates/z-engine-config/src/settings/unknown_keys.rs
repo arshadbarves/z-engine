@@ -21,17 +21,35 @@ pub(crate) fn unknown_keys(table: &Table) -> Vec<String> {
         }
         match (schema.get(key), value) {
             (None, _) => unknown.push(key.clone()),
-            (Some(Json::Object(fields)), toml::Value::Table(section)) => unknown.extend(
-                section
-                    .keys()
-                    .filter(|field| !fields.contains_key(*field))
-                    .map(|field| format!("{key}.{field}")),
-            ),
+            (Some(Json::Object(fields)), toml::Value::Table(section)) => {
+                section_keys(key, fields, section, &mut unknown);
+            }
             _ => {}
         }
     }
     unknown.sort();
     unknown
+}
+
+/// Keys of `section` missing from `fields`, descending into sub-sections
+/// with a fixed schema (`shell.sandbox`). Empty schema maps (`shell.env`,
+/// `mcp.servers`) hold user-chosen names and are not checked.
+fn section_keys(
+    prefix: &str,
+    fields: &serde_json::Map<String, Json>,
+    section: &Table,
+    unknown: &mut Vec<String>,
+) {
+    for (field, value) in section {
+        let path = format!("{prefix}.{field}");
+        match (fields.get(field), value) {
+            (None, _) => unknown.push(path),
+            (Some(Json::Object(nested)), toml::Value::Table(inner)) if !nested.is_empty() => {
+                section_keys(&path, nested, inner, unknown);
+            }
+            _ => {}
+        }
+    }
 }
 
 #[cfg(test)]
@@ -53,9 +71,17 @@ input = 1.0
 output = 2.0
 [mcp.servers.fs]
 command = "npx"
+[shell.env]
+MY_VAR = "1"
+[shell.sandbox]
+enabled = true
+alow_network = true
 "#,
         )
         .unwrap();
-        assert_eq!(unknown_keys(&table), vec!["model.effrot", "modle"]);
+        assert_eq!(
+            unknown_keys(&table),
+            vec!["model.effrot", "modle", "shell.sandbox.alow_network"]
+        );
     }
 }

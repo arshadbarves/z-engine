@@ -46,6 +46,13 @@ impl LspHub {
             .map(|active| Arc::clone(&active.worker))
     }
 
+    /// Names of the servers the settings enable (empty when LSP is off).
+    pub(crate) fn server_names(&self) -> Vec<String> {
+        read(&self.active).as_ref().map_or_else(Vec::new, |active| {
+            active.specs.iter().map(|spec| spec.name.clone()).collect()
+        })
+    }
+
     /// Whether some server claims `path`'s extension.
     pub(crate) fn covers(&self, path: &Path) -> bool {
         let Some(extension) = path.extension().and_then(|ext| ext.to_str()) else {

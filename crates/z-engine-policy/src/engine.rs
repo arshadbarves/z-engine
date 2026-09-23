@@ -19,6 +19,11 @@ pub struct PolicyConfig {
     /// Run read-only shell commands that stay inside allowed directories
     /// without asking. On by default.
     pub auto_allow_read_only_bash: bool,
+    /// Shell commands run in the OS sandbox: allow commands that would
+    /// otherwise ask when every write they name stays inside the allowed
+    /// directories. Deny and ask rules and plan mode still win. Set it only
+    /// when the sandbox is enabled and available. Off by default.
+    pub sandbox_auto_allow: bool,
 }
 
 impl Default for PolicyConfig {
@@ -28,6 +33,7 @@ impl Default for PolicyConfig {
             ask: Vec::new(),
             deny: Vec::new(),
             auto_allow_read_only_bash: true,
+            sandbox_auto_allow: false,
         }
     }
 }
@@ -100,6 +106,7 @@ pub struct Policy {
     pub(crate) deny: Vec<Rule>,
     pub(crate) session: Vec<Rule>,
     pub(crate) auto_allow_read_only_bash: bool,
+    pub(crate) sandbox_auto_allow: bool,
 }
 
 impl Policy {
@@ -137,6 +144,7 @@ impl Policy {
             deny,
             session: Vec::new(),
             auto_allow_read_only_bash: config.auto_allow_read_only_bash,
+            sandbox_auto_allow: config.sandbox_auto_allow,
         };
         (policy, errors)
     }
@@ -215,7 +223,7 @@ mod tests {
             ],
             ask: vec!["WebSearch(x)".into()],
             deny: vec!["Read(~/.ssh/**)".into()],
-            auto_allow_read_only_bash: true,
+            ..PolicyConfig::default()
         };
         let (policy, errors) = Policy::new(&config, ctx());
         assert_eq!(errors.len(), 2);
@@ -252,10 +260,14 @@ mod tests {
     #[test]
     fn config_defaults_and_serde_shape() {
         assert!(PolicyConfig::default().auto_allow_read_only_bash);
-        let config: PolicyConfig =
-            serde_json::from_str(r#"{"allow":["Bash"],"autoAllowReadOnlyBash":false}"#).unwrap();
+        assert!(!PolicyConfig::default().sandbox_auto_allow);
+        let config: PolicyConfig = serde_json::from_str(
+            r#"{"allow":["Bash"],"autoAllowReadOnlyBash":false,"sandboxAutoAllow":true}"#,
+        )
+        .unwrap();
         assert_eq!(config.allow, ["Bash"]);
         assert!(!config.auto_allow_read_only_bash);
+        assert!(config.sandbox_auto_allow);
         let empty: PolicyConfig = serde_json::from_str("{}").unwrap();
         assert_eq!(empty, PolicyConfig::default());
     }

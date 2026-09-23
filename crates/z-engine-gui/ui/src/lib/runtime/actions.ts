@@ -117,6 +117,14 @@ export const answerQuestion = (requestId: string, answers: QuestionAnswer[] | nu
 export const resolvePlan = (requestId: string, decision: PlanDecision) =>
   send({ type: "resolvePlan", requestId, decision });
 
+/** Answer `trustRequired`; trusting reloads the session (its snapshot clears the banner). */
+export async function answerTrust(trusted: boolean, sessionId = sessions.activeId): Promise<boolean> {
+  if (!sessionId) return false;
+  const ok = await send({ type: "trustWorkspace", trusted }, sessionId);
+  if (ok) sessions.dismissTrust(sessionId);
+  return ok;
+}
+
 /** `!cmd`: echo into the terminal drawer, then let the engine run it. */
 export async function runShell(command: string): Promise<boolean> {
   startShell(command);

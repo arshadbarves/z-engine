@@ -74,6 +74,18 @@ schema = 2
 # [shell]
 # env_passthrough = []
 
+# Runs Bash commands, background shells and checks in an OS sandbox
+# (macOS: sandbox-exec, Linux: bubblewrap; unavailable on Windows). Commands
+# may write only inside the project, additional_directories, temp
+# directories, existing tool caches (~/.cargo/registry, ~/.cargo/git,
+# ~/.npm, ~/.cache, ~/.gradle, ~/.m2, ~/Library/Caches on macOS) and
+# extra_writable. Deny and ask rules and plan mode still apply.
+# [shell.sandbox]
+# enabled = false
+# allow_network = false         # off: only localhost is reachable
+# extra_writable = []           # e.g. ["~/scratch"]; relative to the project
+# auto_allow = true             # run sandboxed commands without asking
+
 # [ui]
 # task_report_view = "quiet"    # quiet | compact | detailed
 

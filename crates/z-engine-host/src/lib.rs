@@ -1,5 +1,5 @@
 //! The only OS and network adapter: files, processes, background shells,
-//! search, git, checkpoints, fetch. Every other v2 crate reaches the machine
+//! the command sandbox, search, git, checkpoints, fetch. Every other v2 crate reaches the machine
 //! through these small, typed APIs.
 
 mod blocking;
@@ -12,6 +12,7 @@ pub mod fs;
 pub mod git;
 pub mod media;
 pub mod process;
+pub mod sandbox;
 pub mod search;
 pub mod web;
 
@@ -33,6 +34,9 @@ pub use process::{
     BackgroundShells, BackgroundSpec, DEFAULT_MAX_OUTPUT_BYTES, DEFAULT_RUN_TIMEOUT, EnvPolicy,
     JobEvent, JobEventSink, JobRead, JobSnapshot, OutputSink, RunOutput, RunSpec, ShellKind,
     ShellSpec, kill_tree, resolve_shell, run,
+};
+pub use sandbox::{
+    SandboxBackend, SandboxProfile, TOOL_CACHES, is_sandbox_denial, sandbox_shell, tool_caches,
 };
 pub use search::{
     FileIndex, GlobResult, GrepEngine, GrepMode, GrepQuery, GrepResult, glob, grep,

@@ -5,7 +5,7 @@
 use std::sync::{Arc, Mutex, RwLock};
 
 use tokio::sync::mpsc::UnboundedSender;
-use z_engine_integrations::{McpChange, McpManager, McpServerState};
+use z_engine_integrations::{McpChange, McpManager, McpPromptInfo, McpServerState};
 
 use super::catalog::{Catalog, CatalogTool};
 use super::specs::ServerPlan;
@@ -26,16 +26,29 @@ pub(super) struct Reconciled {
     pub stopped: Vec<McpManager>,
 }
 
+/// `(server, prompt)` of every ready server, listed with the tools.
+pub(crate) type PromptList = Arc<Vec<(String, McpPromptInfo)>>;
+
 #[derive(Debug, Default)]
 pub(crate) struct McpHub {
     servers: Mutex<Vec<Server>>,
     catalog: RwLock<Arc<Catalog>>,
+    prompts: RwLock<PromptList>,
     pub(super) changes: Mutex<Option<UnboundedSender<McpChange>>>,
 }
 
 impl McpHub {
     pub(crate) fn catalog(&self) -> Arc<Catalog> {
         Arc::clone(&read(&self.catalog))
+    }
+
+    /// The prompts of ready servers as of the last refresh.
+    pub(crate) fn prompts(&self) -> PromptList {
+        Arc::clone(&read(&self.prompts))
+    }
+
+    pub(super) fn set_prompts(&self, prompts: Vec<(String, McpPromptInfo)>) {
+        *write(&self.prompts) = Arc::new(prompts);
     }
 
     /// The manager running `server`.

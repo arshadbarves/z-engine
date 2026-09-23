@@ -7,7 +7,9 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use serde_json::{Value, json};
-use z_engine_host::{DEFAULT_MAX_OUTPUT_BYTES, HostError, RunOutput, RunSpec, run};
+use z_engine_host::{
+    DEFAULT_MAX_OUTPUT_BYTES, HostError, RunOutput, RunSpec, is_sandbox_denial, run,
+};
 use z_engine_policy::{Action, shell};
 use z_engine_prompts::tools as prompts;
 use z_engine_protocol::Preview;
@@ -101,7 +103,13 @@ impl Tool for BashTool {
                 execute(ctx, command, ctx.root.clone(), timeout_ms).await
             }
             other => other,
-        }?;
+        }
+        .map_err(|error| match error {
+            HostError::SandboxUnavailable(reason) => ToolError::failed(format!(
+                "The command was not run: the sandbox cannot start ({reason})."
+            )),
+            other => ToolError::from(other),
+        })?;
         if out.cancelled {
             return Err(ToolError::Cancelled);
         }
@@ -131,7 +139,7 @@ async fn execute(
         command: command.to_string(),
         cwd,
         timeout: Duration::from_millis(timeout_ms),
-        shell: ctx.shell.spec.clone(),
+        shell: ctx.shell.effective_spec()?,
         env: ctx.shell.env.clone(),
         track_cwd: true,
         max_output_bytes: DEFAULT_MAX_OUTPUT_BYTES,
@@ -140,7 +148,10 @@ async fn execute(
     run(spec, ctx.cancel.clone(), ctx.progress.clone()).await
 }
 
-fn report(ctx: &ToolCtx, out: &RunOutput, timeout_ms: u64, notes: Vec<String>) -> ToolOutput {
+fn report(ctx: &ToolCtx, out: &RunOutput, timeout_ms: u64, mut notes: Vec<String>) -> ToolOutput {
+    if let Some(hint) = sandbox_hint(ctx.shell.sandbox.is_some(), out) {
+        notes.push(hint.to_string());
+    }
     let mut text = truncate_output(ctx, "bash", out.combined.trim_end_matches('\n'));
     if text.trim().is_empty() {
         text = "(no output)".to_string();
@@ -176,6 +187,14 @@ fn report(ctx: &ToolCtx, out: &RunOutput, timeout_ms: u64, notes: Vec<String>) -
         .ran_command()
 }
 
+/// Explains a failure that looks like the sandbox refusing a write.
+fn sandbox_hint(sandboxed: bool, out: &RunOutput) -> Option<&'static str> {
+    let failed = out.exit_code.is_some_and(|code| code != 0);
+    (sandboxed && failed && is_sandbox_denial(&out.stderr)).then_some(
+        "The command runs in a sandbox and appears to have tried to write outside the allowed directories (or to reach the network). Keep writes inside the project, or ask the user to re-run it without the sandbox.",
+    )
+}
+
 async fn background(
     ctx: &ToolCtx,
     command: &str,
@@ -193,4 +212,30 @@ async fn background(
         format!("Running in background ({job})"),
     )
     .ran_command())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn failed_with(stderr: &str) -> RunOutput {
+        RunOutput {
+            exit_code: Some(1),
+            stderr: stderr.to_string(),
+            ..RunOutput::default()
+        }
+    }
+
+    #[test]
+    fn sandbox_hint_needs_a_sandboxed_failure_with_a_denial() {
+        let denied = failed_with("touch: /x: Operation not permitted\n");
+        assert!(sandbox_hint(true, &denied).is_some());
+        assert!(sandbox_hint(false, &denied).is_none());
+        assert!(sandbox_hint(true, &failed_with("no such file\n")).is_none());
+        let passed = RunOutput {
+            exit_code: Some(0),
+            ..denied
+        };
+        assert!(sandbox_hint(true, &passed).is_none());
+    }
 }

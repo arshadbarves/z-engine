@@ -12,6 +12,7 @@
   import PendingInteractions from "../planning/PendingInteractions.svelte";
   import ChatTimeline from "./ChatTimeline.svelte";
   import StatusDock from "./StatusDock.svelte";
+  import TrustBanner from "./TrustBanner.svelte";
   import TurnView from "./TurnView.svelte";
 
   type Props = { projectName: string | null };
@@ -99,6 +100,7 @@
     {/if}
 
     {#if view}
+      {#if view.trustRequest}<TrustBanner request={view.trustRequest} />{/if}
       <PendingInteractions {view} />
       <StatusDock
         {status}

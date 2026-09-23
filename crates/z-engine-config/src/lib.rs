@@ -47,8 +47,9 @@ pub use paths::{
 pub use settings::{
     AgentSettings, CheckConfig, CompatSettings, ContextSettings, HOOK_EVENTS, HookConfig,
     LspServerConfig, LspSettings, McpServerConfig, McpSettings, ModelSettings, PermissionSettings,
-    PricingOverride, ProviderKind, ProviderSettings, RuleKind, SearchBackend, Settings,
-    ShellSettings, TaskReportView, UiSettings, VerificationSettings, WebSettings, is_hook_event,
+    PricingOverride, ProviderKind, ProviderSettings, RuleKind, SandboxSettings, SearchBackend,
+    Settings, ShellSettings, TaskReportView, UiSettings, VerificationSettings, WebSettings,
+    is_hook_event,
 };
 pub use trust::TrustStore;
 pub use writer::{

@@ -1,6 +1,7 @@
-//! One user turn of the main agent: `UserPromptSubmit` hooks, the opening
-//! message and `TurnStarted`, a code checkpoint, the title for a new
-//! session, the agent run, and `TurnFinished` with its badge.
+//! One user turn of the main agent: a prompt command's expansion and
+//! turn-scoped grants, `UserPromptSubmit` hooks, the opening message and
+//! `TurnStarted`, a code checkpoint, the title for a new session, the
+//! agent run, and `TurnFinished` with its badge.
 
 use std::sync::Arc;
 
@@ -14,6 +15,7 @@ use z_engine_protocol::{
 use z_engine_store::LogRecord;
 
 use super::checkpoint::take_checkpoint;
+use super::command_turn::{TurnScope, command_texts};
 use super::meta::write_meta;
 use super::prompt::{TurnInput, compose, prompt_text};
 use super::title::spawn_title;
@@ -28,7 +30,14 @@ pub(crate) async fn run_turn(
     input: TurnInput,
     cancel: CancellationToken,
 ) -> Option<TurnOutcome> {
-    let text = prompt_text(&core, &input);
+    let (texts, expansion) = match &input.command {
+        Some(call) => {
+            let (texts, expansion) = command_texts(&core, call, &cancel).await?;
+            (texts, Some(expansion))
+        }
+        None => (vec![prompt_text(&core, &input)], None),
+    };
+    let text = texts[0].clone();
     if text.is_empty() && input.attachments.is_empty() {
         return None;
     }
@@ -48,6 +57,9 @@ pub(crate) async fn run_turn(
         );
         return None;
     }
+    let _scope = expansion
+        .as_ref()
+        .map(|expansion| TurnScope::apply(&core, expansion));
     let max_turns = core.settings().settings.agents.max_turns;
     let ctx = RunContext::new(
         Arc::clone(&core),
@@ -55,7 +67,7 @@ pub(crate) async fn run_turn(
         core.main.clone(),
         cancel,
     );
-    let content = compose(&ctx, &text, &input.attachments, hooks.context).await;
+    let content = compose(&ctx, &texts, &input.attachments, hooks.context).await;
     let message = Message::new(Role::User, content);
     let turn_id = TurnId::new();
     let started_at = now_ms();

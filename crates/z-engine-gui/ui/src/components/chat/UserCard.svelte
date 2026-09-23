@@ -1,10 +1,12 @@
 <script lang="ts">
   import { mediaSrc, messageDocuments, messageImages, visibleText } from "$lib/domain/timeline/blocks";
+  import { commandChip } from "$lib/domain/timeline/commandChip";
   import type { Message } from "$lib/protocol/Message";
   import type { RewindScope } from "$lib/protocol/RewindScope";
   import { pushToast } from "$lib/runtime";
   import { copyFeedback } from "$lib/ui/copyFeedback.svelte";
   import Icon, { Check, Copy, FileText } from "$lib/ui/icons";
+  import CommandChip from "./CommandChip.svelte";
   import RewindMenu from "./RewindMenu.svelte";
 
   const COLLAPSE_CHARS = 380;
@@ -18,10 +20,11 @@
   let { message, canRestoreCode = false, onRewind }: Props = $props();
 
   const feedback = copyFeedback();
+  const chip = $derived(commandChip(message));
   const text = $derived(visibleText(message));
   const images = $derived(messageImages(message));
   const documents = $derived(messageDocuments(message));
-  const isLong = $derived(text.length > COLLAPSE_CHARS || text.split("\n").length > COLLAPSE_LINES);
+  const isLong = $derived(!chip && (text.length > COLLAPSE_CHARS || text.split("\n").length > COLLAPSE_LINES));
   let expanded = $state(false);
 
   async function copy() {
@@ -32,7 +35,9 @@
 <div class="user-message-row" id={`msg-${message.id}`} data-msg-id={message.id}>
   <div class="user-message-wrapper">
     <div class="user-message-bubble">
-      {#if text}
+      {#if chip}
+        <CommandChip {chip} />
+      {:else if text}
         <div class={`user-prompt-text${isLong && !expanded ? " collapsed" : ""}`}>{text}</div>
       {/if}
       {#if images.length > 0}

@@ -60,6 +60,13 @@ export function applyLocalEvent(
   return { ...state, views: { ...state.views, [sessionId]: reduce(prev, event, now) } };
 }
 
+/** The user answered the trust request; the engine sends no event for "Not now". */
+export function dismissTrustRequest(state: SessionsState, sessionId: string): SessionsState {
+  const view = state.views[sessionId];
+  if (!view?.trustRequest) return state;
+  return { ...state, views: { ...state.views, [sessionId]: { ...view, trustRequest: null } } };
+}
+
 export function markRead(state: SessionsState, sessionId: string): SessionsState {
   if (!(sessionId in state.unread)) return state;
   const unread = { ...state.unread };

@@ -20,7 +20,10 @@ impl Policy {
     /// 4. a matching ask rule asks;
     /// 5. matching allow rules, configured or granted this session, allow
     ///    (for shell commands, every command in the line must be covered);
-    /// 6. otherwise the per-action default applies.
+    /// 6. otherwise the per-action default applies (for shell commands with
+    ///    [`PolicyConfig::sandbox_auto_allow`](crate::PolicyConfig), a
+    ///    statically parsed line whose named writes stay inside the allowed
+    ///    directories is allowed as `sandboxed`).
     pub fn decide(&self, tool: &str, action: &Action, mode: PermissionMode) -> Decision {
         let command = match action {
             Action::Execute { command } => Some(CommandFacts::new(command)),

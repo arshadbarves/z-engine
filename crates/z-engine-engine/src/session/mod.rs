@@ -5,10 +5,12 @@
 mod actor;
 mod agent_jobs;
 mod checkpoint;
+mod command_turn;
 mod compaction;
 mod control;
 mod core;
 mod emitter;
+mod grants;
 mod handle;
 mod jobs;
 mod journal;
@@ -28,6 +30,7 @@ mod state;
 mod status;
 mod title;
 mod tools;
+mod trust;
 mod turn;
 
 pub(crate) use core::{AgentResources, SessionCore, Shared};

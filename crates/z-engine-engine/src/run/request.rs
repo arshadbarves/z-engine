@@ -44,8 +44,9 @@ pub(crate) fn prepare(ctx: &RunContext, model: &str, tools: Vec<ToolSpec>) -> Pr
             Some(scope) => scope.git.clone(),
             None => ctx.core.git_info(),
         },
-        additional_dirs: settings
-            .additional_dirs
+        additional_dirs: ctx
+            .core
+            .additional_dirs()
             .iter()
             .chain(worktree.map(|scope| &scope.project))
             .map(|dir| dir.to_string_lossy().into_owned())

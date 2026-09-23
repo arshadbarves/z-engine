@@ -1,5 +1,6 @@
 //! Built-in commands answered without the model: context, cost, status,
-//! remember (which also reloads instructions), and unknown commands.
+//! remember (which also reloads instructions), and unknown commands with
+//! suggestions of close matches.
 
 mod support;
 
@@ -60,7 +61,17 @@ async fn informational_commands_and_remember() {
     h.wait(|e| {
         matches!(
             e,
-            Event::Notice { level: NoticeLevel::Info, text } if text.contains("/frobnicate")
+            Event::Notice { level: NoticeLevel::Info, text }
+                if text.contains("/frobnicate is not a known command.") && !text.contains("Did you mean")
+        )
+    })
+    .await;
+    run(&h, "reveiw", "");
+    h.wait(|e| {
+        matches!(
+            e,
+            Event::Notice { level: NoticeLevel::Info, text }
+                if text.contains("/reveiw") && text.contains("Did you mean /review")
         )
     })
     .await;

@@ -1,10 +1,13 @@
-//! Per-agent settings carried by [`super::ToolCtx`]: limits, shell and
-//! environment policy, web options, and the artifact spill hook.
+//! Per-agent settings carried by [`super::ToolCtx`]: limits, shell,
+//! environment policy and sandbox, web options, and the artifact spill hook.
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use z_engine_host::{DEFAULT_MAX_IMAGE_BYTES, EnvPolicy, SearchBackend, ShellSpec, resolve_shell};
+use z_engine_host::{
+    DEFAULT_MAX_IMAGE_BYTES, EnvPolicy, HostError, SandboxProfile, SearchBackend, ShellSpec,
+    resolve_shell, sandbox_shell,
+};
 
 /// Stores a full tool output as an artifact: `(hint, content)` -> path.
 /// `hint` names the producer (`"bash"`, `"grep"`, ...). `None` means the
@@ -42,19 +45,41 @@ impl Default for ToolLimits {
     }
 }
 
-/// The shell agent commands run in and the environment they see.
+/// The shell agent commands run in, the environment they see, and the
+/// sandbox that confines them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShellConfig {
     pub spec: ShellSpec,
     pub env: EnvPolicy,
+    /// `Some` runs every command in the OS sandbox; a sandbox that cannot
+    /// start fails the command rather than running it unconfined.
+    pub sandbox: Option<SandboxProfile>,
 }
 
 impl ShellConfig {
-    /// The detected default shell with the default environment policy.
+    /// The detected default shell with the default environment policy and
+    /// no sandbox.
     pub fn detect() -> Self {
         Self {
             spec: resolve_shell(None),
             env: EnvPolicy::default(),
+            sandbox: None,
+        }
+    }
+
+    #[must_use]
+    pub fn with_sandbox(mut self, sandbox: Option<SandboxProfile>) -> Self {
+        self.sandbox = sandbox;
+        self
+    }
+
+    /// The shell to run commands with: [`Self::spec`], wrapped in the
+    /// sandbox when one is configured. Foreground and background commands
+    /// both start from this.
+    pub fn effective_spec(&self) -> Result<ShellSpec, HostError> {
+        match &self.sandbox {
+            Some(profile) => sandbox_shell(&self.spec, profile),
+            None => Ok(self.spec.clone()),
         }
     }
 }

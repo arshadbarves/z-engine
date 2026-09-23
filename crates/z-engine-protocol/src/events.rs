@@ -218,6 +218,12 @@ pub enum Event {
     QueueChanged {
         queued: Vec<String>,
     },
+    /// The project defines hooks, MCP servers or checks that stay off
+    /// until the user trusts it (`defines` names them, e.g. `hooks`).
+    TrustRequired {
+        project_root: String,
+        defines: Vec<String>,
+    },
     Error {
         message: String,
     },
@@ -247,6 +253,20 @@ mod tests {
         assert_eq!(json["type"], "textDelta");
         assert_eq!(json["agentId"], "main");
         assert_eq!(json["messageId"], "m1");
+        let back: Event = serde_json::from_value(json).unwrap();
+        assert_eq!(back, event);
+    }
+
+    #[test]
+    fn trust_required_round_trips() {
+        let event = Event::TrustRequired {
+            project_root: "/work/app".into(),
+            defines: vec!["hooks".into(), "MCP servers".into()],
+        };
+        let json = serde_json::to_value(&event).unwrap();
+        assert_eq!(json["type"], "trustRequired");
+        assert_eq!(json["projectRoot"], "/work/app");
+        assert_eq!(json["defines"][1], "MCP servers");
         let back: Event = serde_json::from_value(json).unwrap();
         assert_eq!(back, event);
     }

@@ -7,8 +7,8 @@ use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 use z_engine_host::{
-    EnvPolicy, OutputSink, RunSpec, ShellSpec, relative_display, resolve, run,
-    workspace_fingerprint,
+    EnvPolicy, OutputSink, RunSpec, SandboxProfile, ShellSpec, relative_display, resolve, run,
+    sandbox_shell, workspace_fingerprint,
 };
 use z_engine_protocol::{AgentId, CheckRecord, now_ms};
 
@@ -31,6 +31,9 @@ pub struct CheckEnv {
     /// Fingerprinted before and after the run; relative check directories
     /// resolve against it.
     pub project_root: PathBuf,
+    /// `Some` runs the check in the OS sandbox; a sandbox that cannot
+    /// start is a host error, never an unconfined run.
+    pub sandbox: Option<SandboxProfile>,
 }
 
 /// Runs `spec` to completion or timeout and records the evidence. A
@@ -64,7 +67,10 @@ pub async fn run_check(
 
     let mut run_spec = RunSpec::new(spec.command.clone(), cwd.clone());
     run_spec.timeout = Duration::from_secs(timeout_secs(spec));
-    run_spec.shell = env.shell.clone();
+    run_spec.shell = match &env.sandbox {
+        Some(profile) => sandbox_shell(&env.shell, profile)?,
+        None => env.shell.clone(),
+    };
     run_spec.env = env.env.clone();
     run_spec.track_cwd = false;
     tracing::debug!(check = %spec.id, cwd = %cwd.display(), "check started");

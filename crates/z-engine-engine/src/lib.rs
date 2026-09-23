@@ -4,6 +4,7 @@
 
 mod batch;
 mod broker;
+mod commands;
 mod engine;
 mod error;
 mod hooks;
@@ -18,6 +19,9 @@ mod settings;
 mod sync;
 mod verify;
 
-pub use engine::Engine;
+pub use engine::{
+    AgentCard, ChangedKind, ChangedPath, Engine, GitChangedFile, McpTestReport, SlashCommandInfo,
+    SlashKind,
+};
 pub use error::EngineError;
 pub use options::{ClientFactory, EngineOptions, EventSink, ExportFormat};
