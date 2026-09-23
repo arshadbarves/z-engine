@@ -25,5 +25,21 @@ which.workspace = true
 tempfile.workspace = true
 axum.workspace = true
 
+# Test-only fake servers; integration tests reach them via
+# env!("CARGO_BIN_EXE_zengine-fake-mcp") / env!("CARGO_BIN_EXE_zengine-fake-lsp").
+[[bin]]
+name = "zengine-fake-mcp"
+path = "tests/fake/mcp_server.rs"
+test = false
+bench = false
+doc = false
+
+[[bin]]
+name = "zengine-fake-lsp"
+path = "tests/fake/lsp_server.rs"
+test = false
+bench = false
+doc = false
+
 [lints]
 workspace = true
