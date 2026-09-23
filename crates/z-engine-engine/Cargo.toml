@@ -15,6 +15,7 @@ z-engine-config.workspace = true
 z-engine-policy.workspace = true
 z-engine-host.workspace = true
 z-engine-integrations.workspace = true
+z-engine-verify.workspace = true
 z-engine-context.workspace = true
 z-engine-store.workspace = true
 z-engine-tools.workspace = true

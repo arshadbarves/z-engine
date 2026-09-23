@@ -1,7 +1,7 @@
 //! Applying changed settings to a live session: settings, extensions (and
 //! with them the agent types in the `Agent` tool), instructions, the model
-//! client, the policy (session grants kept), the git snapshot and the
-//! context window.
+//! client, the policy (session grants kept), the git snapshot, the context
+//! window, MCP and language servers, the checks, and the repository map.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -9,15 +9,17 @@ use std::sync::Arc;
 use z_engine_context::GitInfo;
 use z_engine_host::summary;
 use z_engine_protocol::NoticeLevel;
-use z_engine_tools::ToolRegistry;
 
 use super::snapshot::emit_snapshot;
+use super::tools::rebuild_tools;
+use crate::mcp::sync_servers;
 use crate::orchestration::AgentRegistry;
 use crate::session::SessionCore;
 use crate::settings::{build_policy, load_session_settings, models, session_client};
 use crate::sync::{lock, write};
+use crate::verify::{discover_checks, publish_outcome};
 
-pub(crate) async fn reload(core: &SessionCore) {
+pub(crate) async fn reload(core: &Arc<SessionCore>) {
     let shared = &core.shared;
     let report = load_session_settings(&shared.paths, &core.root, &shared.env);
     for (level, text) in &report.notices {
@@ -41,15 +43,23 @@ pub(crate) async fn reload(core: &SessionCore) {
     let git = git_info(&core.root).await;
     let catalog = core.catalog();
     let limit = models::context_window(&settings.settings, catalog.as_deref(), &core.main_model());
-    let registry = AgentRegistry::build(&settings.extensions.agents);
-    *write(&core.tools) = Arc::new(ToolRegistry::builtin(registry.cards()));
-    core.agents.set_registry(registry);
+    let checks = discover_checks(&core.root, &settings.settings.verification.checks).await;
+    core.agents
+        .set_registry(AgentRegistry::build(&settings.extensions.agents));
+    if let Some(replaced) = core.lsp.configure(&core.root, &settings.settings.lsp) {
+        tokio::spawn(async move { replaced.shutdown().await });
+    }
     *write(&core.settings) = settings;
+    rebuild_tools(core);
     *write(&core.client) = client;
     *lock(&core.policy) = policy;
     *lock(&core.git) = git;
+    core.checks.set(checks);
+    core.repo_map.invalidate();
     core.with_state(|state| state.context_limit = limit);
+    sync_servers(core);
     emit_snapshot(core);
+    publish_outcome(core).await;
 }
 
 /// The environment section's git snapshot; `None` outside a repository.

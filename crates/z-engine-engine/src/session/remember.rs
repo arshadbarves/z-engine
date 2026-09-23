@@ -3,6 +3,7 @@
 //! `AGENTS.md`) and reloads the session's instructions.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use z_engine_host::{atomic_write, read_text};
 
@@ -15,7 +16,7 @@ pub(crate) const USAGE: &str = "Usage: /remember <project|local|user> <text>";
 
 /// The file that was extended and the bullet written.
 pub(crate) async fn remember(
-    core: &SessionCore,
+    core: &Arc<SessionCore>,
     args: &str,
 ) -> Result<(PathBuf, String), EngineError> {
     let (scope, text) = args

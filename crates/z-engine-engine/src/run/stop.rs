@@ -3,6 +3,8 @@
 //! per turn), queued steering continues it, and for the main agent the
 //! verifier computes the badge or asks for another round.
 
+use std::path::PathBuf;
+
 use serde_json::json;
 use z_engine_context::wrap_reminder;
 use z_engine_protocol::{ContentBlock, NoticeLevel, VerificationOutcome};
@@ -35,7 +37,7 @@ pub(crate) enum StopAction {
 pub(crate) async fn stop_boundary(
     ctx: &RunContext,
     counters: &mut StopCounters,
-    mutated: bool,
+    changed: &[PathBuf],
 ) -> StopAction {
     let main = ctx.spec.is_main();
     let (event, mut input) = if main {
@@ -87,7 +89,7 @@ pub(crate) async fn stop_boundary(
     match ctx
         .core
         .verifier
-        .at_stop(mutated, counters.verify_continuations)
+        .at_stop(ctx, counters.verify_continuations, changed)
         .await
     {
         StopVerdict::Done(outcome) => StopAction::End {

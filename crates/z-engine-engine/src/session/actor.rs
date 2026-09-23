@@ -283,6 +283,7 @@ impl Actor {
         core.agents.close_slots();
         core.jobs.kill_all().await;
         core.cancel.cancel();
+        tokio::join!(core.mcp.shutdown(), core.lsp.shutdown());
         write_meta(core);
         core.journal.sync_or_report();
     }

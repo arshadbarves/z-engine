@@ -8,7 +8,8 @@ use serde_json::json;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use z_engine_protocol::{
-    Event, Message, MessageId, NoticeLevel, Role, TurnId, TurnOutcome, TurnRecord, now_ms,
+    Event, Message, MessageId, NoticeLevel, Role, TurnId, TurnOutcome, TurnRecord,
+    VerificationOutcome, now_ms,
 };
 use z_engine_store::LogRecord;
 
@@ -19,7 +20,7 @@ use super::title::spawn_title;
 use crate::hooks::{HookEvent, HookInput, run_hooks};
 use crate::run::{AgentRun, AgentSpec, MainSink, RunContext, RunOutcome, TranscriptSink};
 use crate::session::SessionCore;
-use crate::verify::badge;
+use crate::verify::{Mutation, current_outcome};
 
 /// `None` when no turn started (nothing to send, or a hook blocked it).
 pub(crate) async fn run_turn(
@@ -79,7 +80,11 @@ pub(crate) async fn run_turn(
     if fresh {
         spawn_title(Arc::clone(&core), text);
     }
-    let mutated = core.with_state(|state| std::mem::take(&mut state.external_mutation));
+    let mutated = core.with_state(|state| {
+        let mutated = std::mem::take(&mut state.external_mutation);
+        state.mutation = Mutation::seeded(mutated);
+        mutated
+    });
     let run = AgentRun::new(ctx, sink, mutated)
         .tools_wait_for(gate)
         .run()
@@ -88,7 +93,18 @@ pub(crate) async fn run_turn(
         tracing::warn!(%error, "checkpoint task failed");
     }
     core.broker.withdraw_abandoned();
-    Some(finish(&core, turn_id, message.id, started_at, run))
+    let verification = match run.verification.clone() {
+        Some(outcome) => outcome,
+        None => current_outcome(&core).await,
+    };
+    Some(finish(
+        &core,
+        turn_id,
+        message.id,
+        started_at,
+        run,
+        verification,
+    ))
 }
 
 fn start(
@@ -117,8 +133,11 @@ fn finish(
     message_id: MessageId,
     started_at: u64,
     run: RunOutcome,
+    verification: VerificationOutcome,
 ) -> TurnOutcome {
-    let verification = run.verification.unwrap_or_else(|| badge(run.mutated));
+    core.events.emit(Event::VerificationChanged {
+        outcome: verification.clone(),
+    });
     let turn = TurnRecord {
         turn_id,
         message_id,

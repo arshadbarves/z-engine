@@ -27,6 +27,7 @@ mod snapshot;
 mod state;
 mod status;
 mod title;
+mod tools;
 mod turn;
 
 pub(crate) use core::{AgentResources, SessionCore, Shared};
@@ -40,3 +41,4 @@ pub(crate) use reminders::ReminderBox;
 pub(crate) use snapshot::emit_snapshot;
 pub(crate) use state::SessionState;
 pub(crate) use status::StatusTracker;
+pub(crate) use tools::rebuild_tools;

@@ -22,6 +22,9 @@ pub const VERIFY: &str = "Verify";
 pub const LSP: &str = "LSP";
 pub const LIST_MCP_RESOURCES: &str = "ListMcpResources";
 pub const READ_MCP_RESOURCE: &str = "ReadMcpResource";
+/// Registered by the engine only while MCP tools are deferred; not in
+/// [`ALL`].
+pub const LOAD_MCP_TOOLS: &str = "LoadMcpTools";
 
 /// Every built-in tool, in the order `ToolRegistry::builtin` registers them.
 pub const ALL: [&str; 22] = [

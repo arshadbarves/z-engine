@@ -6193,6 +6193,7 @@ dependencies = [
  "z-engine-store",
  "z-engine-testkit",
  "z-engine-tools",
+ "z-engine-verify",
 ]
 
 [[package]]

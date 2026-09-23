@@ -92,6 +92,7 @@ impl TranscriptSink for MainSink {
             state.compactions.push(marker.clone());
             state.meter.reset();
         });
+        self.core.repo_map.invalidate();
         self.core.events.emit(Event::Compacted { marker });
         Ok(())
     }

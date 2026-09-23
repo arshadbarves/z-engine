@@ -11,7 +11,7 @@ use serde_json::json;
 use tokio_util::sync::CancellationToken;
 use z_engine_context::wrap_reminder;
 use z_engine_protocol::{ContentBlock, ToolResultPart, ToolStatus};
-use z_engine_tools::{Effects, Tool, ToolError, ToolOutput};
+use z_engine_tools::{Effects, Tool, ToolError, ToolOutput, names};
 
 use super::ctx::tool_ctx;
 use super::gate::ToolCall;
@@ -91,8 +91,10 @@ pub(super) async fn run_call(
             tracing::debug!(path = %path.display(), %error, "written file not re-stamped");
         }
     }
+    // Checks are evidence, not changes: files a check touches show up in
+    // the workspace fingerprint that makes its record stale.
     let mutated = !effects.files_written.is_empty()
-        || (effects.ran_command && !tool.is_read_only(&call.input));
+        || (effects.ran_command && !tool.is_read_only(&call.input) && tool.name() != names::VERIFY);
     let written = effects.files_written;
     let mut touched = effects.files_read;
     touched.extend(written.iter().cloned());

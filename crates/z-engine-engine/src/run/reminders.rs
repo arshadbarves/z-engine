@@ -1,7 +1,7 @@
 //! Reminder blocks attached to an agent's next user message: the run's own
 //! pending notes, reminders queued from outside the run (finished jobs,
-//! hook context), files changed behind the agent's back, and queued
-//! steering for the main agent.
+//! hook context), the deferred MCP tool listing, files changed behind the
+//! agent's back, and queued steering for the main agent.
 
 use std::path::PathBuf;
 
@@ -48,6 +48,7 @@ impl TodoNudge {
 pub(crate) async fn collect(ctx: &RunContext, pending: &mut Vec<String>) -> Vec<ContentBlock> {
     let mut texts = std::mem::take(pending);
     texts.extend(ctx.core.reminders.take(&ctx.spec.agent_id));
+    texts.extend(ctx.mcp.reminder(&ctx.core.mcp.catalog()));
     if let Some(changed) = changed_files(&ctx.resources.files).await {
         let shown: Vec<String> = changed
             .iter()

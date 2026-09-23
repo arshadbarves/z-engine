@@ -8,16 +8,17 @@ use std::path::PathBuf;
 use futures::future::join_all;
 use z_engine_context::nested_instructions;
 use z_engine_llm::MalformedToolUse;
-use z_engine_protocol::{ContentBlock, ToolStatus};
+use z_engine_protocol::{ContentBlock, ToolStatus, now_ms};
 use z_engine_tools::names;
 
 use super::approval;
 use super::call::{CANCELLED, CallResult, run_call};
+use super::diagnose::append_lsp_errors;
 use super::gate::{Gated, ToolCall, Verdict, gate};
 use super::report::refused;
 use super::toolset::ToolSet;
 use crate::run::RunContext;
-use crate::settings::nested_docs;
+use crate::settings::{nested_docs, scoped_rules};
 use crate::sync::lock;
 
 #[derive(Debug, Default)]
@@ -26,6 +27,8 @@ pub(crate) struct BatchOutcome {
     pub results: Vec<ContentBlock>,
     pub cancelled: bool,
     pub mutated: bool,
+    /// Epoch ms right after the last call that changed something.
+    pub mutated_at: Option<u64>,
     pub used_todo_write: bool,
     /// Files the calls wrote.
     pub written: Vec<PathBuf>,
@@ -59,9 +62,9 @@ pub(crate) async fn run_batch(
 
 async fn execute(ctx: &RunContext, gated: Vec<Gated>, pending: &mut Vec<String>) -> BatchOutcome {
     let mut results: Vec<Option<ContentBlock>> = gated.iter().map(|_| None).collect();
-    let mut mutated = false;
+    let mut mutated_at = None;
     let mut touched: Vec<PathBuf> = Vec::new();
-    let mut written: Vec<PathBuf> = Vec::new();
+    let mut written: Vec<(usize, Vec<PathBuf>)> = Vec::new();
     let mut index = 0;
     while index < gated.len() {
         if ctx.cancel.is_cancelled() {
@@ -109,14 +112,21 @@ async fn execute(ctx: &RunContext, gated: Vec<Gated>, pending: &mut Vec<String>)
         ) in join_all(runs).await
         {
             results[at] = Some(block);
-            mutated |= changed;
+            if changed {
+                mutated_at = Some(now_ms());
+            }
             touched.extend(files);
-            written.extend(wrote);
+            if !wrote.is_empty() {
+                written.push((at, wrote));
+            }
         }
         index = next;
     }
     if !touched.is_empty() {
         announce_nested(ctx, &touched, pending);
+    }
+    if !written.is_empty() && !ctx.cancel.is_cancelled() {
+        append_lsp_errors(ctx, &mut results, &written).await;
     }
     let cancelled = ctx.cancel.is_cancelled();
     let results = results
@@ -129,24 +139,25 @@ async fn execute(ctx: &RunContext, gated: Vec<Gated>, pending: &mut Vec<String>)
     BatchOutcome {
         results,
         cancelled,
-        mutated,
+        mutated: mutated_at.is_some(),
+        mutated_at,
         used_todo_write: false,
-        written,
+        written: written.into_iter().flat_map(|(_, files)| files).collect(),
     }
 }
 
-/// Queues instruction files from directories the calls touched that this
-/// agent has not seen yet.
+/// Queues instruction files from directories the calls touched, and rules
+/// whose globs match the touched files, that this agent has not seen yet.
 fn announce_nested(ctx: &RunContext, touched: &[PathBuf], pending: &mut Vec<String>) {
-    let compat = ctx.core.settings().settings.compat.claude;
+    let settings = ctx.core.settings();
+    let compat = settings.settings.compat.claude;
     let docs = {
         let mut seen = lock(&ctx.resources.seen_instructions);
-        nested_docs(
-            &ctx.spec.root,
-            touched.iter().map(PathBuf::as_path),
-            compat,
-            &mut seen,
-        )
+        let files = || touched.iter().map(PathBuf::as_path);
+        let mut docs = nested_docs(&ctx.spec.root, files(), compat, &mut seen);
+        let rules = &settings.extensions.rules;
+        docs.extend(scoped_rules(&ctx.spec.root, files(), rules, &mut seen));
+        docs
     };
     if !docs.is_empty() {
         pending.push(nested_instructions(&docs));

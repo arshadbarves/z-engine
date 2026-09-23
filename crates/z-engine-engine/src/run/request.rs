@@ -1,7 +1,8 @@
 //! Request assembly: cache-stable system sections (base prompt,
-//! environment, instructions, skills, output style), the offered tools,
-//! the working transcript with cache breakpoints on the last two user
-//! messages, thinking from the session effort, and the output ceiling.
+//! environment, instructions, skills, output style, repository map), the
+//! offered tools, the working transcript with cache breakpoints on the
+//! last two user messages, thinking from the session effort, and the
+//! output ceiling.
 
 use serde_json::{Value, json};
 use z_engine_context::{
@@ -65,7 +66,7 @@ pub(crate) fn prepare(ctx: &RunContext, model: &str, tools: Vec<ToolSpec>) -> Pr
             let styles = &settings.extensions.output_styles;
             styles.iter().find(|style| style.name == name)
         });
-    let sections = build_system(&SystemInputs {
+    let mut sections = build_system(&SystemInputs {
         base_prompt: &ctx.spec.base_prompt,
         environment: &environment,
         instructions: &settings.instructions,
@@ -73,6 +74,14 @@ pub(crate) fn prepare(ctx: &RunContext, model: &str, tools: Vec<ToolSpec>) -> Pr
         output_style: output_style.map(|style| style.body.as_str()),
         extra: worktree.map(|scope| scope.note.as_str()),
     });
+    if let Some(map) = worktree
+        .is_none()
+        .then(|| ctx.core.repo_map.current())
+        .flatten()
+    {
+        let after_cached = system_breakpoint(&sections).map_or(0, |index| index + 1);
+        sections.insert(after_cached, PromptSection::cached(map.as_ref()));
+    }
     let described: Vec<(String, String, Value)> = tools
         .iter()
         .map(|tool| {

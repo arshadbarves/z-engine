@@ -22,8 +22,11 @@ use super::snapshot::emit_snapshot;
 use crate::broker::Broker;
 use crate::error::EngineError;
 use crate::hooks::{HookEvent, HookInput, run_hooks};
+use crate::lsp::LspHub;
+use crate::mcp::{McpHub, sync_servers};
 use crate::options::EventSink;
 use crate::orchestration::{AgentRegistry, Orchestra, prune_stale_worktrees};
+use crate::run::RepoMapCache;
 use crate::session::{
     AgentResources, Emitter, JobHub, Journal, ReminderBox, SessionCore, SessionState, Shared,
     StatusTracker,
@@ -32,7 +35,7 @@ use crate::settings::{
     SessionSettings, build_policy, load_session_settings, models, session_client,
 };
 use crate::sync::read;
-use crate::verify::BadgeOnly;
+use crate::verify::{CheckHub, ModeVerifier, discover_checks};
 
 type Notices = Vec<(NoticeLevel, String)>;
 
@@ -78,6 +81,7 @@ pub(crate) async fn open_session(
     for (level, text) in notices {
         core.events.notice(level, text);
     }
+    sync_servers(&core);
     session_start(&core, fresh).await;
     Ok(handle)
 }
@@ -210,6 +214,10 @@ async fn assemble(
     let registry = AgentRegistry::build(&settings.extensions.agents);
     let tools = ToolRegistry::builtin(registry.cards());
     let agents = Orchestra::new(registry, settings.settings.agents.max_concurrent);
+    let checks = CheckHub::default();
+    checks.set(discover_checks(&root, &settings.settings.verification.checks).await);
+    let lsp = LspHub::default();
+    lsp.configure(&root, &settings.settings.lsp);
     Arc::new(SessionCore {
         id,
         root: root.clone(),
@@ -230,7 +238,11 @@ async fn assemble(
         main: AgentResources::new(root),
         locks: PathLocks::new(),
         checkpoints: Checkpoints::default(),
-        verifier: Arc::new(BadgeOnly),
+        verifier: Arc::new(ModeVerifier),
+        checks,
+        mcp: McpHub::default(),
+        lsp,
+        repo_map: RepoMapCache::default(),
         last_request: Mutex::new(None),
         cancel: CancellationToken::new(),
     })

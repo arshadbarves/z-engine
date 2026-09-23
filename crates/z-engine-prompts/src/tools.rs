@@ -67,6 +67,10 @@ pub const LIST_MCP_RESOURCES: &str = include_str!("../prompts/tools/list_mcp_res
 /// Reads one MCP resource.
 pub const READ_MCP_RESOURCE: &str = include_str!("../prompts/tools/read_mcp_resource.md");
 
+/// Loads deferred MCP tool definitions. Registered by the engine only
+/// while MCP tools are deferred, so it is not part of [`BUILTIN`].
+pub const LOAD_MCP_TOOLS: &str = include_str!("../prompts/tools/load_mcp_tools.md");
+
 /// Every built-in tool as `(tool name, description)`, in registry order.
 pub const BUILTIN: &[(&str, &str)] = &[
     ("Read", READ),
@@ -115,5 +119,6 @@ mod tests {
         for (name, text) in BUILTIN.iter().filter(|(name, _)| *name != "Agent") {
             assert!(!text.contains("{{"), "{name}: unexpected placeholder");
         }
+        assert!(!LOAD_MCP_TOOLS.trim().is_empty() && !LOAD_MCP_TOOLS.contains("{{"));
     }
 }

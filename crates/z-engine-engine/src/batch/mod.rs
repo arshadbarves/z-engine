@@ -4,6 +4,7 @@
 mod approval;
 mod call;
 mod ctx;
+mod diagnose;
 mod execute;
 mod gate;
 mod progress;

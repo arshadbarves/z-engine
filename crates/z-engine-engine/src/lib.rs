@@ -7,6 +7,8 @@ mod broker;
 mod engine;
 mod error;
 mod hooks;
+mod lsp;
+mod mcp;
 mod options;
 mod orchestration;
 mod ports;

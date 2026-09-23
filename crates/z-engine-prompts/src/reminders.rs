@@ -50,6 +50,14 @@ pub const VERIFICATION_REQUIRED: &str =
 /// Checks run automatically at the stop boundary failed.
 pub const AUTO_CHECK_FAILED: &str = include_str!("../prompts/reminders/auto-check-failed.md");
 
+/// MCP tools are deferred; `{{tools}}` holds one `- name: summary` line per
+/// tool, loadable with `LoadMcpTools`.
+pub const MCP_TOOLS_DEFERRED: &str = include_str!("../prompts/reminders/mcp-tools-deferred.md");
+
+/// Error diagnostics of a file the model just wrote; `{{file}}` is its
+/// root-relative path, `{{diagnostics}}` one line per error.
+pub const LSP_ERRORS: &str = include_str!("../prompts/reminders/lsp-errors.md");
+
 /// The user interrupted the previous response.
 pub const INTERRUPTED: &str = include_str!("../prompts/reminders/interrupted.md");
 

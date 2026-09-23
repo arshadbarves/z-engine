@@ -26,4 +26,11 @@ pub trait McpPort: Send + Sync {
         server: &str,
         uri: &str,
     ) -> Result<Vec<ToolResultPart>, String>;
+
+    /// Makes deferred MCP tools (model-facing names) callable by the
+    /// calling agent from its next request on; returns a report for the
+    /// model.
+    async fn load_tools(&self, _ctx: &ToolCtx, _names: &[String]) -> Result<String, String> {
+        Err("MCP tools are not deferred in this session; call them directly".to_string())
+    }
 }

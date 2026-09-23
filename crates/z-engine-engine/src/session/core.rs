@@ -20,12 +20,15 @@ use z_engine_tools::ToolRegistry;
 use super::checkpoint::Checkpoints;
 use crate::broker::Broker;
 use crate::hooks::HookEnv;
+use crate::lsp::LspHub;
+use crate::mcp::McpHub;
 use crate::options::ClientFactory;
 use crate::orchestration::Orchestra;
+use crate::run::RepoMapCache;
 use crate::session::{Emitter, JobHub, Journal, ReminderBox, SessionState, StatusTracker};
 use crate::settings::SessionSettings;
 use crate::sync::{lock, read};
-use crate::verify::Verifier;
+use crate::verify::{CheckHub, Verifier};
 
 /// The engine-wide model catalog, replaced whole on refresh.
 pub(crate) type CatalogHandle = Arc<RwLock<Option<Arc<ModelCatalog>>>>;
@@ -91,6 +94,12 @@ pub(crate) struct SessionCore {
     pub locks: PathLocks,
     pub checkpoints: Checkpoints,
     pub verifier: Arc<dyn Verifier>,
+    /// Discovered and configured checks.
+    pub checks: CheckHub,
+    pub mcp: McpHub,
+    pub lsp: LspHub,
+    /// The repository map section, stable between compactions.
+    pub repo_map: RepoMapCache,
     /// The last main-agent request, for the prompt inspector.
     pub last_request: Mutex<Option<Value>>,
     /// Cancelled when the session closes; background work hangs off it.

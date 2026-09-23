@@ -14,7 +14,9 @@ use z_engine_protocol::{
 };
 
 use super::meter::ContextMeter;
+use super::mutation::note_mutation;
 use super::reminders::{TodoNudge, collect, take_steering};
+use super::repo_map::ensure_repo_map;
 use super::request::{assemble, inspect, prepare};
 use super::sink::TranscriptSink;
 use super::spec::{RunContext, RunOutcome};
@@ -106,6 +108,9 @@ impl AgentRun {
         self.usage += absorbed.usage;
         self.cost += absorbed.cost_usd;
         self.mutated |= absorbed.mutated;
+        if absorbed.mutated {
+            note_mutation(&self.ctx, now_ms());
+        }
     }
 
     async fn round(&mut self, meter: &mut ContextMeter) -> Round {
@@ -116,6 +121,7 @@ impl AgentRun {
             return Round::End(TurnOutcome::BudgetExhausted { reason });
         }
         let model = self.ctx.model();
+        ensure_repo_map(&self.ctx).await;
         let tools = ToolSet::offered(&self.ctx);
         let prepared = prepare(&self.ctx, &model, tools.specs());
         meter.set_overhead(prepared.overhead);
@@ -207,6 +213,9 @@ impl AgentRun {
         let count = u32::try_from(calls.len()).unwrap_or(u32::MAX);
         let batch = run_batch(&self.ctx, tools, calls, &turn.malformed, &mut self.pending).await;
         self.mutated |= batch.mutated;
+        if let Some(at) = batch.mutated_at {
+            note_mutation(&self.ctx, at);
+        }
         self.tool_calls = self.tool_calls.saturating_add(count);
         self.written.extend(batch.written);
         if let Some(tracker) = &self.ctx.tracker {
@@ -242,7 +251,8 @@ impl AgentRun {
     }
 
     async fn at_stop(&mut self) -> Round {
-        match stop_boundary(&self.ctx, &mut self.stop, self.mutated).await {
+        let written: Vec<PathBuf> = self.written.iter().cloned().collect();
+        match stop_boundary(&self.ctx, &mut self.stop, &written).await {
             StopAction::End { verification } => {
                 self.verification = verification;
                 Round::End(TurnOutcome::Completed)

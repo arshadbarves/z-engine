@@ -10,6 +10,7 @@ use z_engine_context::GitInfo;
 use z_engine_protocol::{AgentId, PermissionMode, TurnOutcome, Usage, VerificationOutcome};
 
 use super::tally::ChildTally;
+use crate::mcp::McpRunState;
 use crate::orchestration::AgentTracker;
 use crate::session::{AgentResources, SessionCore};
 
@@ -97,6 +98,8 @@ pub(crate) struct RunContext {
     pub tracker: Option<Arc<AgentTracker>>,
     /// What foreground children and applied worktrees add to this run.
     pub children: Arc<ChildTally>,
+    /// Deferred MCP tools this run loaded and the listing it was shown.
+    pub mcp: Arc<McpRunState>,
 }
 
 impl RunContext {
@@ -113,6 +116,7 @@ impl RunContext {
             cancel,
             tracker: None,
             children: Arc::default(),
+            mcp: Arc::default(),
         }
     }
 

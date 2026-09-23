@@ -9,7 +9,7 @@ use serde_json::json;
 use support::fakes::FakeMcp;
 use support::{ctx_with, ok_text, project};
 use z_engine_policy::Action;
-use z_engine_tools::builtin::{ListMcpResourcesTool, ReadMcpResourceTool};
+use z_engine_tools::builtin::{ListMcpResourcesTool, LoadMcpToolsTool, ReadMcpResourceTool};
 use z_engine_tools::{Ports, Tool, ToolCtx, mcp_tool};
 
 fn setup(port: Arc<FakeMcp>) -> (tempfile::TempDir, ToolCtx) {
@@ -106,4 +106,19 @@ async fn resource_tools_list_and_read_through_the_port() {
         resources("docs")
     );
     assert!(ReadMcpResourceTool.is_concurrency_safe(&json!({})));
+}
+
+#[tokio::test]
+async fn load_mcp_tools_validates_names_and_needs_deferral() {
+    let port = Arc::new(FakeMcp::default());
+    let (_dir, ctx) = setup(port);
+    let tool = LoadMcpToolsTool;
+    let input = json!({"names": ["mcp__docs__search"]});
+    assert_eq!(tool.name(), "LoadMcpTools");
+    assert_eq!(tool.action(&input, &ctx), Action::Other { read_only: true });
+    assert!(tool.is_read_only(&input) && tool.is_concurrency_safe(&input));
+    assert_eq!(tool.title(&input, &ctx), "Load 1 MCP tool");
+    assert!(tool.call(json!({"names": [" "]}), &ctx).await.is_err());
+    let refused = tool.call(input, &ctx).await.unwrap_err();
+    assert!(refused.to_string().contains("not deferred"), "{refused}");
 }

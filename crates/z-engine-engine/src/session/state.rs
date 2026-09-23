@@ -11,6 +11,7 @@ use z_engine_protocol::{
 use z_engine_store::ReplayState;
 
 use crate::run::ContextMeter;
+use crate::verify::Mutation;
 
 #[derive(Debug, Clone)]
 pub(crate) struct SessionState {
@@ -47,6 +48,8 @@ pub(crate) struct SessionState {
     pub interrupted: bool,
     /// A `!cmd` ran since the last turn started.
     pub external_mutation: bool,
+    /// What the current (or last) main-agent turn changed.
+    pub mutation: Mutation,
 }
 
 impl SessionState {
@@ -96,6 +99,7 @@ impl SessionState {
             meter: ContextMeter::default(),
             interrupted,
             external_mutation: false,
+            mutation: Mutation::default(),
         }
     }
 

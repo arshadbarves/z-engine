@@ -6,10 +6,12 @@
 
 use std::path::{Path, PathBuf};
 
+use z_engine_context::render_template;
 use z_engine_host::{
     apply_patch, commit_all, create_worktree, diff_range, diffstat_range, git, is_repo,
     remove_worktree,
 };
+use z_engine_prompts::system::WORKTREE;
 use z_engine_protocol::{AgentId, AgentInfo, WorktreeInfo, WorktreeState};
 
 use super::blueprint::Placement;
@@ -60,14 +62,18 @@ pub(crate) async fn reenter(core: &SessionCore, info: &WorktreeInfo) -> Option<P
 }
 
 async fn placement(core: &SessionCore, root: PathBuf, info: &WorktreeInfo) -> Placement {
-    let note = format!(
-        "Isolated git worktree: you work in {} on branch {} (created from {}). The main \
-         project at {} is readable; change files only inside the worktree.",
-        info.path,
-        info.branch,
-        short(&info.base),
-        core.root.display()
-    );
+    let project = core.root.to_string_lossy();
+    let note = render_template(
+        WORKTREE,
+        &[
+            ("path", &info.path),
+            ("branch", &info.branch),
+            ("base", short(&info.base)),
+            ("project", &project),
+        ],
+    )
+    .trim()
+    .to_string();
     Placement {
         worktree: Some(WorktreeScope {
             project: core.root.clone(),
