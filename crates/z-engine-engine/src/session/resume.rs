@@ -1,13 +1,14 @@
 //! Repairs what a crash left open in a stored session: the open turn is
 //! closed as `Interrupted`, unanswered tool calls get "interrupted"
-//! results so the working set is valid for any provider, and questions or
-//! plans nobody can answer any more are resolved as dismissed.
+//! results so the working set is valid for any provider, subagents that
+//! were still running are recorded as failed, and questions or plans
+//! nobody can answer any more are resolved as dismissed.
 
 use std::collections::HashSet;
 
 use z_engine_protocol::{
-    CallId, ContentBlock, Message, Role, TurnOutcome, TurnRecord, Usage, VerificationOutcome,
-    now_ms,
+    AgentStatus, CallId, ContentBlock, Message, Role, TurnOutcome, TurnRecord, Usage,
+    VerificationOutcome, now_ms,
 };
 use z_engine_store::{LogRecord, ReplayState};
 
@@ -15,6 +16,7 @@ use crate::error::EngineError;
 use crate::session::Journal;
 
 const INTERRUPTED_RESULT: &str = "interrupted: the app closed before this call finished";
+const INTERRUPTED_AGENT: &str = "interrupted: the app closed before this agent finished";
 
 /// Appends the repair records; returns whether anything was repaired (the
 /// caller then replays the log again).
@@ -67,6 +69,18 @@ pub(crate) fn repair(journal: &Journal, replay: &ReplayState) -> Result<bool, En
             request_id: request_id.clone(),
             answers: None,
         })?;
+        repaired = true;
+    }
+    for agent in replay
+        .agents
+        .iter()
+        .filter(|agent| !agent.status.is_terminal())
+    {
+        let mut info = agent.clone();
+        info.status = AgentStatus::Failed;
+        info.error = Some(INTERRUPTED_AGENT.to_string());
+        info.finished_at = Some(now_ms());
+        journal.append(&LogRecord::AgentUpdated { info })?;
         repaired = true;
     }
     for (request_id, ..) in &replay.pending_plans {

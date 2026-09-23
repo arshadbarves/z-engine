@@ -15,12 +15,12 @@ use crate::settings::models::fast_model;
 
 pub(crate) fn context(core: &Arc<SessionCore>) -> String {
     let settings = core.settings();
-    let ctx = RunContext {
-        core: Arc::clone(core),
-        spec: AgentSpec::main(core.root.clone(), 1),
-        resources: core.main.clone(),
-        cancel: CancellationToken::new(),
-    };
+    let ctx = RunContext::new(
+        Arc::clone(core),
+        AgentSpec::main(core.root.clone(), 1),
+        core.main.clone(),
+        CancellationToken::new(),
+    );
     let tools = ToolSet::offered(&ctx);
     let specs = tools.specs();
     let described: Vec<(String, String, Value)> = specs

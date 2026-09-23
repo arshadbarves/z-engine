@@ -9,6 +9,7 @@ mod gate;
 mod progress;
 mod report;
 mod schema;
+mod scope;
 mod toolset;
 
 pub(crate) use execute::run_batch;

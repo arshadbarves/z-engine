@@ -21,6 +21,7 @@ use super::checkpoint::Checkpoints;
 use crate::broker::Broker;
 use crate::hooks::HookEnv;
 use crate::options::ClientFactory;
+use crate::orchestration::Orchestra;
 use crate::session::{Emitter, JobHub, Journal, ReminderBox, SessionState, StatusTracker};
 use crate::settings::SessionSettings;
 use crate::sync::{lock, read};
@@ -77,6 +78,8 @@ pub(crate) struct SessionCore {
     pub broker: Broker,
     pub reminders: Arc<ReminderBox>,
     pub jobs: Arc<JobHub>,
+    /// Agent types, concurrency slots and worktree merges of subagents.
+    pub agents: Orchestra,
     pub settings: RwLock<Arc<SessionSettings>>,
     pub client: RwLock<Arc<dyn ModelClient>>,
     pub tools: RwLock<Arc<ToolRegistry>>,

@@ -8,7 +8,7 @@ use z_engine_host::OutputSink;
 use z_engine_protocol::CallId;
 use z_engine_tools::{ShellConfig, SpillFn, ToolCtx, ToolLimits, WebOptions};
 
-use crate::ports::session_ports;
+use crate::ports::run_ports;
 use crate::run::RunContext;
 use crate::session::SessionCore;
 use crate::settings::models;
@@ -22,12 +22,19 @@ pub(crate) fn tool_ctx(
     let settings = core.settings();
     let catalog = core.catalog();
     let web = &settings.settings.web;
+    let mut additional_dirs = settings.additional_dirs.clone();
+    additional_dirs.extend(
+        ctx.spec
+            .worktree
+            .as_ref()
+            .map(|scope| scope.project.clone()),
+    );
     ToolCtx {
         session_id: core.id.clone(),
         agent_id: ctx.spec.agent_id.clone(),
         call_id: call_id.clone(),
         root: ctx.spec.root.clone(),
-        additional_dirs: settings.additional_dirs.clone(),
+        additional_dirs,
         mode: ctx.mode(),
         cwd: Arc::clone(&ctx.resources.cwd),
         cancel: ctx.cancel.clone(),
@@ -47,7 +54,7 @@ pub(crate) fn tool_ctx(
         spill: Some(spill(core)),
         limits: ToolLimits::default(),
         vision: models::supports_vision(catalog.as_deref(), &ctx.model()),
-        ports: Arc::new(session_ports(core)),
+        ports: Arc::new(run_ports(ctx)),
     }
 }
 

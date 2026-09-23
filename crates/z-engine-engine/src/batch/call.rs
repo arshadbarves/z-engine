@@ -29,6 +29,7 @@ pub(super) struct CallResult {
     pub mutated: bool,
     /// Files read or written, for nested instruction discovery.
     pub touched: Vec<PathBuf>,
+    pub written: Vec<PathBuf>,
 }
 
 pub(super) async fn run_call(
@@ -92,8 +93,9 @@ pub(super) async fn run_call(
     }
     let mutated = !effects.files_written.is_empty()
         || (effects.ran_command && !tool.is_read_only(&call.input));
+    let written = effects.files_written;
     let mut touched = effects.files_read;
-    touched.extend(effects.files_written);
+    touched.extend(written.iter().cloned());
     CallResult {
         block: ContentBlock::ToolResult {
             tool_use_id: call.id.clone(),
@@ -102,6 +104,7 @@ pub(super) async fn run_call(
         },
         mutated,
         touched,
+        written,
     }
 }
 

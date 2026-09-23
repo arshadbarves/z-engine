@@ -34,7 +34,13 @@ pub(super) async fn resolve(ctx: &RunContext, gated: &mut [Gated]) {
     let waits = replies
         .into_iter()
         .map(|reply| Broker::wait(reply, &ctx.cancel));
+    if let Some(tracker) = &ctx.tracker {
+        tracker.set_waiting(&ctx.core, true);
+    }
     let decisions = join_all(waits).await;
+    if let Some(tracker) = &ctx.tracker {
+        tracker.set_waiting(&ctx.core, false);
+    }
     for ((index, request), decision) in asks.into_iter().zip(decisions) {
         let verdict = std::mem::replace(
             &mut gated[index].verdict,

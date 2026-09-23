@@ -23,6 +23,7 @@ use crate::broker::Broker;
 use crate::error::EngineError;
 use crate::hooks::{HookEvent, HookInput, run_hooks};
 use crate::options::EventSink;
+use crate::orchestration::{AgentRegistry, Orchestra, prune_stale_worktrees};
 use crate::session::{
     AgentResources, Emitter, JobHub, Journal, ReminderBox, SessionCore, SessionState, Shared,
     StatusTracker,
@@ -71,6 +72,7 @@ pub(crate) async fn open_session(
         settings,
     };
     let core = assemble(shared, parts, state, &mut notices).await;
+    prune_stale_worktrees(&core).await;
     let handle = spawn_actor(Arc::clone(&core));
     emit_snapshot(&core);
     for (level, text) in notices {
@@ -205,6 +207,9 @@ async fn assemble(
     let broker = Broker::new(Arc::clone(&journal), Arc::clone(&status));
     let reminders = Arc::new(ReminderBox::default());
     let jobs = JobHub::new(Arc::clone(&events), Arc::clone(&reminders));
+    let registry = AgentRegistry::build(&settings.extensions.agents);
+    let tools = ToolRegistry::builtin(registry.cards());
+    let agents = Orchestra::new(registry, settings.settings.agents.max_concurrent);
     Arc::new(SessionCore {
         id,
         root: root.clone(),
@@ -215,9 +220,10 @@ async fn assemble(
         broker,
         reminders,
         jobs,
+        agents,
         settings: RwLock::new(settings),
         client: RwLock::new(client),
-        tools: RwLock::new(Arc::new(ToolRegistry::builtin(Vec::new()))),
+        tools: RwLock::new(Arc::new(tools)),
         policy: Mutex::new(policy),
         state: Mutex::new(state),
         git: Mutex::new(git),

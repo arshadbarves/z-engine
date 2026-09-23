@@ -1,4 +1,4 @@
-//! `JobPort`: background shells through the session's job hub.
+//! `JobPort`: background shells and agents through the session's job hub.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -6,7 +6,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use regex::Regex;
 use z_engine_host::BackgroundSpec;
-use z_engine_protocol::{JobId, JobKind};
+use z_engine_protocol::JobId;
 use z_engine_tools::{JobOutput, JobPort, ToolCtx};
 
 use crate::session::SessionCore;
@@ -81,7 +81,7 @@ impl JobPort for Jobs {
             status: read.status,
             exit_code: read.exit_code,
             output: read.output,
-            kind: JobKind::Shell,
+            kind: jobs.kind(job),
         })
     }
 

@@ -11,11 +11,10 @@ use z_engine_protocol::{ApprovalRequest, CallId, RequestId, ToolStatus};
 use z_engine_tools::Tool;
 
 use super::ctx::tool_ctx;
-use super::schema;
 use super::toolset::ToolSet;
+use super::{schema, scope};
 use crate::hooks::{HookEvent, HookInput, PermissionOverride, run_hooks};
 use crate::run::RunContext;
-use crate::sync::lock;
 
 #[derive(Debug, Clone)]
 pub(crate) struct ToolCall {
@@ -90,7 +89,7 @@ pub(super) async fn gate(
     }
     let probe = tool_ctx(ctx, &call.id, None);
     let action = tool.action(&call.input, &probe);
-    let decision = lock(&ctx.core.policy).decide(tool.name(), &action, ctx.mode());
+    let decision = scope::decide(ctx, tool.name(), &action);
     let verdict = match with_override(decision, hooks.permission) {
         Decision::Allow { .. } => Verdict::Run(tool),
         Decision::Deny { reason } => Verdict::Refuse {

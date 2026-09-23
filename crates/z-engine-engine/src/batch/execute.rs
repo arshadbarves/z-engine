@@ -27,6 +27,8 @@ pub(crate) struct BatchOutcome {
     pub cancelled: bool,
     pub mutated: bool,
     pub used_todo_write: bool,
+    /// Files the calls wrote.
+    pub written: Vec<PathBuf>,
 }
 
 pub(crate) async fn run_batch(
@@ -59,6 +61,7 @@ async fn execute(ctx: &RunContext, gated: Vec<Gated>, pending: &mut Vec<String>)
     let mut results: Vec<Option<ContentBlock>> = gated.iter().map(|_| None).collect();
     let mut mutated = false;
     let mut touched: Vec<PathBuf> = Vec::new();
+    let mut written: Vec<PathBuf> = Vec::new();
     let mut index = 0;
     while index < gated.len() {
         if ctx.cancel.is_cancelled() {
@@ -101,12 +104,14 @@ async fn execute(ctx: &RunContext, gated: Vec<Gated>, pending: &mut Vec<String>)
                 block,
                 mutated: changed,
                 touched: files,
+                written: wrote,
             },
         ) in join_all(runs).await
         {
             results[at] = Some(block);
             mutated |= changed;
             touched.extend(files);
+            written.extend(wrote);
         }
         index = next;
     }
@@ -126,6 +131,7 @@ async fn execute(ctx: &RunContext, gated: Vec<Gated>, pending: &mut Vec<String>)
         cancelled,
         mutated,
         used_todo_write: false,
+        written,
     }
 }
 

@@ -3,6 +3,8 @@
 //! receives exactly one `tool_result`, so the transcript stays valid for
 //! any provider whatever the outcome.
 
+use std::collections::BTreeSet;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use tokio::sync::oneshot;
@@ -35,6 +37,8 @@ pub(crate) struct AgentRun {
     pending: Vec<String>,
     final_text: String,
     verification: Option<VerificationOutcome>,
+    tool_calls: u32,
+    written: BTreeSet<PathBuf>,
     /// Resolves when the turn's checkpoint is taken; no tool runs before.
     before_tools: Option<oneshot::Receiver<()>>,
 }
@@ -60,6 +64,8 @@ impl AgentRun {
             pending: Vec::new(),
             final_text: String::new(),
             verification: None,
+            tool_calls: 0,
+            written: BTreeSet::new(),
             before_tools: None,
         }
     }
@@ -80,6 +86,7 @@ impl AgentRun {
             }
         };
         self.sink.save_meter(meter);
+        self.absorb_children();
         RunOutcome {
             outcome,
             usage: self.usage,
@@ -87,7 +94,18 @@ impl AgentRun {
             mutated: self.mutated,
             verification: self.verification,
             final_text: self.final_text,
+            tool_calls: self.tool_calls,
+            written: self.written.into_iter().collect(),
         }
+    }
+
+    /// Usage of finished foreground children and changes they (or an
+    /// applied worktree) made count as this run's.
+    fn absorb_children(&mut self) {
+        let absorbed = self.ctx.children.take();
+        self.usage += absorbed.usage;
+        self.cost += absorbed.cost_usd;
+        self.mutated |= absorbed.mutated;
     }
 
     async fn round(&mut self, meter: &mut ContextMeter) -> Round {
@@ -186,8 +204,15 @@ impl AgentRun {
                 },
             }
         }
+        let count = u32::try_from(calls.len()).unwrap_or(u32::MAX);
         let batch = run_batch(&self.ctx, tools, calls, &turn.malformed, &mut self.pending).await;
         self.mutated |= batch.mutated;
+        self.tool_calls = self.tool_calls.saturating_add(count);
+        self.written.extend(batch.written);
+        if let Some(tracker) = &self.ctx.tracker {
+            tracker.add_tool_calls(&self.ctx.core, count);
+        }
+        self.absorb_children();
         let nudge = self
             .todo_nudge
             .after_round(&self.ctx, batch.used_todo_write);
@@ -244,6 +269,9 @@ impl AgentRun {
         self.sink.append(message, false)?;
         let text = message.text();
         if !text.trim().is_empty() {
+            if let Some(tracker) = &self.ctx.tracker {
+                tracker.note_text(&self.ctx.core, &text);
+            }
             self.final_text = text;
         }
         self.ctx.core.events.emit(Event::AssistantFinished {
@@ -291,5 +319,8 @@ impl AgentRun {
         );
         self.usage += usage;
         self.cost += cost;
+        if let Some(tracker) = &self.ctx.tracker {
+            tracker.add_usage(&self.ctx.core, usage, cost);
+        }
     }
 }

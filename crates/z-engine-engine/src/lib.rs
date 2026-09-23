@@ -8,6 +8,7 @@ mod engine;
 mod error;
 mod hooks;
 mod options;
+mod orchestration;
 mod ports;
 mod run;
 mod session;

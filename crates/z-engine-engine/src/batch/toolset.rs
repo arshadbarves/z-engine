@@ -1,6 +1,7 @@
 //! The tools one run offers: the session registry filtered by the agent
-//! definition, main-agent-only tools, and services this phase does not
-//! wire (subagents, checks, LSP, MCP resources) or settings disable.
+//! definition, main-agent-only tools, `Agent` above the nesting limit, and
+//! services this phase does not wire (checks, LSP, MCP resources) or
+//! settings disable.
 
 use std::sync::Arc;
 
@@ -24,13 +25,17 @@ impl std::fmt::Debug for ToolSet {
 impl ToolSet {
     pub(crate) fn offered(ctx: &RunContext) -> Self {
         let settings = ctx.core.settings();
-        let main = ctx.spec.is_main();
+        let offer = Offer {
+            main: ctx.spec.is_main(),
+            may_spawn: ctx.spec.depth < settings.settings.agents.max_depth,
+            search: &settings.web_search,
+        };
         let registry = ctx.core.tools();
         let tools = registry
             .iter()
             .filter(|tool| {
                 let name = tool.name();
-                ctx.spec.tools.permits(name) && available(name, main, &settings.web_search)
+                ctx.spec.tools.permits(name) && offer.available(name)
             })
             .cloned()
             .collect();
@@ -57,16 +62,28 @@ impl ToolSet {
     }
 }
 
-fn available(name: &str, main: bool, search: &SearchBackend) -> bool {
-    match name {
-        names::AGENT
-        | names::APPLY_AGENT_CHANGES
-        | names::VERIFY
-        | names::LSP
-        | names::LIST_MCP_RESOURCES
-        | names::READ_MCP_RESOURCE => false,
-        names::ASK_USER_QUESTION | names::EXIT_PLAN_MODE => main,
-        names::WEB_SEARCH => *search != SearchBackend::None,
-        _ => true,
+/// What decides a tool's availability beyond the agent's filter.
+struct Offer<'a> {
+    main: bool,
+    /// The agent is above the nesting limit, so its children may exist.
+    may_spawn: bool,
+    search: &'a SearchBackend,
+}
+
+impl Offer<'_> {
+    /// Worktree changes merge into the project tree, which only the main
+    /// agent owns.
+    fn available(&self, name: &str) -> bool {
+        match name {
+            names::VERIFY | names::LSP | names::LIST_MCP_RESOURCES | names::READ_MCP_RESOURCE => {
+                false
+            }
+            names::AGENT => self.may_spawn,
+            names::ASK_USER_QUESTION | names::EXIT_PLAN_MODE | names::APPLY_AGENT_CHANGES => {
+                self.main
+            }
+            names::WEB_SEARCH => *self.search != SearchBackend::None,
+            _ => true,
+        }
     }
 }

@@ -31,6 +31,7 @@ pub(crate) fn prepare(ctx: &RunContext, model: &str, tools: Vec<ToolSpec>) -> Pr
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default();
+    let worktree = ctx.spec.worktree.as_ref();
     let environment = Environment {
         cwd: ctx.resources.cwd().to_string_lossy().into_owned(),
         project_root: ctx.spec.root.to_string_lossy().into_owned(),
@@ -38,10 +39,14 @@ pub(crate) fn prepare(ctx: &RunContext, model: &str, tools: Vec<ToolSpec>) -> Pr
         shell,
         date: today(),
         model: model.to_string(),
-        git: ctx.core.git_info(),
+        git: match worktree {
+            Some(scope) => scope.git.clone(),
+            None => ctx.core.git_info(),
+        },
         additional_dirs: settings
             .additional_dirs
             .iter()
+            .chain(worktree.map(|scope| &scope.project))
             .map(|dir| dir.to_string_lossy().into_owned())
             .collect(),
     };
@@ -66,7 +71,7 @@ pub(crate) fn prepare(ctx: &RunContext, model: &str, tools: Vec<ToolSpec>) -> Pr
         instructions: &settings.instructions,
         skills: &skills,
         output_style: output_style.map(|style| style.body.as_str()),
-        extra: None,
+        extra: worktree.map(|scope| scope.note.as_str()),
     });
     let described: Vec<(String, String, Value)> = tools
         .iter()

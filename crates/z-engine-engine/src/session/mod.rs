@@ -1,7 +1,9 @@
-//! One open session: shared core, event path, log, status, state, jobs,
-//! the actor that serializes GUI commands, and everything it runs.
+//! One open session: shared core, event path, log, status, state, jobs
+//! (shells and background agents), the actor that serializes GUI
+//! commands, and everything it runs.
 
 mod actor;
+mod agent_jobs;
 mod checkpoint;
 mod compaction;
 mod control;
@@ -33,6 +35,7 @@ pub(crate) use handle::SessionHandle;
 pub(crate) use jobs::JobHub;
 pub(crate) use journal::Journal;
 pub(crate) use open::open_session;
+pub(crate) use reload::git_info;
 pub(crate) use reminders::ReminderBox;
 pub(crate) use snapshot::emit_snapshot;
 pub(crate) use state::SessionState;

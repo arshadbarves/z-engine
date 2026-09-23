@@ -1,5 +1,6 @@
-//! A deterministic [`ModelClient`]: queued scripts for the main flow plus
-//! persistent routed responders for side requests (titles, summaries).
+//! A deterministic [`ModelClient`]: queued scripts for the main flow,
+//! consumable routed queues (subagents), and persistent routed responders
+//! for side requests (titles, summaries).
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
@@ -78,6 +79,8 @@ type Matcher = Box<dyn Fn(&ModelRequest) -> bool + Send + Sync>;
 #[derive(Default)]
 struct Inner {
     queue: VecDeque<Script>,
+    /// Consumed in order; an exhausted queue stops matching.
+    routed_queues: Vec<(Matcher, VecDeque<Script>)>,
     routes: Vec<(Matcher, Script)>,
     requests: Vec<ModelRequest>,
     fallback: Option<Script>,
@@ -115,6 +118,36 @@ impl ScriptedModel {
         self
     }
 
+    /// Answer successive requests matching `matcher` with `scripts`, one
+    /// each (e.g. the rounds of one subagent). Checked before `route`;
+    /// once exhausted, matching requests fall through to routes and the
+    /// main queue.
+    pub fn route_queue(
+        &self,
+        matcher: impl Fn(&ModelRequest) -> bool + Send + Sync + 'static,
+        scripts: Vec<Script>,
+    ) -> &Self {
+        self.lock()
+            .routed_queues
+            .push((Box::new(matcher), scripts.into()));
+        self
+    }
+
+    /// [`ScriptedModel::route_queue`] for requests whose system prompt
+    /// contains `needle`.
+    pub fn route_queue_system(&self, needle: &'static str, scripts: Vec<Script>) -> &Self {
+        self.route_queue(move |req| req.system_text().contains(needle), scripts)
+    }
+
+    /// Scripts left in routed queues.
+    pub fn routed_remaining(&self) -> usize {
+        self.lock()
+            .routed_queues
+            .iter()
+            .map(|(_, queue)| queue.len())
+            .sum()
+    }
+
     /// Answer requests whose system prompt contains `needle`.
     pub fn route_system(&self, needle: &'static str, script: Script) -> &Self {
         self.route(move |req| req.system_text().contains(needle), script)
@@ -144,6 +177,14 @@ impl ScriptedModel {
     fn next_script(&self, request: &ModelRequest) -> Script {
         let mut inner = self.lock();
         inner.requests.push(request.clone());
+        let routed = inner
+            .routed_queues
+            .iter_mut()
+            .find(|(matcher, queue)| !queue.is_empty() && matcher(request))
+            .and_then(|(_, queue)| queue.pop_front());
+        if let Some(script) = routed {
+            return script;
+        }
         if let Some((_, script)) = inner.routes.iter().find(|(matcher, _)| matcher(request)) {
             return script.clone();
         }

@@ -1,6 +1,7 @@
-//! Applying changed settings to a live session: settings, extensions,
-//! instructions, the model client, the policy (session grants kept), the
-//! git snapshot and the context window.
+//! Applying changed settings to a live session: settings, extensions (and
+//! with them the agent types in the `Agent` tool), instructions, the model
+//! client, the policy (session grants kept), the git snapshot and the
+//! context window.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -8,8 +9,10 @@ use std::sync::Arc;
 use z_engine_context::GitInfo;
 use z_engine_host::summary;
 use z_engine_protocol::NoticeLevel;
+use z_engine_tools::ToolRegistry;
 
 use super::snapshot::emit_snapshot;
+use crate::orchestration::AgentRegistry;
 use crate::session::SessionCore;
 use crate::settings::{build_policy, load_session_settings, models, session_client};
 use crate::sync::{lock, write};
@@ -38,6 +41,9 @@ pub(crate) async fn reload(core: &SessionCore) {
     let git = git_info(&core.root).await;
     let catalog = core.catalog();
     let limit = models::context_window(&settings.settings, catalog.as_deref(), &core.main_model());
+    let registry = AgentRegistry::build(&settings.extensions.agents);
+    *write(&core.tools) = Arc::new(ToolRegistry::builtin(registry.cards()));
+    core.agents.set_registry(registry);
     *write(&core.settings) = settings;
     *write(&core.client) = client;
     *lock(&core.policy) = policy;

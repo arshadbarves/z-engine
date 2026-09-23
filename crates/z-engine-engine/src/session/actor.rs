@@ -23,6 +23,7 @@ use super::shell::spawn_shell;
 use super::slash::{Slash, run_command};
 use super::turn::run_turn;
 use crate::hooks::{HookEvent, HookInput, run_hooks};
+use crate::orchestration::{apply_command, discard_command};
 use crate::session::SessionCore;
 
 const COMMAND_CAPACITY: usize = 256;
@@ -136,9 +137,8 @@ impl Actor {
             Command::Compact { instructions } => self.compact(instructions),
             Command::Rewind { message_id, scope } => self.rewind(&message_id, scope).await,
             Command::KillJob { job_id } => control::kill_job(core, job_id),
-            Command::ApplyAgentChanges { .. } | Command::DiscardAgentChanges { .. } => core
-                .events
-                .notice(NoticeLevel::Info, "Worktree agents are not available yet."),
+            Command::ApplyAgentChanges { agent_id } => apply_command(core, agent_id),
+            Command::DiscardAgentChanges { agent_id } => discard_command(core, agent_id),
             Command::RunCommand { name, args } => {
                 if let Slash::Compact(instructions) = run_command(core, &name, &args).await {
                     self.compact(instructions);
@@ -280,6 +280,7 @@ impl Actor {
             &hooks_cancel,
         )
         .await;
+        core.agents.close_slots();
         core.jobs.kill_all().await;
         core.cancel.cancel();
         write_meta(core);

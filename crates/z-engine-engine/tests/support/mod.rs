@@ -6,6 +6,7 @@
 // Each test binary uses a different subset of this module.
 #![allow(dead_code, unused_imports)]
 
+mod agents;
 mod hooks;
 mod transcript;
 
@@ -17,6 +18,10 @@ use z_engine_llm::{ModelClient, ModelRequest};
 use z_engine_protocol::{ApprovalRequest, Command, Event, Message, SessionId, TurnRecord};
 use z_engine_testkit::{EventRecorder, FixtureRepo, Script, ScriptedModel};
 
+pub use agents::{
+    SUBAGENT_NEEDLE, agent_call, first_user_text, is_subagent, route_task, task_requests,
+    tool_names, write_agent,
+};
 pub use hooks::{hook_script, hook_toml};
 pub use transcript::{all_text, assert_valid_transcript, last_user_text, results};
 
@@ -187,7 +192,7 @@ impl Harness {
         self.model
             .requests()
             .into_iter()
-            .filter(|request| !request.tools.is_empty())
+            .filter(|request| !request.tools.is_empty() && !is_subagent(request))
             .collect()
     }
 

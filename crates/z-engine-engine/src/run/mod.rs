@@ -14,6 +14,7 @@ mod sink;
 mod spec;
 mod stop;
 mod stream;
+mod tally;
 mod usage;
 
 pub(crate) use agent::AgentRun;
@@ -23,4 +24,5 @@ pub(crate) use reminders::collect as collect_reminders;
 pub(crate) use request::prepare as prepare_request;
 pub(crate) use side::side_request;
 pub(crate) use sink::{MainSink, TranscriptSink};
-pub(crate) use spec::{AgentSpec, RunContext, RunOutcome};
+pub(crate) use spec::{AgentSpec, ModelChoice, RunContext, RunOutcome, ToolFilter, WorktreeScope};
+pub(crate) use tally::ChildTally;

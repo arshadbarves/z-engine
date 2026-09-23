@@ -1,13 +1,16 @@
 //! What parameterizes one agent run, so the same loop serves the main
-//! agent and (later) subagents: identity, prompt, tools, model, mode,
-//! budget, root directory, depth, working resources and cancellation.
+//! agent and subagents: identity, prompt, tools, model, mode, budget,
+//! root directory, depth, working resources and cancellation.
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;
+use z_engine_context::GitInfo;
 use z_engine_protocol::{AgentId, PermissionMode, TurnOutcome, Usage, VerificationOutcome};
 
+use super::tally::ChildTally;
+use crate::orchestration::AgentTracker;
 use crate::session::{AgentResources, SessionCore};
 
 /// Which registry tools an agent is offered.
@@ -32,11 +35,19 @@ impl ToolFilter {
 pub(crate) enum ModelChoice {
     /// Follows the session's main model (`SetModel` applies next round).
     Session,
-    #[expect(
-        dead_code,
-        reason = "subagent definitions pick their own model (phase 6)"
-    )]
     Fixed(String),
+}
+
+/// An isolated agent's view: its root is the worktree, the main project
+/// stays readable.
+#[derive(Debug, Clone)]
+pub(crate) struct WorktreeScope {
+    /// The session's project root.
+    pub project: PathBuf,
+    /// Git state of the worktree for the environment section.
+    pub git: Option<GitInfo>,
+    /// Environment note naming the worktree and its branch.
+    pub note: String,
 }
 
 #[derive(Debug, Clone)]
@@ -50,8 +61,9 @@ pub(crate) struct AgentSpec {
     pub max_turns: u32,
     /// Project root, or the agent's worktree.
     pub root: PathBuf,
-    #[expect(dead_code, reason = "the subagent depth limit reads it (phase 6)")]
+    /// 0 for the main agent, parent depth + 1 for subagents.
     pub depth: u32,
+    pub worktree: Option<WorktreeScope>,
 }
 
 impl AgentSpec {
@@ -65,6 +77,7 @@ impl AgentSpec {
             max_turns: max_turns.max(1),
             root,
             depth: 0,
+            worktree: None,
         }
     }
 
@@ -80,9 +93,29 @@ pub(crate) struct RunContext {
     pub spec: AgentSpec,
     pub resources: AgentResources,
     pub cancel: CancellationToken,
+    /// A subagent's live `AgentInfo`; `None` for the main agent.
+    pub tracker: Option<Arc<AgentTracker>>,
+    /// What foreground children and applied worktrees add to this run.
+    pub children: Arc<ChildTally>,
 }
 
 impl RunContext {
+    pub(crate) fn new(
+        core: Arc<SessionCore>,
+        spec: AgentSpec,
+        resources: AgentResources,
+        cancel: CancellationToken,
+    ) -> Self {
+        Self {
+            core,
+            spec,
+            resources,
+            cancel,
+            tracker: None,
+            children: Arc::default(),
+        }
+    }
+
     pub(crate) fn mode(&self) -> PermissionMode {
         self.spec.mode.unwrap_or_else(|| self.core.mode())
     }
@@ -99,6 +132,7 @@ impl RunContext {
 #[derive(Debug, Clone)]
 pub(crate) struct RunOutcome {
     pub outcome: TurnOutcome,
+    /// This run's usage plus its foreground children's.
     pub usage: Usage,
     pub cost_usd: f64,
     /// Files changed during the run.
@@ -106,6 +140,8 @@ pub(crate) struct RunOutcome {
     /// The badge from the stop boundary, when the run reached it.
     pub verification: Option<VerificationOutcome>,
     /// Text of the last assistant message.
-    #[expect(dead_code, reason = "a subagent's report to its parent (phase 6)")]
     pub final_text: String,
+    pub tool_calls: u32,
+    /// Files the run's own tools wrote.
+    pub written: Vec<PathBuf>,
 }

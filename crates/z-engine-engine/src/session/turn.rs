@@ -48,12 +48,12 @@ pub(crate) async fn run_turn(
         return None;
     }
     let max_turns = core.settings().settings.agents.max_turns;
-    let ctx = RunContext {
-        core: Arc::clone(&core),
-        spec: AgentSpec::main(core.root.clone(), max_turns),
-        resources: core.main.clone(),
+    let ctx = RunContext::new(
+        Arc::clone(&core),
+        AgentSpec::main(core.root.clone(), max_turns),
+        core.main.clone(),
         cancel,
-    };
+    );
     let content = compose(&ctx, &text, &input.attachments, hooks.context).await;
     let message = Message::new(Role::User, content);
     let turn_id = TurnId::new();
