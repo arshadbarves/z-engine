@@ -2,7 +2,7 @@
 exclude = ["tmp"]
 resolver = "3"
 members = [
-    # v2 engine (see AGENTS.md "v2 structure")
+    # engine (see AGENTS.md)
     "crates/z-engine-protocol",
     "crates/z-engine-prompts",
     "crates/z-engine-llm",
@@ -16,12 +16,6 @@ members = [
     "crates/z-engine-tools",
     "crates/z-engine-engine",
     "crates/z-engine-testkit",
-    # v1 crates, removed at the GUI cutover
-    "crates/z-engine-provider",
-    "crates/z-engine-runtime",
-    "crates/legacy/z-engine-context",
-    "crates/z-engine-project",
-    "crates/z-engine-core",
     # desktop application
     "crates/z-engine-gui/src-tauri",
 ]

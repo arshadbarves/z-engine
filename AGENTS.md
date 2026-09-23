@@ -5,49 +5,44 @@ modifying this codebase MUST maintain the structure defined below.** The
 structure exists so every file stays small, single-purpose, and easy to
 navigate. Violations are review-blocking.
 
-Companion conventions: [Engineering & Coding Style Guide](docs/engineering/style-guide.md).
-The [supervised harness](docs/architecture/supervised-harness.md) describes the
-current bounded implementation and its limits.
-The [GUI-first architecture](docs/architecture/agent-harness.md) and
-[vertical-slice roadmap](docs/roadmap/agent-harness.md) describe staged future
-work; they do not change the current layout below. Update this contract in the
-same implementation slice as any crate or frontend migration.
+Companion documents: [Engineering & Coding Style Guide](docs/engineering/style-guide.md),
+[v2 engine architecture](docs/architecture/v2-engine.md),
+[GUI UI guide](docs/design/gui-ui-guide.md), and [status](docs/status.md).
+Documents marked "Historical (v1)" describe the deleted v1 crates and do not
+govern new code. Update this contract in the same change as any crate or
+frontend restructuring.
 
 The desktop GUI is the only product frontend. Do not add a terminal or
 headless replacement. The agent's shell tool and private integration-test
 fixtures remain supported; neither is a public command-line product.
 
-## v2 structure (branch `v2`; authoritative for the new crates)
-
-v2 is a from-scratch rewrite that lives beside the v1 crates until the GUI
-cutover, when v1 (`z-engine-core`, `-provider`, `-runtime`, `-project`,
-`crates/legacy/z-engine-context`) is deleted and this section replaces the
-v1 layout below. The golden rules (file budget, SRP, composition-root
-`lib.rs`/`mod.rs`, typed `thiserror` errors, tests beside code) apply
-unchanged. v2 must never import a v1 crate.
+## Crates
 
 ```
 crates/
 ├── z-engine-protocol/     # leaf: ids, conversation model, Event/Command (ts-rs -> ui/src/lib/protocol/)
 ├── z-engine-prompts/      # leaf: ALL prompt prose as markdown under prompts/<area>/*.md
 ├── z-engine-llm/          # ModelClient seam, openai_chat + anthropic adapters, retry, fallback, catalog, cost
-├── z-engine-config/       # settings v2 layering + v1 migration, credentials, trust, extension discovery
+├── z-engine-config/       # settings layering + v1 migration, credentials, trust, extension discovery
 ├── z-engine-policy/       # pure permission engine: rules, modes, shell analysis
 ├── z-engine-host/         # the ONLY OS/network adapter: fs, processes, jobs, search, git, checkpoints, web
 ├── z-engine-integrations/ # MCP (stdio + HTTP) and LSP clients over one JSON-RPC core
 ├── z-engine-context/      # pure prompt assembly, reminders, repo map, tokens, compaction planning
 ├── z-engine-verify/       # check discovery, records, output parsing, freshness, outcome
-├── z-engine-store/        # session v2 logs, subagent transcripts, artifacts, index, v1 import
+├── z-engine-store/        # session logs, subagent transcripts, artifacts, index, v1 import
 ├── z-engine-tools/        # Tool trait, capability ports, registry, builtin/<tool>.rs (one file per tool)
-├── z-engine-engine/       # orchestrator: sessions, agent runs, gating, hooks, jobs, commands
-└── z-engine-testkit/      # dev-only: ScriptedModel, FixtureRepo, EventRecorder
+├── z-engine-engine/       # orchestrator: sessions, agent runs, gating, hooks, jobs, commands, GUI queries
+├── z-engine-testkit/      # dev-only: ScriptedModel, FixtureRepo, EventRecorder
+└── z-engine-gui/
+    ├── src-tauri/         # Tauri shell: builder wiring, AppState, event bridge, commands/<domain>.rs
+    └── ui/                # Svelte 5 frontend
 ```
 
 Dependency rules (arrows mean "may import"):
 
 ```
-z-engine-gui -> engine, protocol
-engine       -> every v2 crate below
+z-engine-gui -> engine, protocol, config
+engine       -> every crate below
 tools        -> host, policy
 integrations -> host
 verify       -> host
@@ -58,15 +53,21 @@ testkit      -> llm (dev-dependency of other crates only)
 ```
 
 - Only `engine` knows concrete implementations; tools reach engine
-  services through capability traits in `z-engine-tools::ports`.
-- Only `host` touches the OS or network (processes, git, HTTP). `config`
-  and `store` read/write their own files; `context` and `policy` do no I/O.
+  services through capability traits in `z-engine-tools::ports`. The GUI
+  shell calls `Engine` (sessions, settings, catalog, and the queries in
+  `engine/queries/`) and uses `config` only for settings files, credentials,
+  trust and extension/instruction discovery.
+- Only `host` touches the OS or network (processes, git, HTTP); the
+  documented exception is `integrations`, which owns its server processes.
+  `config` and `store` read/write their own files; `context` and `policy`
+  do no I/O.
 - Prompt prose lives only in `crates/z-engine-prompts/prompts/<area>/`,
   one `pub const` per file in `src/<area>.rs`. Tool descriptions are
-  `prompts/tools/<tool>.md`.
+  `prompts/tools/<tool>.md`. Never inline prompt text in logic files.
 - Protocol types are the GUI contract: change them only in
-  `z-engine-protocol`, then run `cargo test -p z-engine-protocol` and commit
-  the regenerated `ui/src/lib/protocol/*.ts` in the same change.
+  `z-engine-protocol` (config types in `z-engine-config`), then run
+  `cargo test -p z-engine-protocol` / `-p z-engine-config` and commit the
+  regenerated `ui/src/lib/protocol/**/*.ts` in the same change.
 - Tool names and input schemas follow Claude Code (`Read`, `Edit`, `Bash`,
   `Grep`, `TodoWrite`, `Agent`, ...). Custom agents, commands and skills are
   markdown with YAML frontmatter; `.claude/` folders are read for
@@ -78,129 +79,59 @@ testkit      -> llm (dev-dependency of other crates only)
    exceed the cap, split it by responsibility — never by percentage.
 2. **One file = one reason to change** (SRP). A file named after a thing
    contains only that thing.
-3. **`mod.rs` / `lib.rs` are composition roots only**: module
-   declarations + re-exports. No logic beyond ~30 lines of glue.
-4. **Prompts are data, not code.** All LLM prompt prose lives in
-   `crates/z-engine-core/prompts/*.md`, loaded via `include_str!` in
-   `src/prompts.rs`. Never inline prompt text inside logic files.
-5. **Dependency direction (DIP):**
-   ```
-   z-engine-gui -> z-engine-core
-   z-engine-core -> z-engine-provider  # model transport only
-                 -> z-engine-runtime   # pure bounded supervisor contracts
-                 -> z-engine-context   # provider-independent context packets
-                 -> z-engine-project   # read-only project discovery
-   ```
-   Core must not depend on GUI. Provider, runtime, context, and project must
-   not depend on core or GUI. Runtime and context perform no model,
-   filesystem, or process I/O; project discovery reads bounded filesystem
-   inputs but never executes suggested checks.
-   Cross-layer calls go through traits/re-exported types, never
-   concrete internals.
-6. **Errors:** libraries (`-core`, `-provider`, `-runtime`, `-context`, `-project`) use typed
-   `thiserror` enums. The GUI application shell may use `anyhow`.
-7. **Tests live next to what they test** (`#[cfg(test)] mod tests`) or
-   in `tests/` for integration flows. One concern per integration file.
+3. **`mod.rs` / `lib.rs` / `main.rs` are composition roots only**: module
+   declarations + re-exports (the GUI `main.rs`: builder wiring, <160
+   lines). No logic beyond ~30 lines of glue.
+4. **Prompts are data, not code** (see above).
+5. **Dependency direction** as above; cross-crate calls go through public
+   traits and types, never concrete internals.
+6. **Errors:** library crates use typed `thiserror` enums. The GUI shell may
+   use `anyhow`; its commands return display strings to the webview.
+7. **Tests live next to what they test** (`#[cfg(test)] mod tests`) or in
+   `tests/` for integration flows. One concern per integration file.
 
-## Layout
+## GUI shell (`crates/z-engine-gui/src-tauri/src`)
 
 ```
-crates/
-├── z-engine-provider/         # LLM transport (swap-friendly seam)
-│   ├── src/lib.rs             #   re-exports only
-│   ├── src/{types,client,sse,accumulate}.rs
-│   └── tests/fixtures/sse/    #   recorded SSE streams as fixtures
-├── z-engine-runtime/          # pure bounded task supervision contracts
-│   ├── src/lib.rs             #   re-exports only
-│   └── src/{supervisor,types}.rs
-├── z-engine-context/          # bounded packets; no provider or filesystem I/O
-│   ├── src/lib.rs             #   re-exports only
-│   ├── src/{builder,packet,report,notes,error}.rs
-│   └── tests/                #   budgets, evidence boundaries, supervision data
-├── z-engine-project/          # bounded, read-only language-neutral discovery
-│   ├── src/lib.rs             #   re-exports only
-│   ├── src/{discovery,traversal,filesystem,markers,options,types,error}.rs
-│   ├── src/parsers/           #   manifest-specific discovery; no check execution
-│   └── tests/                #   profiles, malformed input, bounds, containment
-├── z-engine-core/
-│   ├── prompts/               # ✏️ EDIT PROMPTS HERE (plain markdown)
-│   │   ├── system-main.md     #   L0 operating instructions
-│   │   ├── reviewer.md        #   post-edit reviewer persona
-│   │   ├── summarizer.md      #   compaction summarizer
-│   │   ├── task-supervision.md #  bounded continuation guidance
-│   │   ├── context-packet.md  #   task data provenance and retention
-│   │   ├── subagent.md        #   research sub-agent persona
-│   │   └── session-title.md   #   sidebar session title
-│   └── src/
-│       ├── lib.rs             # re-exports only
-│       ├── prompts.rs         # include_str! registry (one const per prompt)
-│       ├── agent/
-│       │   ├── mod.rs         # composition root
-│       │   ├── config.rs      # LoopConfig
-│       │   ├── handle.rs      # AgentHandle lifecycle/spawn
-│       │   ├── task.rs        # command loop, MCP/LSP wiring
-│       │   ├── turn.rs        # single-turn pipeline
-│       │   ├── request.rs     # grounded request assembly
-│       │   ├── supervision.rs # bounded response-boundary adapter
-│       │   ├── task_completion.rs # durable completion gate
-│       │   ├── execute.rs     # tool execution + approval gating
-│       │   ├── stream.rs      # stream consumption
-│       │   ├── state.rs       # LoopState
-│       │   ├── revert.rs      # rewind handlers
-│       │   ├── subagent.rs    # isolated research loops
-│       │   ├── auxiliary.rs   # bounded, cancellable text collection
-│       │   ├── side_requests.rs # summary + title requests
-│       │   ├── review.rs      # advisory reviewer outcomes
-│       │   ├── system_prompt.rs # L0 assembly (uses crate::prompts)
-│       │   └── events.rs      # Event/Command enums (UI contract)
-│       ├── config/
-│       │   ├── mod.rs         # composition root
-│       │   ├── types.rs       # Config/FileFormat/errors
-│       │   ├── loader.rs      # load + layering
-│       │   ├── store.rs       # persistence CRUD (atomic writes!)
-│       │   ├── auth.rs        # OpenRouter key in auth.json
-│       │   └── paths.rs       # z-engine dirs; create config if missing
-│       ├── perms/
-│       │   ├── mod.rs         # composition root
-│       │   ├── engine.rs      # PolicyEngine decisions
-│       │   └── shell_syntax.rs# tokenizer + safe-lists
-│       ├── context/
-│       │   ├── mod.rs         # composition root
-│       │   ├── system.rs      # L0 assembly + AGENTS.md loader
-│       │   ├── task_packet.rs # observed report + unverified notes projection
-│       │   ├── budget.rs compact.rs cost.rs notes.rs repo_map.rs
-│       ├── tools/
-│       │   ├── mod.rs         # composition root + re-exports
-│       │   ├── interface.rs   # Tool contract + outcomes
-│       │   ├── registry.rs    # ToolRegistry + built-in registrations
-│       │   ├── context.rs     # ToolCtx (the per-call capability bundle)
-│       │   ├── fsutil.rs      # atomic_write, diffs, truncation
-│       │   └── <tool_name>.rs # ONE FILE PER TOOL (bash, edit_file, …)
-│       ├── lsp/  mcp/         # external-process integrations
-│       ├── verification/     # typed checks, artifacts, freshness and final gate
-│       ├── verification/     # typed checks, evidence, freshness, completion gate
-│       └── session/           # JSONL transcript store
-└── z-engine-gui/src-tauri/src/
-    ├── main.rs                # builder wiring only (<160 lines)
-    ├── state.rs event_bridge.rs git_util.rs catalog.rs
-    ├── slash_commands.rs session_store.rs
-    └── commands/              # ALL #[tauri::command] fns, grouped by domain
-        ├── mod.rs agent.rs settings.rs misc.rs
+main.rs          # builder wiring: runtime, logging, plugins, handler list, setup, shutdown
+state.rs         # AppState { engine, workspaces, active project }
+events.rs        # EventSink -> Tauri event `engineEvent` (payload: EventEnvelope)
+window.rs        # main window, title bar, vibrancy/Mica
+logging.rs       # <data dir>/z-engine-gui.log
+workspaces.rs    # <data dir>/workspaces.json registry
+layers.rs        # settings scope -> layer file, layer tables (incl. in-memory v1 import)
+guard.rs         # path validation for extension and instruction files
+ipc.rs           # IpcResult, error text, JSON for engine query results
+commands/        # ALL #[tauri::command] fns, one file per domain:
+                 # session, catalog, workspace, settings, access (keys, trust),
+                 # extensions, app, update
 ```
 
-The desktop frontend is **Svelte 5 + Bits UI + Vite** in
-`z-engine-gui/ui/src`. Canonical UI rules:
+## Frontend (`crates/z-engine-gui/ui/src`)
+
+**Svelte 5 + Bits UI + Vite.** Canonical UI rules:
 [`docs/design/gui-ui-guide.md`](docs/design/gui-ui-guide.md).
 
 ```
 ui/src/
-├── App.svelte              # composition root (wiring only)
-├── lib/commands.ts         # ONLY Tauri invoke wrappers
-├── lib/runtime/            # agent events, transcript, session park/replay
-├── lib/domain/             # pure helpers (tested with vitest)
-├── lib/stores/             # config / workspace / update / chrome UI
-├── lib/ui/                 # Bits UI wrappers + Icon + Button (ONLY bits-ui import)
-└── components/{chrome,sidebar,chat,settings,overlays}/
+├── App.svelte                  # composition root (wiring only)
+├── lib/protocol/               # GENERATED by ts-rs (protocol + config/); never edit by hand
+├── lib/commands/*.ts           # ONLY Tauri invoke wrappers: engine, workspace, app, settings
+├── lib/runtime/                # event listening (listen.ts), session stores, catalogs, actions
+├── lib/domain/                 # pure helpers, tested with vitest:
+│   ├── sessionView/            #   EventEnvelope -> session view reducer
+│   ├── timeline/               #   turns and blocks for the transcript
+│   ├── tools/                  #   per-tool presentation helpers
+│   └── settings/               #   forms, scopes, provenance, credentials
+├── lib/stores/                 # composer, settings, UI chrome state
+├── lib/ui/                     # Bits UI wrappers + Icon + Button (ONLY bits-ui import)
+└── components/
+    ├── chat/ chat/tools/       # transcript, composer, approval and tool cards
+    ├── planning/               # questions, plans, todos
+    ├── agents/                 # agents and jobs panel, subagent transcripts
+    ├── settings/               # settings page and tabs
+    ├── overlays/               # diff, worktree, prompt inspector, palette, shell
+    ├── chrome/ sidebar/ home/  # top bar, status, sidebar, home screen
 ```
 
 Rules: screens never `invoke()` or import `bits-ui`; event listening only
@@ -211,21 +142,25 @@ SvelteKit, Tailwind, shadcn-svelte, React, or a second design system.
 
 | Adding… | Do this |
 |---|---|
-| a tool | new `tools/<name>.rs` implementing `Tool`; register in `ToolRegistry::builtins()` |
-| a prompt | new `prompts/<name>.md` + one `pub const` in `src/prompts.rs` + reference it |
-| an IPC command | fn in the matching `commands/<domain>.rs` with `#[tauri::command]` + add to `generate_handler!` in `main.rs`; frontend wrapper in `ui/src/lib/commands.ts` |
-| a GUI screen | new `ui/src/components/<area>/<Name>.svelte`; use `lib/ui` primitives; follow `docs/design/gui-ui-guide.md` |
+| a tool | `z-engine-tools/src/builtin/<name>.rs` implementing `Tool`, description in `prompts/tools/<Name>.md`, register in the registry |
+| a prompt | `z-engine-prompts/prompts/<area>/<name>.md` + one `pub const` in `src/<area>.rs` |
+| an IPC command | fn in the matching `src-tauri/src/commands/<domain>.rs` with `#[tauri::command]`, add it to `generate_handler!` in `main.rs`, wrapper in `ui/src/lib/commands/<domain>.ts` |
+| a GUI query | `impl Engine` method in `z-engine-engine/src/engine/queries/<topic>.rs` with camelCase `Serialize` results and unit tests |
+| a GUI screen | `ui/src/components/<area>/<Name>.svelte`; use `lib/ui` primitives; follow the UI guide |
 | a GUI primitive | wrapper in `ui/src/lib/ui/` around Bits UI; never import `bits-ui` from a screen |
-| a config key | `config/types.rs` (struct + Partial) → `loader.rs` apply → default in `types.rs` |
-| an event variant | `agent/events.rs` enum + its serde shape in one place |
+| a config key | field in `z-engine-config/src/settings/<section>.rs` (+ default), commented example in `default_config.toml`, v1 mapping in `migrate/convert.rs` if v1 had it; regenerate TS |
+| an event/command variant | `z-engine-protocol` enum, handle it in the engine (actor / emitter) and in `lib/domain/sessionView`; run `cargo test -p z-engine-protocol` and commit the TS |
+| a built-in agent | `z-engine-prompts/prompts/agents/<name>.md` (frontmatter) + `BUILTIN` entry in `src/agents.rs` |
+| a hook event | `HOOK_EVENTS` in `z-engine-config/src/settings/hooks.rs`, fire it from `z-engine-engine/src/hooks/`, document it in `docs/architecture/v2-engine.md` |
 
 ## Before you commit
 
 ```bash
 cargo fmt --all
-cargo clippy --workspace --all-targets   # 0 warnings required
-cargo test --workspace                   # all green required
-wc -l $(git diff --name-only | grep '\.rs$')   # respect the 400 cap
+cargo clippy --workspace --all-targets -- -D warnings   # 0 warnings required
+cargo test --workspace                                   # all green required
+npm test --prefix crates/z-engine-gui/ui && npm run check --prefix crates/z-engine-gui/ui
+wc -l $(git diff --name-only | grep '\.rs$')             # respect the 400 cap
 ```
 
 If your change pushes any file past 400 lines, split it first. If you

@@ -3,5 +3,6 @@
 mod api;
 mod catalog;
 mod export;
+mod queries;
 
 pub use api::Engine;
