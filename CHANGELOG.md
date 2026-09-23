@@ -5,6 +5,74 @@ All notable changes to the **Z Engine** project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-09-24
+
+A from-scratch rewrite of the engine, tools, persistence and the desktop
+runtime. See the [v2 engine architecture](docs/architecture/v2-engine.md).
+
+### Added
+- **Multi-agent orchestration**: built-in agents (`general`, `explore`,
+  `plan`, `review`, `verify`) and custom agents from markdown files run in
+  parallel, nested, in the background, or resumed, each with its own tools,
+  model and permission mode, per-agent usage and cost, and an agent tree and
+  jobs panel in the app.
+- **Worktree isolation**: an agent can work in its own git worktree; its
+  changes are applied with a three-way merge (conflicts reported) or
+  discarded.
+- **Claude Code-compatible tools**: `Read` (images, PDFs, notebooks),
+  `Write`, `Edit`, `MultiEdit`, `NotebookEdit`, `Glob`, `Grep`, `Bash` with
+  background jobs, `JobOutput`, `JobKill`, `WebFetch`, `WebSearch`,
+  `TodoWrite`, `AskUserQuestion`, `ExitPlanMode`, `Skill`, `Agent`,
+  `ApplyAgentChanges`, `Verify`, `LSP`, MCP resources and `LoadMcpTools`.
+- **Planning and interaction**: todo strip, structured questions, and plan
+  mode with an editable plan approval card.
+- **Steering and interrupts**: messages sent while the agent works are
+  injected at the next step; Cmd+Enter interrupts and redirects.
+- **Hooks** for every agent event with a Claude Code-compatible JSON
+  protocol (block, rewrite input, add context, force continuation).
+- **Slash commands**: session commands, `/init`, `/review`,
+  `/security-review`, `/commit`, custom markdown commands with arguments,
+  file inclusion, inline shell output and turn-scoped tool grants, and MCP
+  prompts.
+- **Verification badges**: checks are discovered for most ecosystems, runs
+  are recorded as evidence, and each turn is marked Verified, Unverified or
+  Failed; optional `auto` and `strict` modes.
+- **MCP over stdio and streamable HTTP**, deferred loading for large tool
+  sets, and a multi-language **LSP** integration with post-edit diagnostics.
+- **Native Anthropic provider** with prompt caching and extended thinking;
+  cache breakpoints for OpenRouter; fallback models; a models.dev catalog
+  with cache-aware cost.
+- **Durable checkpoints** in a shadow git repository (shell changes
+  included) and rewind of code, conversation, or both.
+- **Optional sandbox** for shell commands (macOS seatbelt, Linux
+  bubblewrap) with opt-in auto-approval.
+- **Workspace trust** for project-defined hooks, MCP servers and checks.
+- Hierarchical instructions (`AGENTS.md`, `CLAUDE.md`, nested files,
+  glob-scoped rules), a multi-language repo map, and compaction that can
+  summarize inside long agentic turns.
+- Settings screens for models, providers, permissions, hooks, agents and
+  commands, MCP, verification, memory and advanced options, per scope.
+
+### Changed
+- Settings live in `settings.toml` (user, project, project-local) with
+  allow/ask/deny permission rules such as `Bash(npm test:*)`.
+- Sessions are stored as one folder per chat with subagent transcripts and
+  artifacts.
+
+### Migration
+- v1 `config.toml` files are never modified: the user file is imported once
+  into `settings.toml`, project files are read in memory until the first
+  change made in the app.
+- v1 chats are imported on first open; the original files stay untouched.
+- API keys in `auth.json` keep working. Keys for custom endpoints are now
+  only sent to their own host and may need to be entered again.
+
+### Removed
+- The v1 crates (`z-engine-core`, `z-engine-provider`, `z-engine-runtime`,
+  `z-engine-project`) and the task-report views they fed.
+
+---
+
 ## [1.4.6] - 2026-09-15
 
 ### Added
