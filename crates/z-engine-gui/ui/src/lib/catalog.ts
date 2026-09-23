@@ -1,4 +1,5 @@
 import { fetchModelCatalog } from "./commands";
+import { detectProviderId, PROVIDERS, requiresApiKey } from "./providers";
 
 /** Trimmed models.dev entry (plus local models.json overrides). */
 export interface CatalogModel {
@@ -18,15 +19,20 @@ export interface CatalogData {
   [providerId: string]: CatalogProvider;
 }
 
-/** Provider id shown in the model picker (multi-provider lands later). */
-export const PICKER_PROVIDER_ID = "openrouter";
-
-/** Restrict the catalog to OpenRouter so the picker only lists that provider. */
-export function catalogForPicker(catalog: CatalogData | null): CatalogData {
+/** Restrict the picker to the active provider and hide keyed providers after
+ * their credential is disconnected. */
+export function catalogForPicker(
+  catalog: CatalogData | null,
+  baseUrl: string | null | undefined,
+  hasApiKey: boolean,
+): CatalogData {
   if (!catalog) return {};
-  const prov = catalog[PICKER_PROVIDER_ID];
+  const providerId = detectProviderId(baseUrl);
+  const preset = PROVIDERS.find((provider) => provider.id === providerId);
+  if (!preset || (requiresApiKey(preset) && !hasApiKey)) return {};
+  const prov = catalog[providerId];
   if (!prov) return {};
-  return { [PICKER_PROVIDER_ID]: prov };
+  return { [providerId]: prov };
 }
 
 let data: CatalogData | null = null;

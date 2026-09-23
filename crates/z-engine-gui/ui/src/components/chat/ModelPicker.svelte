@@ -2,6 +2,8 @@
   import { tick } from "svelte";
   import { catalogForPicker, catalogStore, fmtLimit } from "$lib/catalog";
   import { setModel } from "$lib/commands";
+  import { configStore } from "$lib/configStore";
+  import { detectProviderId, PROVIDERS } from "$lib/providers";
   import { modelStore } from "$lib/runtime";
   import { bindStore } from "$lib/svelte/bind.svelte";
   import Icon, { Brain, Check, ChevronDown, Search, Sparkles, X } from "$lib/ui/icons";
@@ -9,6 +11,7 @@
 
   const model = bindStore(modelStore);
   const catalog = bindStore(catalogStore);
+  const config = bindStore(configStore);
   let open = $state(false);
   let custom = $state("");
   let query = $state("");
@@ -54,7 +57,11 @@
       items: { id: string; name: string; context?: number; output?: number; reasoning: boolean }[];
     }[] = [];
     if (!catalog.current) return out;
-    const filtered = catalogForPicker(catalog.current);
+    const filtered = catalogForPicker(
+      catalog.current,
+      config.current?.baseUrl,
+      Boolean(config.current?.hasApiKey),
+    );
     for (const [pid, prov] of Object.entries(filtered)) {
       const items = Object.entries(prov.models)
         .filter(([id, m]) => {
@@ -78,6 +85,11 @@
     out.sort((a, b) => a.provider.localeCompare(b.provider));
     return out;
   });
+
+  const activeProviderName = $derived(
+    PROVIDERS.find((provider) => provider.id === detectProviderId(config.current?.baseUrl))?.name ??
+      "active provider",
+  );
 </script>
 
 <div class="model-picker">
@@ -142,7 +154,7 @@
         {#if groups.length === 0 && !query}
           <div class="model-empty-note">
             {catalog.current
-              ? "No OpenRouter models — check Settings for your API key."
+              ? `No ${activeProviderName} models available — check Settings.`
               : "Loading catalog…"}
           </div>
         {:else if groups.length === 0 && query}

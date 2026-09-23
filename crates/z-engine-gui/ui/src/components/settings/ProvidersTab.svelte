@@ -6,7 +6,13 @@
     type HarnessConfig,
   } from "$lib/commands";
   import { configStore } from "$lib/configStore";
-  import { detectProviderId, PROVIDERS, type ProviderPreset } from "$lib/providers";
+  import {
+    detectProviderId,
+    isProviderConnected,
+    PROVIDERS,
+    requiresApiKey,
+    type ProviderPreset,
+  } from "$lib/providers";
   import { modelStore, pushToast } from "$lib/runtime";
   import Icon, { Check, Sparkles } from "$lib/ui/icons";
   import ProviderConnectModal from "./ProviderConnectModal.svelte";
@@ -42,7 +48,12 @@
   async function handleDisconnect(p: ProviderPreset) {
     if (p.id === selectedProviderId && hasKey) {
       await saveApiKey(null);
-      pushToast(`${p.name} disconnected`, "info");
+      pushToast(
+        requiresApiKey(p)
+          ? `${p.name} disconnected`
+          : `${p.name} API key removed — free models still work`,
+        "info",
+      );
       await refresh();
     }
   }
@@ -80,7 +91,7 @@
     <div class="settings-card providers-table-card">
       {#each PROVIDERS as p}
         {@const isCurrent = p.id === selectedProviderId}
-        {@const isConnected = isCurrent && (hasKey || p.tag === "Local")}
+        {@const isConnected = isProviderConnected(p, isCurrent, hasKey)}
         <div class={`provider-table-row${isConnected ? " is-connected" : ""}`}>
           <div class="provider-row-left">
             <span class="provider-row-icon" style={`color: ${p.color}`}>
@@ -105,7 +116,7 @@
               >
                 Configure
               </button>
-              {#if p.tag !== "Local"}
+              {#if requiresApiKey(p) || hasKey}
                 <button
                   type="button"
                   class="provider-action-btn disconnect"
@@ -137,7 +148,13 @@
         <code class="active-model-val">{model || "openrouter/auto"}</code>
       </div>
       <span class="active-model-hint">
-        {hasKey ? "API Key connected and ready" : "Connect an API key above to start chat sessions"}
+        {hasKey
+          ? "API Key connected and ready"
+          : selectedProviderId === "opencode"
+            ? "Connected without a key — free Zen models work now"
+            : selectedProviderId === "ollama"
+              ? "Local provider — no API key required"
+              : "Connect an API key above to start chat sessions"}
       </span>
     </div>
   </section>
@@ -148,8 +165,8 @@
       provider={modalProvider}
       currentModel={model}
       currentBaseUrl={baseUrl}
-      {hasKey}
-      keyHint={hint}
+      hasKey={modalProvider.id === selectedProviderId && hasKey}
+      keyHint={modalProvider.id === selectedProviderId ? hint : null}
       onClose={() => (modalProvider = null)}
       onSave={handleConnectModalSave}
     />

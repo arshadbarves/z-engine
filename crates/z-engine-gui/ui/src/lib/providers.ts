@@ -6,7 +6,7 @@ export interface ProviderPreset {
   keyUrl?: string;
   keyPlaceholder: string;
   desc: string;
-  tag: "API key" | "Local" | "Custom";
+  tag: "API key" | "Optional key" | "Local" | "Custom";
   color: string;
 }
 
@@ -17,9 +17,9 @@ export const PROVIDERS: ProviderPreset[] = [
     baseUrl: "https://opencode.ai/zen/v1",
     defaultModel: "deepseek-v4-flash-free",
     keyUrl: "https://opencode.ai/zen",
-    keyPlaceholder: "Zen API key from opencode.ai/zen",
-    desc: "OpenCode’s curated gateway. Free chat/completions models work without a key; a Zen key is only needed for paid models.",
-    tag: "API key",
+    keyPlaceholder: "Optional — paid models only",
+    desc: "OpenCode’s curated gateway. Connect directly with no key for free chat models; a Zen key is only needed for paid models.",
+    tag: "Optional key",
     color: "#0ea5e9",
   },
   {
@@ -121,6 +121,28 @@ export const PROVIDERS: ProviderPreset[] = [
   },
 ];
 
+/** Paid gateways need a stored or typed key. Zen free models and local servers do not. */
+export function requiresApiKey(provider: ProviderPreset): boolean {
+  return provider.tag === "API key" || provider.tag === "Custom";
+}
+
+export function isProviderConnected(
+  provider: ProviderPreset,
+  isCurrent: boolean,
+  hasKey: boolean,
+): boolean {
+  return isCurrent && (hasKey || !requiresApiKey(provider));
+}
+
+export function canSubmitProviderConnect(
+  provider: ProviderPreset,
+  apiKey: string,
+  hasSavedKey: boolean,
+): boolean {
+  if (!requiresApiKey(provider)) return true;
+  return Boolean(apiKey.trim() || hasSavedKey);
+}
+
 export function detectProviderId(baseUrl: string | null | undefined): string {
   const url = (baseUrl ?? "").trim().toLowerCase();
   if (url.includes("opencode.ai")) return "opencode";
@@ -133,4 +155,20 @@ export function detectProviderId(baseUrl: string | null | undefined): string {
   if (url.includes("mistral.ai")) return "mistral";
   if (url.includes("11434") || url.includes("ollama")) return "ollama";
   return "custom";
+}
+
+/** Prefill for the connect dialog. Live values belong to the active provider
+ * only — reusing them for another provider would save the wrong endpoint. */
+export function connectFormDefaults(
+  provider: ProviderPreset,
+  active: { model?: string; baseUrl?: string },
+): { model: string; baseUrl: string } {
+  const isActive = detectProviderId(active.baseUrl) === provider.id;
+  if (!isActive) {
+    return { model: provider.defaultModel, baseUrl: provider.baseUrl };
+  }
+  return {
+    model: active.model || provider.defaultModel,
+    baseUrl: active.baseUrl || provider.baseUrl,
+  };
 }

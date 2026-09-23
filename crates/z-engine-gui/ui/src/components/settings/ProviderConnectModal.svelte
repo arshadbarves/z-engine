@@ -1,6 +1,11 @@
 <script lang="ts">
   import { openReleaseUrl } from "$lib/commands";
-  import type { ProviderPreset } from "$lib/providers";
+  import {
+    canSubmitProviderConnect,
+    connectFormDefaults,
+    requiresApiKey,
+    type ProviderPreset,
+  } from "$lib/providers";
   import { pushToast } from "$lib/runtime";
   import Icon, {
     ChevronDown,
@@ -41,8 +46,12 @@
   let saving = $state(false);
 
   $effect(() => {
-    model = currentModel || provider.defaultModel;
-    baseUrl = currentBaseUrl || provider.baseUrl;
+    const defaults = connectFormDefaults(provider, {
+      model: currentModel,
+      baseUrl: currentBaseUrl,
+    });
+    model = defaults.model;
+    baseUrl = defaults.baseUrl;
   });
 
   $effect(() => {
@@ -124,8 +133,16 @@
       {#if provider.keyUrl}
         <div class="provider-portal-banner">
           <div class="provider-portal-text">
-            <span>Need an API key for {provider.name}?</span>
-            <small>Create or copy one from your developer dashboard</small>
+            <span>
+              {requiresApiKey(provider)
+                ? `Need an API key for ${provider.name}?`
+                : `Paid ${provider.name} models need a key`}
+            </span>
+            <small>
+              {requiresApiKey(provider)
+                ? "Create or copy one from your developer dashboard"
+                : "Skip this for free models — connect directly with no key"}
+            </small>
           </div>
           <button
             type="button"
@@ -139,6 +156,11 @@
       {/if}
 
       {#if provider.tag !== "Local"}
+        {#if !requiresApiKey(provider)}
+          <p class="provider-field-hint">
+            Free models work with no key. Add a Zen key only if you want paid models.
+          </p>
+        {/if}
         <label class="provider-field-group">
           <div class="provider-field-label-row">
             <span class="provider-field-label">API Key</span>
@@ -218,7 +240,7 @@
         <button
           type="submit"
           class="provider-btn-primary"
-          disabled={saving || (provider.tag !== "Local" && !apiKey.trim() && !hasKey)}
+          disabled={saving || !canSubmitProviderConnect(provider, apiKey, hasKey)}
         >
           {#if saving}
             <Icon icon={LoaderCircle} size={13} class="spin" />

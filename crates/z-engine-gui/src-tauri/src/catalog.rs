@@ -107,8 +107,12 @@ pub(crate) async fn fetch_model_catalog() -> Result<serde_json::Value, String> {
             entry.models.insert(mid, model);
         }
     }
-    merged.retain(|pid, _| pid == "openrouter");
+    retain_picker_providers(&mut merged);
     serde_json::to_value(&merged).map_err(|e| e.to_string())
+}
+
+fn retain_picker_providers(catalog: &mut Catalog) {
+    catalog.retain(|pid, _| matches!(pid.as_str(), "openrouter" | "opencode"));
 }
 
 /// Reduce the raw 4MB models.dev payload to what the picker shows.
@@ -156,4 +160,43 @@ fn trim_catalog(raw: &serde_json::Value) -> Catalog {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn picker_catalog_keeps_openrouter_and_opencode() {
+        let mut catalog = Catalog::from([
+            (
+                "openrouter".into(),
+                CatalogProvider {
+                    name: "OpenRouter".into(),
+                    models: BTreeMap::new(),
+                },
+            ),
+            (
+                "opencode".into(),
+                CatalogProvider {
+                    name: "OpenCode Zen".into(),
+                    models: BTreeMap::new(),
+                },
+            ),
+            (
+                "openai".into(),
+                CatalogProvider {
+                    name: "OpenAI".into(),
+                    models: BTreeMap::new(),
+                },
+            ),
+        ]);
+
+        retain_picker_providers(&mut catalog);
+
+        assert_eq!(
+            catalog.keys().map(String::as_str).collect::<Vec<_>>(),
+            ["opencode", "openrouter"]
+        );
+    }
 }
