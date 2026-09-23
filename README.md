@@ -7,10 +7,27 @@ supplies authority, execution, evidence and durability: every tool, hook and
 check goes through one permission gate, and every observable change is a
 typed event the GUI renders.
 
-This is v2, a from-scratch rewrite (branch `v2`). Its design is in
-[v2 engine architecture](docs/architecture/v2-engine.md); phase progress is in
-[status](docs/status.md). The desktop app is the only product frontend; there
-is no terminal or headless product.
+Version 2 is a from-scratch rewrite. Its design is in
+[v2 engine architecture](docs/architecture/v2-engine.md). The desktop app is
+the only product frontend; there is no terminal or headless product.
+
+Highlights:
+
+- **Multi-agent orchestration:** built-in and custom subagents run in
+  parallel, nested, in the background, or resumed, each with its own model,
+  tools and permission mode; an agent can work in its own git worktree and
+  hand back changes you apply or discard.
+- **Claude Code-compatible tools, commands, hooks and `.claude/` folders**,
+  so existing agents, commands, skills and `CLAUDE.md` files work as-is.
+- **Steering and interrupts:** messages sent while the agent works are
+  injected at the next step; nothing is dropped while an approval waits.
+- **Evidence-backed badges:** every turn that changes files is marked
+  Verified, Unverified or Failed from the checks that actually ran.
+- **Durable checkpoints:** code (including shell-made changes) and
+  conversation can be rewound to any prompt; sessions survive crashes.
+- **Native Anthropic caching and extended thinking**, OpenAI-compatible
+  providers, fallback models, and per-agent cost tracking.
+- **Optional sandbox** that confines shell commands to the workspace.
 
 ## Install
 
@@ -127,7 +144,8 @@ variable (`OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
 free models without a key.
 
 Project-defined hooks, MCP servers and checks run only after you trust the
-workspace (Settings → Workspace).
+workspace: a banner in the chat asks when a project defines them, and
+**Settings → Advanced → Workspace** changes it later.
 
 ## Tools
 
@@ -151,6 +169,35 @@ Hooks (`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`,
 `Stop`, `SubagentStop`, `PreCompact`, `Notification`, `SessionEnd`) receive
 JSON on stdin; exit 2 blocks with stderr as the reason. Details are in the
 [architecture](docs/architecture/v2-engine.md#hooks).
+
+Slash commands come from four sources: session commands (`/compact`,
+`/context`, `/cost`, `/status`, `/model`, `/mode`, `/effort`, `/mcp`,
+`/todos`, `/doctor`, `/add-dir`, `/remember`), built-in prompt commands
+(`/init`, `/review`, `/security-review`, `/commit`), your own markdown
+commands, and MCP prompts (`/mcp__<server>__<prompt>`). Custom commands
+support `$ARGUMENTS` and `$1`..`$9`, `@path` file inclusion, inline
+`` !`cmd` `` output, and frontmatter `allowed-tools` (granted for that turn
+only) and `model` (that turn's model).
+
+## MCP and language servers
+
+MCP servers run over stdio or streamable HTTP. Their tools appear as
+`mcp__<server>__<tool>` behind the same permission gate; resources are read
+with `ListMcpResources`/`ReadMcpResource`; large tool sets are loaded on
+demand. The `LSP` tool offers definitions, references, hover, symbols, call
+hierarchy, diagnostics and rename previews through rust-analyzer,
+typescript-language-server, pyright/basedpyright, gopls or clangd when they
+are installed, and edits report new compile errors right away.
+
+## Sandbox
+
+With `[shell.sandbox] enabled = true`, shell commands, background jobs and
+checks run under macOS `sandbox-exec` or Linux `bwrap`: writes are limited
+to the workspace, extra directories, temp and tool caches; hook and settings
+files stay read-only; the network can be blocked (`allow_network`). With
+`auto_allow`, sandboxed commands run without approval prompts, while deny
+and ask rules still apply. Platforms without a backend run commands
+unconfined and keep asking.
 
 ## Verification
 

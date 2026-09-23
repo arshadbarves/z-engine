@@ -1,8 +1,8 @@
 # v2 engine architecture
 
-Status: design for the v2 rewrite (branch `v2`). The crate layout and
-dependency rules are in [AGENTS.md](../../AGENTS.md#v2-structure-branch-v2-authoritative-for-the-new-crates);
-phase progress is in [status](../status.md).
+Status: implemented (v2.0). The crate layout and
+dependency rules are in [AGENTS.md](../../AGENTS.md#crates); phase progress
+is in [status](../status.md).
 
 The model supplies judgment; the engine supplies authority, execution,
 evidence and durability. Every executable capability (tools, MCP, hooks,
@@ -226,3 +226,70 @@ are listed by `Engine::slash_commands` with kind `ui` and never resolved.
 - `@agent-<name>` of a known agent type adds a reminder to use the `Agent`
   tool with that `subagent_type`. Unknown commands get a notice with close
   matches.
+
+## Context and memory
+
+- **Instructions:** `~/.config/z-engine/AGENTS.md`, `AGENTS.md`/`CLAUDE.md`
+  from the repository root down to the project, and `AGENTS.local.md` form
+  the instructions section of the system prompt (later files take
+  precedence). `AGENTS.md` files in subdirectories and glob-scoped rules
+  (`.z-engine/rules/*.md` with `globs`) are injected as reminders the first
+  time the agent touches a matching path; `alwaysApply` rules stay in the
+  system prompt.
+- **Prompt caching:** system sections are ordered for a stable prefix (base
+  prompt, environment, instructions, skills, output style, repo map); the
+  last cacheable section, the tool list and the last two user messages carry
+  cache breakpoints (native on Anthropic, passthrough on OpenRouter).
+- **Repo map:** a tree-sitter outline of Rust, TypeScript/JavaScript, Python
+  and Go definitions, ranked by cross-file references and the files touched
+  in the session, built off the request path and rebuilt only after a
+  compaction or reload so the cached prefix stays stable.
+- **Compaction:** above half the context window, old tool results are cleared
+  (originals spilled to artifacts); above `context.compact_at_percent`,
+  older history is summarized by the `fast` model. A split never separates a
+  tool call from its result and may land inside a long single turn.
+
+## MCP and language servers
+
+Each session starts its MCP servers in the background from the effective
+settings (project-defined servers only in trusted workspaces). Tools are
+registered as `mcp__<server>__<tool>` through the shared gate; a
+`tools/list_changed` notification refreshes them. Above 40 MCP tools the
+schemas are deferred: a reminder lists the tools and `LoadMcpTools` adds the
+named schemas from the next request on. MCP prompts become slash commands.
+
+Language servers start lazily per file type when their binary is installed
+(rust-analyzer, typescript-language-server, pyright/basedpyright, gopls,
+clangd, or configured ones). The `LSP` tool answers navigation, symbol,
+diagnostics and rename-preview queries; after a write to a covered file,
+error diagnostics are appended to that tool result when the server has
+fresh ones.
+
+## Verification
+
+Checks are discovered per session (Cargo, npm/pnpm/yarn/bun, Python, Go,
+Gradle, Maven, .NET, CMake, Make, just, Deno) plus configured
+`[[verification.checks]]`; discovery never executes anything. `Verify`
+lists and runs them through the normal gate and records a `CheckRecord`
+(command, exit code, parsed test counts, duration, output artifact, workspace
+fingerprints before and after). A turn that changed files ends `Verified`
+only when a passing test, build or typecheck record is newer than the last
+change and its fingerprint matches the current tree; a failing latest check
+gives `Failed`; otherwise `Unverified` with the reason. `verification.mode`:
+`off`, `report` (badge only), `auto` (run the configured checks at the stop
+boundary in trusted workspaces and feed failures back), `strict` (keep going
+until verified or `max_continuations` is spent). Nothing blocks the user.
+
+## Sandbox
+
+`[shell.sandbox]` (off by default) runs agent shell commands, background
+shells and checks under macOS seatbelt (`sandbox-exec`) or Linux bubblewrap.
+Writes are allowed only in the agent's root (a worktree agent gets its
+worktree, not the main project), additional directories, temp directories
+and known tool caches; `.git/hooks`, `.git/config` and harness settings files
+stay read-only so a command cannot plant code that runs outside the sandbox.
+`allow_network = false` blocks outbound traffic except localhost (macOS).
+With `auto_allow`, the policy allows sandboxed commands whose writes stay in
+bounds without asking; deny rules, ask rules and plan mode still win. When
+no backend exists, commands run unconfined, keep asking, and a warning says
+why.
