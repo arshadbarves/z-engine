@@ -2,10 +2,12 @@
 //! whole-tree cleanup, bounded capture, and a persistent working directory.
 
 use std::path::PathBuf;
+use std::process::Stdio;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
-use tokio::io::AsyncRead;
+use tokio::io::{AsyncRead, AsyncWriteExt};
+use tokio::process::ChildStdin;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -34,6 +36,9 @@ pub struct RunSpec {
     pub track_cwd: bool,
     /// Per-stream capture budget; beyond it the middle is dropped.
     pub max_output_bytes: usize,
+    /// Written in full to the child's stdin, which is then closed (e.g. a
+    /// hook's JSON payload). `None` leaves stdin closed.
+    pub stdin: Option<Vec<u8>>,
 }
 
 impl RunSpec {
@@ -48,6 +53,7 @@ impl RunSpec {
             env: EnvPolicy::default(),
             track_cwd: true,
             max_output_bytes: DEFAULT_MAX_OUTPUT_BYTES,
+            stdin: None,
         }
     }
 }
@@ -94,10 +100,16 @@ pub async fn run(
         None => spec.command.clone(),
     };
     let started = Instant::now();
-    let mut child = shell_command(&spec.shell, &script, &spec.cwd, &spec.env)
-        .spawn()
-        .map_err(|e| spawn_error(&spec.shell, e))?;
+    let mut command = shell_command(&spec.shell, &script, &spec.cwd, &spec.env);
+    if spec.stdin.is_some() {
+        command.stdin(Stdio::piped());
+    }
+    let mut child = command.spawn().map_err(|e| spawn_error(&spec.shell, e))?;
     let pid = child.id();
+    let writer = match (spec.stdin, child.stdin.take()) {
+        (Some(input), Some(pipe)) => Some(tokio::spawn(feed_stdin(pipe, input))),
+        _ => None,
+    };
     let capture = Arc::new(Mutex::new(Capture::new(spec.max_output_bytes)));
     let mut readers = vec![
         reader(child.stdout.take(), Stream::Stdout, &capture, &on_output),
@@ -122,6 +134,11 @@ pub async fn run(
             None
         }
     };
+    // The tree is gone, so the pipe is closed; a writer still pending was
+    // blocked on a reader that no longer exists.
+    if let Some(writer) = writer {
+        writer.abort();
+    }
 
     // An aborted reader may still hold its clone, so take the contents.
     let captured = std::mem::replace(
@@ -141,6 +158,20 @@ pub async fn run(
         duration_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
         final_cwd,
     })
+}
+
+/// Writes `input` and closes stdin. A child that exits without reading
+/// closes the pipe, which is not an error.
+async fn feed_stdin(mut pipe: ChildStdin, input: Vec<u8>) {
+    let written = async {
+        pipe.write_all(&input).await?;
+        pipe.shutdown().await
+    };
+    match written.await {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {}
+        Err(e) => tracing::debug!(error = %e, "writing stdin failed"),
+    }
 }
 
 fn reader<R>(

@@ -183,6 +183,38 @@ async fn output_beyond_the_budget_keeps_head_and_tail() {
 }
 
 #[tokio::test]
+async fn stdin_payloads_are_delivered_then_closed() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut echo = spec("cat; echo end", dir.path());
+    echo.stdin = Some(br#"{"hook":"PreToolUse"}"#.to_vec());
+    let out = run_ok(echo).await;
+    assert_eq!(out.stdout, "{\"hook\":\"PreToolUse\"}end\n");
+
+    let mut line = spec("read -r first; echo \"got $first\"", dir.path());
+    line.stdin = Some(b"payload\nrest\n".to_vec());
+    assert_eq!(run_ok(line).await.stdout, "got payload\n");
+
+    // Without a payload stdin stays closed: `cat` sees EOF at once.
+    assert_eq!(
+        run_ok(spec("cat; echo eof", dir.path())).await.stdout,
+        "eof\n"
+    );
+}
+
+#[tokio::test]
+async fn a_child_that_ignores_a_large_stdin_does_not_hang() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut ignoring = spec("echo ignored; exit 5", dir.path());
+    ignoring.stdin = Some(vec![b'x'; 8 * 1024 * 1024]);
+    ignoring.timeout = Duration::from_secs(20);
+    let started = Instant::now();
+    let out = run_ok(ignoring).await;
+    assert_eq!((out.exit_code, out.stdout.as_str()), (Some(5), "ignored\n"));
+    assert!(!out.timed_out);
+    assert!(started.elapsed() < Duration::from_secs(10));
+}
+
+#[tokio::test]
 async fn invalid_specs_are_rejected_before_spawning() {
     let dir = tempfile::tempdir().unwrap();
     let empty = run(spec("   ", dir.path()), CancellationToken::new(), None).await;
