@@ -1,23 +1,17 @@
 <script lang="ts">
-  import type { Msg } from "$lib/types";
+  type Props = { prompts: Array<{ id: string; text: string }> };
+  let { prompts }: Props = $props();
 
-  type Props = { messages: Msg[] };
-  let { messages }: Props = $props();
+  let hoveredId = $state<string | null>(null);
 
-  const users = $derived(messages.filter((m) => m.kind === "user"));
-  let hoveredId = $state<number | null>(null);
-
-  function jumpTo(id: number) {
+  function jumpTo(id: string) {
     const el = document.getElementById(`msg-${id}`);
     const transcript = el?.closest(".transcript");
     if (el && transcript) {
       const tRect = transcript.getBoundingClientRect();
       const elRect = el.getBoundingClientRect();
       const offset = elRect.top - tRect.top + transcript.scrollTop - 24;
-      transcript.scrollTo({
-        top: Math.max(0, offset),
-        behavior: "smooth",
-      });
+      transcript.scrollTo({ top: Math.max(0, offset), behavior: "smooth" });
     } else {
       el?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
@@ -29,31 +23,31 @@
   }
 </script>
 
-{#if users.length >= 2}
+{#if prompts.length >= 2}
   <nav class="chat-timeline-rail" aria-label="Jump to conversation prompt">
     <div class="chat-timeline-track">
-      {#each users as m (m.id)}
+      {#each prompts as prompt (prompt.id)}
         <div class="chat-timeline-node">
           <button
             type="button"
             class="chat-timeline-pill"
-            aria-label={`Jump to: ${getSnippet(m.text)}`}
-            onclick={() => jumpTo(m.id)}
-            onmouseenter={() => (hoveredId = m.id)}
+            aria-label={`Jump to: ${getSnippet(prompt.text)}`}
+            onclick={() => jumpTo(prompt.id)}
+            onmouseenter={() => (hoveredId = prompt.id)}
             onmouseleave={() => {
-              if (hoveredId === m.id) hoveredId = null;
+              if (hoveredId === prompt.id) hoveredId = null;
             }}
-            onfocus={() => (hoveredId = m.id)}
+            onfocus={() => (hoveredId = prompt.id)}
             onblur={() => {
-              if (hoveredId === m.id) hoveredId = null;
+              if (hoveredId === prompt.id) hoveredId = null;
             }}
           >
             <span class="chat-timeline-core"></span>
           </button>
 
-          {#if hoveredId === m.id}
+          {#if hoveredId === prompt.id}
             <div class="chat-timeline-tip" role="tooltip">
-              <span class="tip-text">{getSnippet(m.text) || "Jump to prompt"}</span>
+              <span class="tip-text">{getSnippet(prompt.text) || "Jump to prompt"}</span>
             </div>
           {/if}
         </div>
@@ -61,4 +55,3 @@
     </div>
   </nav>
 {/if}
-

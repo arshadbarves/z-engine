@@ -1,64 +1,51 @@
 <script lang="ts">
-  import { abort, revertToTurn } from "$lib/commands";
-  import { busyStore, draftStore, pushToast, trimTranscript } from "$lib/runtime";
-  import { bindStore } from "$lib/svelte/bind.svelte";
-  import type { Msg } from "$lib/types";
-  import Icon, { Check, Copy, Undo2 } from "$lib/ui/icons";
+  import { mediaSrc, messageDocuments, messageImages, visibleText } from "$lib/domain/timeline/blocks";
+  import type { Message } from "$lib/protocol/Message";
+  import type { RewindScope } from "$lib/protocol/RewindScope";
+  import { pushToast } from "$lib/runtime";
+  import { copyFeedback } from "$lib/ui/copyFeedback.svelte";
+  import Icon, { Check, Copy, FileText } from "$lib/ui/icons";
+  import RewindMenu from "./RewindMenu.svelte";
 
   const COLLAPSE_CHARS = 380;
   const COLLAPSE_LINES = 6;
 
-  type Props = { m: Msg };
-  let { m }: Props = $props();
+  type Props = {
+    message: Message;
+    canRestoreCode?: boolean;
+    onRewind?: (message: Message, scope: RewindScope) => void;
+  };
+  let { message, canRestoreCode = false, onRewind }: Props = $props();
 
-  const busy = bindStore(busyStore);
-  let copied = $state(false);
-  let pending = $state(false);
-  const lines = $derived(m.text.split("\n").length);
-  const isLong = $derived(m.text.length > COLLAPSE_CHARS || lines > COLLAPSE_LINES);
-  let expanded = $state(true);
+  const feedback = copyFeedback();
+  const text = $derived(visibleText(message));
+  const images = $derived(messageImages(message));
+  const documents = $derived(messageDocuments(message));
+  const isLong = $derived(text.length > COLLAPSE_CHARS || text.split("\n").length > COLLAPSE_LINES);
+  let expanded = $state(false);
 
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(m.text);
-      copied = true;
-      setTimeout(() => {
-        copied = false;
-      }, 1200);
-    } catch {
-      pushToast("Copy failed", "warn");
-    }
-  }
-
-  const canRevert = $derived(typeof m.runTurn === "number");
-
-  async function revert() {
-    if (!canRevert || pending) return;
-    pending = true;
-    try {
-      if (busy.current) await abort();
-      draftStore.set(m.text);
-      trimTranscript(m.runTurn as number);
-      await revertToTurn(m.runTurn as number);
-    } catch (e) {
-      console.error(e);
-      pushToast("Could not restore that prompt", "warn");
-    } finally {
-      pending = false;
-    }
+    if (!(await feedback.copy(text))) pushToast("Copy failed", "warn");
   }
 </script>
 
-<div class="user-message-row" id={`msg-${m.id}`} data-msg-id={m.id}>
+<div class="user-message-row" id={`msg-${message.id}`} data-msg-id={message.id}>
   <div class="user-message-wrapper">
     <div class="user-message-bubble">
-      <div class={`user-prompt-text${isLong && !expanded ? " collapsed" : ""}`}>
-        {m.text}
-      </div>
-      {#if m.images && m.images.length > 0}
+      {#if text}
+        <div class={`user-prompt-text${isLong && !expanded ? " collapsed" : ""}`}>{text}</div>
+      {/if}
+      {#if images.length > 0}
         <div class="user-attached-images">
-          {#each m.images as url, i}
-            <img src={url} alt={`attached ${i + 1}`} class="user-img-thumb" />
+          {#each images as source, i (i)}
+            <img src={mediaSrc(source)} alt={`attachment ${i + 1}`} class="user-img-thumb" />
+          {/each}
+        </div>
+      {/if}
+      {#if documents.length > 0}
+        <div class="user-attached-docs">
+          {#each documents as doc, i (i)}
+            <span class="user-doc-chip"><Icon icon={FileText} size={11} />{doc.title ?? "Document"}</span>
           {/each}
         </div>
       {/if}
@@ -72,32 +59,16 @@
     <div class="user-bubble-actions">
       <button
         type="button"
-        class={`bubble-action-icon-btn${copied ? " ok" : ""}`}
-        title={copied ? "Copied" : "Copy prompt"}
-        onclick={() => void copy()}
+        class={`bubble-action-icon-btn${feedback.copied ? " ok" : ""}`}
+        title={feedback.copied ? "Copied" : "Copy prompt"}
         aria-label="Copy prompt"
+        onclick={() => void copy()}
       >
-        {#if copied}
-          <Icon icon={Check} size={11} strokeWidth={2.2} class="copy-ok" />
-          <span class="bubble-action-label">Copied</span>
-        {:else}
-          <Icon icon={Copy} size={11} strokeWidth={1.8} />
-          <span class="bubble-action-label">Copy</span>
-        {/if}
+        <Icon icon={feedback.copied ? Check : Copy} size={11} strokeWidth={1.8} />
+        <span class="bubble-action-label">{feedback.copied ? "Copied" : "Copy"}</span>
       </button>
-
-      {#if canRevert}
-        <button
-          type="button"
-          class="bubble-action-icon-btn"
-          disabled={pending}
-          title={busy.current ? "Stop & edit prompt" : "Revert & edit prompt"}
-          onclick={() => void revert()}
-          aria-label="Revert & edit prompt"
-        >
-          <Icon icon={Undo2} size={11} strokeWidth={1.8} />
-          <span class="bubble-action-label">Edit</span>
-        </button>
+      {#if onRewind}
+        <RewindMenu {canRestoreCode} onRewind={(scope) => onRewind(message, scope)} />
       {/if}
     </div>
   </div>

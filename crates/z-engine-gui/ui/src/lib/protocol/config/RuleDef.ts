@@ -3,7 +3,7 @@ import type { ExtensionSource } from "./ExtensionSource";
 
 export type RuleDef = { name: string, description: string, 
 /**
- * Paths the rule applies to, e.g. `src/**/*.rs`; validated globs.
+ * Validated gitignore-style globs for the paths the rule applies to.
  */
 globs: Array<string>, 
 /**

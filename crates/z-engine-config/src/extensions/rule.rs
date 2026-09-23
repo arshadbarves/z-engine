@@ -13,7 +13,7 @@ use super::frontmatter::{ListStyle, parse_document};
 pub struct RuleDef {
     pub name: String,
     pub description: String,
-    /// Paths the rule applies to, e.g. `src/**/*.rs`; validated globs.
+    /// Validated gitignore-style globs for the paths the rule applies to.
     pub globs: Vec<String>,
     /// Attach to every request regardless of paths.
     pub always_apply: bool,

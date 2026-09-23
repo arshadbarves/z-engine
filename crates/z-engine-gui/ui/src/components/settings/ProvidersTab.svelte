@@ -13,7 +13,7 @@
     requiresApiKey,
     type ProviderPreset,
   } from "$lib/providers";
-  import { modelStore, pushToast } from "$lib/runtime";
+  import { pushToast, sessions, setModel } from "$lib/runtime";
   import Icon, { Check, Sparkles } from "$lib/ui/icons";
   import ProviderConnectModal from "./ProviderConnectModal.svelte";
 
@@ -72,8 +72,8 @@
     if (params.apiKey) {
       await saveApiKey(params.apiKey);
     }
-    if (params.model.trim()) {
-      modelStore.set(params.model.trim());
+    if (params.model.trim() && sessions.activeId) {
+      void setModel(params.model.trim());
     }
     pushToast(`Connected to ${modalProvider?.name ?? "provider"}`, "info");
     await refresh();

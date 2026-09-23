@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { getConfig } from "$lib/commands";
   import { configStore } from "$lib/configStore";
   import { shouldApplyConfigResponse } from "$lib/domain/configRequest";
@@ -24,10 +25,10 @@
   import "../../settings.css";
 
   type Tab = "providers" | "general" | "appearance" | "permissions" | "mcp" | "about";
-  type Props = { isClosing?: boolean; onClose: () => void };
+  type Props = { isClosing?: boolean; initialTab?: Tab; onClose: () => void };
 
-  let { isClosing = false, onClose }: Props = $props();
-  let tab = $state<Tab>("providers");
+  let { isClosing = false, initialTab = "providers", onClose }: Props = $props();
+  let tab = $state<Tab>(untrack(() => initialTab));
   let search = $state("");
   const config = bindStore(configStore);
   const update = bindStore(updateStore);

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { CatalogData } from "$lib/catalog";
-  import Icon, { ArrowUp, CornerDownLeft, Paperclip, Square, Terminal } from "$lib/ui/icons";
+  import { modLabel } from "$lib/platform";
+  import Icon, { ArrowUp, CornerDownLeft, ImageIcon, Square, Terminal, Zap } from "$lib/ui/icons";
   import EffortSelector from "./EffortSelector.svelte";
   import ModePicker from "./ModePicker.svelte";
   import ModelPicker from "./ModelPicker.svelte";
@@ -9,26 +10,28 @@
     shellMode: boolean;
     busy: boolean;
     canSend: boolean;
-    canSendShell: boolean;
+    hasText: boolean;
     catalog: CatalogData | null;
     showTerminalBtn: boolean;
     onAttachClick: () => void;
     onShowShell: () => void;
     onSend: () => void;
-    onAbort: () => void;
+    onInterrupt: () => void;
+    onCancel: () => void;
   };
 
   let {
     shellMode,
     busy,
     canSend,
-    canSendShell,
+    hasText,
     catalog,
     showTerminalBtn,
     onAttachClick,
     onShowShell,
     onSend,
-    onAbort,
+    onInterrupt,
+    onCancel,
   }: Props = $props();
 </script>
 
@@ -47,21 +50,11 @@
       <ModelPicker />
       <EffortSelector {catalog} />
       <span class="composer-bar-divider" aria-hidden="true"></span>
-      <button
-        type="button"
-        class="composer-icon-btn"
-        title="Attach file or image"
-        onclick={onAttachClick}
-      >
-        <Icon icon={Paperclip} size={13} />
+      <button type="button" class="composer-icon-btn" title="Attach images" onclick={onAttachClick}>
+        <Icon icon={ImageIcon} size={13} />
       </button>
       {#if showTerminalBtn}
-        <button
-          type="button"
-          class="composer-icon-btn"
-          title="Show terminal drawer"
-          onclick={onShowShell}
-        >
+        <button type="button" class="composer-icon-btn" title="Show terminal drawer" onclick={onShowShell}>
           <Icon icon={Terminal} size={13} />
         </button>
       {/if}
@@ -69,25 +62,31 @@
   {/if}
 
   <div class="composer-actions-right">
+    {#if busy && hasText && !shellMode}
+      <button
+        type="button"
+        class="composer-interrupt"
+        title={`Stop this round and send now (${modLabel()}Enter)`}
+        onclick={onInterrupt}
+      >
+        <Icon icon={Zap} size={11} />
+        <span>Interrupt</span>
+      </button>
+    {/if}
     {#if busy}
-      <button class="stop" title="Stop (Esc)" onclick={onAbort} type="button">
+      <button class="stop" title="Cancel the turn (Esc)" onclick={onCancel} type="button">
         <Icon icon={Square} size={11} />
       </button>
-    {:else if shellMode}
-      <button
-        class="send shell-send"
-        title="Run shell command (Enter)"
-        onclick={onSend}
-        disabled={!canSendShell}
-        type="button"
-      >
+    {/if}
+    {#if shellMode}
+      <button class="send shell-send" title="Run shell command (Enter)" onclick={onSend} disabled={!canSend} type="button">
         <Icon icon={CornerDownLeft} size={12} />
         <span>Run</span>
       </button>
-    {:else}
+    {:else if !busy || hasText}
       <button
         class="send"
-        title="Send (Enter)"
+        title={busy ? "Queue as steering (Enter)" : "Send (Enter)"}
         onclick={onSend}
         disabled={!canSend}
         type="button"

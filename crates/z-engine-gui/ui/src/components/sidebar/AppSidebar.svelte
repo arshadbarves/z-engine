@@ -3,18 +3,19 @@
   import LogoMark from "../chrome/LogoMark.svelte";
   import Icon, { Plus } from "$lib/ui/icons";
   import { modLabel } from "$lib/platform";
-  import type { SessionActivity } from "$lib/types";
-  import type { SessionEntry } from "$lib/util";
+  import type { SessionListItem } from "$lib/domain/sessionList";
+  import type { SessionActivity, UnreadMark } from "$lib/domain/sessions";
 
   type Props = {
-    sessions: SessionEntry[];
+    sessions: SessionListItem[];
     workspaces: string[];
     activeWorkspace: string | null;
-    activeUlid: string;
+    activeSessionId: string | null;
     activity: Record<string, SessionActivity>;
+    unread: Record<string, UnreadMark>;
     version?: string;
-    onOpen: (path: string, projectRoot?: string | null) => void;
-    onDelete: (path: string) => void;
+    onOpen: (sessionId: string, projectRoot: string) => void;
+    onDelete: (sessionId: string) => void;
     onAddWorkspace: () => void;
     onRemoveWorkspace: (root: string) => void;
     onActivateWorkspace: (root: string | null) => void;
@@ -25,8 +26,9 @@
     sessions,
     workspaces,
     activeWorkspace,
-    activeUlid,
+    activeSessionId,
     activity,
+    unread,
     version,
     onOpen,
     onDelete,
@@ -69,8 +71,9 @@
       {sessions}
       {workspaces}
       {activeWorkspace}
-      {activeUlid}
+      {activeSessionId}
       {activity}
+      {unread}
       {onOpen}
       {onDelete}
       {onAddWorkspace}

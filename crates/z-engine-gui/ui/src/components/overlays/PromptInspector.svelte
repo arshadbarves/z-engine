@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { inspectPrompt, type PromptInspect } from "$lib/commands";
+  import { inspectRequest } from "$lib/commands";
+  import { parseInspectRequest, type PromptInspect } from "$lib/domain/requestInspect";
   import {
     categorizeRow,
     inspectBody,
@@ -7,7 +8,7 @@
     inspectRows,
     type ContextCategory,
   } from "$lib/promptInspectView";
-  import { sessionStore } from "$lib/runtime";
+  import { errorText, sessions } from "$lib/runtime";
   import Icon, {
     AlertTriangle,
     Brain,
@@ -54,8 +55,7 @@
     return stats;
   });
 
-  // Estimated max context window for the active model (200,000 standard)
-  const maxContext = 200_000;
+  const maxContext = $derived(sessions.active?.contextLimit || 200_000);
   const memoryPct = $derived(
     categoryStats.total > 0
       ? Math.min(100, Math.round((categoryStats.total / maxContext) * 100))
@@ -70,17 +70,22 @@
   });
 
   $effect(() => {
+    const id = sessions.activeId;
     loading = true;
-    const id = sessionStore.getSnapshot() || undefined;
-    inspectPrompt(id)
-      .then((s) => {
-        snap = s;
-        err = null;
+    if (!id) {
+      err = "Open a chat and send a message to capture a request.";
+      loading = false;
+      return;
+    }
+    inspectRequest(id)
+      .then((raw) => {
+        snap = parseInspectRequest(raw);
+        err = snap ? null : "No model request yet — send a message first.";
         sel = 0;
         loading = false;
       })
       .catch((e: unknown) => {
-        err = String(e).replace(/^Error:\s*/, "");
+        err = errorText(e);
         loading = false;
       });
   });

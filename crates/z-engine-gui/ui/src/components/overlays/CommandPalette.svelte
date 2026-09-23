@@ -1,18 +1,19 @@
 <script lang="ts">
+  import type { SessionListItem } from "$lib/domain/sessionList";
   import type { PaletteItem } from "$lib/paletteTypes";
-  import { sessionLabel } from "$lib/sessionList";
-  import type { SessionEntry } from "$lib/util";
   import { wsBasename } from "$lib/workspaces";
   import { FolderGit2, Icon, MessageSquare, Search, X } from "$lib/ui/icons";
 
   type Props = {
     isClosing?: boolean;
     onClose: () => void;
-    sessions: SessionEntry[];
+    sessions: SessionListItem[];
     workspaces: string[];
     activeWorkspace: string | null;
     actions: PaletteItem[];
-    onOpenSession: (path: string, projectRoot?: string | null) => void;
+    /** `/resume`: list chats only. */
+    sessionsOnly?: boolean;
+    onOpenSession: (sessionId: string, projectRoot: string) => void;
     onActivateWorkspace: (root: string) => void;
   };
 
@@ -23,6 +24,7 @@
     workspaces,
     activeWorkspace,
     actions,
+    sessionsOnly = false,
     onOpenSession,
     onActivateWorkspace,
   }: Props = $props();
@@ -54,14 +56,15 @@
   }
 
   const items = $derived.by(() => {
-    const sessionItems: PaletteItem[] = sessions.slice(0, 8).map((s) => ({
-      label: sessionLabel(s.firstUserMsg),
-      hint: s.projectRoot ? wsBasename(s.projectRoot) : "Chat",
-      keywords: `session chat ${s.ulid} ${s.projectRoot ?? ""}`,
+    const sessionItems: PaletteItem[] = sessions.slice(0, sessionsOnly ? 40 : 8).map((s) => ({
+      label: s.title,
+      hint: `${s.projectRoot ? wsBasename(s.projectRoot) : "Chat"}${s.legacy ? " · v1" : ""}`,
+      keywords: `session chat resume ${s.sessionId} ${s.projectRoot}`,
       group: "Recent Chats",
       icon: MessageSquare,
-      run: () => onOpenSession(s.path, s.projectRoot),
+      run: () => onOpenSession(s.sessionId, s.projectRoot),
     }));
+    if (sessionsOnly) return rank(sessionItems);
 
     const wsItems: PaletteItem[] = workspaces.map((root) => ({
       label: wsBasename(root),
@@ -72,12 +75,16 @@
       run: () => onActivateWorkspace(root),
     }));
 
-    return [...actions, ...wsItems, ...sessionItems]
+    return rank([...actions, ...wsItems, ...sessionItems]);
+  });
+
+  function rank(list: PaletteItem[]): PaletteItem[] {
+    return list
       .map((item) => ({ item, score: fuzzyScore(query, item) }))
       .filter(({ score }) => score !== null)
       .sort((a, b) => (a.score as number) - (b.score as number))
       .map(({ item }) => item);
-  });
+  }
 
   const selIndex = $derived(Math.min(sel, Math.max(0, items.length - 1)));
 
@@ -144,7 +151,7 @@
         bind:value={query}
         oninput={onQueryInput}
         onkeydown={onInputKey}
-        placeholder="Type a command or search actions, chats, workspaces…"
+        placeholder={sessionsOnly ? "Search chats to resume…" : "Type a command or search actions, chats, workspaces…"}
         spellcheck={false}
       />
       {#if query}

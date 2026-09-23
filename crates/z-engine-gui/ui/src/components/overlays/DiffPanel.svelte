@@ -1,15 +1,14 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { untrack } from "svelte";
   import {
     diffForFile,
     listChangedFiles,
-    listSessionChangedFiles,
+    sessionChangedFiles,
     sessionDiffForFile,
     type ChangedFile,
   } from "$lib/commands";
   import { flattenDiffTree, buildDiffTree, filterDiffTree } from "$lib/domain/diffTree";
-  import { sessionStore } from "$lib/runtime/state";
-  import { bindStore } from "$lib/svelte/bind.svelte";
+  import { sessions } from "$lib/runtime";
   import Icon, {
     ChevronLeft,
     ChevronRight,
@@ -26,7 +25,7 @@
   type Props = { isClosing?: boolean; onClose: () => void };
   let { isClosing = false, onClose }: Props = $props();
 
-  const sessionId = bindStore(sessionStore);
+  const sessionId = $derived(sessions.activeId);
   let scope = $state<Scope>("session");
   let files = $state<ChangedFile[] | null>(null);
   let error = $state<string | null>(null);
@@ -39,28 +38,31 @@
   let isResizing = $state(false);
   let loadGen = 0;
 
-  onMount(() => {
-    let active = true;
-    void refresh().finally(() => {
-      if (!active) return;
+  let lastSession: string | null | undefined;
+
+  $effect(() => {
+    const id = sessionId;
+    if (lastSession === id) return;
+    const first = lastSession === undefined;
+    lastSession = id;
+    untrack(() => {
+      if (!first && scope !== "session") return;
+      diffCache = {};
+      selectedPath = null;
+      void refresh();
     });
-    return () => {
-      active = false;
-    };
   });
 
   async function loadFiles(): Promise<ChangedFile[]> {
-    if (scope === "session") {
-      return listSessionChangedFiles(sessionId.current || null);
-    }
-    return listChangedFiles();
+    if (scope === "git") return listChangedFiles();
+    if (!sessionId) return [];
+    const changed = await sessionChangedFiles(sessionId);
+    return changed.map((f) => ({ path: f.path, status: f.kind, added: 0, deleted: 0 }));
   }
 
   async function loadDiff(path: string): Promise<string> {
-    if (scope === "session") {
-      return sessionDiffForFile(path, sessionId.current || null);
-    }
-    return diffForFile(path);
+    if (scope === "git") return diffForFile(path);
+    return sessionId ? sessionDiffForFile(sessionId, path) : "";
   }
 
   async function refresh() {
@@ -162,7 +164,7 @@
   );
   const title = $derived(scope === "session" ? "Review" : "Review · Git");
   const emptyLabel = $derived(
-    scope === "session" ? "No changes in this chat" : "Working tree clean",
+    scope === "session" ? (sessionId ? "No changes in this chat" : "Open a chat to review its changes") : "Working tree clean",
   );
   const showHint = $derived((files?.length ?? 0) >= 2);
 </script>

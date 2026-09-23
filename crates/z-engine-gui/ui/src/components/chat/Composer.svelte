@@ -1,277 +1,290 @@
 <script lang="ts">
-  import { activeAtToken, stripAtToken } from "$lib/atFile";
+  import { untrack } from "svelte";
+  import { replaceAtToken } from "$lib/atFile";
   import { catalogStore } from "$lib/catalog";
-  import { abort, listProjectFiles, shellPassthrough } from "$lib/commands";
-  import { submitTask } from "$lib/sessionSubmit";
-  import { dispatchSlashCommand } from "$lib/composerCommands";
-  import { createComposerHistory } from "$lib/composerHistory";
-  import { fileToDataUrl } from "$lib/imageUtil";
-  import {
-    attachmentStore,
-    busyStore,
-    commandLocal,
-    draftStore,
-    pushToast,
-    queueStore,
-  } from "$lib/runtime";
+  import type { SlashCommandInfo } from "$lib/commands";
+  import { createComposerHistory } from "$lib/domain/composerHistory";
+  import { composerIntent } from "$lib/domain/composerKeys";
+  import { activePopover, agentMention, filterAgents, wrapIndex, type MentionItem } from "$lib/domain/composerPopover";
+  import { planSubmission } from "$lib/domain/composerSubmit";
+  import { nextMode } from "$lib/domain/modes";
+  import { REMEMBER_TARGETS, type RememberScope } from "$lib/domain/remember";
+  import { filterCommands } from "$lib/domain/slashCommands";
+  import { modLabel } from "$lib/platform";
+  import { cancelTurn, catalogs, editQueue, searchFiles, sessions, setMode } from "$lib/runtime";
   import { hideShell, shellStore, showShell } from "$lib/shellStore";
-  import { filterSlash } from "$lib/slash";
+  import { composer } from "$lib/stores/composer.svelte";
+  import { executePlan, rememberNote } from "$lib/stores/composerSubmit";
   import { bindStore } from "$lib/svelte/bind.svelte";
+  import { workspaceStore } from "$lib/workspaces";
   import ShellOverlay from "../overlays/ShellOverlay.svelte";
+  import TodoStrip from "../planning/TodoStrip.svelte";
   import ComposerAttachments from "./ComposerAttachments.svelte";
   import ComposerBar from "./ComposerBar.svelte";
-  import ComposerPopovers from "./ComposerPopovers.svelte";
   import ComposerQueue from "./ComposerQueue.svelte";
+  import MentionPopover from "./MentionPopover.svelte";
+  import RememberPopover from "./RememberPopover.svelte";
+  import SlashPopover from "./SlashPopover.svelte";
 
-  const input = bindStore(draftStore);
-  const attachments = bindStore(attachmentStore);
-  const busyNow = bindStore(busyStore);
+  const history = createComposerHistory();
   const shell = bindStore(shellStore);
   const catalog = bindStore(catalogStore);
-  const queued = bindStore(queueStore);
-  const { pushHistory, historyPrev, historyNext } = createComposerHistory();
+  const workspaces = bindStore(workspaceStore);
 
-  let images = $state<string[]>([]);
-  let caret = $state(0);
-  let slashSel = $state(0);
-  let fileSel = $state(0);
-  let dismissed = $state(false);
-  let fileResult = $state<{ q: string; list: string[] | null }>({ q: "", list: null });
   let ta: HTMLTextAreaElement | undefined = $state();
-  let fileInput: HTMLInputElement | undefined = $state();
+  let imageInput: HTMLInputElement | undefined = $state();
+  let caret = $state(0);
+  let dismissed = $state(false);
+  let selected = $state(0);
+  let files = $state<{ q: string; list: string[] }>({ q: "\u0000", list: [] });
 
-  const shellMode = $derived(input.current.startsWith("!"));
-  const slashMatches = $derived(!dismissed ? filterSlash(input.current) : null);
-  const atQuery = $derived(
-    !dismissed && slashMatches === null ? activeAtToken(input.current, caret) : null,
+  const view = $derived(sessions.active);
+  const busy = $derived((view?.status ?? "idle") !== "idle");
+  const root = $derived(view?.info?.projectRoot ?? workspaces.current.active ?? workspaces.current.roots[0] ?? null);
+  const commands = $derived(catalogs.commandsFor(root));
+  const text = $derived(composer.draft);
+  const shellMode = $derived(text.startsWith("!"));
+  const popover = $derived(dismissed ? null : activePopover(text, caret));
+  const slashItems = $derived(popover?.kind === "slash" ? filterCommands(commands, popover.query) : []);
+  const mentionQuery = $derived(popover?.kind === "mention" ? popover.query : null);
+  const mentionItems: MentionItem[] = $derived(
+    mentionQuery === null
+      ? []
+      : [
+          ...filterAgents(catalogs.agentsFor(root), mentionQuery).map((agent) => ({ kind: "agent" as const, agent })),
+          ...(files.q === mentionQuery ? files.list : []).map((path) => ({ kind: "file" as const, path })),
+        ],
   );
-  const showSlash = $derived(Boolean(slashMatches && slashMatches.length > 0));
-  const showFiles = $derived(atQuery !== null);
-  const files = $derived(fileResult.q === atQuery ? fileResult.list : null);
+  const itemCount = $derived(
+    popover?.kind === "slash"
+      ? slashItems.length
+      : popover?.kind === "mention"
+        ? mentionItems.length
+        : popover?.kind === "remember"
+          ? REMEMBER_TARGETS.length
+          : 0,
+  );
 
   $effect(() => {
-    void catalogStore.ensure();
+    void catalogs.ensure(root);
   });
 
   $effect(() => {
-    const q = atQuery;
+    const q = mentionQuery;
     if (q === null) return;
     let alive = true;
-    const t = setTimeout(() => {
-      listProjectFiles(q)
-        .then((r) => {
-          if (alive) fileResult = { q, list: r };
-        })
-        .catch(() => {
-          if (alive) fileResult = { q, list: [] };
-        });
-    }, 140);
+    const timer = setTimeout(() => {
+      void searchFiles(root, q).then((list) => {
+        if (alive) files = { q, list };
+      });
+    }, 120);
     return () => {
       alive = false;
-      clearTimeout(t);
+      clearTimeout(timer);
     };
+  });
+
+  $effect(() => {
+    const el = ta;
+    if (composer.focusTick === 0 || !el) return;
+    untrack(() => {
+      const end = composer.draft.length;
+      el.focus();
+      el.setSelectionRange(end, end);
+      caret = end;
+    });
   });
 
   function syncCaret() {
     if (ta) caret = ta.selectionStart;
   }
 
-  function onInputChanged(text: string, caretPos: number) {
-    draftStore.set(text);
-    caret = caretPos;
-    slashSel = 0;
-    fileSel = 0;
-    dismissed = false;
-  }
-
-  function runCommand(name: string) {
-    const currentInput = input.current;
-    draftStore.set("");
-    caret = 0;
-    dismissed = false;
-    dispatchSlashCommand(name, currentInput);
-  }
-
-  function insertFile(path: string) {
-    attachmentStore.add(path);
-    const r = stripAtToken(input.current, caret);
-    draftStore.set(r.text);
-    dismissed = false;
+  function setText(next: string, nextCaret = next.length) {
+    composer.setDraft(next, false);
+    caret = nextCaret;
+    selected = 0;
     requestAnimationFrame(() => {
-      if (ta) {
-        ta.focus();
-        ta.setSelectionRange(r.caret, r.caret);
-        caret = r.caret;
-      }
+      ta?.focus();
+      ta?.setSelectionRange(nextCaret, nextCaret);
     });
   }
 
-  async function onPaste(e: ClipboardEvent) {
-    const pasted = Array.from(e.clipboardData?.files ?? []);
-    if (pasted.length === 0) return;
-    e.preventDefault();
-    for (const f of pasted.slice(0, 4)) {
-      const url = await fileToDataUrl(f);
-      if (url) images = [...images, url].slice(0, 6);
-    }
-  }
-
-  async function onFileInputChanged(e: Event) {
-    const list = Array.from((e.currentTarget as HTMLInputElement).files ?? []);
-    for (const f of list.slice(0, 4)) {
-      if (f.type.startsWith("image/")) {
-        const url = await fileToDataUrl(f);
-        if (url) images = [...images, url].slice(0, 6);
-      } else {
-        attachmentStore.add(f.name);
-      }
-    }
-    if (fileInput) fileInput.value = "";
-  }
-
-  async function send() {
-    const text = input.current.trim();
-    if (!text && images.length === 0) return;
-    const atts = attachmentStore.getSnapshot();
-    draftStore.set("");
-    attachmentStore.clear();
-    caret = 0;
+  function onInput(e: Event & { currentTarget: HTMLTextAreaElement }) {
+    composer.setDraft(e.currentTarget.value, false);
+    caret = e.currentTarget.selectionStart;
     dismissed = false;
-    const myImages = images;
-    images = [];
-    const composed = atts.length > 0 ? `${text}\n\n${atts.map((p) => `@${p}`).join(" ")}` : text;
-
-    if (busyNow.current) {
-      if (composed || myImages.length > 0) {
-        queueStore.push(composed, myImages);
-        pushToast("Queued — sends when the turn finishes", "info");
-      }
-      return;
-    }
-
-    pushHistory(composed);
-    if (text.startsWith("!")) {
-      const cmd = text.slice(1).trim();
-      if (!cmd) return;
-      commandLocal(cmd);
-      try {
-        await shellPassthrough(cmd);
-      } catch (err) {
-        console.error(err);
-      }
-      return;
-    }
-    if (!await submitTask(composed, myImages)) {
-      if (!draftStore.getSnapshot()) draftStore.set(composed);
-      if (images.length === 0) images = myImages;
-    }
+    selected = 0;
+    history.reset();
   }
 
-  function handleNav(
-    e: KeyboardEvent,
-    len: number,
-    getSel: () => number,
-    setSel: (n: number) => void,
-    onPick: (idx: number) => void,
-  ): boolean {
-    if (len === 0) return false;
-    if (e.key === "ArrowDown") { e.preventDefault(); setSel((getSel() + 1) % len); return true; }
-    if (e.key === "ArrowUp") { e.preventDefault(); setSel((getSel() - 1 + len) % len); return true; }
-    if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); onPick(Math.min(getSel(), len - 1)); return true; }
-    if (e.key === "Escape") { e.preventDefault(); dismissed = true; return true; }
-    return false;
+  function pickSlash(command: SlashCommandInfo, run: boolean) {
+    if (command.argumentHint || !run) setText(`/${command.name} `);
+    else void submit(false, `/${command.name}`);
+  }
+
+  function pickMention(item: MentionItem) {
+    const insert = item.kind === "agent" ? agentMention(item.agent) : `@${item.path} `;
+    if (item.kind === "file") composer.addFile(item.path);
+    const next = replaceAtToken(text, caret, insert);
+    setText(next.text, next.caret);
+  }
+
+  async function pickRemember(scope: RememberScope) {
+    const note = text.trim().replace(/^#/, "").trim();
+    if (note && (await rememberNote(scope, note))) caret = 0;
+  }
+
+  function pickSelected(run: boolean) {
+    if (popover?.kind === "slash" && slashItems[selected]) pickSlash(slashItems[selected], run);
+    else if (popover?.kind === "mention" && mentionItems[selected]) pickMention(mentionItems[selected]);
+    else if (popover?.kind === "remember") void pickRemember(REMEMBER_TARGETS[selected]?.scope ?? "project");
+  }
+
+  async function submit(interrupt: boolean, override?: string) {
+    const raw = override ?? text;
+    let plan = planSubmission({ text: raw, attachments: composer.attachments, busy, interrupt, commands });
+    if (plan.kind === "remember") {
+      if (!dismissed) return pickRemember(REMEMBER_TARGETS[selected]?.scope ?? "project");
+      plan = busy ? { kind: "steer", text: raw.trim() } : { kind: "submit", text: raw.trim(), attachments: composer.attachments };
+    }
+    if (plan.kind === "none") return;
+    history.push(raw.trim());
+    dismissed = false;
+    caret = 0;
+    await executePlan(plan);
   }
 
   function onKeyDown(e: KeyboardEvent) {
     syncCaret();
-    if (showSlash && slashMatches && slashMatches.length > 0) {
-      if (handleNav(e, slashMatches.length, () => slashSel, (n) => (slashSel = n), (i) => runCommand(slashMatches[i].name)))
+    if (popover && itemCount > 0 && !e.isComposing) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        selected = wrapIndex(selected, e.key === "ArrowDown" ? 1 : -1, itemCount);
         return;
-    }
-    if (showFiles && files && files.length > 0) {
-      if (handleNav(e, files.length, () => fileSel, (n) => (fileSel = n), (i) => insertFile(files[i])))
+      }
+      if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey)) {
+        e.preventDefault();
+        pickSelected(e.key === "Enter");
         return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        dismissed = true;
+        return;
+      }
     }
-    if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !input.current.includes("\n")) {
+    if (e.key === "Escape" && !busy && shell.current.visible) {
       e.preventDefault();
-      if (e.key === "ArrowUp") historyPrev((n) => (caret = n));
-      else historyNext((n) => (caret = n));
+      hideShell();
       return;
     }
-    if (e.key === "Escape") {
-      e.preventDefault();
-      if (busyNow.current) void abort();
-      else if (shell.current.visible) hideShell();
-      else if (input.current) { draftStore.set(""); caret = 0; }
-      return;
+    switch (composerIntent(e, { busy, text, caret })) {
+      case "send":
+        e.preventDefault();
+        void submit(false);
+        break;
+      case "interrupt":
+        e.preventDefault();
+        void submit(true);
+        break;
+      case "cancel":
+        e.preventDefault();
+        void cancelTurn();
+        break;
+      case "clear":
+        e.preventDefault();
+        setText("");
+        break;
+      case "historyPrev":
+      case "historyNext": {
+        const next = e.key === "ArrowUp" ? history.prev(text) : history.next();
+        if (next === null) break;
+        e.preventDefault();
+        setText(next);
+        break;
+      }
+      case "cycleMode":
+        e.preventDefault();
+        void setMode(nextMode(view?.mode ?? "default"));
+        break;
     }
-    if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
-      e.preventDefault();
-      void send();
-    }
+  }
+
+  function onFiles(e: Event, list: FileList | null | undefined) {
+    const picked = Array.from(list ?? []);
+    if (!picked.some((f) => f.type.startsWith("image/"))) return;
+    e.preventDefault();
+    void composer.addImageFiles(picked);
   }
 </script>
 
 <div class="composer-wrap">
   <ShellOverlay />
-  <div class={`composer${shellMode ? " shell" : ""}`}>
-    <ComposerPopovers
-      {showSlash}
-      {slashMatches}
-      {slashSel}
-      onSelectSlash={runCommand}
-      onHoverSlash={(i) => (slashSel = i)}
-      {showFiles}
-      {files}
-      {fileSel}
-      onSelectFile={insertFile}
-      onHoverFile={(i) => (fileSel = i)}
-    />
-    <ComposerQueue items={queued.current} onRemove={(i) => queueStore.removeAt(i)} />
-    <ComposerAttachments
-      attachments={attachments.current}
-      {images}
-      onRemoveAttachment={(p) => attachmentStore.remove(p)}
-      onRemoveImage={(i) => (images = images.filter((_, j) => j !== i))}
-    />
+  <TodoStrip todos={view?.todos.main ?? []} />
+  <div
+    class={`composer${shellMode ? " shell" : ""}`}
+    role="group"
+    aria-label="Message composer"
+    ondragover={(e) => e.preventDefault()}
+    ondrop={(e) => onFiles(e, e.dataTransfer?.files)}
+  >
+    {#if popover?.kind === "slash"}
+      <SlashPopover items={slashItems} {selected} onPick={(c) => pickSlash(c, true)} onHover={(i) => (selected = i)} />
+    {:else if popover?.kind === "mention"}
+      <MentionPopover
+        items={mentionItems}
+        loading={files.q !== mentionQuery}
+        {selected}
+        onPick={pickMention}
+        onHover={(i) => (selected = i)}
+      />
+    {:else if popover?.kind === "remember"}
+      <RememberPopover {selected} onPick={(scope) => void pickRemember(scope)} onHover={(i) => (selected = i)} />
+    {/if}
+    <ComposerQueue items={view?.queue ?? []} onChange={(queued) => void editQueue(queued)} />
+    <ComposerAttachments attachments={composer.attachments} onRemove={(i) => composer.removeAttachment(i)} />
     <div class={`composer-input-area${shellMode ? " shell-active" : ""}`}>
       <textarea
         bind:this={ta}
         rows={2}
         class={shellMode ? "shell-textarea" : ""}
-        placeholder={busyNow.current
-          ? "Agent is working… press Esc to abort"
+        placeholder={busy
+          ? `Enter steers · ${modLabel()}Enter interrupts · Esc cancels`
           : shellMode
             ? "Enter shell command… (e.g. !git status)"
-            : "Ask anything, @ for files, / for commands, ! for bash…"}
-        value={input.current}
-        oninput={(e) =>
-          onInputChanged(e.currentTarget.value, e.currentTarget.selectionStart)}
+            : "Ask anything · @ files and agents · / commands · ! shell · # remember"}
+        value={text}
+        oninput={onInput}
         onselect={syncCaret}
         onclick={syncCaret}
         onkeyup={syncCaret}
         onkeydown={onKeyDown}
-        onpaste={(e) => void onPaste(e)}
+        onpaste={(e) => onFiles(e, e.clipboardData?.files)}
       ></textarea>
     </div>
     <input
       type="file"
-      bind:this={fileInput}
+      accept="image/*"
       multiple
-      style="display: none"
-      onchange={(e) => void onFileInputChanged(e)}
+      hidden
+      bind:this={imageInput}
+      onchange={(e) => {
+        void composer.addImageFiles(Array.from(e.currentTarget.files ?? []));
+        e.currentTarget.value = "";
+      }}
     />
     <ComposerBar
       {shellMode}
-      busy={busyNow.current}
-      canSend={Boolean(input.current.trim() || attachments.current.length > 0 || images.length > 0)}
-      canSendShell={Boolean(input.current.slice(1).trim())}
+      {busy}
+      hasText={Boolean(text.trim())}
+      canSend={shellMode ? Boolean(text.slice(1).trim()) : Boolean(text.trim() || composer.attachments.length > 0)}
       catalog={catalog.current}
       showTerminalBtn={!shell.current.visible && shell.current.entries.length > 0}
-      onAttachClick={() => fileInput?.click()}
+      onAttachClick={() => imageInput?.click()}
       onShowShell={showShell}
-      onSend={() => void send()}
-      onAbort={() => void abort()}
+      onSend={() => void submit(false)}
+      onInterrupt={() => void submit(true)}
+      onCancel={() => void cancelTurn()}
     />
   </div>
 </div>

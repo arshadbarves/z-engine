@@ -39,6 +39,7 @@ pub fn agent(id: &str, status: AgentStatus) -> AgentInfo {
     AgentInfo {
         agent_id: AgentId::from(id),
         parent_id: Some(AgentId::main()),
+        call_id: None,
         agent_type: "explore".into(),
         description: "find callers".into(),
         model: "claude-haiku".into(),

@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::ids::AgentId;
+use crate::ids::{AgentId, CallId};
 use crate::usage::Usage;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -68,6 +68,8 @@ pub struct WorktreeInfo {
 pub struct AgentInfo {
     pub agent_id: AgentId,
     pub parent_id: Option<AgentId>,
+    /// The `Agent` tool call that started this run (None for the main agent).
+    pub call_id: Option<CallId>,
     /// Definition name, e.g. "explore" or a custom agent.
     pub agent_type: String,
     /// Short task label supplied by the caller.

@@ -1,17 +1,16 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { catalogForPicker, catalogStore, fmtLimit } from "$lib/catalog";
-  import { setModel } from "$lib/commands";
   import { configStore } from "$lib/configStore";
   import { detectProviderId, PROVIDERS } from "$lib/providers";
-  import { modelStore } from "$lib/runtime";
+  import { sessions, setModel } from "$lib/runtime";
   import { bindStore } from "$lib/svelte/bind.svelte";
   import Icon, { Brain, Check, ChevronDown, Search, Sparkles, X } from "$lib/ui/icons";
   import { shortModel } from "$lib/util";
 
-  const model = bindStore(modelStore);
   const catalog = bindStore(catalogStore);
   const config = bindStore(configStore);
+  const model = $derived({ current: sessions.active?.model || config.current?.model || "" });
   let open = $state(false);
   let custom = $state("");
   let query = $state("");
@@ -42,12 +41,7 @@
     await closeMenu(true);
     query = "";
     if (id === model.current) return;
-    try {
-      await setModel(id);
-      modelStore.set(id);
-    } catch (e) {
-      console.error(e);
-    }
+    await setModel(id);
   }
 
   const groups = $derived.by(() => {
