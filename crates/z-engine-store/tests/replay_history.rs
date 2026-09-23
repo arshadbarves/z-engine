@@ -158,8 +158,41 @@ fn conversation_rewind_drops_the_message_and_every_later_record() {
     assert!(state.compactions.is_empty());
     assert_eq!(state.mode, PermissionMode::Plan);
     assert_eq!(state.todos[&AgentId::main()], [todo("kept")]);
-    assert_eq!(state.usage, usage(10, 1));
-    assert!((state.cost_usd - 0.1).abs() < 1e-9);
+    assert_eq!(
+        state.usage,
+        usage(10 + 99, 2),
+        "spent usage survives the rewind"
+    );
+    assert!((state.cost_usd - 9.1).abs() < 1e-9);
+}
+
+#[test]
+fn rewinding_a_costly_turn_keeps_its_cost_but_drops_the_turn() {
+    let (u1, u2) = (Message::user_text("u1"), Message::user_text("u2"));
+    let (t1, t2) = (TurnId::new(), TurnId::new());
+    let records = vec![
+        started(),
+        msg(&u1),
+        turn_started(&t1, &u1),
+        turn_finished(&t1, &u1, 10, 0.25),
+        msg(&u2),
+        turn_started(&t2, &u2),
+        turn_finished(&t2, &u2, 5_000, 3.0),
+        LogRecord::Usage {
+            agent_id: AgentId::main(),
+            usage: usage(40, 8),
+            cost_usd: 0.05,
+        },
+        rewound(&u2, true),
+    ];
+    let state = replay(&records);
+    assert_eq!(state.transcript, std::slice::from_ref(&u1));
+    let turns: Vec<&TurnId> = state.turns.iter().map(|turn| &turn.turn_id).collect();
+    assert_eq!(turns, [&t1], "the rewound turn is gone");
+    assert_eq!(state.open_turn, None);
+    assert_eq!(state.usage.input_tokens, 10 + 5_000 + 40);
+    assert_eq!(state.usage.output_tokens, 1 + 1 + 8);
+    assert!((state.cost_usd - 3.30).abs() < 1e-9);
 }
 
 #[test]

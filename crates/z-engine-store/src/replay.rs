@@ -30,7 +30,8 @@ pub struct ReplayState {
     pub model: Option<String>,
     pub effort: Option<Effort>,
     pub title: Option<String>,
-    /// Finished turns plus side-request `Usage` records.
+    /// Every `TurnFinished` and `Usage` record in the log, including ones a
+    /// conversation rewind discarded: spent money stays in the total.
     pub usage: Usage,
     pub cost_usd: f64,
     /// Started but never finished; the engine reports it as interrupted.
@@ -43,6 +44,22 @@ pub fn replay(records: &[LogRecord]) -> ReplayState {
     let mut state = ReplayState::default();
     for record in effective_records(records) {
         state.apply(record);
+    }
+    // Money already spent stays spent, so totals ignore rewinds.
+    for record in records {
+        match record {
+            LogRecord::TurnFinished { turn } => {
+                state.usage += turn.usage;
+                state.cost_usd += turn.cost_usd;
+            }
+            LogRecord::Usage {
+                usage, cost_usd, ..
+            } => {
+                state.usage += *usage;
+                state.cost_usd += *cost_usd;
+            }
+            _ => {}
+        }
     }
     state
 }
@@ -142,13 +159,10 @@ impl ReplayState {
                 let title = title.trim();
                 self.title = (!title.is_empty()).then(|| title.to_string());
             }
-            LogRecord::Usage {
-                usage, cost_usd, ..
-            } => {
-                self.usage += *usage;
-                self.cost_usd += *cost_usd;
-            }
-            LogRecord::Approval { .. } | LogRecord::Rewound { .. } | LogRecord::Note { .. } => {}
+            LogRecord::Approval { .. }
+            | LogRecord::Rewound { .. }
+            | LogRecord::Note { .. }
+            | LogRecord::Usage { .. } => {}
         }
     }
 
@@ -160,8 +174,6 @@ impl ReplayState {
         {
             self.open_turn = None;
         }
-        self.usage += turn.usage;
-        self.cost_usd += turn.cost_usd;
         self.turns.push(turn.clone());
     }
 
