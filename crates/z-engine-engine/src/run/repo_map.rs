@@ -1,7 +1,7 @@
-//! The repository map system section: built once (lazily, before the first
-//! request that needs it) and kept byte-stable so the prompt-cache prefix
-//! survives; only a compaction or a settings reload invalidates it. Files
-//! the main agent touched rank first.
+//! The repository map system section: built once (in the background when a
+//! session opens, awaited by the first request that needs it) and kept
+//! byte-stable so the prompt-cache prefix survives; only a compaction or a
+//! settings reload invalidates it. Files the main agent touched rank first.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -46,10 +46,20 @@ impl RepoMapCache {
 
 /// Builds the section once for agents working in the project tree.
 pub(crate) async fn ensure_repo_map(ctx: &RunContext) {
-    if ctx.spec.worktree.is_some() {
-        return;
+    if ctx.spec.worktree.is_none() {
+        build_once(&ctx.core).await;
     }
-    let cache = &ctx.core.repo_map;
+}
+
+/// Starts the build as soon as a session opens, so the first request
+/// usually finds the map ready instead of waiting for the walk and parse.
+pub(crate) fn prebuild_repo_map(core: &Arc<SessionCore>) {
+    let core = Arc::clone(core);
+    tokio::spawn(async move { build_once(&core).await });
+}
+
+async fn build_once(core: &SessionCore) {
+    let cache = &core.repo_map;
     if cache.is_built() {
         return;
     }
@@ -57,7 +67,7 @@ pub(crate) async fn ensure_repo_map(ctx: &RunContext) {
     if cache.is_built() {
         return;
     }
-    let built = build(&ctx.core).await;
+    let built = build(core).await;
     *lock(&cache.value) = Some(built);
 }
 

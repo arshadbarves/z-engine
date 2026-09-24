@@ -19,6 +19,7 @@ use z_engine_store::SessionStore;
 use super::{catalog, export};
 use crate::error::EngineError;
 use crate::options::{EngineOptions, EventSink, ExportFormat};
+use crate::run::inspect_request;
 use crate::session::{SessionHandle, Shared, emit_snapshot, open_session};
 use crate::settings::models;
 use crate::sync::{lock, read};
@@ -168,7 +169,8 @@ impl Engine {
     /// inspector.
     pub fn last_request(&self, session_id: &SessionId) -> Option<Value> {
         let handle = self.handle(session_id)?;
-        lock(&handle.core.last_request).clone()
+        let request = lock(&handle.core.last_request).clone()?;
+        Some(inspect_request(&request))
     }
 
     pub fn settings(&self, project_root: Option<&Path>) -> LoadedSettings {

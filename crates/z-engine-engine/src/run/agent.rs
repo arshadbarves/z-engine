@@ -17,7 +17,7 @@ use super::meter::ContextMeter;
 use super::mutation::note_mutation;
 use super::reminders::{TodoNudge, collect, take_steering};
 use super::repo_map::ensure_repo_map;
-use super::request::{assemble, inspect, prepare};
+use super::request::{assemble, prepare};
 use super::sink::TranscriptSink;
 use super::spec::{RunContext, RunOutcome};
 use super::stop::{StopAction, StopCounters, stop_boundary};
@@ -134,7 +134,7 @@ impl AgentRun {
             };
             let request = assemble(&self.ctx, &prepared, &model, working.clone());
             if self.ctx.spec.is_main() {
-                *lock(&self.ctx.core.last_request) = Some(inspect(&request));
+                *lock(&self.ctx.core.last_request) = Some(Arc::new(request.clone()));
             }
             let message_id = MessageId::new();
             match stream_response(&self.ctx, request, &message_id).await {

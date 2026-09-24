@@ -6,12 +6,11 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 
-use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 use z_engine_config::{EnvOverrides, Paths};
 use z_engine_context::GitInfo;
 use z_engine_host::{FileTracker, PathLocks, WebClient};
-use z_engine_llm::{ModelCatalog, ModelClient};
+use z_engine_llm::{ModelCatalog, ModelClient, ModelRequest};
 use z_engine_policy::Policy;
 use z_engine_protocol::{PermissionMode, SessionId};
 use z_engine_store::SessionStore;
@@ -100,8 +99,9 @@ pub(crate) struct SessionCore {
     pub lsp: LspHub,
     /// The repository map section, stable between compactions.
     pub repo_map: RepoMapCache,
-    /// The last main-agent request, for the prompt inspector.
-    pub last_request: Mutex<Option<Value>>,
+    /// The last main-agent request, rendered for the prompt inspector only
+    /// when the inspector asks (rendering every round is costly).
+    pub last_request: Mutex<Option<Arc<ModelRequest>>>,
     /// Cancelled when the session closes; background work hangs off it.
     pub cancel: CancellationToken,
 }

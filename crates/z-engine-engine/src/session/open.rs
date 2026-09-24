@@ -27,7 +27,7 @@ use crate::lsp::LspHub;
 use crate::mcp::{McpHub, sync_servers};
 use crate::options::EventSink;
 use crate::orchestration::{AgentRegistry, Orchestra, prune_stale_worktrees};
-use crate::run::RepoMapCache;
+use crate::run::{RepoMapCache, prebuild_repo_map};
 use crate::session::{
     AgentResources, Emitter, JobHub, Journal, ReminderBox, SessionCore, SessionState, Shared,
     StatusTracker,
@@ -84,6 +84,7 @@ pub(crate) async fn open_session(
     }
     request_trust(&core);
     sync_servers(&core);
+    prebuild_repo_map(&core);
     session_start(&core, fresh).await;
     Ok(handle)
 }
