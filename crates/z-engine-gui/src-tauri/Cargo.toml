@@ -14,7 +14,7 @@ path = "src/main.rs"
 z-engine-engine.workspace = true
 z-engine-protocol.workspace = true
 z-engine-config.workspace = true
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-updater = "2"

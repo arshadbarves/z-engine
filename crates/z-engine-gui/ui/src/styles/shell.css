@@ -1,0 +1,153 @@
+/* App frame. The title zone and sidebar sit on the window material; the
+   content sheet is the one raised, solid surface. */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app-titlebar {
+  /* Widest side cluster, so the centered status line never runs under it. */
+  --titlebar-side: 150px;
+  position: relative;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  height: var(--titlebar-h);
+  flex-shrink: 0;
+  padding: 0 10px;
+  user-select: none;
+  -webkit-app-region: drag;
+}
+
+/* Clearance for the system-drawn traffic lights. */
+html.plat-mac .app-titlebar {
+  --titlebar-side: 130px;
+  padding-left: 84px;
+}
+html.plat-mac .app.no-sidebar .app-titlebar {
+  --titlebar-side: 200px;
+}
+html.plat-win .app-titlebar {
+  --titlebar-side: 220px;
+}
+
+.titlebar-side {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* Centered in the window by auto margins, not left: 50%, so it may use the
+   full width between the side clusters instead of half the bar. */
+.titlebar-center {
+  position: absolute;
+  top: calc((var(--titlebar-h) - 30px) / 2);
+  left: 0;
+  right: 0;
+  display: flex;
+  width: fit-content;
+  max-width: calc(100% - 2 * var(--titlebar-side));
+  margin-inline: auto;
+}
+
+.titlebar-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--label-3);
+  -webkit-app-region: no-drag;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+.titlebar-btn:hover {
+  color: var(--label);
+  background: var(--fill-hover);
+}
+.titlebar-btn.is-active {
+  color: var(--label);
+}
+.titlebar-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--blue);
+}
+
+.app-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: var(--shell-gap);
+  padding: 0 var(--shell-gap) var(--shell-gap);
+  overflow: hidden;
+  transition: gap var(--dur-med) var(--ease-out);
+}
+.app.no-sidebar .app-body {
+  gap: 0;
+}
+
+.sidebar-slot {
+  width: 264px;
+  flex-shrink: 0;
+  display: flex;
+  overflow: hidden;
+  transition:
+    width var(--dur-med) var(--spring-smooth),
+    opacity var(--dur-fast) var(--ease-out);
+}
+.app.no-sidebar .sidebar-slot {
+  width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.workstation-stage {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  gap: var(--shell-gap);
+  position: relative;
+  overflow: hidden;
+}
+
+.canvas-pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: var(--sheet);
+  border-radius: var(--r-l);
+  box-shadow: var(--sheet-shadow);
+  overflow: hidden;
+}
+
+/* First appearance after the splash: each surface sharpens into place. */
+.app.app-enter .app-titlebar {
+  animation: blur-in var(--dur-slow) var(--ease-out) both;
+}
+.app.app-enter .sidebar-slot {
+  animation: blur-in var(--dur-slow) var(--ease-out) 60ms both;
+}
+.app.app-enter .canvas-pane {
+  animation: blur-in var(--dur-slow) var(--ease-out) 120ms both;
+}

@@ -24,5 +24,3 @@ export const checkForUpdate = (force = false) =>
 export const openReleaseUrl = (url: string) => invoke("open_release_url", { url });
 
 export const installUpdate = () => invoke("install_update");
-
-export const getChangelog = () => invoke<string>("get_changelog");

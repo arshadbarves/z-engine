@@ -55,9 +55,11 @@ Every subagent appears as an **Agent** card in the transcript with its
 type, task, status, model, tokens, cost and duration. Click **Open
 transcript** to follow it.
 
-The **Agents & jobs** button in the top bar opens a side panel. Its badge
-counts running agents, running background jobs, and worktree changes
-waiting for you.
+While subagents or background jobs run, a pill such as **2 agents** appears
+next to the status line at the top of the window, and small dots orbit the
+companion. The pill counts running agents, running background jobs, and
+worktree changes waiting for you; click it to open the agents and jobs
+panel. The command palette (⌘K / Ctrl+K) opens it too.
 
 - **Agents** tab: every subagent of this chat as a tree (nested agents are
   indented), with status, model, tokens, cost, tool calls and time. Click a

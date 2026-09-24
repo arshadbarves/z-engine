@@ -96,7 +96,6 @@ fn main() -> anyhow::Result<()> {
             update::check_for_update,
             update::open_release_url,
             update::install_update,
-            update::get_changelog,
         ])
         .setup(move |app| {
             let _guard = handle.enter();
@@ -110,6 +109,7 @@ fn main() -> anyhow::Result<()> {
             let active = workspaces.initial_root(paths.home_dir.as_deref());
             tracing::info!(project = %active.display(), "engine initialized");
             app.manage(AppState::new(engine, workspaces, active));
+            app.manage(window::Material::default());
             window::create_main(app)?;
             Ok(())
         })

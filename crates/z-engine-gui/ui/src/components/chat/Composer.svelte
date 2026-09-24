@@ -15,10 +15,10 @@
   import { hideShell, shellStore, showShell } from "$lib/shellStore";
   import { composer } from "$lib/stores/composer.svelte";
   import { executePlan, rememberNote } from "$lib/stores/composerSubmit";
+  import { userSignals } from "$lib/stores/userSignals.svelte";
   import { bindStore } from "$lib/svelte/bind.svelte";
   import { workspaceStore } from "$lib/workspaces";
   import ShellOverlay from "../overlays/ShellOverlay.svelte";
-  import TodoStrip from "../planning/TodoStrip.svelte";
   import ComposerAttachments from "./ComposerAttachments.svelte";
   import ComposerBar from "./ComposerBar.svelte";
   import ComposerQueue from "./ComposerQueue.svelte";
@@ -111,6 +111,7 @@
 
   function onInput(e: Event & { currentTarget: HTMLTextAreaElement }) {
     composer.setDraft(e.currentTarget.value, false);
+    userSignals.typed();
     caret = e.currentTarget.selectionStart;
     dismissed = false;
     selected = 0;
@@ -220,7 +221,6 @@
 
 <div class="composer-wrap">
   <ShellOverlay />
-  <TodoStrip todos={view?.todos.main ?? []} />
   <div
     class={`composer${shellMode ? " shell" : ""}`}
     role="group"

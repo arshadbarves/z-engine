@@ -1,0 +1,52 @@
+/* Materials. The tokens turn solid under html.solid-surfaces and Reduce Transparency,
+   so nothing here needs its own fallback. */
+
+.glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--glass-sheen), var(--elev-2);
+}
+
+.glass-strong {
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--glass-sheen), var(--elev-3);
+}
+
+.sheet {
+  background: var(--sheet);
+  border-radius: var(--r-l);
+  box-shadow: var(--sheet-shadow);
+}
+
+/* Scroll-edge fade: content softens and fades as it passes under floating chrome. */
+.edge-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--edge-fade, 28px);
+  pointer-events: none;
+  z-index: 3;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.edge-fade.top {
+  top: 0;
+  background: linear-gradient(to bottom, var(--sheet), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, black 35%, transparent);
+  mask-image: linear-gradient(to bottom, black 35%, transparent);
+}
+.edge-fade.bottom {
+  bottom: 0;
+  background: linear-gradient(to top, var(--sheet), transparent);
+  -webkit-mask-image: linear-gradient(to top, black 35%, transparent);
+  mask-image: linear-gradient(to top, black 35%, transparent);
+}
+html.solid-surfaces .edge-fade {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}

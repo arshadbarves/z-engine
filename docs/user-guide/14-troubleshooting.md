@@ -29,8 +29,10 @@ The log is `z-engine-gui.log` in the data folder:
 - Windows: `%APPDATA%\z-engine\z-engine-gui.log`
 
 For more detail, start Z Engine with the environment variable
-`RUST_LOG=debug`. Notifications shown in the app (pop-ups) are usually
-the quickest clue.
+`RUST_LOG=debug`. Notices appear briefly in the status line at the top
+of the window; warnings and errors stay in the Now card's **Recent** list
+(click the line),
+which is usually the quickest clue.
 
 ## Common problems
 
@@ -62,6 +64,19 @@ the quickest clue.
 - If the model id is wrong for the provider, the provider reports an
   error; check the id format (for example `anthropic/claude-sonnet-4.5` on
   OpenRouter, `claude-sonnet-4-5` on Anthropic).
+
+### OpenCode Zen: "FreeTierError" or "free tier can only be used from within OpenCode"
+
+Zen's free models require the OpenCode client fingerprint (streaming, a
+shaped session id, and `shell`/`read` tools). Z Engine sends that for
+`opencode.ai` URLs. If you still see this:
+
+- Confirm the base URL is `https://opencode.ai/zen/v1` (not a mirror that
+  forwards without the free-tier headers).
+- Pick a model that is still free in the catalog (for example
+  `big-pickle`). Retired free ids return a different provider error.
+- Paid Zen models need an `OPENCODE_API_KEY` or a key stored under
+  OpenCode Zen in **Settings → Providers**.
 
 ### Rate limits, "Provider busy", retrying
 

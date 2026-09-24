@@ -11,6 +11,7 @@ import {
 } from "../runtime";
 import { startNewChat } from "./app-actions";
 import { composer } from "./composer.svelte";
+import { companion } from "./companion.svelte";
 import { ui } from "./ui.svelte";
 
 function hookReport(): string {
@@ -53,7 +54,7 @@ export async function runUiCommand(name: string, args: string): Promise<void> {
     case "clear":
       return startNewChat();
     case "context":
-      ui.contextOpen = true;
+      companion.open = true;
       return requestContextReport();
     default:
       await runCommand(name, args);

@@ -4,7 +4,7 @@ import { agentTree, agentUsageRows, workCounts } from "./agentTree";
 import { contextMeter } from "./contextMeter";
 import { parseInspectRequest } from "./requestInspect";
 import { fallbackTitle, listItems, viewTitle } from "./sessionList";
-import { unreadSessionOutcome } from "./sessionOutcome";
+import { sidebarMark, unreadSessionOutcome } from "./sessionOutcome";
 import { emptyView } from "./sessionView";
 import { agentInfo, info, jobInfo, user, usage } from "./testFixtures";
 import { cacheShare, usageLine } from "./usage";
@@ -87,14 +87,14 @@ describe("session list", () => {
   });
 });
 
-describe("unread outcomes", () => {
-  const mark = (over: object) => ({
-    outcome: { type: "completed" as const },
-    verification: { status: "notApplicable" as const },
-    at: 1,
-    ...over,
-  });
+const mark = (over: object) => ({
+  outcome: { type: "completed" as const },
+  verification: { status: "notApplicable" as const },
+  at: 1,
+  ...over,
+});
 
+describe("unread outcomes", () => {
   it("tints verified and failing results only", () => {
     expect(unreadSessionOutcome(mark({ verification: { status: "verified", checks: [] } }), false, null)?.tone).toBe(
       "verified",
@@ -107,6 +107,30 @@ describe("unread outcomes", () => {
     expect(unreadSessionOutcome(mark({}), true, null)).toBeNull();
     expect(unreadSessionOutcome(mark({}), false, "working")).toBeNull();
     expect(unreadSessionOutcome(null, false, null)).toBeNull();
+  });
+});
+
+describe("sidebarMark", () => {
+  const base = { active: false, activity: null, unread: null, lastOutcome: null };
+
+  it("leaves the active chat to the title bar", () => {
+    expect(sidebarMark({ ...base, active: true, activity: "approval" })).toBeNull();
+  });
+
+  it("puts needs-you above working above unread results", () => {
+    const unread = mark({});
+    expect(sidebarMark({ ...base, activity: "approval", unread })?.label).toBe("Needs you");
+    expect(sidebarMark({ ...base, activity: "working", unread })?.tone).toBe("working");
+    expect(sidebarMark({ ...base, unread: mark({ verification: { status: "verified", checks: [] } }) })?.tone).toBe("ok");
+  });
+
+  it("marks settled chats only when their last response did not complete", () => {
+    expect(sidebarMark({ ...base, lastOutcome: { type: "failed", message: "x" } })).toEqual({
+      tone: "danger",
+      label: "Last response failed",
+    });
+    expect(sidebarMark({ ...base, lastOutcome: { type: "completed" } })).toBeNull();
+    expect(sidebarMark(base)).toBeNull();
   });
 });
 

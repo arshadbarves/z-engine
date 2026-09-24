@@ -18,6 +18,19 @@ gone; they remain in git history.
 | 9 | Commands, MCP prompts, workspace trust | done |
 | 10 | Sandbox, fault injection, flakiness, performance, docs, 2.0.0 | done |
 
+## GUI redesign (after 2.0.0)
+
+| Step | Scope | Status |
+|---|---|---|
+| 1 | Dead CSS and components removed; tokens, base, motion and materials in `ui/src/styles/`; native window translucency | done |
+| 2 | Title bar, sidebar, content sheet, scroll-edge fades, one-home-per-fact cleanup | done |
+| 3 | Companion orb and title status line with the Now card (replaces the first island design); `ui.companion` setting | done, awaiting visual review |
+| 4 | Transcript, tool grouping, turn receipt, composer | pending |
+| 5 | Home screen | pending |
+| 6 | Inspector sheet, palette, every Settings tab and the prompt inspector | pending |
+| 7 | Background notifications; errors after edits (engine event) | pending |
+| 8 | Remove legacy stylesheets and token aliases | pending |
+
 ## Release checks (2.0.0)
 
 - `cargo clippy --workspace --all-targets -- -D warnings`: no warnings.

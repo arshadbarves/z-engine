@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { listExtensions } from "$lib/commands";
-  import { APPEARANCE_OPTIONS } from "$lib/domain/appearanceSettings";
+  import { APPEARANCE_OPTIONS, COMPANION_OPTIONS } from "$lib/domain/appearanceSettings";
   import type { OutputStyleDef } from "$lib/protocol/config/OutputStyleDef";
   import type { Settings } from "$lib/protocol/config/Settings";
   import { settingsStore } from "$lib/stores/settings.svelte";
@@ -40,6 +40,18 @@
 </script>
 
 <div class="tab-body appearance-tab">
+  <SettingsGroup title="Companion" description="The orb in the title bar that shows what the agent is doing">
+    <SettingsCard>
+      <ChoiceSetting
+        title="Liveliness"
+        description="The status line shows the same information at every level."
+        keyPath={["ui", "companion"]}
+        options={COMPANION_OPTIONS}
+        value={settings.ui.companion}
+      />
+    </SettingsCard>
+  </SettingsGroup>
+
   <SettingsGroup title="Task report detail" description="Choose how much verification information completed tasks show">
     <SettingsCard>
       <ChoiceSetting

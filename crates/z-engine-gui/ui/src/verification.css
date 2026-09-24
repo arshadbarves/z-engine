@@ -54,12 +54,6 @@
   border-color: var(--tone-danger-ring);
 }
 
-.verify-badge.live {
-  color: var(--text-2);
-  background: var(--surface-quiet);
-  border-color: var(--border-strong);
-}
-
 .verify-count {
   font-weight: 500;
   opacity: 0.8;

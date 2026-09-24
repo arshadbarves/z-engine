@@ -164,7 +164,6 @@ export async function deleteChat(sessionId: string): Promise<boolean> {
   }
   sessionList.remove(sessionId);
   sessions.forget(sessionId);
-  pushToast("Chat deleted", "info");
   void sessionList.refresh();
   return true;
 }

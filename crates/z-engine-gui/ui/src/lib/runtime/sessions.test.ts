@@ -12,7 +12,7 @@ describe("sessions store", () => {
     expect(sessions.active?.messages).toHaveLength(1);
 
     const effects = sessions.apply(envelope({ type: "approvalRequested", request: approval() }, 0, "B"));
-    expect(effects).toEqual([{ kind: "attention", sessionId: "B", text: "Approval needed · Run cargo test" }]);
+    expect(effects).toEqual([]);
     expect(sessions.activity).toEqual({ B: "approval" });
 
     sessions.apply(envelope({ type: "turnFinished", turn: turnRecord() }, 1, "B"));

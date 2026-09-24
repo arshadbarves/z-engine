@@ -1,0 +1,182 @@
+/* Design tokens. Dark palette; a light palette overrides the first :root block. */
+
+:root {
+  color-scheme: dark;
+
+  /* neutrals: canvas behind everything, sheet under content, raised on the sheet */
+  --canvas: #08080a;
+  --sheet: #111113;
+  --raised: #18181b;
+  --raised-2: #1f1f23;
+  --raised-3: #2a2a2f;
+  --field: #141417;
+
+  --label: #f5f5f7;
+  --label-2: #a1a1a6;
+  --label-3: #6e6e73;
+  --label-4: #48484d;
+
+  --separator: rgba(255, 255, 255, 0.08);
+  --separator-strong: rgba(255, 255, 255, 0.14);
+  --separator-hover: rgba(255, 255, 255, 0.2);
+  --fill-quiet: rgba(255, 255, 255, 0.035);
+  --fill-hover: rgba(255, 255, 255, 0.06);
+  --fill-press: rgba(255, 255, 255, 0.1);
+  --selection: rgba(255, 255, 255, 0.16);
+  --shimmer: rgba(255, 255, 255, 0.04);
+  --scrollbar: rgba(255, 255, 255, 0.1);
+  --scrollbar-hover: rgba(255, 255, 255, 0.18);
+
+  /* the accent is monochrome; color is reserved for status */
+  --accent: #f5f5f7;
+  --accent-hover: #e8e8ed;
+  --accent-press: #d2d2d7;
+  --on-accent: #0a0a0b;
+  --focus-ring: rgba(255, 255, 255, 0.32);
+
+  --green: #30d158;
+  --green-soft: rgba(48, 209, 88, 0.14);
+  --green-ring: rgba(48, 209, 88, 0.3);
+  --amber: #ff9f0a;
+  --amber-soft: rgba(255, 159, 10, 0.14);
+  --amber-ring: rgba(255, 159, 10, 0.32);
+  --red: #ff453a;
+  --red-label: #ff8a80;
+  --red-soft: rgba(255, 69, 58, 0.14);
+  --red-soft-strong: rgba(255, 69, 58, 0.22);
+  --red-ring: rgba(255, 69, 58, 0.3);
+  --red-ring-strong: rgba(255, 69, 58, 0.5);
+  --blue: #0a84ff;
+  --blue-soft: rgba(10, 132, 255, 0.14);
+  --blue-ring: rgba(10, 132, 255, 0.32);
+
+  /* materials: glass floats above content, the sheet holds it */
+  --glass: rgba(30, 30, 34, 0.62);
+  --glass-strong: rgba(6, 6, 8, 0.86);
+  --glass-chrome: rgba(14, 14, 17, 0.34);
+  --glass-filter: blur(28px) saturate(170%);
+  --glass-edge: rgba(255, 255, 255, 0.09);
+  --glass-sheen: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+
+  /* the companion orb: a pearl tinted by the status tone */
+  --orb-light: #ffffff;
+  --orb-pearl: #eceef4;
+  --orb-shade: #7b8193;
+  --orb-rim: rgba(255, 255, 255, 0.42);
+  --orb-eye: #14151a;
+
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --elev-2: 0 8px 24px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.28);
+  --elev-3: 0 20px 56px rgba(0, 0, 0, 0.5), 0 2px 10px rgba(0, 0, 0, 0.32);
+  --sheet-shadow: 0 0 0 1px var(--separator), 0 12px 40px rgba(0, 0, 0, 0.32);
+
+  --r-xs: 6px;
+  --r-s: 8px;
+  --r-m: 12px;
+  --r-l: 16px;
+  --r-xl: 22px;
+  --r-full: 999px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI Variable", "Segoe UI",
+    system-ui, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, "Cascadia Code", Menlo, Monaco, Consolas, monospace;
+  --font-system: var(--font-sans);
+  --text-xs: 11px;
+  --text-s: 12px;
+  --text-m: 13px;
+  --text-l: 15px;
+  --text-xl: 20px;
+  --text-2xl: 26px;
+  --weight-medium: 510;
+  --weight-semibold: 590;
+  --tracking: -0.012em;
+
+  /* transcript and composer share one reading column */
+  --measure-chat: 680px;
+  --gutter-chat: 24px;
+  --column-chat: calc(var(--measure-chat) + var(--gutter-chat) * 2);
+  --turn-gap: 22px;
+  --turn-gap-tight: 6px;
+
+  --titlebar-h: 44px;
+  --shell-gap: 6px;
+}
+
+/* Nothing to see through (Linux) or Reduce Transparency: every material turns solid. */
+html.solid-surfaces {
+  --glass: #1b1b1f;
+  --glass-strong: #0b0b0d;
+  --glass-chrome: var(--canvas);
+  --glass-filter: none;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass: #1b1b1f;
+    --glass-strong: #0b0b0d;
+    --glass-chrome: var(--canvas);
+    --glass-filter: none;
+  }
+}
+
+/* Legacy names: kept only until every area uses the tokens above. */
+:root {
+  --bg: var(--sheet);
+  --bg-sidebar: var(--raised);
+  --bg-elev: var(--raised-2);
+  --surface: var(--raised);
+  --surface-2: var(--raised-2);
+  --surface-3: var(--raised-3);
+  --surface-raised: var(--raised-2);
+  --surface-input: var(--field);
+  --surface-quiet: var(--fill-quiet);
+  --border: var(--separator);
+  --border-strong: var(--separator-strong);
+  --border-hover: var(--separator-hover);
+  --text: var(--label);
+  --text-2: var(--label-2);
+  --text-3: var(--label-3);
+  --hover-quiet: var(--fill-hover);
+  --hover-strong: var(--fill-press);
+  --shimmer-sheen: var(--shimmer);
+  --accent-dim: var(--fill-press);
+  --accent-ring: var(--focus-ring);
+  --accent-active: var(--accent-press);
+  --accent-blue: var(--blue);
+  --ok: var(--green);
+  --warn: var(--amber);
+  --err: var(--red);
+  --tone-working: var(--green);
+  --tone-working-soft: var(--green-soft);
+  --tone-working-ring: var(--green-ring);
+  --tone-attention: var(--amber);
+  --tone-attention-soft: var(--amber-soft);
+  --tone-attention-ring: var(--amber-ring);
+  --tone-danger-soft: var(--red-soft);
+  --tone-danger-soft-hover: var(--red-soft-strong);
+  --tone-danger-ring: var(--red-ring);
+  --tone-danger-ring-hover: var(--red-ring-strong);
+  --tone-danger-text: var(--red-label);
+  --tone-shell: var(--blue);
+  --tone-shell-soft: var(--blue-soft);
+  --tone-shell-ring: var(--blue-ring);
+  --sans: var(--font-sans);
+  --mono: var(--font-mono);
+  --radius-s: var(--r-s);
+  --radius-m: var(--r-m);
+  --radius-l: var(--r-l);
+  --radius-pill: var(--r-s);
+  --shadow-pop: var(--elev-2), 0 0 0 1px var(--separator);
+  --shadow-floating: var(--elev-3), 0 0 0 1px var(--separator);
+  --shadow-island: var(--elev-2);
+  --shadow-input: var(--elev-2);
+  --shadow-input-focus: var(--elev-3);
+}

@@ -17,7 +17,6 @@
     Copy,
   } from "$lib/ui/icons";
   import { fmtTokens } from "$lib/util";
-  import LogoMark from "../chrome/LogoMark.svelte";
   import WindowControlsMaybe from "../chrome/WindowControlsMaybe.svelte";
   import PromptInspectContent from "./PromptInspectContent.svelte";
   import PromptInspectSidebar from "./PromptInspectSidebar.svelte";
@@ -120,8 +119,8 @@
     tabindex="-1"
     aria-label="Context and memory inspector"
   >
-    <header class="app-topbar settings-topbar" data-tauri-drag-region>
-      <div class="topbar-left" data-tauri-drag-region>
+    <header class="app-titlebar settings-topbar" data-tauri-drag-region>
+      <div class="titlebar-side" data-tauri-drag-region>
         <button
           type="button"
           class="icon-btn settings-back-btn"
@@ -140,14 +139,7 @@
         </div>
       </div>
 
-      <div class="topbar-center" data-tauri-drag-region>
-        <div class="settings-topbar-pill">
-          <LogoMark size={14} />
-          <span>Active Context Inspector</span>
-        </div>
-      </div>
-
-      <div class="topbar-right" data-tauri-drag-region>
+      <div class="titlebar-side" data-tauri-drag-region>
         <button
           type="button"
           class="settings-copy-btn"

@@ -1,10 +1,10 @@
 <script lang="ts">
-  import Sidebar from "./Sidebar.svelte";
-  import LogoMark from "../chrome/LogoMark.svelte";
-  import Icon, { Plus } from "$lib/ui/icons";
-  import { modLabel } from "$lib/platform";
   import type { SessionListItem } from "$lib/domain/sessionList";
   import type { SessionActivity, UnreadMark } from "$lib/domain/sessions";
+  import { modLabel } from "$lib/platform";
+  import { Tooltip } from "$lib/ui";
+  import Icon, { Plus, Search } from "$lib/ui/icons";
+  import Sidebar from "./Sidebar.svelte";
 
   type Props = {
     sessions: SessionListItem[];
@@ -13,78 +13,35 @@
     activeSessionId: string | null;
     activity: Record<string, SessionActivity>;
     unread: Record<string, UnreadMark>;
-    version?: string;
     onOpen: (sessionId: string, projectRoot: string) => void;
     onDelete: (sessionId: string) => void;
     onAddWorkspace: () => void;
     onRemoveWorkspace: (root: string) => void;
     onActivateWorkspace: (root: string | null) => void;
-    onNewChat?: () => void;
+    onNewChat: () => void;
+    onSearch: () => void;
   };
 
-  let {
-    sessions,
-    workspaces,
-    activeWorkspace,
-    activeSessionId,
-    activity,
-    unread,
-    version,
-    onOpen,
-    onDelete,
-    onAddWorkspace,
-    onRemoveWorkspace,
-    onActivateWorkspace,
-    onNewChat,
-  }: Props = $props();
+  let { onNewChat, onSearch, ...list }: Props = $props();
+  const mod = modLabel();
 </script>
 
 <div class="sidebar-slot">
-  <aside class="sidebar">
-    <div class="sidebar-header-deck">
-      <div class="sidebar-brand-row">
-        <div class="sidebar-brand">
-          <div class="sidebar-brand-icon">
-            <LogoMark size={14} />
-          </div>
-          <span class="sidebar-brand-name">Z Engine</span>
-          <span class="brand-beta-pill">BETA</span>
-        </div>
-      </div>
-      {#if onNewChat}
-        <button
-          type="button"
-          class="sidebar-new-chat-btn"
-          onclick={onNewChat}
-          aria-label="New chat"
-        >
-          <div class="btn-left">
-            <Icon icon={Plus} size={13} strokeWidth={2.4} />
-            <span class="sidebar-new-chat-text">New chat</span>
-          </div>
-          <kbd class="sidebar-new-chat-kbd">{modLabel()}N</kbd>
+  <aside class="app-sidebar" aria-label="Chats">
+    <div class="sidebar-top">
+      <Tooltip text="New chat" shortcut={`${mod}N`} side="right">
+        <button type="button" class="sidebar-action" onclick={onNewChat}>
+          <Icon icon={Plus} size={14} strokeWidth={2} />
+          <span>New chat</span>
         </button>
-      {/if}
+      </Tooltip>
+      <Tooltip text="Search chats" shortcut={`${mod}K`} side="right">
+        <button type="button" class="sidebar-action" onclick={onSearch}>
+          <Icon icon={Search} size={14} strokeWidth={1.9} />
+          <span>Search</span>
+        </button>
+      </Tooltip>
     </div>
-
-    <Sidebar
-      {sessions}
-      {workspaces}
-      {activeWorkspace}
-      {activeSessionId}
-      {activity}
-      {unread}
-      {onOpen}
-      {onDelete}
-      {onAddWorkspace}
-      {onRemoveWorkspace}
-      {onActivateWorkspace}
-    />
-
-    {#if version}
-      <div class="sidebar-footer">
-        <span class="footer-version-tag">v{version}</span>
-      </div>
-    {/if}
+    <Sidebar {...list} />
   </aside>
 </div>

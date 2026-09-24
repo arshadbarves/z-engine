@@ -11,12 +11,9 @@
   import HomeScreen from "../home/HomeScreen.svelte";
   import PendingInteractions from "../planning/PendingInteractions.svelte";
   import ChatTimeline from "./ChatTimeline.svelte";
-  import StatusDock from "./StatusDock.svelte";
   import TrustBanner from "./TrustBanner.svelte";
   import TurnView from "./TurnView.svelte";
 
-  type Props = { projectName: string | null };
-  let { projectName }: Props = $props();
 
   const NO_LIST: never[] = [];
   const NO_RECORD: Record<string, never> = {};
@@ -66,7 +63,7 @@
 <div class="transcript-stage">
   <div class="transcript-inner">
     {#if empty && !sessions.hydrating}
-      <HomeScreen {projectName} />
+      <HomeScreen />
     {/if}
 
     {#each timeline as turn, i (turn.key)}
@@ -79,7 +76,6 @@
         {checks}
         {projectRoot}
         live={i === timeline.length - 1 ? live : undefined}
-        verification={turn.active ? (view?.verification ?? null) : null}
         canRestoreCode={(id) => checkpointIds.has(id)}
         {onRewind}
         onOpenAgent={openAgent}
@@ -102,12 +98,6 @@
     {#if view}
       {#if view.trustRequest}<TrustBanner request={view.trustRequest} />{/if}
       <PendingInteractions {view} />
-      <StatusDock
-        {status}
-        startedAt={view.activeTurn?.startedAt ?? null}
-        streaming={live.length > 0}
-        retrying={view.retrying}
-      />
     {/if}
   </div>
   <ChatTimeline {prompts} />

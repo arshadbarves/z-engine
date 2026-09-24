@@ -133,8 +133,8 @@ one, and the others keep cooking.
   turn ended (coloured by its outcome and verification, cleared when you
   open the chat), or a warning when its last turn failed, hit a budget or
   was interrupted. A collapsed workspace shows its most urgent mark.
-- The title-bar island also tells you when another chat needs you; clicking
-  it opens that chat.
+- The title bar also tells you when another chat needs you, with a chip
+  beside the chat title; clicking it opens that chat.
 - Switching is instant: the window shows the view it already has and calls
   `open_session` only for a chat not yet opened since the app started.
 - Quitting closes every session: turns stop, jobs end, logs are flushed.
@@ -206,30 +206,45 @@ who knocks before taking down a wall.
   [`broker/`](../../crates/z-engine-engine/src/broker/) holds pending
   requests so the session actor keeps accepting commands.
 
-## The title-bar island
+## The companion and the status line
 
-**In plain words.** A small capsule in the title bar is the app's status
-light: what the agent is doing, passing notices, todo progress and whether
-you are needed, like the strip at the top of a phone that shows a running
-timer or an incoming call.
+**In plain words.** A small glass orb with eyes sits in the middle of the
+title bar, next to one line that names the chat and says what the agent is
+doing. The orb shows the mood of the work at a glance, like a colleague you
+can see working across the desk; the line gives the facts.
 
 **How it works**
-- It shows one state at a time, most urgent first: this chat needs you, a
-  notice, a provider retry, work in progress, a turn that just ended,
-  another chat needs you, idle. A second activity can show in a bubble.
-- A small ring shows todo progress while the agent works and context use
-  while it is idle. The agent keeps its to-do list with the `TodoWrite`
-  tool; the engine saves it in the session log and emits `todosUpdated`.
-- A dot marks warnings or errors you have not seen. Clicking opens the chat
-  that needs you, dismisses a notice, or expands a panel with the todo
-  checklist, context use and a **Compact** button, cost, running agents and
-  recent notices.
+- The line names the workspace and chat, then shows one state, most urgent
+  first: this chat needs you, a passing notice, a provider retry, work in
+  progress (the step in plain words, plan progress, elapsed time and this
+  turn's cost), a turn that just ended, a recap of turns that ended while
+  you were away, or idle (the session cost). Another chat that needs you
+  appears as a chip beside it, and running agents and jobs as a pill.
+- The orb's pose follows the same state: its eyes scan while the agent
+  reads, it bobs while commands run, looks at you in amber when it needs
+  you, hops with sparkles when a turn is verified and droops when one
+  fails. Running agents orbit it as small dots, and a ring around it shows
+  plan progress (the agent keeps its to-do list with the `TodoWrite` tool;
+  the engine saves it in the session log and emits `todosUpdated`).
+- At the default **Lively** level (`ui.companion`) it also reacts to you: it
+  watches the composer while you type, looks up when you scroll back, dozes
+  after a few quiet minutes, and waves when you return after five minutes
+  away. **Calm** reacts only to the agent; **Off** replaces the orb with a
+  small dot. Under Reduce Motion it holds still poses.
+- Clicking the line opens the **Now card**: the full step, the plan
+  checklist, context use with **Compact** and **Inspect prompt**, this
+  turn's and the session's cost, running agents, and recent warnings and
+  errors. A dot on the line marks warnings you have not opened yet.
 
 **For developers**
-- `components/chrome/AgentIsland.svelte` and its `Island*` parts;
-  `islandState` in `lib/domain/island.ts`
-  picks the state from the view, `todos.ts`, `contextMeter.ts`, `activity.ts`
-  and the toast store; the checklist is `planning/TodoChecklist.svelte`.
+- [`chrome/TitleStatus.svelte`](../../crates/z-engine-gui/ui/src/components/chrome/TitleStatus.svelte)
+  (the line), `Companion.svelte` (the orb) and `NowCard.svelte` (the card,
+  on the kit `Popover`).
+- `liveStatus()` in [`lib/domain/liveStatus.ts`](../../crates/z-engine-gui/ui/src/lib/domain/liveStatus.ts)
+  picks the state from the session view and the toast store;
+  `companionPose()` in `lib/domain/companion.ts` maps it and the user's
+  signals (`lib/stores/userSignals.svelte.ts`, DOM events only) to a mood,
+  a gaze and particles. The live turn cost uses `activeTurn.costAtStart`.
 
 ## The agents and jobs panel
 
@@ -240,8 +255,8 @@ board showing who is out on an errand.
 **How it works**
 - A subagent emits `agentStarted`, then `agentUpdated`; a background shell
   or agent emits `jobUpdated`. The panel lists them with status, usage and
-  cost; open it from the island or the palette (**Agents**, **Background
-  jobs**).
+  cost; open it from the agents pill in the title bar or the palette (**Agents**,
+  **Background jobs**).
 - Opening an agent loads its own transcript from disk (`agent_transcript`).
 - You can stop a job (`killJob`), and apply (`applyAgentChanges`) or discard
   (`discardAgentChanges`) the work of an agent that ran in its own git
@@ -285,7 +300,7 @@ before it goes in the post.
   lays out its system sections, tools and messages, with a breakdown of
   where the context tokens go. You can copy all of it.
 - `/context` (**Context usage** in the palette) asks the engine for that
-  breakdown by category (`contextReport`); the island shows how full the
+  breakdown by category (`contextReport`); the Now card shows how full the
   context is.
 
 **For developers**

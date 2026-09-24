@@ -162,6 +162,11 @@ describe("turns", () => {
     expect(view.activeTurn).toMatchObject({ turnId: "t1", messageId: "u1" });
   });
 
+  it("remembers the session cost a turn started from", () => {
+    const view = run([{ type: "turnStarted", turnId: "t1", messageId: "u1" }], { ...emptyView("S1"), costUsd: 0.42 });
+    expect(view.activeTurn?.costAtStart).toBe(0.42);
+  });
+
   it("settles the main agent when the turn finishes", () => {
     const view = run([
       { type: "turnStarted", turnId: "t1", messageId: "u1" },

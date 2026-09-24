@@ -19,7 +19,7 @@ These are answered immediately, without using the model.
 | Command | What it does |
 |---|---|
 | `/compact [instructions]` | Summarizes older history to free context. Optional text tells the summary what to focus on. Only when the agent is idle. |
-| `/context` | Shows how many tokens each prompt layer uses (system prompt, tool definitions, instructions, messages) and opens the context meter. |
+| `/context` | Shows how many tokens each prompt layer uses (system prompt, tool definitions, instructions, messages) and opens the context details in the Now card. |
 | `/cost` | Shows this chat's cost and token counts (input, output, cache read, cache write), plus tokens per agent when subagents ran. |
 | `/status` | Shows the session id, project and its trust state, model and fast model, provider, permission mode, effort, context use, whether code checkpoints are on, and running background jobs. |
 | `/model [id]` | Without an id, shows the current model. With an id, switches this chat's model. |
@@ -59,7 +59,7 @@ instructions go to the model.
 | `/resume` | Opens the palette listing your chats. |
 | `/export [markdown\|json]` | Copies the transcript to the clipboard. |
 | `/clear` | Starts a new chat (the old one is kept). |
-| `/context` | Opens the context meter with a per-layer breakdown. |
+| `/context` | Opens the Now card with context use; **Inspect prompt** there shows the per-layer breakdown. |
 
 Commands that prompt the model can't be queued while the agent is working;
 you'll see "/name waits for an idle session". An unknown command shows a

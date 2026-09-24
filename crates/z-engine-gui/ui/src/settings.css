@@ -318,8 +318,6 @@
   box-sizing: border-box;
 }
 
-
-
 .active-model-summary {
   display: flex;
   align-items: center;
@@ -1321,10 +1319,6 @@
 }
 
 /* ── About Update Section ──────────────────────────────────────────────── */
-
-.about-update-section {
-  width: 100%;
-}
 
 .about-update-card {
   width: 100%;

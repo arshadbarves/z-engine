@@ -248,9 +248,8 @@ tidy up before anything falls off.
 - Local estimates: characters divided by four, rounded up; a Chinese,
   Japanese or Korean character is one token; an image or other media block
   is 1,600; tools count their name, description and schema.
-- The island at the top of the window shows how full the context is (a
-  ring while the agent is idle, and in its panel); `/context` shows the
-  numbers by prompt layer.
+- The Now card (click the status line at the top of the window) shows how
+  full the context is; `/context` shows the numbers by prompt layer.
   Estimates only steer compaction; cost uses the provider's reported usage.
 
 **For developers.**

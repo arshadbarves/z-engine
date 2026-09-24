@@ -37,7 +37,7 @@ export function onTurnStarted(
 ): SessionView {
   return {
     ...view,
-    activeTurn: { turnId, messageId, startedAt: now },
+    activeTurn: { turnId, messageId, startedAt: now, costAtStart: view.costUsd },
     turnStarts: put(view.turnStarts, messageId, turnId),
     verification: null,
   };

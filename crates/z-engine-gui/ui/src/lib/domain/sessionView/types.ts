@@ -54,6 +54,8 @@ export interface ActiveTurn {
   turnId: string;
   messageId: string;
   startedAt: number;
+  /** Session cost when the turn began; the live turn cost is measured from here. */
+  costAtStart: number;
 }
 
 export interface NoticeView {

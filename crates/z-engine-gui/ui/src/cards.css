@@ -74,34 +74,6 @@
   border-left: 1px solid var(--border);
 }
 
-.retry-banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
-  font-size: 12px;
-  color: var(--warn);
-  background: var(--tone-attention-soft);
-  border: 1px solid var(--tone-attention-ring);
-  border-radius: var(--radius-s);
-}
-
-.retry-title {
-  font-weight: 600;
-}
-
-.retry-reason {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-2);
-}
-
-.working-pulse-dot.waiting {
-  background: var(--tone-attention);
-}
-
 .user-attached-docs {
   display: flex;
   flex-wrap: wrap;

@@ -71,25 +71,23 @@ describe("activity", () => {
 describe("eventEffects", () => {
   it("toasts notices for the active session only", () => {
     const notice = { type: "notice", level: "warn", text: "slow" } as const;
-    expect(eventEffects(notice, "S", true)).toEqual([{ kind: "toast", tone: "warn", text: "slow" }]);
-    expect(eventEffects(notice, "S", false)).toEqual([]);
+    expect(eventEffects(notice, true)).toEqual([{ kind: "toast", tone: "warn", text: "slow" }]);
+    expect(eventEffects(notice, false)).toEqual([]);
   });
 
   it("routes shell output to the terminal drawer", () => {
-    expect(eventEffects({ type: "commandOutput", name: "shell", markdown: "$ ls" }, "S", true)).toEqual([
+    expect(eventEffects({ type: "commandOutput", name: "shell", markdown: "$ ls" }, true)).toEqual([
       { kind: "shellOutput", text: "$ ls" },
     ]);
-    expect(eventEffects({ type: "commandOutput", name: "cost", markdown: "x" }, "S", true)).toEqual([]);
+    expect(eventEffects({ type: "commandOutput", name: "cost", markdown: "x" }, true)).toEqual([]);
   });
 
-  it("asks for attention when a background session needs input", () => {
-    const effects = eventEffects({ type: "approvalRequested", request: approval() }, "bg", false);
-    expect(effects).toEqual([{ kind: "attention", sessionId: "bg", text: "Approval needed · Run cargo test" }]);
-    expect(eventEffects({ type: "approvalRequested", request: approval() }, "fg", true)).toEqual([]);
+  it("leaves a background request to the title bar instead of a toast", () => {
+    expect(eventEffects({ type: "approvalRequested", request: approval() }, false)).toEqual([]);
   });
 
   it("refreshes the session list when titles or turns change", () => {
-    expect(eventEffects({ type: "titleChanged", title: "x" }, "S", false)).toEqual([{ kind: "refreshSessions" }]);
-    expect(eventEffects({ type: "hookRan", hookEvent: "Stop", command: "x", blocked: false, message: null }, "S", true)).toEqual([]);
+    expect(eventEffects({ type: "titleChanged", title: "x" }, false)).toEqual([{ kind: "refreshSessions" }]);
+    expect(eventEffects({ type: "hookRan", hookEvent: "Stop", command: "x", blocked: false, message: null }, true)).toEqual([]);
   });
 });

@@ -32,7 +32,7 @@ pub use permissions::{PermissionSettings, RuleKind};
 pub use provider::{DEFAULT_BASE_URL, ProviderKind, ProviderSettings};
 pub use root::Settings;
 pub use shell::{SandboxSettings, ShellSettings};
-pub use ui::{TaskReportView, UiSettings};
+pub use ui::{CompanionLevel, TaskReportView, UiSettings};
 pub use verification::{CheckConfig, MAX_CONTINUATIONS, VerificationSettings};
 pub use web::{SearchBackend, WebSettings};
 

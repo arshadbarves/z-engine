@@ -26,7 +26,7 @@ function emit() {
   for (const l of listeners) l();
 }
 
-/** `{ subscribe, getSnapshot }` so ToastHost binds it with `bindStore`. */
+/** `{ subscribe, getSnapshot }` so the title status line binds it with `bindStore`. */
 export const toastStore = {
   subscribe(l: Listener) {
     listeners.add(l);

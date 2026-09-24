@@ -1,204 +1,75 @@
 <script lang="ts">
-  import Icon, {
-    Bot,
-    FolderGit2,
-    GitCompare,
-    MessageSquare,
-    PanelLeft,
-    Plus,
-    Search,
-    Settings,
-  } from "$lib/ui/icons";
-  import { isMacPlatform, modLabel } from "$lib/platform";
-  import ContextMeter from "./ContextMeter.svelte";
-  import LogoMark from "./LogoMark.svelte";
-  import UpdateButton from "./UpdateButton.svelte";
+  import { modLabel } from "$lib/platform";
+  import { bindStore } from "$lib/svelte/bind.svelte";
+  import { GitCompare, PanelLeft, Plus, Search, Settings } from "$lib/ui/icons";
+  import { updateStore } from "$lib/updateStore";
+  import TitleStatus from "./TitleStatus.svelte";
+  import TitlebarButton from "./TitlebarButton.svelte";
   import WindowControlsMaybe from "./WindowControlsMaybe.svelte";
 
+  /** Title zone: window controls and toggles at the sides, the companion and status line in the middle. */
   type Props = {
-    workspaceName?: string | null;
-    chatTitle?: string | null;
-    titleHint?: string;
+    workspaceName: string | null;
+    chatTitle: string | null;
     diffOpen: boolean;
-    workOpen: boolean;
-    workBadge?: number;
     sidebarOpen: boolean;
-    isWorking?: boolean;
-    isApproval?: boolean;
     onToggleSidebar: () => void;
     onPalette: () => void;
     onToggleDiff: () => void;
-    onToggleWork: () => void;
-    onInspectPrompt?: () => void;
-    onNewChat?: () => void;
-    onSettings?: () => void;
+    onNewChat: () => void;
+    onSettings: () => void;
   };
 
   let {
     workspaceName,
     chatTitle,
-    titleHint,
     diffOpen,
-    workOpen,
-    workBadge = 0,
     sidebarOpen,
-    isWorking = false,
-    isApproval = false,
     onToggleSidebar,
     onPalette,
     onToggleDiff,
-    onToggleWork,
-    onInspectPrompt,
     onNewChat,
     onSettings,
   }: Props = $props();
 
-  const isMac = isMacPlatform();
+  const update = bindStore(updateStore);
+  const mod = modLabel();
 </script>
 
-<header class="app-topbar" data-tauri-drag-region>
-  <div class="topbar-left" data-tauri-drag-region>
-    {#if !isMac}
-      <div class="topbar-brand" title="Z Engine Beta">
-        <LogoMark size={14} />
-        <span>Z Engine</span>
-        <span class="brand-beta-pill">BETA</span>
-      </div>
-    {/if}
-
-    <div class="topbar-item-wrap">
-      <button
-        type="button"
-        class="icon-btn topbar-toggle-btn"
-        onclick={onToggleSidebar}
-        aria-label="Toggle sidebar"
-      >
-        <Icon icon={PanelLeft} size={14} strokeWidth={1.8} />
-      </button>
-      <div class="topbar-micro-tip" role="tooltip">
-        <span>{sidebarOpen ? "Hide sidebar" : "Show sidebar"}</span>
-        <kbd>{modLabel()}B</kbd>
-      </div>
-    </div>
-
-    {#if onNewChat && !sidebarOpen}
-      <div class="topbar-item-wrap">
-        <button
-          type="button"
-          class="icon-btn"
-          onclick={onNewChat}
-          aria-label="New chat"
-        >
-          <Icon icon={Plus} size={14} strokeWidth={2} />
-        </button>
-        <div class="topbar-micro-tip" role="tooltip">
-          <span>New chat</span>
-          <kbd>{modLabel()}N</kbd>
-        </div>
-      </div>
+<header class="app-titlebar" data-tauri-drag-region>
+  <div class="titlebar-side" data-tauri-drag-region>
+    <TitlebarButton
+      label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+      shortcut={`${mod}B`}
+      icon={PanelLeft}
+      pressed={sidebarOpen}
+      onclick={onToggleSidebar}
+    />
+    {#if !sidebarOpen}
+      <TitlebarButton label="New chat" shortcut={`${mod}N`} icon={Plus} onclick={onNewChat} />
+      <TitlebarButton label="Search and commands" shortcut={`${mod}K`} icon={Search} onclick={onPalette} />
     {/if}
   </div>
 
-  <div class="topbar-center" data-tauri-drag-region>
-    <div
-      class={`topbar-session-info${isWorking ? " is-working" : ""}${isApproval ? " is-approval" : ""}`}
-      data-tauri-drag-region
-      title={titleHint || `${workspaceName || ""}${workspaceName && chatTitle ? " / " : ""}${chatTitle || ""}`}
-    >
-      {#if isWorking}
-        <span class="topbar-live-dot working" aria-hidden="true"></span>
-        <span class="topbar-live-label working">Working</span>
-        <span class="topbar-crumb-sep" data-tauri-drag-region>·</span>
-      {:else if isApproval}
-        <span class="topbar-live-dot approval" aria-hidden="true"></span>
-        <span class="topbar-live-label approval">Review</span>
-        <span class="topbar-crumb-sep" data-tauri-drag-region>·</span>
-      {/if}
-
-      {#if workspaceName}
-        <span class="topbar-ws-tag" data-tauri-drag-region>
-          <Icon icon={FolderGit2} size={12} strokeWidth={1.8} class="topbar-ws-icon" />
-          <span class="topbar-ws-text" data-tauri-drag-region>{workspaceName}</span>
-        </span>
-      {/if}
-      {#if workspaceName && chatTitle}
-        <span class="topbar-crumb-sep" data-tauri-drag-region>›</span>
-      {/if}
-      {#if chatTitle}
-        <span class="topbar-chat-title" data-tauri-drag-region>
-          <Icon icon={MessageSquare} size={11} strokeWidth={1.8} class="topbar-chat-icon" />
-          <span data-tauri-drag-region>{chatTitle}</span>
-        </span>
-      {/if}
-    </div>
+  <div class="titlebar-center">
+    <TitleStatus workspace={workspaceName} chat={chatTitle} />
   </div>
 
-  <div class="topbar-right" data-tauri-drag-region>
-    <div class="topbar-item-wrap">
-      <button
-        type="button"
-        class="icon-btn"
-        onclick={onPalette}
-        aria-label="Search and commands"
-      >
-        <Icon icon={Search} size={14} strokeWidth={1.8} />
-      </button>
-      <div class="topbar-micro-tip" role="tooltip">
-        <span>Search & commands</span>
-        <kbd>{modLabel()}K</kbd>
-      </div>
-    </div>
-
-    <UpdateButton />
-    <ContextMeter onInspect={onInspectPrompt} />
-
-    <div class="topbar-item-wrap">
-      <button
-        type="button"
-        class={`icon-btn topbar-work-btn${workOpen ? " active" : ""}`}
-        onclick={onToggleWork}
-        aria-label="Agents and background jobs"
-      >
-        <Icon icon={Bot} size={14} strokeWidth={1.8} />
-        {#if workBadge > 0}<span class="topbar-badge">{workBadge}</span>{/if}
-      </button>
-      <div class="topbar-micro-tip" role="tooltip">
-        <span>Agents & jobs</span>
-      </div>
-    </div>
-
-    <div class="topbar-item-wrap">
-      <button
-        type="button"
-        class={`icon-btn${diffOpen ? " active" : ""}`}
-        onclick={onToggleDiff}
-        aria-label="Review file changes"
-      >
-        <Icon icon={GitCompare} size={14} strokeWidth={1.8} />
-      </button>
-      <div class="topbar-micro-tip" role="tooltip">
-        <span>Review changes</span>
-        <kbd>{modLabel()}D</kbd>
-      </div>
-    </div>
-
-    {#if onSettings}
-      <div class="topbar-item-wrap">
-        <button
-          type="button"
-          class="icon-btn"
-          onclick={onSettings}
-          aria-label="Open settings"
-        >
-          <Icon icon={Settings} size={14} strokeWidth={1.8} />
-        </button>
-        <div class="topbar-micro-tip" role="tooltip">
-          <span>Settings</span>
-          <kbd>{modLabel()},</kbd>
-        </div>
-      </div>
-    {/if}
-
+  <div class="titlebar-side end" data-tauri-drag-region>
+    <TitlebarButton
+      label="Review changes"
+      shortcut={`${mod}D`}
+      icon={GitCompare}
+      pressed={diffOpen}
+      onclick={onToggleDiff}
+    />
+    <TitlebarButton
+      label={update.current.info?.available ? "Settings · update available" : "Settings"}
+      shortcut={`${mod},`}
+      icon={Settings}
+      dot={Boolean(update.current.info?.available)}
+      onclick={onSettings}
+    />
     <WindowControlsMaybe />
   </div>
 </header>

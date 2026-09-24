@@ -21,7 +21,6 @@ export interface SessionsState {
 export type RuntimeEffect =
   | { kind: "toast"; tone: "info" | "warn" | "error"; text: string }
   | { kind: "shellOutput"; text: string }
-  | { kind: "attention"; sessionId: string; text: string }
   | { kind: "refreshSessions" };
 
 export function emptySessionsState(): SessionsState {
@@ -106,7 +105,7 @@ export function activityMap(views: Record<string, SessionView>): Record<string, 
 const NOTICE_TONE = { info: "info", warn: "warn", error: "error" } as const;
 
 /** Side effects an event asks of the shell (toasts, list refresh, terminal output). */
-export function eventEffects(event: Event, sessionId: string, active: boolean): RuntimeEffect[] {
+export function eventEffects(event: Event, active: boolean): RuntimeEffect[] {
   switch (event.type) {
     case "notice":
       return active ? [{ kind: "toast", tone: NOTICE_TONE[event.level], text: event.text }] : [];
@@ -121,10 +120,6 @@ export function eventEffects(event: Event, sessionId: string, active: boolean): 
       ];
     case "commandOutput":
       return active && event.name === "shell" ? [{ kind: "shellOutput", text: event.markdown }] : [];
-    case "approvalRequested":
-    case "questionAsked":
-    case "planProposed":
-      return active ? [] : [{ kind: "attention", sessionId, text: attentionText(event) }];
     case "titleChanged":
     case "turnStarted":
     case "turnFinished":
@@ -132,10 +127,4 @@ export function eventEffects(event: Event, sessionId: string, active: boolean): 
     default:
       return [];
   }
-}
-
-function attentionText(event: Event): string {
-  if (event.type === "approvalRequested") return `Approval needed · ${event.request.title}`;
-  if (event.type === "questionAsked") return "A background chat has a question for you";
-  return "A background chat proposed a plan";
 }

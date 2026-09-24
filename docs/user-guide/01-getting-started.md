@@ -25,9 +25,10 @@ Two free tools make Z Engine better if they are installed:
 - **ripgrep** (`rg`) – faster code search. Without it, search uses a
   built-in engine.
 
-Z Engine updates itself: when a new version is available, a version chip
-appears in the top bar. Click it (or **Settings → About & Updates →
-Update & Restart**) to install. The app checks for updates when it starts.
+Z Engine updates itself: when a new version is available, the status line
+at the top of the window says so and a dot appears on the **Settings** button.
+Open **Settings → About & Updates → Update & Restart** to install. The app
+checks for updates when it starts.
 
 ## Connect a model provider
 

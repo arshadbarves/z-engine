@@ -168,7 +168,9 @@ your settings, else the catalog, else a small built-in price table) and
 adds it up:
 
 - the footer under each turn shows its tokens and cost;
-- the context meter in the top bar shows the chat's total cost;
+- the status line at the top of the window shows the current turn's cost
+  while the agent works and the chat's total while it's idle; the Now card
+  (click the line) shows both;
 - `/cost` shows the chat's cost and its input, output, cache-read and
   cache-write tokens, plus tokens per agent;
 - the **Agents** panel's **Usage by agent** table shows input tokens,

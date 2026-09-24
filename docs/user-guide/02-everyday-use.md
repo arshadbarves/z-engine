@@ -118,11 +118,14 @@ You don't have to wait for the agent to finish.
 Slash commands that start a turn (like `/review`) can't be queued: wait
 until the agent is idle.
 
-## The todo strip
+## Following progress
 
-For multi-step work the agent keeps a todo list. A strip above the
-composer shows progress (for example `3/7`), a bar, and the current item.
-Click it to expand the full checklist. See
+The status line at the top of the window says what the agent is doing
+right now, in plain words (for example "Reading auth.rs" or "Running the
+parser tests"), with plan progress, the turn's elapsed time and its cost so
+far. The orb beside it shows the same thing at a glance, and a ring around
+it fills as the todo list gets done. Click the status line to see the full
+checklist. See
 [Plan mode, questions and todos](05-plan-mode-questions-and-todos.md#todos).
 
 ## Reading tool cards

@@ -5,7 +5,6 @@
   import Transcript from "./components/chat/Transcript.svelte";
   import JumpLatest from "./components/chrome/JumpLatest.svelte";
   import SplashScreen from "./components/chrome/SplashScreen.svelte";
-  import ToastHost from "./components/chrome/ToastHost.svelte";
   import TopBar from "./components/chrome/TopBar.svelte";
   import CommandPalette from "./components/overlays/CommandPalette.svelte";
   import DiffPanel from "./components/overlays/DiffPanel.svelte";
@@ -13,7 +12,6 @@
   import WorktreePanel from "./components/overlays/WorktreePanel.svelte";
   import SettingsPage from "./components/settings/SettingsPage.svelte";
   import AppSidebar from "./components/sidebar/AppSidebar.svelte";
-  import { workCounts } from "./lib/domain/agentTree";
   import { sessionLabel, viewTitle } from "./lib/domain/sessionList";
   import { lastPromptId } from "./lib/domain/timeline/blocks";
   import { paletteActions } from "./lib/paletteActions";
@@ -28,6 +26,7 @@
   } from "./lib/stores/app-actions";
   import { settingsStore } from "./lib/stores/settings.svelte";
   import { ui } from "./lib/stores/ui.svelte";
+  import { userSignals } from "./lib/stores/userSignals.svelte";
   import { bindStore } from "./lib/svelte/bind.svelte";
   import { presence } from "./lib/ui/presence.svelte";
   import { createScrollController } from "./lib/ui/scrollController.svelte";
@@ -48,10 +47,7 @@
   const workPresence = presence(() => ui.workPanel !== null, 180);
 
   const view = $derived(sessions.active);
-  const activity = $derived(sessions.activeId ? (sessions.activity[sessions.activeId] ?? null) : null);
-  const counts = $derived(view ? workCounts(view.agents, view.jobs) : null);
-  const workBadge = $derived(counts ? counts.runningAgents + counts.runningJobs + counts.pendingWorktrees : 0);
-  const chatTitle = $derived(view ? sessionLabel(viewTitle(view)) : "New Chat");
+  const chatTitle = $derived(view ? sessionLabel(viewTitle(view)) : null);
   const projectRoot = $derived(view?.info?.projectRoot ?? workspaces.current.active);
   const workspaceName = $derived(projectRoot ? wsBasename(projectRoot) : null);
   const lastPrompt = $derived(lastPromptId(view?.messages));
@@ -75,6 +71,12 @@
 
   $effect(() => scroller.bindContainer(transcriptEl));
 
+  $effect(() => userSignals.track());
+
+  $effect(() => {
+    userSignals.scrolledBack = scroller.showJump;
+  });
+
   $effect(() => {
     void view;
     scroller.onContentUpdated(sessions.activeId, lastPrompt);
@@ -83,8 +85,8 @@
   $effect(() => {
     function onDblClick(e: MouseEvent) {
       const target = e.target as HTMLElement;
-      if (target.closest("button, input, textarea, a, .session, .ws-head")) return;
-      if (target.closest(".sidebar, .chat-head")) void getCurrentWindow().toggleMaximize();
+      if (target.closest("button, input, textarea, a, .chat-row, .ws-head")) return;
+      if (target.closest(".app-sidebar, .chat-head")) void getCurrentWindow().toggleMaximize();
     }
     window.addEventListener("dblclick", onDblClick);
     return () => window.removeEventListener("dblclick", onDblClick);
@@ -111,28 +113,15 @@
   <SplashScreen onDone={() => (splash = false)} />
 {/if}
 
-<ToastHost />
-
 <main class={`app${ui.sidebarOpen ? "" : " no-sidebar"}${splash ? "" : " app-enter"}`}>
   <TopBar
     {workspaceName}
     {chatTitle}
-    titleHint={projectRoot
-      ? `workspace ${projectRoot}${sessions.activeId ? ` · session ${sessions.activeId}` : ""}`
-      : sessions.activeId
-        ? `session ${sessions.activeId}`
-        : undefined}
     diffOpen={ui.diffOpen}
-    workOpen={ui.workPanel !== null}
-    {workBadge}
     sidebarOpen={ui.sidebarOpen}
-    isWorking={activity === "working"}
-    isApproval={activity === "approval"}
     onToggleSidebar={() => (ui.sidebarOpen = !ui.sidebarOpen)}
     onPalette={() => ui.openPalette()}
     onToggleDiff={() => (ui.diffOpen = !ui.diffOpen)}
-    onToggleWork={() => ui.toggleWork()}
-    onInspectPrompt={() => (ui.inspectOpen = true)}
     onNewChat={() => void startNewChat()}
     onSettings={() => ui.openSettings()}
   />
@@ -145,13 +134,13 @@
       activeSessionId={sessions.activeId}
       activity={sessions.activity}
       unread={sessions.unread}
-      version={settingsStore.info?.version}
       onOpen={(id, root) => void openChat(id, root)}
       onDelete={(id) => void removeChat(id)}
       onAddWorkspace={() => void addWorkspace()}
       onRemoveWorkspace={(root) => void removeWorkspace(root)}
       onActivateWorkspace={(root) => workspaceStore.setActive(root)}
       onNewChat={() => void startNewChat()}
+      onSearch={() => ui.openPalette(true)}
     />
 
     <section class="workstation-stage">
@@ -160,11 +149,13 @@
           {#if sessions.hydrating}
             <div class="hydrate-shimmer" aria-label="Restoring chat"></div>
           {/if}
+          <div class="edge-fade top" aria-hidden="true"></div>
           <div class="transcript" bind:this={transcriptEl}>
-            <Transcript projectName={workspaces.current.active ? wsBasename(workspaces.current.active) : null} />
+            <Transcript />
           </div>
+          <div class="edge-fade bottom" aria-hidden="true"></div>
           {#if scroller.showJump}
-            <JumpLatest onJump={() => scroller.jumpToLatest()} busy={view?.status === "busy"} />
+            <JumpLatest onJump={() => scroller.jumpToLatest()} />
           {/if}
         </div>
 

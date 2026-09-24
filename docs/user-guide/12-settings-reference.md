@@ -220,6 +220,7 @@ environment. They get `PATH`, `HOME`, `SHELL`, `TERM`, `LANG`, `LC_ALL`,
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
+| `ui.companion` | `"lively"`, `"calm"`, `"off"` | `"lively"` | The title-bar companion: **Lively** reacts to the agent and to you (typing, scrolling, stepping away), **Calm** only to the agent, **Off** shows a small dot instead of the orb. Settings → Appearance. |
 | `ui.output_style` | string | unset | Name of an [output style](07-memory-and-context.md#output-styles). |
 | `ui.task_report_view` | `"quiet"`, `"compact"`, `"detailed"` | `"quiet"` | Report density choice under Settings → Appearance. The v2 transcript doesn't use it yet. |
 | `compat.claude` | bool | `true` | Also read `.claude/` folders (agents, commands, skills) and `CLAUDE.md` files. `.claude/settings.json` is never read. |

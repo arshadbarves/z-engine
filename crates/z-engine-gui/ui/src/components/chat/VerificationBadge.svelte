@@ -3,11 +3,11 @@
   import { verificationBadge } from "$lib/domain/verification";
   import type { CheckRecord } from "$lib/protocol/CheckRecord";
   import type { VerificationOutcome } from "$lib/protocol/VerificationOutcome";
-  import Icon, { AlertOctagon, AlertTriangle, CheckCircle2, Info, LoaderCircle } from "$lib/ui/icons";
+  import Icon, { AlertOctagon, AlertTriangle, CheckCircle2, Info } from "$lib/ui/icons";
   import CheckEvidence from "./CheckEvidence.svelte";
 
-  type Props = { outcome: VerificationOutcome; evidence: CheckRecord[]; live?: boolean };
-  let { outcome, evidence, live = false }: Props = $props();
+  type Props = { outcome: VerificationOutcome; evidence: CheckRecord[] };
+  let { outcome, evidence }: Props = $props();
 
   const ICONS = { ok: CheckCircle2, warn: AlertTriangle, err: AlertOctagon, neutral: Info } as const;
   const badge = $derived(verificationBadge(outcome));
@@ -18,13 +18,13 @@
 <div class="verify-wrap">
   <button
     type="button"
-    class={`verify-badge tone-${badge.tone}${live ? " live" : ""}`}
+    class={`verify-badge tone-${badge.tone}`}
     disabled={!hasDetail}
     aria-expanded={hasDetail ? open : undefined}
     onclick={() => (open = !open)}
   >
-    <Icon icon={live ? LoaderCircle : ICONS[badge.tone]} size={11} class={live ? "spin" : ""} />
-    <span>{live ? `Verifying · ${badge.label}` : badge.label}</span>
+    <Icon icon={ICONS[badge.tone]} size={11} />
+    <span>{badge.label}</span>
     {#if evidence.length > 0}<span class="verify-count">{plural(evidence.length, "check")}</span>{/if}
   </button>
   {#if open && hasDetail}

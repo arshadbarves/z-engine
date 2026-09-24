@@ -4,21 +4,29 @@
 
   type Props = {
     text: string;
+    /** Keyboard shortcut shown after the text, e.g. "⌘K". */
+    shortcut?: string;
+    side?: "top" | "bottom" | "left" | "right";
     children: Snippet;
   };
 
-  let { text, children }: Props = $props();
+  let { text, shortcut, side = "bottom", children }: Props = $props();
 </script>
 
 <Tooltip.Provider>
   <Tooltip.Root delayDuration={280}>
     <Tooltip.Trigger>
       {#snippet child({ props })}
-        <span {...props} style="display:inline-flex">
+        <span {...props} class="tip-anchor">
           {@render children()}
         </span>
       {/snippet}
     </Tooltip.Trigger>
-    <Tooltip.Content class="tip" sideOffset={6}>{text}</Tooltip.Content>
+    <Tooltip.Portal>
+      <Tooltip.Content class="tip" {side} sideOffset={6}>
+        <span>{text}</span>
+        {#if shortcut}<kbd class="tip-key">{shortcut}</kbd>{/if}
+      </Tooltip.Content>
+    </Tooltip.Portal>
   </Tooltip.Root>
 </Tooltip.Provider>

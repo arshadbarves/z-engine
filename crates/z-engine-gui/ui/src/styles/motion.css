@@ -1,0 +1,169 @@
+/* Motion tokens and shared keyframes. Blur-morph for state changes, springs for size. */
+
+:root {
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+  --spring-snappy: var(--ease-out);
+  --spring-smooth: var(--ease-out);
+  --dur-fast: 160ms;
+  --dur-med: 280ms;
+  --dur-slow: 420ms;
+  --dur-spring: 520ms;
+}
+
+/* Damped springs sampled into linear(): snappy overshoots ~4%, smooth is critically damped. */
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    --spring-snappy: linear(
+      0, 0.05, 0.167, 0.315, 0.468, 0.61, 0.733, 0.832, 0.908, 0.963, 1, 1.023, 1.034, 1.038, 1.037, 1.033,
+      1.028, 1.022, 1.016, 1.011, 1.007, 1.004, 1.002, 1, 0.999, 1
+    );
+    --spring-smooth: linear(
+      0, 0.059, 0.185, 0.327, 0.463, 0.582, 0.679, 0.758, 0.819, 0.866, 0.902, 0.928, 0.948, 0.962, 0.973,
+      0.981, 0.986, 0.99, 0.993, 0.995, 0.997, 1
+    );
+  }
+}
+
+@keyframes veil-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes veil-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes panel-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.99);
+  }
+}
+/* Disclosures fade only: expanding panels must not slide the text below them. */
+@keyframes disclosure-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes glyph-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes sheet-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+/* Focus pull: content sharpens in and softens out. Uses `scale` so `transform` stays free. */
+@keyframes blur-in {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+    scale: 0.98;
+  }
+  to {
+    opacity: 1;
+    filter: none;
+    scale: 1;
+  }
+}
+@keyframes blur-out {
+  from {
+    opacity: 1;
+    filter: none;
+  }
+  to {
+    opacity: 0;
+    filter: blur(6px);
+    scale: 0.985;
+  }
+}
+
+@keyframes spin {
+  to {
+    rotate: 360deg;
+  }
+}
+.spin {
+  animation: spin 0.85s linear infinite;
+}
+
+/* Live work breathes; "needs you" pulses. */
+@keyframes live-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+@keyframes attention-pulse {
+  0%,
+  100% {
+    scale: 1;
+    opacity: 1;
+  }
+  50% {
+    scale: 0.8;
+    opacity: 0.6;
+  }
+}
+
+/* Reduce Motion: state still changes, nothing travels or pulses. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}

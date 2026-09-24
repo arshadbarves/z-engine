@@ -115,12 +115,12 @@ tokens a model can take in one request (for example 200,000). Everything
 counts: the system prompt, instruction files, tool definitions, the
 conversation, and every file or command output the agent has looked at.
 
-The ring in the top bar shows how full the context is. Hover for the
-numbers; click it to see used tokens, headroom, the chat's cost, a
-breakdown by layer, and where automatic compaction kicks in. From there you
-can **Compact Now** or **Inspect Prompt** (the full last request: system
-prompt, tools and messages). `/context` prints the same breakdown in the
-chat.
+Click the status line at the top of the window to open the Now card. It
+shows how full the context is (used tokens and the limit), the chat's cost,
+and two actions: **Compact** (when the
+agent is idle) and **Inspect prompt** (the full last request: system
+prompt, tools and messages, with a breakdown by layer). `/context` prints
+the breakdown in the chat and opens the same card.
 
 Z Engine takes the window size from the model catalog; set
 `model.context_window` to override it. Unknown models are assumed to have

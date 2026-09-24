@@ -26,7 +26,6 @@ class UiStore {
   workPanel = $state<WorkTab | null>(null);
   /** Agent whose transcript the work panel shows. */
   agentTranscript = $state<string | null>(null);
-  contextOpen = $state(false);
 
   togglePalette() {
     this.paletteSessionsOnly = false;

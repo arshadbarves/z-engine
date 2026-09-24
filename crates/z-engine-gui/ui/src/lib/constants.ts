@@ -37,4 +37,3 @@ export const HERO_STARTERS: HeroStarter[] = [
   },
 ];
 
-export const HERO_EXAMPLES = HERO_STARTERS.map((s) => s.prompt);

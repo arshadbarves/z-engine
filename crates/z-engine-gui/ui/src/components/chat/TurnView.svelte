@@ -6,13 +6,11 @@
   import type { CheckRecord } from "$lib/protocol/CheckRecord";
   import type { Message } from "$lib/protocol/Message";
   import type { RewindScope } from "$lib/protocol/RewindScope";
-  import type { VerificationOutcome } from "$lib/protocol/VerificationOutcome";
   import AssistantText from "./AssistantText.svelte";
   import LocalCards from "./LocalCards.svelte";
   import ThinkingDisclosure from "./ThinkingDisclosure.svelte";
   import TurnFooter from "./TurnFooter.svelte";
   import UserCard from "./UserCard.svelte";
-  import VerificationBadge from "./VerificationBadge.svelte";
   import ToolCall from "./tools/ToolCall.svelte";
 
   type Props = {
@@ -24,7 +22,6 @@
     checks: CheckRecord[];
     projectRoot: string | null;
     live?: StreamingMessage[];
-    verification?: VerificationOutcome | null;
     canRestoreCode?: (messageId: string) => boolean;
     onRewind?: (message: Message, scope: RewindScope) => void;
     onOpenAgent: (agentId: string) => void;
@@ -39,7 +36,6 @@
     checks,
     projectRoot,
     live = [],
-    verification = null,
     canRestoreCode,
     onRewind,
     onOpenAgent,
@@ -86,9 +82,5 @@
 
   {#if turn.record}
     <TurnFooter record={turn.record} {checks} />
-  {:else if turn.active && verification}
-    <footer class="turn-footer">
-      <VerificationBadge outcome={verification} evidence={[]} live />
-    </footer>
   {/if}
 </section>

@@ -31,8 +31,10 @@ Rules behind the badge:
   also count as changes for the next turn.
 - The badge never blocks you. It's information.
 
-While a turn is running, a live badge (**Verifying · ...**) shows the
-current state.
+While checks run at the end of a turn, the status line at the top of the
+window says **Checking the changes**. When the turn ends, it briefly shows
+the result, such as **Verified** or **Checks failed** (the companion cheers
+or droops), and the footer keeps the badge.
 
 ## Where checks come from
 

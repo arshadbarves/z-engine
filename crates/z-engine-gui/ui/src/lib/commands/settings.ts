@@ -18,6 +18,8 @@ export interface AppInfo {
   version: string;
   configDir: string;
   dataDir: string;
+  /** The window shows native vibrancy (macOS) or Mica (Windows) behind the webview. */
+  nativeGlass: boolean;
 }
 
 /** One layer file; `raw` is its TOML table as JSON. */

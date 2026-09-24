@@ -13,7 +13,19 @@ export function modLabel(): string {
   return isMacPlatform() ? "⌘" : "Ctrl+";
 }
 
+/** Surfaces start solid; `applyWindowMaterial` lets the native material through once it is confirmed. */
 export function applyPlatformClass(): void {
-  document.documentElement.classList.toggle("plat-mac", isMacPlatform());
-  document.documentElement.classList.toggle("plat-win", /Win/.test(navigator.platform));
+  const root = document.documentElement;
+  const mac = isMacPlatform();
+  const win = isWinPlatform();
+  root.classList.toggle("plat-mac", mac);
+  root.classList.toggle("plat-win", win);
+  root.classList.toggle("plat-linux", !mac && !win);
+  applyWindowMaterial(false);
+}
+
+export function applyWindowMaterial(translucent: boolean): void {
+  const root = document.documentElement;
+  root.classList.toggle("native-glass", translucent);
+  root.classList.toggle("solid-surfaces", !translucent);
 }

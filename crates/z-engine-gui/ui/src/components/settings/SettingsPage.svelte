@@ -50,8 +50,8 @@
 
 <div class={`settings-overlay${isClosing ? " is-closing" : ""}`} role="presentation">
   <div class={`settings-page${isClosing ? " is-closing" : ""}`} role="dialog" tabindex="-1" aria-label="Settings">
-    <header class="app-topbar settings-topbar" data-tauri-drag-region>
-      <div class="topbar-left" data-tauri-drag-region>
+    <header class="app-titlebar settings-topbar" data-tauri-drag-region>
+      <div class="titlebar-side" data-tauri-drag-region>
         <button type="button" class="icon-btn settings-back-btn" title="Back (Esc)" onclick={onClose} aria-label="Back">
           <Icon icon={ChevronLeft} size={15} strokeWidth={1.8} />
         </button>
@@ -61,8 +61,7 @@
           <span class="settings-breadcrumb-leaf">{active.label}</span>
         </div>
       </div>
-      <div class="topbar-center" data-tauri-drag-region></div>
-      <div class="topbar-right" data-tauri-drag-region>
+      <div class="titlebar-side" data-tauri-drag-region>
         <WindowControlsMaybe />
       </div>
     </header>

@@ -61,7 +61,7 @@ class SessionsStore {
     const next = applyEnvelope(prev, env, this.activeId, now);
     if (next === prev) return [];
     this.#state = next;
-    return eventEffects(env.event, env.sessionId, env.sessionId === this.activeId);
+    return eventEffects(env.event, env.sessionId === this.activeId);
   }
 
   applyLocal(sessionId: string, event: Event, now = Date.now()) {

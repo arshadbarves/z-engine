@@ -1,9 +1,7 @@
-import { HERO_EXAMPLES } from "./constants";
 import { MODES } from "./domain/modes";
 import type { PaletteItem } from "./paletteTypes";
 import { modLabel } from "./platform";
-import { compact, exportTranscript, sessions, setMode, submitPrompt } from "./runtime";
-import { composer } from "./stores/composer.svelte";
+import { compact, exportTranscript, sessions, setMode } from "./runtime";
 import { ui } from "./stores/ui.svelte";
 import { runUiCommand } from "./stores/uiCommands";
 import {
@@ -20,7 +18,6 @@ import {
   Settings,
   Shield,
   SquareTerminal,
-  Workflow,
 } from "./ui/icons";
 
 export function paletteActions(opts: {
@@ -71,16 +68,5 @@ export function paletteActions(opts: {
       icon: HelpCircle,
       run: () => void runUiCommand("help", ""),
     },
-    ...HERO_EXAMPLES.map((example) => ({
-      label: example,
-      hint: "Starter task",
-      keywords: "task example prompt starter",
-      group: "Starters",
-      icon: Workflow,
-      run: () => {
-        composer.clear();
-        void submitPrompt(example, []);
-      },
-    })),
   ];
 }

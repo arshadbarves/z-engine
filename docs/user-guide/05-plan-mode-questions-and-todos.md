@@ -76,10 +76,10 @@ For tasks with several steps, the agent keeps a todo list with the
 `TodoWrite` tool. Each item is pending, in progress, or completed; the agent
 keeps exactly one item in progress at a time.
 
-- **The todo strip** above the composer shows `done/total`, a progress bar,
-  and the current step (for example "Running the parser tests"). When all
-  items are done it says **All tasks done**.
-- **Click the strip** to expand the full checklist.
+- **The status line** at the top of the window shows the count (for
+  example `2/5`) next to the current step, such as "Running the parser
+  tests", and a ring around the companion fills as items are done.
+- **Click the status line** to see the full checklist.
 - **`/todos`** prints the list in the transcript as a checklist.
 - A subagent's own todo list is shown in its transcript in the **Agents**
   panel.

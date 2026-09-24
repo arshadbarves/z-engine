@@ -88,6 +88,7 @@ schema = 2
 
 # [ui]
 # task_report_view = "quiet"    # quiet | compact | detailed
+# companion = "lively"          # lively | calm | off  (the title-bar companion)
 
 # [compat]
 # claude = true                 # also read .claude/ folders and CLAUDE.md

@@ -45,11 +45,11 @@ pub use paths::{
     project_settings_file,
 };
 pub use settings::{
-    AgentSettings, CheckConfig, CompatSettings, ContextSettings, HOOK_EVENTS, HookConfig,
-    LspServerConfig, LspSettings, McpServerConfig, McpSettings, ModelSettings, PermissionSettings,
-    PricingOverride, ProviderKind, ProviderSettings, RuleKind, SandboxSettings, SearchBackend,
-    Settings, ShellSettings, TaskReportView, UiSettings, VerificationSettings, WebSettings,
-    is_hook_event,
+    AgentSettings, CheckConfig, CompanionLevel, CompatSettings, ContextSettings, HOOK_EVENTS,
+    HookConfig, LspServerConfig, LspSettings, McpServerConfig, McpSettings, ModelSettings,
+    PermissionSettings, PricingOverride, ProviderKind, ProviderSettings, RuleKind, SandboxSettings,
+    SearchBackend, Settings, ShellSettings, TaskReportView, UiSettings, VerificationSettings,
+    WebSettings, is_hook_event,
 };
 pub use trust::TrustStore;
 pub use writer::{

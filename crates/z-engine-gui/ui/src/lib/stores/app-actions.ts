@@ -10,7 +10,7 @@ import {
   sessions,
 } from "../runtime";
 import { resetShell } from "../shellStore";
-import { sameWorkspacePath, workspaceStore, wsBasename } from "../workspaces";
+import { sameWorkspacePath, workspaceStore } from "../workspaces";
 import { composer } from "./composer.svelte";
 
 /** Pick a folder and register it as a workspace; returns the new root. */
@@ -19,7 +19,6 @@ export async function addWorkspace(): Promise<string | null> {
     const picked = await openFileDialog({ directory: true, multiple: false, title: "Choose a workspace folder" });
     if (typeof picked !== "string" || !picked) return null;
     await workspaceStore.add(picked);
-    pushToast(`Workspace added · ${wsBasename(picked)}`, "ok");
     return workspaceStore.getSnapshot().active;
   } catch (e) {
     console.error(e);
@@ -44,6 +43,15 @@ export async function openChat(sessionId: string, projectRoot: string): Promise<
   await openSession(sessionId, projectRoot);
 }
 
+/** Open a chat known only by id; its project comes from the live view or the chat list. */
+export function openChatById(sessionId: string): Promise<void> {
+  const root =
+    sessions.view(sessionId)?.info?.projectRoot ??
+    sessionList.summaries.find((s) => s.sessionId === sessionId)?.projectRoot ??
+    "";
+  return openChat(sessionId, root);
+}
+
 export async function removeChat(sessionId: string): Promise<void> {
   await deleteChat(sessionId);
 }
@@ -57,7 +65,6 @@ export async function removeWorkspace(root: string): Promise<void> {
     pushToast("Could not remove workspace", "warn");
     return;
   }
-  pushToast(`Workspace removed · ${wsBasename(root)}`, "info");
   if (sameWorkspacePath(activeRoot, root)) sessions.activate(null);
   void sessionList.refresh();
 }
@@ -67,7 +74,6 @@ export async function createWorktreeAndStart(name: string): Promise<void> {
     const root = await createWorktree(name);
     await workspaceStore.load();
     workspaceStore.setActive(root);
-    pushToast(`Worktree created · ${wsBasename(root)}`, "ok");
     await startNewChat();
   } catch (e) {
     console.error(e);

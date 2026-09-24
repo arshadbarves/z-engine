@@ -16,8 +16,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Documentation contract** (`docs/AGENTS.md`), a `docs-maintainer`
   subagent, and a CI link check, so feature changes update the docs in the
   same change.
+- **Companion and status line**: the title bar names the workspace and chat
+  and says what the agent is doing in plain words, with plan progress,
+  elapsed time and this turn's cost. A small glass orb beside it shows the
+  same state as body language (reading, running, needs you, verified,
+  failed), orbited by running agents, and reacts to you at the default
+  **Lively** level (listening while you type, dozing when idle, waving with a
+  recap when you return). Click the line for the Now card: plan, context
+  (**Compact**, **Inspect prompt**), cost, agents, and recent warnings and
+  errors. New setting `ui.companion` (`lively`, `calm`, `off`) under
+  Settings → Appearance.
+- Real window translucency: macOS vibrancy and Windows 11 Mica show through
+  the window chrome; other systems get solid surfaces.
+
+### Changed
+- New visual system for the desktop app: design tokens with system colors
+  and SF Pro, glass only for chrome that floats above content, a solid
+  content sheet, spring and blur-in motion, and Reduce Motion and Reduce
+  Transparency support.
+- The sidebar shows one status dot per chat instead of pills, icons and
+  counts, and gains **Search**. The top bar keeps **Review changes** and
+  **Settings**; **New chat** and search join them while the sidebar is
+  hidden.
+
+### Removed
+- The top-bar context ring, update chip, **Agents & jobs** button and
+  Working/Review label, the working pill under the transcript, the todo
+  strip above the composer, the live verification badge and the separate
+  toast capsule. The companion and status line replace all of them.
+- Toasts that only confirmed something already visible (chat deleted,
+  workspace added or removed, worktree created), the command palette's
+  starter prompts (they remain on the home screen), and the home screen's
+  logo, badge, tagline and shortcut rows.
 
 ### Fixed
+- OpenCode Zen free models no longer fail with `FreeTierError` ("can only
+  be used from within OpenCode"): requests use the gateway's required
+  client fingerprint (OpenCode user-agent, session id shape, and
+  `shell`/`read` tool declarations).
 - `verification.auto_checks` accepts a custom check by the id you gave it
   (`e2e`) as well as by its full id (`custom:e2e`).
 - A built-in language server can be turned off with `enabled = false`

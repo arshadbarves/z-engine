@@ -1,19 +1,9 @@
 <script lang="ts">
   import type { SessionListItem } from "$lib/domain/sessionList";
-  import { unreadSessionOutcome } from "$lib/domain/sessionOutcome";
+  import { sidebarMark, type SidebarMark } from "$lib/domain/sessionOutcome";
   import type { SessionActivity, UnreadMark } from "$lib/domain/sessions";
+  import { ChevronDown, ChevronRight, Icon, Plus, Trash2, X } from "$lib/ui/icons";
   import { sameWorkspacePath, wsBasename } from "$lib/workspaces";
-  import {
-    ChevronDown,
-    ChevronRight,
-    FolderGit2,
-    Icon,
-    LoaderCircle,
-    MessageSquare,
-    Plus,
-    ShieldAlert,
-    Trash2,
-  } from "$lib/ui/icons";
 
   type Props = {
     sessions: SessionListItem[];
@@ -43,7 +33,7 @@
     onActivateWorkspace,
   }: Props = $props();
 
-  let recentsOpen = $state(true);
+  let othersOpen = $state(true);
   let wsOpen = $state<Record<string, boolean>>({});
   let lastActive: string | null | undefined = undefined;
 
@@ -52,9 +42,7 @@
     for (const root of workspaces) byWorkspace.set(root, []);
     const otherSessions: SessionListItem[] = [];
     for (const s of sessions) {
-      const hit = s.projectRoot
-        ? workspaces.find((root) => sameWorkspacePath(s.projectRoot, root))
-        : undefined;
+      const hit = s.projectRoot ? workspaces.find((root) => sameWorkspacePath(s.projectRoot, root)) : undefined;
       if (hit) byWorkspace.get(hit)!.push(s);
       else otherSessions.push(s);
     }
@@ -74,197 +62,148 @@
     return wsOpen[root] ?? isActive;
   }
 
-  function toggleWs(root: string, isActive: boolean) {
-    wsOpen[root] = !isWsOpen(root, isActive);
+  function markFor(session: SessionListItem): SidebarMark | null {
+    return sidebarMark({
+      active: session.sessionId === activeSessionId,
+      activity: activity[session.sessionId] ?? null,
+      unread: unread[session.sessionId],
+      lastOutcome: session.lastOutcome,
+    });
   }
 
-  function workspaceActivity(items: SessionListItem[]): SessionActivity | null {
-    let working = false;
-    for (const s of items) {
-      const a = activity[s.sessionId];
-      if (a === "approval") return "approval";
-      if (a === "working") working = true;
-    }
-    return working ? "working" : null;
+  /** A collapsed workspace hides its chats, so it carries their most urgent live mark. */
+  function groupMark(items: SessionListItem[]): SidebarMark | null {
+    const live = items.map((s) => activity[s.sessionId]).filter(Boolean);
+    if (live.includes("approval")) return { tone: "attention", label: "A chat here needs you" };
+    return live.length ? { tone: "working", label: "Working" } : null;
+  }
+
+  function activate(e: KeyboardEvent, run: () => void) {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    run();
   }
 </script>
 
-{#snippet sessionTreeItem(session: SessionListItem)}
-  {@const active = session.sessionId === activeSessionId}
-  {@const activityState = activity[session.sessionId] ?? null}
-  {@const title = session.title}
-  {@const isWorking = activityState === "working"}
-  {@const isApproval = activityState === "approval"}
-  {@const unreadMark = unreadSessionOutcome(unread[session.sessionId], active, activityState)}
+{#snippet chatRow(session: SessionListItem)}
+  {@const mark = markFor(session)}
+  {@const open = () => onOpen(session.sessionId, session.projectRoot)}
   <div
-    class="sidebar-session-item{active ? ' active' : ''}{isWorking ? ' working' : ''}{isApproval
-      ? ' approval'
-      : ''}{unreadMark ? ` unread unread-${unreadMark.tone}` : ''}"
+    class={`chat-row${session.sessionId === activeSessionId ? " is-active" : ""}`}
     role="button"
     tabindex={0}
-    title={isApproval
-      ? `Action Required · ${title}`
-      : isWorking
-        ? `Agent Working · ${title}`
-        : title}
-    onclick={(e) => {
-      e.stopPropagation();
-      onOpen(session.sessionId, session.projectRoot);
-    }}
-    onkeydown={(e) => e.key === "Enter" && onOpen(session.sessionId, session.projectRoot)}
+    title={[session.title, mark?.label, session.legacy ? "imported from v1" : null].filter(Boolean).join(" · ")}
+    onclick={open}
+    onkeydown={(e) => activate(e, open)}
   >
-    <div class="session-item-icon-wrap">
-      {#if isWorking}
-        <span class="session-activity-ring working" aria-hidden="true"></span>
-        <Icon icon={LoaderCircle} size={13} strokeWidth={2} class="spin session-spin-icon" />
-      {:else if isApproval}
-        <span class="session-activity-ring approval" aria-hidden="true"></span>
-        <Icon icon={ShieldAlert} size={13} strokeWidth={2} class="session-alert-icon" />
-      {:else}
-        <Icon icon={MessageSquare} size={13} strokeWidth={1.8} class="session-msg-icon" />
-      {/if}
-    </div>
-    <span class="session-item-title"><span class="title-text">{title}</span></span>
-    <div class="session-item-tail">
-      {#if session.legacy}
-        <span class="session-legacy-pill" title="Imported from a v1 session file">v1</span>
-      {/if}
-      {#if isWorking}
-        <span class="session-live-pill working" title="Agent working">Live</span>
-      {:else if isApproval}
-        <span class="session-live-pill approval" title="Needs approval">Review</span>
-      {:else if unreadMark}
-        <span
-          class="session-status-dot"
-          data-tone={unreadMark.tone}
-          role="img"
-          title={unreadMark.label}
-          aria-label={unreadMark.label}
-        ></span>
-      {/if}
-      <button
-        type="button"
-        class="session-delete-btn"
-        title="Delete chat"
-        onclick={(e) => {
-          e.stopPropagation();
-          onDelete(session.sessionId);
-        }}
-      >
-        <Icon icon={Trash2} size={11} strokeWidth={1.8} />
-      </button>
-    </div>
+    <span class="chat-row-title">{session.title}</span>
+    {#if mark}<span class={`chat-mark tone-${mark.tone}`} role="img" aria-label={mark.label}></span>{/if}
+    <button
+      type="button"
+      class="chat-row-delete"
+      aria-label="Delete chat"
+      title="Delete chat"
+      onclick={(e) => {
+        e.stopPropagation();
+        onDelete(session.sessionId);
+      }}
+    >
+      <Icon icon={Trash2} size={12} strokeWidth={1.8} />
+    </button>
   </div>
 {/snippet}
 
-{#snippet workspaceTreeItem(root: string)}
+{#snippet workspaceGroup(root: string)}
   {@const active = sameWorkspacePath(activeWorkspace, root)}
   {@const items = (byWorkspace.get(root) ?? []).slice(0, 40)}
-  {@const name = wsBasename(root)}
   {@const open = isWsOpen(root, active)}
-  {@const wsActivity = workspaceActivity(items)}
-  <div class="workspace-item{active ? ' active-ws' : ''}">
+  {@const mark = open ? null : groupMark(items)}
+  {@const toggle = () => {
+    onActivateWorkspace(root);
+    wsOpen[root] = !open;
+  }}
+  <div class={`ws-group${active ? " is-active" : ""}`}>
     <div
-      class="workspace-header{wsActivity ? ` ws-${wsActivity}` : ''}"
+      class="ws-head"
       role="button"
       tabindex={0}
-      title="{root}{active ? ' (Active Workspace)' : ''}"
-      onclick={() => {
-        onActivateWorkspace(root);
-        toggleWs(root, active);
-      }}
-      onkeydown={(e) => e.key === "Enter" && onActivateWorkspace(root)}
+      title={root}
+      aria-expanded={open}
+      onclick={toggle}
+      onkeydown={(e) => activate(e, toggle)}
     >
-      <span class="workspace-chevron" aria-hidden="true">
-        {#if open}
-          <Icon icon={ChevronDown} size={11} strokeWidth={2} />
-        {:else}
-          <Icon icon={ChevronRight} size={11} strokeWidth={2} />
-        {/if}
-      </span>
-      <Icon icon={FolderGit2} size={13} strokeWidth={1.8} class="workspace-folder-icon" />
-      <span class="workspace-title"><span class="title-text">{name}</span></span>
-      <div class="workspace-actions">
-        {#if wsActivity === "working"}
-          <span class="ws-activity-dot working" title="Agent working in this workspace"></span>
-        {:else if wsActivity === "approval"}
-          <span class="ws-activity-dot approval" title="Approval needed in this workspace"></span>
-        {/if}
-        {#if items.length > 0}
-          <span class="workspace-badge">{items.length}</span>
-        {/if}
-        <button
-          type="button"
-          class="workspace-del-btn"
-          title="Remove workspace"
-          onclick={(e) => {
-            e.stopPropagation();
-            onRemoveWorkspace(root);
-          }}
-        >
-          <Icon icon={Trash2} size={11} strokeWidth={1.8} />
-        </button>
-      </div>
+      <Icon icon={open ? ChevronDown : ChevronRight} size={11} strokeWidth={2} class="ws-chevron" />
+      <span class="ws-name">{wsBasename(root)}</span>
+      {#if mark}<span class={`chat-mark tone-${mark.tone}`} role="img" aria-label={mark.label}></span>{/if}
+      <button
+        type="button"
+        class="sidebar-icon-btn"
+        aria-label="Remove workspace"
+        title="Remove workspace"
+        onclick={(e) => {
+          e.stopPropagation();
+          onRemoveWorkspace(root);
+        }}
+      >
+        <Icon icon={X} size={11} strokeWidth={2} />
+      </button>
     </div>
     {#if open}
-      <div class="workspace-session-list">
-        {#if items.length === 0}
-          <div class="workspace-empty-hint">No chats in this workspace</div>
+      <div class="ws-chats">
+        {#each items as s (s.sessionId)}
+          {@render chatRow(s)}
         {:else}
-          {#each items as s (s.sessionId)}
-            {@render sessionTreeItem(s)}
-          {/each}
-        {/if}
+          <p class="ws-empty">No chats yet</p>
+        {/each}
       </div>
     {/if}
   </div>
 {/snippet}
 
-<div class="sidebar-content-deck">
-  <div class="sidebar-scrollable-area">
-    <div class="sidebar-group-header">
-      <span class="group-title">Workspaces</span>
+<div class="sidebar-scroll">
+  <div class="sidebar-section">
+    <div class="sidebar-section-head">
+      <span>Workspaces</span>
       <button
         type="button"
-        class="group-action-btn"
+        class="sidebar-icon-btn"
+        aria-label="Add workspace folder"
         title="Add workspace folder…"
         onclick={onAddWorkspace}
       >
         <Icon icon={Plus} size={12} strokeWidth={2} />
       </button>
     </div>
-
-    {#if workspaces.length === 0}
-      <div class="sidebar-empty-state">
-        <span>No workspaces linked.</span>
-        <button type="button" class="empty-add-btn" onclick={onAddWorkspace}>Add folder</button>
-      </div>
-    {/if}
-
     {#each workspaces as root (root)}
-      {@render workspaceTreeItem(root)}
-    {/each}
-
-    {#if otherSessions.length > 0}
-      <div class="sidebar-group-section">
-        <div
-          class="sidebar-group-header clickable"
-          role="button"
-          tabindex={0}
-          onclick={() => (recentsOpen = !recentsOpen)}
-          onkeydown={(e) => e.key === "Enter" && (recentsOpen = !recentsOpen)}
-        >
-          <span class="group-title">Other Chats</span>
-          <span class="workspace-badge">{otherSessions.length}</span>
-        </div>
-        {#if recentsOpen}
-          <div class="loose-sessions-list">
-            {#each otherSessions.slice(0, 24) as s (s.sessionId)}
-              {@render sessionTreeItem(s)}
-            {/each}
-          </div>
-        {/if}
+      {@render workspaceGroup(root)}
+    {:else}
+      <div class="sidebar-empty">
+        <span>Add a project folder to start.</span>
+        <button type="button" class="sidebar-empty-btn" onclick={onAddWorkspace}>Add folder</button>
       </div>
-    {/if}
+    {/each}
   </div>
+
+  {#if otherSessions.length > 0}
+    <div class="sidebar-section">
+      <div
+        class="sidebar-section-head is-toggle"
+        role="button"
+        tabindex={0}
+        aria-expanded={othersOpen}
+        onclick={() => (othersOpen = !othersOpen)}
+        onkeydown={(e) => activate(e, () => (othersOpen = !othersOpen))}
+      >
+        <span>Other chats</span>
+        <Icon icon={othersOpen ? ChevronDown : ChevronRight} size={11} strokeWidth={2} />
+      </div>
+      {#if othersOpen}
+        <div class="ws-chats">
+          {#each otherSessions.slice(0, 24) as s (s.sessionId)}
+            {@render chatRow(s)}
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {/if}
 </div>

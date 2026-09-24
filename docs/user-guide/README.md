@@ -33,14 +33,14 @@ permission rules, records everything, and lets you undo changes.
 
 | Area | What it is |
 |---|---|
-| **Sidebar** (left) | Your workspaces (project folders) and their chats. **New chat** starts a conversation; the trash icons delete chats or remove workspaces. |
-| **Top bar** | The current workspace and chat title, a **Working** or **Review** indicator, and buttons for search (⌘K / Ctrl+K), updates, the context meter, **Agents & jobs**, **Review changes** (⌘D / Ctrl+D) and **Settings** (⌘, / Ctrl+,). |
+| **Sidebar** (left) | Your workspaces (project folders) and their chats. **New chat** starts a conversation and **Search** finds one. A dot on a chat means it is working, needs you (amber), finished while you were away, or its last response failed; the open chat reports its status in the title bar instead. Hover a chat or workspace to delete or remove it. |
+| **Top bar** | In the middle, a small glass orb (the **companion**) and a **status line** name the workspace and chat and say what the agent is doing, with plan progress, time and cost (for example "Running the parser tests · 2/4 · 42s · $0.08"). The orb's expression follows the work and turns amber when you're needed, and the line briefly shows how each turn ended. Click the line for the plan, context use, cost, agents and recent notices. The buttons are **Review changes** (⌘D / Ctrl+D) and **Settings** (⌘, / Ctrl+,); while the sidebar is hidden, **New chat** and search (⌘K / Ctrl+K) move here too. |
 | **Transcript** (center) | Your messages, the agent's replies, a card for every tool it uses, approval cards, and a footer under each turn with the badge, time and cost. |
-| **Composer** (bottom) | Where you type. Above it: the todo strip and queued messages. Below it: the permission mode, model, reasoning effort, and an image button. |
+| **Composer** (bottom) | Where you type. Above it: queued messages. Below it: the permission mode, model, reasoning effort, and an image button. |
 | **Side panels** (right) | The agents and jobs panel, the diff (review) panel, and the git worktree panel open here. |
 
 On the empty home screen, starter cards fill the composer with example
-tasks, and the `@`, `/` and `!` buttons show what those characters do.
+tasks. The composer's placeholder lists what `@`, `/`, `!` and `#` do.
 
 ## Contents
 
@@ -55,7 +55,7 @@ tasks, and the `@`, `/` and `!` buttons show what those characters do.
    isolation, and writing your own agents.
 5. [Plan mode, questions and todos](05-plan-mode-questions-and-todos.md) –
    reviewing plans before any change, answering the agent's questions, and
-   the todo strip.
+   the todo list.
 6. [Commands and skills](06-commands-and-skills.md) – every slash command,
    writing custom commands, MCP prompts and skills.
 7. [Memory and context](07-memory-and-context.md) – `AGENTS.md` files,
