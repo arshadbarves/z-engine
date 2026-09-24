@@ -51,7 +51,7 @@ Personal). The page also lists other instruction files it found, such as
 `CLAUDE.md` or files in parent folders. `AGENTS.local.md` is meant for you
 alone; add it to your `.gitignore`.
 
-### Save a note with #
+### Save a note with `#`
 
 Type `# ` followed by a note in the composer and pick **Project memory**,
 **Personal project memory** or **User memory**. The note is appended to

@@ -180,7 +180,7 @@ files next to `SKILL.md` by relative path. You can ask for a skill by name
 ("use the release-notes skill"). Loading skills is allowed by default; a
 rule like `deny = ["Skill(deploy)"]` blocks one.
 
-## Save a note with #
+## Save a note with `#`
 
 Start a message with `#` to save a standing instruction without asking the
 model:
