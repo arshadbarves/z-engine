@@ -85,8 +85,8 @@
       />
     {/if}
     <ToggleSetting
-      title="Convert fetched pages to markdown"
-      description="Readable text instead of raw HTML for WebFetch results."
+      title="Answer from fetched pages with the fast model"
+      description="WebFetch returns the fast model's answer to the agent's question instead of the whole page. Off returns the page itself as markdown."
       keyPath={["web", "fetch_extract"]}
       value={web.fetch_extract}
     />

@@ -9,8 +9,9 @@ use z_engine_protocol::CheckKind;
 use crate::{CheckSpec, ProjectProfile};
 
 /// Checks matching any selector — a kind (`test`, `build`, `lint`, ...), a
-/// check id (`web/npm:test`), or an id without its root (`npm:test`); no
-/// selectors means every check. When the matches span several roots, each
+/// check id (`web/npm:test`), an id without its root (`npm:test`), or a
+/// configured check's own id (`unit` for `custom:unit`); no selectors means
+/// every check. When the matches span several roots, each
 /// changed path (root-relative) is attributed to the deepest root holding
 /// it and only those roots' checks are kept; if no match lies in such a
 /// root, all matches are kept. Profile order, each id once.
@@ -37,6 +38,7 @@ fn matches(check: &CheckSpec, selector: &str) -> bool {
                 .id
                 .rsplit_once('/')
                 .is_some_and(|(_, local)| local == selector)
+            || check.id.strip_prefix("custom:") == Some(selector)
             || CheckKind::parse(selector) == Some(check.kind))
 }
 

@@ -198,6 +198,12 @@ impl Engine {
         read(&self.inner.shared.catalog).clone()
     }
 
+    /// True when the model catalog was never downloaded or is a day old;
+    /// callers refresh it in the background and keep using the cache.
+    pub fn catalog_is_stale(&self) -> bool {
+        catalog::is_stale(&self.inner.shared.paths)
+    }
+
     /// Downloads models.dev, caches it, merges `models.json` overrides, and
     /// updates the context windows of live sessions.
     pub async fn refresh_catalog(&self) -> Result<Arc<ModelCatalog>, EngineError> {

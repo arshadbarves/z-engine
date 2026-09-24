@@ -113,6 +113,22 @@ fn falls_back_to_every_match_when_no_root_holds_a_change() {
 }
 
 #[test]
+fn configured_checks_match_their_own_id() {
+    let mut profile = profile();
+    profile
+        .checks
+        .push(spec("custom:unit", CheckKind::Custom, "."));
+    assert_eq!(
+        ids(&select_checks(&profile, &strings(&["unit"]), &[])),
+        ["custom:unit"]
+    );
+    assert_eq!(
+        ids(&select_checks(&profile, &strings(&["custom:unit"]), &[])),
+        ["custom:unit"]
+    );
+}
+
+#[test]
 fn duplicate_ids_are_selected_once() {
     let mut profile = profile();
     profile

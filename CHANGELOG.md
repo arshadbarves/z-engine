@@ -17,6 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   subagent, and a CI link check, so feature changes update the docs in the
   same change.
 
+### Fixed
+- `verification.auto_checks` accepts a custom check by the id you gave it
+  (`e2e`) as well as by its full id (`custom:e2e`).
+- A built-in language server can be turned off with `enabled = false`
+  alone; it no longer needs a `command`.
+- The model catalog refreshes in the background once the cached copy is a
+  day old, so newly released models appear without deleting the cache.
+- The WebFetch setting (`web.fetch_extract`) is described as what it does:
+  the fast model answers the agent's question about the page.
+
 ### Security
 - An untrusted workspace can no longer loosen your settings: its permission
   mode, allow rules, extra directories, shell, provider, web and

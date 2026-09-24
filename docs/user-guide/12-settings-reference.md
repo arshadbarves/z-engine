@@ -147,7 +147,7 @@ prefix.
 |---|---|---|---|
 | `mode` | `"off"`, `"report"`, `"auto"`, `"strict"` | `"report"` | What happens at the end of a turn that changed files. |
 | `max_continuations` | integer | `3` | Times auto/strict may send a turn back, 0–10. |
-| `auto_checks` | list | `["test"]` | Check kinds or check ids run by auto/strict. |
+| `auto_checks` | list | `["test"]` | Check kinds or check ids run by auto/strict. A custom check can be listed as `e2e` or `custom:e2e`. |
 
 `[[verification.checks]]` – one table per check: `id` (required),
 `command` (required), `label` (default: the id), `kind` (`test`, `build`,
@@ -175,8 +175,9 @@ See [Hooks](08-hooks.md).
 |---|---|---|---|
 | `lsp.enabled` | bool | `true` | Use language servers. |
 
-`[lsp.servers.<name>]` – fields: `command` (required), `args`,
-`extensions`, `root_markers`, `enabled` (default `true`).
+`[lsp.servers.<name>]` – fields: `command` (required unless the server is
+turned off), `args`, `extensions`, `root_markers`, `enabled` (default
+`true`; `false` also turns off a built-in server of that name).
 
 ## Web
 

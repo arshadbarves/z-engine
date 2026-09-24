@@ -1,9 +1,10 @@
 //! The model catalog: the cached models.dev payload plus local overrides
-//! (`models.json`) at startup, and an on-demand refresh that downloads,
-//! caches and re-merges.
+//! (`models.json`) at startup, an on-demand refresh that downloads, caches
+//! and re-merges, and the staleness rule that triggers it.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
 use z_engine_config::Paths;
 use z_engine_host::{atomic_write, read_text};
@@ -15,9 +16,20 @@ use crate::sync::write;
 
 const CACHE_FILE: &str = "models-dev.json";
 const MAX_CATALOG_BYTES: usize = 64 * 1024 * 1024;
+/// A downloaded catalog older than this is refreshed in the background.
+const MAX_CACHE_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 
 fn cache_path(paths: &Paths) -> PathBuf {
     paths.cache_dir.join(CACHE_FILE)
+}
+
+/// True when no catalog was downloaded yet or the download is a day old.
+pub(crate) fn is_stale(paths: &Paths) -> bool {
+    let age = std::fs::metadata(cache_path(paths))
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(|modified| SystemTime::now().duration_since(modified).ok());
+    age.is_none_or(|age| age > MAX_CACHE_AGE)
 }
 
 /// `None` when neither a cached catalog nor overrides exist. Unreadable
@@ -70,5 +82,29 @@ fn read_optional(path: &Path) -> Option<String> {
             tracing::warn!(path = %path.display(), %error, "catalog file unreadable");
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_missing_or_day_old_download_is_stale() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::with_roots(dir.path().join("config"), dir.path().join("data"));
+        assert!(is_stale(&paths), "never downloaded");
+        std::fs::create_dir_all(&paths.cache_dir).unwrap();
+        let file = cache_path(&paths);
+        std::fs::write(&file, "{}").unwrap();
+        assert!(!is_stale(&paths), "fresh download");
+        let old = SystemTime::now() - Duration::from_secs(2 * 24 * 60 * 60);
+        std::fs::File::options()
+            .write(true)
+            .open(&file)
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+        assert!(is_stale(&paths), "two days old");
     }
 }

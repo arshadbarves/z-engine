@@ -146,8 +146,9 @@ kind = "test"
 A check in a higher settings file replaces a check with the same `id` from
 a lower one.
 
-> **Tip:** To use a custom check in `auto_checks`, write its full id with
-> the prefix, for example `auto_checks = ["custom:e2e"]`, or list its kind.
+> **Tip:** To run a custom check automatically, list it in `auto_checks` by
+> the id you gave it (`auto_checks = ["e2e"]`), by its full id
+> (`"custom:e2e"`), or by its kind.
 
 ## Untrusted projects
 

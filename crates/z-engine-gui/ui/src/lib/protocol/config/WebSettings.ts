@@ -7,7 +7,8 @@ export type WebSettings = { search_backend: SearchBackend,
  */
 search_url: string | null, 
 /**
- * Convert fetched HTML to markdown.
+ * Let the fast model answer `WebFetch`'s question about the page; off
+ * returns the page itself. Pages are always converted to markdown.
  */
 fetch_extract: boolean, 
 /**

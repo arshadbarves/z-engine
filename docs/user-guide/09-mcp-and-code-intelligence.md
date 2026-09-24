@@ -157,15 +157,14 @@ command = "/opt/tools/rust-analyzer"
 extensions = ["rs"]
 root_markers = ["Cargo.toml"]
 
-# Turn a built-in server off (keep a command, or the entry is skipped)
+# Turn a built-in server off
 [lsp.servers.clangd]
-command = "clangd"
 enabled = false
 ```
 
 | Field | Meaning |
 |---|---|
-| `command`, `args` | The program and its arguments. `command` is required; an entry without it is skipped with a warning. |
+| `command`, `args` | The program and its arguments. `command` is required for a server that is on; an enabled entry without it is skipped with a warning. |
 | `extensions` | File extensions without the dot. |
 | `root_markers` | Files that mark the root of a project for this server, such as `Cargo.toml`. |
 | `enabled` | `false` turns the server off (also removes a built-in of that name). |

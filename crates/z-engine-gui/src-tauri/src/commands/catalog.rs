@@ -42,11 +42,22 @@ pub(crate) async fn list_files(
         .map_err(fail)
 }
 
-/// `ModelInfo[]`: the cached catalog, downloaded when there is none yet.
+/// `ModelInfo[]`: the cached catalog, downloaded when there is none yet. A
+/// day-old download is refreshed in the background; the next call sees it.
 #[tauri::command]
 pub(crate) async fn fetch_model_catalog(state: State<'_, AppState>) -> IpcResult<Value> {
     let catalog = match state.engine.catalog() {
-        Some(catalog) => catalog,
+        Some(catalog) => {
+            if state.engine.catalog_is_stale() {
+                let engine = state.engine.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(error) = engine.refresh_catalog().await {
+                        tracing::warn!(%error, "model catalog refresh failed; keeping the cache");
+                    }
+                });
+            }
+            catalog
+        }
         None => state.engine.refresh_catalog().await.map_err(fail)?,
     };
     json(&catalog.models)

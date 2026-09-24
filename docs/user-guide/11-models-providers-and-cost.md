@@ -97,8 +97,11 @@ type the model name in **Custom model ID** instead.
 Context sizes, output limits, image support and prices come from the
 public catalog at [models.dev](https://models.dev). Z Engine downloads it
 the first time you open the model list and caches it in the `cache`
-folder of its data folder. To add or correct models, create `models.json`
-in your config folder:
+folder of its data folder. When the cached copy is more than a day old,
+opening the model list shows the cached copy and downloads a fresh one in
+the background; the next time you open the list, newly released models
+appear. To add or correct models, create `models.json` in your config
+folder:
 
 ```json
 {

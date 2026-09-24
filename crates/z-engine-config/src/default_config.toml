@@ -68,7 +68,7 @@ schema = 2
 
 # [web]
 # search_backend = "none"       # none | brave | tavily | exa | searxng
-# fetch_extract = true
+# fetch_extract = true          # let the fast model answer WebFetch's question about the page
 # allow_private_network = false
 
 # [shell]

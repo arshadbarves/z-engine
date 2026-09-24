@@ -137,7 +137,8 @@ answer its question about them).
   SearXNG), and WebFetch requests go to the sites being fetched.
 - MCP servers receive the arguments of the tool calls made to them.
 - Z Engine downloads the model catalog from `models.dev` when it has none
-  cached, and checks GitHub for updates when it starts.
+  cached or the cached copy is a day old, and checks GitHub for updates
+  when it starts.
 
 **Stays on your computer:** your chats, logs and artifacts, checkpoints,
 settings, keys (except each key going to its own provider), and trust

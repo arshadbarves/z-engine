@@ -44,9 +44,9 @@ the quickest clue.
   picker.
 - The catalog is downloaded from models.dev the first time you open the
   picker. If you were offline, it retries the next time you open it.
-- The catalog is cached and not refreshed automatically. To get newly
-  released models, quit Z Engine, delete `cache/models-dev.json` in the data
-  folder, and start again. You can always use a model by typing its id.
+- The cached catalog is refreshed in the background once it is a day old,
+  so a model released today may appear only after you open the picker
+  again. You can always use a model by typing its id.
 
 ### "provider returned HTTP 401" or other key errors
 

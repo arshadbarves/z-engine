@@ -25,7 +25,8 @@ pub struct WebSettings {
     pub search_backend: SearchBackend,
     /// Base URL of the SearXNG instance.
     pub search_url: Option<String>,
-    /// Convert fetched HTML to markdown.
+    /// Let the fast model answer `WebFetch`'s question about the page; off
+    /// returns the page itself. Pages are always converted to markdown.
     pub fetch_extract: bool,
     /// Allow fetching loopback and private-network addresses.
     pub allow_private_network: bool,

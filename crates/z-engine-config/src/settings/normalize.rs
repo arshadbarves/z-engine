@@ -146,8 +146,9 @@ fn normalize_servers(settings: &mut Settings, w: &mut Vec<String>) {
     for (name, server) in &mut settings.mcp.servers {
         positive_timeout(w, &format!("mcp.servers.{name}"), &mut server.timeout_secs);
     }
+    // `enabled = false` without a command switches a built-in server off.
     settings.lsp.servers.retain(|name, server| {
-        let ok = !server.command.trim().is_empty();
+        let ok = !server.enabled || !server.command.trim().is_empty();
         warn_unless(w, ok, || {
             format!("lsp.servers.{name}: set `command`; server skipped")
         })
@@ -233,6 +234,19 @@ mod tests {
         assert!(settings.mcp.servers.is_empty() && settings.lsp.servers.is_empty());
         assert!(settings.verification.checks.is_empty());
         assert_eq!(warnings.len(), 6, "{warnings:?}");
+    }
+
+    #[test]
+    fn a_disabled_language_server_needs_no_command() {
+        let mut settings = Settings::default();
+        let off = LspServerConfig {
+            enabled: false,
+            ..LspServerConfig::default()
+        };
+        settings.lsp.servers.insert("clangd".into(), off);
+        let warnings = normalize(&mut settings);
+        assert!(settings.lsp.servers.contains_key("clangd"));
+        assert!(warnings.is_empty(), "{warnings:?}");
     }
 
     #[test]
