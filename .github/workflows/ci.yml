@@ -2,7 +2,7 @@ name: ci
 
 on:
   push:
-    branches: [v2]
+    branches: [v2, release]
   pull_request:
 
 jobs:
@@ -19,6 +19,13 @@ jobs:
       - run: cargo test --workspace --exclude z-engine-gui
       - name: Generated protocol TypeScript is committed
         run: git diff --exit-code -- crates/z-engine-gui/ui/src/lib/protocol
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Documentation links resolve
+        run: python3 scripts/check_docs_links.py
 
   windows:
     runs-on: windows-latest

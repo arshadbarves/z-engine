@@ -7,7 +7,10 @@ navigate. Violations are review-blocking.
 
 Companion documents: [Engineering & Coding Style Guide](docs/engineering/style-guide.md),
 [v2 engine architecture](docs/architecture/v2-engine.md),
-[GUI UI guide](docs/design/gui-ui-guide.md), and [status](docs/status.md).
+[GUI UI guide](docs/design/gui-ui-guide.md), [status](docs/status.md), and
+the [documentation contract](docs/AGENTS.md) (with the
+[user guide](docs/user-guide/README.md) and
+[how it works](docs/how-it-works/README.md) it keeps current).
 Documents marked "Historical (v1)" describe the deleted v1 crates and do not
 govern new code. Update this contract in the same change as any crate or
 frontend restructuring.
@@ -151,7 +154,30 @@ SvelteKit, Tailwind, shadcn-svelte, React, or a second design system.
 | a config key | field in `z-engine-config/src/settings/<section>.rs` (+ default), commented example in `default_config.toml`, v1 mapping in `migrate/convert.rs` if v1 had it; regenerate TS |
 | an event/command variant | `z-engine-protocol` enum, handle it in the engine (actor / emitter) and in `lib/domain/sessionView`; run `cargo test -p z-engine-protocol` and commit the TS |
 | a built-in agent | `z-engine-prompts/prompts/agents/<name>.md` (frontmatter) + `BUILTIN` entry in `src/agents.rs` |
-| a hook event | `HOOK_EVENTS` in `z-engine-config/src/settings/hooks.rs`, fire it from `z-engine-engine/src/hooks/`, document it in `docs/architecture/v2-engine.md` |
+| a hook event | `HOOK_EVENTS` in `z-engine-config/src/settings/hooks.rs`, fire it from `z-engine-engine/src/hooks/`, document it in `docs/architecture/v2-engine.md` and `docs/user-guide/08-hooks.md` |
+
+Every row above also means updating the documentation (next section).
+
+## Documentation (keep it in sync)
+
+Documentation is part of the change, not a follow-up. Any change that adds,
+changes or removes something a user or contributor can observe (a UI
+surface, command, tool, agent, hook, setting or default, permission
+behavior, data location, protocol event, crate or crate responsibility)
+updates the affected pages in the same change:
+
+- follow [docs/AGENTS.md](docs/AGENTS.md): it maps each kind of change to
+  the pages to update and says where each fact is defined in the code;
+- keep the [user guide](docs/user-guide/README.md) (how to use the app) and
+  [how it works](docs/how-it-works/README.md) (plain words, mechanism,
+  developer detail) true to the code; never document unshipped behavior;
+- add an entry under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md) for
+  user-visible changes;
+- delegate the update to the `docs-maintainer` subagent
+  ([.claude/agents/docs-maintainer.md](.claude/agents/docs-maintainer.md))
+  when your tool supports subagents; otherwise do it yourself;
+- say in your final summary which documents you updated, or why none
+  needed to change.
 
 ## Before you commit
 
@@ -160,6 +186,7 @@ cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings   # 0 warnings required
 cargo test --workspace                                   # all green required
 npm test --prefix crates/z-engine-gui/ui && npm run check --prefix crates/z-engine-gui/ui
+python3 scripts/check_docs_links.py                     # docs links resolve
 wc -l $(git diff --name-only | grep '\.rs$')             # respect the 400 cap
 ```
 

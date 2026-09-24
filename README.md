@@ -217,10 +217,19 @@ each prompt the working tree is snapshotted into a shadow git repository
 outside the project, so a chat can rewind code, conversation, or both. The
 app log is `z-engine-gui.log` in the same data directory.
 
+## Documentation
+
+- [User guide](docs/user-guide/README.md): everything about using the app,
+  from getting started to the full settings reference.
+- [How Z Engine works](docs/how-it-works/README.md): each feature and crate
+  in plain words first, then the mechanism, then developer detail.
+- [Documentation home](docs/README.md): which document to read for what.
+
 ## Architecture
 
 [AGENTS.md](AGENTS.md) is the structure contract (crates, dependency rules,
-file budget). Read next: [v2 engine](docs/architecture/v2-engine.md),
+file budget, and the [documentation contract](docs/AGENTS.md)). Read next:
+[v2 engine](docs/architecture/v2-engine.md),
 [GUI UI guide](docs/design/gui-ui-guide.md), and the
 [style guide](docs/engineering/style-guide.md). Documents marked
 "Historical (v1)" describe the previous implementation.
