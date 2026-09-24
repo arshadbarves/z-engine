@@ -1,6 +1,6 @@
 # v2 rewrite status
 
-The v2 rewrite is built on the `v2` branch in phases and merges into
+The v2 rewrite was built on the `v2` branch in phases and merged into
 `release` as version 2.0.0. Since the cutover (phase 5) the v1 crates are
 gone; they remain in git history.
 
@@ -16,7 +16,18 @@ gone; they remain in git history.
 | 7 | MCP, LSP, rules, repo map, caching | done |
 | 8 | Verification (discovery, evidence, badges, modes) | done |
 | 9 | Commands, MCP prompts, workspace trust | done |
-| 10 | Sandbox, fault injection, flakiness, performance, docs, 2.0.0 | in progress |
+| 10 | Sandbox, fault injection, flakiness, performance, docs, 2.0.0 | done |
+
+## Release checks (2.0.0)
+
+- `cargo clippy --workspace --all-targets -- -D warnings`: no warnings.
+- `cargo test --workspace`: 1268 passed, 0 failed, on two consecutive runs
+  (the second alongside an extra engine suite for CPU load); the engine
+  suite also passed five repeated runs.
+- Frontend: 303 vitest tests, `svelte-check` 0 errors, `oxlint` clean,
+  production build succeeds.
+- Timing harnesses (release): a 5,000-message, 22 MB session opens in about
+  55 ms; token estimation over 2,000 messages takes about 4 ms.
 
 ## Decisions and notes
 
