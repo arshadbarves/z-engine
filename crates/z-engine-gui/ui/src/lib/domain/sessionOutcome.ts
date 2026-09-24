@@ -1,28 +1,37 @@
-import type { SessionActivity } from "../types";
+import type { SessionActivity, UnreadMark } from "./sessions";
 
 export interface UnreadSessionOutcome {
   label: string;
   tone: "neutral" | "verified" | "warn";
 }
 
-/** Sidebar metadata distinguishes task verification from legacy response endings. */
+/** Sidebar dot for a turn that finished while the chat was in the background. */
 export function unreadSessionOutcome(
-  outcome: string | null | undefined,
+  mark: UnreadMark | null | undefined,
   active: boolean,
   activity: SessionActivity | null,
 ): UnreadSessionOutcome | null {
-  if (active || activity || !outcome) return null;
-  switch (outcome) {
-    case "complete": return { label: "Complete · verified task", tone: "verified" };
-    case "completed": return { label: "Response finished · unassessed", tone: "neutral" };
-    case "aborted":
-    case "stopped": return { label: "Stopped", tone: "neutral" };
-    case "running": return { label: "Running", tone: "neutral" };
-    case "needs_verification": return { label: "Needs verification", tone: "warn" };
-    case "blocked": return { label: "Blocked", tone: "warn" };
-    case "stale": return { label: "Stale evidence", tone: "warn" };
-    case "interrupted": return { label: "Interrupted", tone: "warn" };
-    case "failed": return { label: "Response failed", tone: "warn" };
-    default: return { label: "Unassessed", tone: "neutral" };
+  if (active || activity || !mark) return null;
+  switch (mark.outcome.type) {
+    case "failed":
+      return { label: "Response failed", tone: "warn" };
+    case "budgetExhausted":
+      return { label: "Stopped · budget reached", tone: "warn" };
+    case "interrupted":
+      return { label: "Interrupted", tone: "warn" };
+    case "cancelled":
+      return { label: "Stopped", tone: "neutral" };
+    default:
+      break;
+  }
+  switch (mark.verification.status) {
+    case "verified":
+      return { label: "Finished · verified", tone: "verified" };
+    case "failed":
+      return { label: "Finished · checks failed", tone: "warn" };
+    case "unverified":
+      return { label: "Finished · unverified", tone: "neutral" };
+    default:
+      return { label: "Finished", tone: "neutral" };
   }
 }

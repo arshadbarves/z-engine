@@ -1,0 +1,44 @@
+name: ci
+
+on:
+  push:
+    branches: [v2]
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --exclude z-engine-gui --all-targets -- -D warnings
+      - run: cargo test --workspace --exclude z-engine-gui
+      - name: Generated protocol TypeScript is committed
+        run: git diff --exit-code -- crates/z-engine-gui/ui/src/lib/protocol
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Windows-only code paths compile
+        run: >-
+          cargo check --all-targets
+          -p z-engine-protocol -p z-engine-llm -p z-engine-config -p z-engine-policy
+          -p z-engine-host -p z-engine-integrations -p z-engine-context -p z-engine-verify
+          -p z-engine-store -p z-engine-tools -p z-engine-engine
+
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - run: npm ci --prefix crates/z-engine-gui/ui
+      - run: npm test --prefix crates/z-engine-gui/ui

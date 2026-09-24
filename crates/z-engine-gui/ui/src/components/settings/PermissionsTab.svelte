@@ -1,166 +1,75 @@
 <script lang="ts">
-  import { listPermissionRules, removePermissionRule, savePermissionRule } from "$lib/commands";
-  import Icon, { Check, Plus, Shield, Terminal, Trash2 } from "$lib/ui/icons";
+  import { PERMISSION_MODE_OPTIONS } from "$lib/domain/settings/options";
+  import { stringList, unionItems } from "$lib/domain/settings/provenance";
+  import type { Settings } from "$lib/protocol/config/Settings";
+  import { settingsStore } from "$lib/stores/settings.svelte";
+  import ChoiceSetting from "./ChoiceSetting.svelte";
+  import ListSetting from "./ListSetting.svelte";
+  import RuleListCard from "./RuleListCard.svelte";
+  import SettingsCard from "./SettingsCard.svelte";
+  import SettingsGroup from "./SettingsGroup.svelte";
+  import ToggleSetting from "./ToggleSetting.svelte";
 
-  let rules = $state<string[]>([]);
-  let draft = $state("");
-  let adding = $state(false);
+  type Props = { settings: Settings };
+  let { settings }: Props = $props();
 
-  const PRESETS = [
-    { label: "git status", rule: "git status" },
-    { label: "git diff", rule: "git diff" },
-    { label: "npm test", rule: "npm test" },
-    { label: "cargo test", rule: "cargo test*" },
-  ];
-
-  $effect(() => {
-    let active = true;
-    listPermissionRules()
-      .then((r) => {
-        if (active) rules = r;
-      })
-      .catch(() => {
-        if (active) rules = [];
-      });
-    return () => {
-      active = false;
-    };
+  const DIRS = ["permissions", "additional_directories"];
+  const dirs = $derived(stringList(settingsStore.scopeValue(DIRS)));
+  const inheritedDirs = $derived.by(() => {
+    const provenance = settingsStore.provenance;
+    if (!provenance) return [];
+    return unionItems(provenance, DIRS).filter((item) => !item.scopes.includes(settingsStore.scope));
   });
-
-  async function addRule(ruleToAdd?: string) {
-    const rule = (ruleToAdd ?? draft).trim();
-    if (!rule || rules.includes(rule)) return;
-    adding = true;
-    try {
-      await savePermissionRule(rule);
-      if (!ruleToAdd) draft = "";
-      rules = await listPermissionRules();
-    } finally {
-      adding = false;
-    }
-  }
-
-  async function remove(rule: string) {
-    await removePermissionRule(rule);
-    rules = await listPermissionRules();
-  }
 </script>
 
 <div class="tab-body permissions-tab">
-  <!-- Security Overview Card -->
-  <section class="settings-group">
-    <div class="settings-group-header">
-      <h3>Terminal Safety & Approvals</h3>
-      <span class="settings-group-sub">
-        Control which terminal commands the assistant can run without asking for approval
-      </span>
-    </div>
+  <SettingsGroup title="Default mode" description="How new sessions start; the composer can switch a session's mode.">
+    <SettingsCard>
+      <ChoiceSetting
+        title="Permission mode"
+        keyPath={["permissions", "mode"]}
+        options={PERMISSION_MODE_OPTIONS}
+        value={settings.permissions.mode}
+      />
+      <ToggleSetting
+        title="Run read-only shell commands without asking"
+        description="Recognised read-only commands such as ls, cat or git status skip the approval prompt."
+        keyPath={["permissions", "auto_allow_read_only_bash"]}
+        value={settings.permissions.auto_allow_read_only_bash}
+      />
+    </SettingsCard>
+  </SettingsGroup>
 
-    <div class="settings-card permission-status-card">
-      <div class="permission-status-icon">
-        <Icon icon={Shield} size={20} />
-      </div>
-      <div class="permission-status-copy">
-        <span class="permission-status-title">Terminal Protection is Active</span>
-        <p class="permission-status-desc">
-          Commands that modify files or execute scripts will pause and request your one-click approval,
-          unless they match one of your pre-approved patterns below.
-        </p>
-      </div>
-    </div>
-  </section>
+  <p class="form-note">
+    Rules from every settings file combine. Deny wins in every mode, bypass mode allows everything else, and ask
+    wins over allow. Examples: <code>Bash(npm test:*)</code> <code>Edit(src/**)</code>
+    <code>WebFetch(domain:docs.rs)</code> <code>mcp__github__create_issue</code>
+  </p>
 
-  <!-- Pre-approved Rules List -->
-  <section class="settings-group">
-    <div class="settings-group-header">
-      <h3>Pre-approved Patterns ({rules.length})</h3>
-      <span class="settings-group-sub">
-        Commands starting with these prefixes run immediately without prompting
-      </span>
-    </div>
+  <RuleListCard
+    kind="allow"
+    title="Allow"
+    description="Run without asking."
+    presets={["Bash(git status)", "Bash(git diff:*)", "Bash(npm test:*)", "Bash(cargo test:*)"]}
+  />
+  <RuleListCard
+    kind="ask"
+    title="Ask"
+    description="Ask first, even when the mode or an allow rule would allow it."
+    presets={["Bash(git push:*)"]}
+  />
+  <RuleListCard kind="deny" title="Deny" description="Never allowed, in any mode." presets={["Read(./.env)", "Read(~/.ssh/**)"]} />
 
-    <div class="settings-card">
-      {#if rules.length === 0}
-        <div class="permission-empty-card">
-          <Icon icon={Terminal} size={22} class="permission-empty-icon" />
-          <div class="permission-empty-text">
-            <strong>No pre-approved commands</strong>
-            <p>Every terminal command will require your manual confirmation before executing.</p>
-          </div>
-        </div>
-      {:else}
-        <div class="permission-rules-list">
-          {#each rules as r}
-            <div class="permission-rule-row">
-              <div class="permission-rule-left">
-                <span class="permission-term-badge">
-                  <Icon icon={Terminal} size={12} />
-                </span>
-                <code class="permission-rule-code">{r}</code>
-                <span class="permission-rule-tag">Auto-run</span>
-              </div>
-              <button
-                type="button"
-                class="permission-delete-btn"
-                title={`Remove rule "${r}"`}
-                onclick={() => void remove(r)}
-                aria-label={`Remove rule ${r}`}
-              >
-                <Icon icon={Trash2} size={13} />
-              </button>
-            </div>
-          {/each}
-        </div>
-      {/if}
-
-      <!-- Inline Add Form -->
-      <form
-        class="permission-add-form"
-        onsubmit={(e) => {
-          e.preventDefault();
-          void addRule();
-        }}
-      >
-        <div class="permission-input-wrap">
-          <input
-            bind:value={draft}
-            placeholder="e.g. git status, npm test, cargo test*"
-            spellcheck={false}
-          />
-          <button type="submit" class="permission-add-btn" disabled={!draft.trim() || adding}>
-            <Icon icon={Plus} size={13} />
-            <span>Allow Prefix</span>
-          </button>
-        </div>
-      </form>
-    </div>
-  </section>
-
-  <!-- Suggested Presets -->
-  <section class="settings-group">
-    <div class="settings-group-header">
-      <h3>Common Safe Commands</h3>
-      <span class="settings-group-sub">Click any standard command below to add it instantly</span>
-    </div>
-
-    <div class="permission-presets-row">
-      {#each PRESETS as p}
-        {@const alreadyAdded = rules.includes(p.rule)}
-        <button
-          type="button"
-          class={`preset-chip-btn${alreadyAdded ? " is-added" : ""}`}
-          disabled={alreadyAdded || adding}
-          onclick={() => void addRule(p.rule)}
-          title={alreadyAdded ? "Already allowed" : `Allow "${p.rule}"`}
-        >
-          {#if alreadyAdded}
-            <Icon icon={Check} size={12} class="chip-icon-added" />
-          {:else}
-            <Icon icon={Plus} size={12} />
-          {/if}
-          <code>{p.label}</code>
-        </button>
-      {/each}
-    </div>
-  </section>
+  <SettingsGroup title="Folders" description="Where the agent may read and write outside the project.">
+    <SettingsCard>
+      <ListSetting
+        title="Additional directories"
+        description="Lists from every settings file combine."
+        keyPath={DIRS}
+        items={dirs}
+        inherited={inheritedDirs}
+        placeholder="/path/to/folder or ~/folder"
+      />
+    </SettingsCard>
+  </SettingsGroup>
 </div>

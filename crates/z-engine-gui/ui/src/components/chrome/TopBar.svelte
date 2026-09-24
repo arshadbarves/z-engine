@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon, {
+    Bot,
     FolderGit2,
     GitCompare,
     MessageSquare,
@@ -19,12 +20,15 @@
     chatTitle?: string | null;
     titleHint?: string;
     diffOpen: boolean;
+    workOpen: boolean;
+    workBadge?: number;
     sidebarOpen: boolean;
     isWorking?: boolean;
     isApproval?: boolean;
     onToggleSidebar: () => void;
     onPalette: () => void;
     onToggleDiff: () => void;
+    onToggleWork: () => void;
     onInspectPrompt?: () => void;
     onNewChat?: () => void;
     onSettings?: () => void;
@@ -35,12 +39,15 @@
     chatTitle,
     titleHint,
     diffOpen,
+    workOpen,
+    workBadge = 0,
     sidebarOpen,
     isWorking = false,
     isApproval = false,
     onToggleSidebar,
     onPalette,
     onToggleDiff,
+    onToggleWork,
     onInspectPrompt,
     onNewChat,
     onSettings,
@@ -144,6 +151,21 @@
 
     <UpdateButton />
     <ContextMeter onInspect={onInspectPrompt} />
+
+    <div class="topbar-item-wrap">
+      <button
+        type="button"
+        class={`icon-btn topbar-work-btn${workOpen ? " active" : ""}`}
+        onclick={onToggleWork}
+        aria-label="Agents and background jobs"
+      >
+        <Icon icon={Bot} size={14} strokeWidth={1.8} />
+        {#if workBadge > 0}<span class="topbar-badge">{workBadge}</span>{/if}
+      </button>
+      <div class="topbar-micro-tip" role="tooltip">
+        <span>Agents & jobs</span>
+      </div>
+    </div>
 
     <div class="topbar-item-wrap">
       <button

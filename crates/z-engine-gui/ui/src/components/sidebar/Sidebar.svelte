@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { sessionLabel } from "$lib/sessionList";
+  import type { SessionListItem } from "$lib/domain/sessionList";
   import { unreadSessionOutcome } from "$lib/domain/sessionOutcome";
-  import type { SessionActivity } from "$lib/types";
-  import type { SessionEntry } from "$lib/util";
+  import type { SessionActivity, UnreadMark } from "$lib/domain/sessions";
   import { sameWorkspacePath, wsBasename } from "$lib/workspaces";
   import {
     ChevronDown,
@@ -17,13 +16,14 @@
   } from "$lib/ui/icons";
 
   type Props = {
-    sessions: SessionEntry[];
+    sessions: SessionListItem[];
     workspaces: string[];
     activeWorkspace: string | null;
-    activeUlid: string;
+    activeSessionId: string | null;
     activity: Record<string, SessionActivity>;
-    onOpen: (path: string, projectRoot?: string | null) => void;
-    onDelete: (path: string) => void;
+    unread: Record<string, UnreadMark>;
+    onOpen: (sessionId: string, projectRoot: string) => void;
+    onDelete: (sessionId: string) => void;
     onAddWorkspace: () => void;
     onRemoveWorkspace: (root: string) => void;
     onActivateWorkspace: (root: string | null) => void;
@@ -33,8 +33,9 @@
     sessions,
     workspaces,
     activeWorkspace,
-    activeUlid,
+    activeSessionId,
     activity,
+    unread,
     onOpen,
     onDelete,
     onAddWorkspace,
@@ -47,9 +48,9 @@
   let lastActive: string | null | undefined = undefined;
 
   const { byWorkspace, otherSessions } = $derived.by(() => {
-    const byWorkspace = new Map<string, SessionEntry[]>();
+    const byWorkspace = new Map<string, SessionListItem[]>();
     for (const root of workspaces) byWorkspace.set(root, []);
-    const otherSessions: SessionEntry[] = [];
+    const otherSessions: SessionListItem[] = [];
     for (const s of sessions) {
       const hit = s.projectRoot
         ? workspaces.find((root) => sameWorkspacePath(s.projectRoot, root))
@@ -77,14 +78,10 @@
     wsOpen[root] = !isWsOpen(root, isActive);
   }
 
-  function sessionTitle(session: SessionEntry): string {
-    return sessionLabel(session.firstUserMsg);
-  }
-
-  function workspaceActivity(items: SessionEntry[]): SessionActivity | null {
+  function workspaceActivity(items: SessionListItem[]): SessionActivity | null {
     let working = false;
     for (const s of items) {
-      const a = activity[s.ulid];
+      const a = activity[s.sessionId];
       if (a === "approval") return "approval";
       if (a === "working") working = true;
     }
@@ -92,17 +89,17 @@
   }
 </script>
 
-{#snippet sessionTreeItem(session: SessionEntry)}
-  {@const active = session.ulid === activeUlid}
-  {@const activityState = activity[session.ulid] ?? null}
-  {@const title = sessionTitle(session)}
+{#snippet sessionTreeItem(session: SessionListItem)}
+  {@const active = session.sessionId === activeSessionId}
+  {@const activityState = activity[session.sessionId] ?? null}
+  {@const title = session.title}
   {@const isWorking = activityState === "working"}
   {@const isApproval = activityState === "approval"}
-  {@const unread = unreadSessionOutcome(session.unreadOutcome, active, activityState)}
+  {@const unreadMark = unreadSessionOutcome(unread[session.sessionId], active, activityState)}
   <div
     class="sidebar-session-item{active ? ' active' : ''}{isWorking ? ' working' : ''}{isApproval
       ? ' approval'
-      : ''}{unread ? ` unread unread-${unread.tone}` : ''}"
+      : ''}{unreadMark ? ` unread unread-${unreadMark.tone}` : ''}"
     role="button"
     tabindex={0}
     title={isApproval
@@ -112,9 +109,9 @@
         : title}
     onclick={(e) => {
       e.stopPropagation();
-      onOpen(session.path, session.projectRoot);
+      onOpen(session.sessionId, session.projectRoot);
     }}
-    onkeydown={(e) => e.key === "Enter" && onOpen(session.path, session.projectRoot)}
+    onkeydown={(e) => e.key === "Enter" && onOpen(session.sessionId, session.projectRoot)}
   >
     <div class="session-item-icon-wrap">
       {#if isWorking}
@@ -129,17 +126,20 @@
     </div>
     <span class="session-item-title"><span class="title-text">{title}</span></span>
     <div class="session-item-tail">
+      {#if session.legacy}
+        <span class="session-legacy-pill" title="Imported from a v1 session file">v1</span>
+      {/if}
       {#if isWorking}
         <span class="session-live-pill working" title="Agent working">Live</span>
       {:else if isApproval}
         <span class="session-live-pill approval" title="Needs approval">Review</span>
-      {:else if unread}
+      {:else if unreadMark}
         <span
           class="session-status-dot"
-          data-tone={unread.tone}
+          data-tone={unreadMark.tone}
           role="img"
-          title={unread.label}
-          aria-label={unread.label}
+          title={unreadMark.label}
+          aria-label={unreadMark.label}
         ></span>
       {/if}
       <button
@@ -148,7 +148,7 @@
         title="Delete chat"
         onclick={(e) => {
           e.stopPropagation();
-          onDelete(session.path);
+          onDelete(session.sessionId);
         }}
       >
         <Icon icon={Trash2} size={11} strokeWidth={1.8} />
@@ -211,7 +211,7 @@
         {#if items.length === 0}
           <div class="workspace-empty-hint">No chats in this workspace</div>
         {:else}
-          {#each items as s (s.path)}
+          {#each items as s (s.sessionId)}
             {@render sessionTreeItem(s)}
           {/each}
         {/if}
@@ -259,7 +259,7 @@
         </div>
         {#if recentsOpen}
           <div class="loose-sessions-list">
-            {#each otherSessions.slice(0, 24) as s (s.path)}
+            {#each otherSessions.slice(0, 24) as s (s.sessionId)}
               {@render sessionTreeItem(s)}
             {/each}
           </div>

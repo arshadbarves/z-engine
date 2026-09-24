@@ -1,7 +1,7 @@
 <script lang="ts">
   import { HERO_STARTERS } from "$lib/constants";
   import { modLabel } from "$lib/platform";
-  import { draftStore } from "$lib/runtime";
+  import { composer } from "$lib/stores/composer.svelte";
   import Icon, {
     FolderGit2,
     Search,
@@ -25,11 +25,11 @@
   } as const;
 
   function pickStarter(prompt: string) {
-    draftStore.set(prompt);
+    composer.setDraft(prompt);
   }
 
   function appendPrefix(prefix: string) {
-    draftStore.set(prefix);
+    composer.setDraft(prefix);
   }
 </script>
 

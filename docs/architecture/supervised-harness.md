@@ -1,3 +1,5 @@
+> **Historical (v1).** Describes the deleted v1 crates; the current design is [v2 engine architecture](v2-engine.md) and the structure contract is [AGENTS.md](../../AGENTS.md).
+
 # Supervised engineering harness
 
 Status: first implementation slice, not an AGI claim.

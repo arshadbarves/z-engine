@@ -1,69 +1,34 @@
 <script lang="ts">
-  import Icon, { X } from "$lib/ui/icons";
+  import { attachmentLabel, fileExtension, imageSrc } from "$lib/domain/attachments";
+  import type { Attachment } from "$lib/protocol/Attachment";
+  import Icon, { FileText, X } from "$lib/ui/icons";
 
-  type Props = {
-    attachments: string[];
-    images: string[];
-    onRemoveAttachment: (path: string) => void;
-    onRemoveImage: (index: number) => void;
-  };
-
-  let { attachments, images, onRemoveAttachment, onRemoveImage }: Props = $props();
-
-  function fileName(p: string): string {
-    const i = p.lastIndexOf("/");
-    return i >= 0 ? p.slice(i + 1) : p;
-  }
-
-  function extLabel(p: string): string {
-    const n = fileName(p);
-    const d = n.lastIndexOf(".");
-    return d > 0 ? n.slice(d + 1).toUpperCase() : "FILE";
-  }
+  type Props = { attachments: Attachment[]; onRemove: (index: number) => void };
+  let { attachments, onRemove }: Props = $props();
 </script>
 
 {#if attachments.length > 0}
   <div class="attachments">
-    {#each attachments as p}
-      <span class="attachment">
-        <button class="att-x" title={`Remove ${p}`} onclick={() => onRemoveAttachment(p)} type="button">
-          <Icon icon={X} size={9} strokeWidth={2.4} />
-        </button>
-        <span class="att-icon">
-          <svg
-            viewBox="0 0 24 24"
-            width={16}
-            height={16}
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <path d="M14 2v6h6" />
-            <path d="M9 13h6M9 17h4" />
-          </svg>
+    {#each attachments as attachment, i (i)}
+      {#if attachment.type === "image"}
+        <span class="attachment img-chip">
+          <button class="att-x" title="Remove image" onclick={() => onRemove(i)} type="button">
+            <Icon icon={X} size={9} strokeWidth={2.4} />
+          </button>
+          <img src={imageSrc(attachment)} alt={`image ${i + 1}`} />
         </span>
-        <span class="att-text">
-          <span class="att-name">{fileName(p)}</span>
-          <span class="att-ext">{extLabel(p)}</span>
+      {:else}
+        <span class="attachment" title={attachment.path}>
+          <button class="att-x" title={`Remove ${attachment.path}`} onclick={() => onRemove(i)} type="button">
+            <Icon icon={X} size={9} strokeWidth={2.4} />
+          </button>
+          <span class="att-icon"><Icon icon={FileText} size={14} strokeWidth={1.8} /></span>
+          <span class="att-text">
+            <span class="att-name">{attachmentLabel(attachment)}</span>
+            <span class="att-ext">{fileExtension(attachment.path)}</span>
+          </span>
         </span>
-      </span>
-    {/each}
-  </div>
-{/if}
-
-{#if images.length > 0}
-  <div class="attachments img-chips">
-    {#each images as url, i}
-      <span class="attachment img-chip">
-        <button class="att-x" title="Remove image" onclick={() => onRemoveImage(i)} type="button">
-          <Icon icon={X} size={9} strokeWidth={2.4} />
-        </button>
-        <img src={url} alt={`paste ${i + 1}`} />
-      </span>
+      {/if}
     {/each}
   </div>
 {/if}

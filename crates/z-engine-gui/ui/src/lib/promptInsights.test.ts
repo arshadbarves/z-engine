@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PromptInspect } from "./commands";
+import type { PromptInspect } from "./domain/requestInspect";
 import { promptInsights } from "./promptInsights";
 
 function snap(over: Partial<PromptInspect> = {}): PromptInspect {

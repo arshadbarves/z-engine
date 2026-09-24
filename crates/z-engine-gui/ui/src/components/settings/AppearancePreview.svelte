@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { TaskReportView } from "$lib/commands";
+  import type { TaskReportView } from "$lib/protocol/config/TaskReportView";
   import SettingsCard from "./SettingsCard.svelte";
 
   type Props = { view: TaskReportView; label: string };

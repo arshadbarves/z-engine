@@ -13,4 +13,5 @@ export * as Popover from "./Popover.svelte";
 export * as Combobox from "./Combobox.svelte";
 export { presence } from "./presence.svelte";
 export { copyFeedback } from "./copyFeedback.svelte";
+export { ticker } from "./ticker.svelte";
 export * from "./icons";

@@ -1,191 +1,136 @@
-//! Desktop shell (Tauri 2) wrapping the z-engine-core brain.
+//! Desktop shell (Tauri 2) over the v2 engine: builder wiring only.
 //!
-//! Serving model (rebuilt from scratch): a minimal HTTP server bound to
-//! 127.0.0.1:<random port> serves the built frontend from disk, and the
-//! main window is created programmatically pointed at that http:// URL.
-//! No alternate schemes, no config-relative asset resolution.
+//! One tokio runtime serves Tauri's async commands and the engine's tasks.
+//! The main window is created programmatically (see `window.rs`), and every
+//! engine event reaches the webview on the `engineEvent` channel.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod catalog;
 mod commands;
-mod event_bridge;
-mod git_util;
-mod session_store;
-mod slash_commands;
+mod events;
+mod guard;
+mod ipc;
+mod layers;
+mod logging;
 mod state;
+mod window;
+mod workspaces;
 
-use event_bridge::forward_events;
-use state::{AppCtx, GuiState, build_loop_config};
-use tauri::Manager;
-use z_engine_core::agent::spawn_with_recorder;
-use z_engine_core::config::Config;
+use std::time::Duration;
 
-fn main() {
-    // App-lifetime tokio runtime entered on the main thread so agent
-    // startup `tokio::spawn`s land on a real reactor under Tauri.
-    let rt = tokio::runtime::Builder::new_multi_thread()
+use anyhow::Context;
+use tauri::{Manager, RunEvent};
+use z_engine_config::{EnvOverrides, Paths};
+use z_engine_engine::{Engine, EngineOptions};
+
+use commands::{access, app, catalog, extensions, session, settings, update, workspace};
+use state::AppState;
+use workspaces::Workspaces;
+
+/// Closing sessions on quit kills their shells and MCP servers.
+const SHUTDOWN_LIMIT: Duration = Duration::from_secs(5);
+
+fn main() -> anyhow::Result<()> {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
-        .expect("tokio runtime");
-    let _enter = rt.enter(); // intentionally lives for the process
-
-    // Log file lives under <data_dir>/z-engine/; the directory may not
-    // exist on first run, and a logging failure must never block launch.
-    let log_path = z_engine_core::config::app_data_write_dir().join("z-engine-gui.log");
-    if let Some(parent) = log_path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    match std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&log_path)
-    {
-        Ok(file) => {
-            tracing_subscriber::fmt()
-                .with_writer(std::sync::Mutex::new(file))
-                .with_env_filter(
-                    tracing_subscriber::EnvFilter::try_from_default_env()
-                        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-                )
-                .without_time()
-                .try_init()
-                .ok();
-        }
-        Err(e) => {
-            eprintln!("z-engine-gui: cannot open log {}: {e}", log_path.display());
-        }
-    }
+        .context("tokio runtime")?;
+    let handle = runtime.handle().clone();
+    tauri::async_runtime::set(handle.clone());
+    let paths = Paths::discover().context("z-engine directories")?;
+    logging::init(&paths.data_dir);
+    tracing::info!(version = env!("CARGO_PKG_VERSION"), "z-engine-gui starting");
 
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .manage(GuiState::default())
+        .on_page_load(|webview, payload| {
+            if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
+                tracing::info!(webview = webview.label(), url = %payload.url(), "page loaded");
+            }
+        })
         .invoke_handler(tauri::generate_handler![
-            commands::frontend_ready,
-            commands::submit,
-            commands::abort,
-            commands::compact,
-            commands::notes,
-            commands::set_mode,
-            commands::set_model,
-            commands::approve_with_rule,
-            commands::deny,
-            commands::list_sessions,
-            commands::delete_session,
-            commands::list_workspaces,
-            commands::add_workspace,
-            commands::remove_workspace,
-            commands::fetch_model_catalog,
-            commands::set_reasoning_effort,
-            commands::list_slash_commands,
-            commands::read_slash_command,
-            commands::list_changed_files,
-            commands::diff_for_file,
-            commands::list_session_changed_files,
-            commands::session_diff_for_file,
-            commands::create_worktree,
-            commands::list_permission_rules,
-            commands::save_permission_rule,
-            commands::remove_permission_rule,
-            commands::read_session,
-            commands::save_general,
-            commands::save_api_key,
-            commands::list_mcp_servers,
-            commands::save_mcp_server,
-            commands::remove_mcp_server,
-            commands::test_mcp_server,
-            commands::list_project_files,
-            commands::get_config,
-            commands::shell,
-            commands::revert_last_turn,
-            commands::revert_to_turn,
-            commands::start_session,
-            commands::inspect_prompt,
-            commands::check_for_update,
-            commands::open_release_url,
-            commands::install_update,
-            commands::get_changelog
+            session::open_session,
+            session::send_command,
+            session::list_sessions,
+            session::delete_session,
+            session::agent_transcript,
+            session::export_session,
+            session::inspect_request,
+            session::session_changed_files,
+            session::session_diff_for_file,
+            catalog::list_commands,
+            catalog::list_agents,
+            catalog::list_files,
+            catalog::fetch_model_catalog,
+            workspace::list_workspaces,
+            workspace::add_workspace,
+            workspace::remove_workspace,
+            workspace::list_changed_files,
+            workspace::diff_for_file,
+            workspace::create_worktree,
+            app::app_info,
+            settings::get_settings,
+            settings::get_layer,
+            settings::set_setting,
+            settings::remove_setting,
+            settings::add_permission_rule,
+            settings::remove_permission_rule,
+            settings::set_mcp_server,
+            settings::remove_mcp_server,
+            settings::test_mcp_server,
+            settings::set_hooks,
+            access::credential_status,
+            access::save_api_key,
+            access::save_search_key,
+            access::trust_status,
+            access::set_trust,
+            extensions::list_extensions,
+            extensions::read_extension_file,
+            extensions::write_extension_file,
+            extensions::delete_extension_file,
+            extensions::list_instruction_files,
+            extensions::write_instruction_file,
+            update::check_for_update,
+            update::open_release_url,
+            update::install_update,
+            update::get_changelog,
         ])
-        .setup(|app| {
-            let _ = z_engine_core::config::ensure_user_config();
-            let project_root = state::initial_project_root();
-            let cfg = Config::load(Some(&project_root)).map_err(|e| e.to_string())?;
-            let lc = build_loop_config(&cfg, &project_root);
-
-            let (handle, ev_rx) = spawn_with_recorder(lc, None, None);
-            {
-                let st = app.state::<GuiState>();
-                let _ = st.insert_loop("boot".into(), handle);
-                *st.ctx.lock().unwrap() = Some(AppCtx {
-                    project_root: project_root.clone(),
-                });
-                *st.model.lock().unwrap() = cfg.model.clone();
-            }
-
-            let mut builder = tauri::WebviewWindowBuilder::new(
-                app,
-                "main",
-                tauri::WebviewUrl::App("index.html".into()),
-            )
-            .title("Z Engine")
-            .inner_size(1100.0, 760.0)
-            .min_inner_size(720.0, 520.0)
-            .maximized(true);
-            // macOS: overlay title bar with native shadow & vibrancy.
-            // Windows: frameless with Mica material & custom controls.
-            #[cfg(target_os = "macos")]
-            {
-                // Align native traffic lights with the 40px `.app-topbar`.
-                // tao's inset sets titlebar height = button_height + y and keeps
-                // buttons near the bottom of that container, so y ≈ desired
-                // vertical center (20 for a 40px bar), not a top-edge inset.
-                builder = builder
-                    .title_bar_style(tauri::TitleBarStyle::Overlay)
-                    .hidden_title(true)
-                    .traffic_light_position(tauri::LogicalPosition::new(12.50, 22.50))
-                    .shadow(true);
-            }
-            #[cfg(target_os = "windows")]
-            {
-                builder = builder.decorations(false);
-            }
-            #[cfg(target_os = "linux")]
-            {
-                builder = builder.shadow(true);
-            }
-            let window = builder.build().map_err(|e| e.to_string())?;
-
-            #[cfg(target_os = "macos")]
-            {
-                use window_vibrancy::{NSVisualEffectMaterial, apply_vibrancy};
-                let _ = apply_vibrancy(
-                    &window,
-                    NSVisualEffectMaterial::UnderWindowBackground,
-                    None,
-                    None,
-                );
-            }
-            #[cfg(target_os = "windows")]
-            {
-                use window_vibrancy::apply_mica;
-                let _ = apply_mica(&window, None);
-            }
-
-            forward_events(ev_rx, window, "boot".into());
+        .setup(move |app| {
+            let _guard = handle.enter();
+            let engine = Engine::new(EngineOptions {
+                paths: paths.clone(),
+                event_sink: events::sink(app.handle().clone()),
+                client_factory: None,
+                env: EnvOverrides::from_process(),
+            })?;
+            let workspaces = Workspaces::new(&paths.data_dir);
+            let active = workspaces.initial_root(paths.home_dir.as_deref());
+            tracing::info!(project = %active.display(), "engine initialized");
+            app.manage(AppState::new(engine, workspaces, active));
+            window::create_main(app)?;
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("error while building Z Engine GUI");
-    app.run(|_app_handle, event| {
-        // Tear the agent down on quit so bash/MCP child processes don't
-        // outlive the closed window as orphans.
-        if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
-            if let Some(st) = _app_handle.try_state::<GuiState>() {
-                st.shutdown_all();
+        .context("building the Z Engine window")?;
+
+    app.run(|handle, event| {
+        if matches!(event, RunEvent::ExitRequested { .. }) {
+            if let Some(state) = handle.try_state::<AppState>() {
+                let engine = state.engine.clone();
+                tauri::async_runtime::block_on(async move {
+                    if tokio::time::timeout(SHUTDOWN_LIMIT, engine.shutdown())
+                        .await
+                        .is_err()
+                    {
+                        tracing::warn!("sessions did not close in time");
+                    }
+                });
+                tracing::info!("engine shut down");
             }
         }
     });
+    Ok(())
 }

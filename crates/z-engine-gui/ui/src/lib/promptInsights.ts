@@ -1,4 +1,4 @@
-import type { PromptInspect, PromptPart, PromptTool } from "./commands";
+import type { PromptInspect, PromptPart, PromptTool } from "./domain/requestInspect";
 
 export interface PromptLayer {
   order: number;

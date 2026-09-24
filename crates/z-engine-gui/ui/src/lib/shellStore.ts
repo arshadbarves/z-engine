@@ -40,16 +40,14 @@ export function startShell(cmd: string) {
   emit();
 }
 
-/** Append a stdout line (core sends `$ line` status notes). */
-export function appendShellLine(raw: string) {
-  const text = raw.startsWith("$ ") ? raw.slice(2) : raw;
+/** Output of a `!` command (a `commandOutput` named `shell`); a code fence is unwrapped. */
+export function appendShellOutput(raw: string) {
+  const text = raw.replace(/^```[^\n]*\n([\s\S]*?)\n?```\s*$/, "$1").replace(/\n$/, "");
+  const lines = text ? text.split("\n") : [];
   const entries = state.entries.slice();
   const last = entries[entries.length - 1];
-  if (!last) {
-    entries.push({ id: nextId++, cmd: "", lines: [text] });
-  } else {
-    entries[entries.length - 1] = { ...last, lines: [...last.lines, text] };
-  }
+  if (!last) entries.push({ id: nextId++, cmd: "", lines });
+  else entries[entries.length - 1] = { ...last, lines: [...last.lines, ...lines] };
   state = { visible: true, entries };
   emit();
 }

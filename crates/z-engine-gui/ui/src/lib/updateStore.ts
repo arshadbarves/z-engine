@@ -6,7 +6,7 @@ import {
   type UpdateInfo,
   type UpdateProgress,
 } from "./commands";
-import { pushToast } from "./events";
+import { pushToast } from "./runtime/toasts";
 
 export type UpdateSnapshot = {
   info: UpdateInfo | null;

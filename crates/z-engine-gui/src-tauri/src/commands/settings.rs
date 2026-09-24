@@ -1,281 +1,181 @@
-use crate::state::GuiState;
-use serde_json::json;
-use z_engine_core::config::Config;
+//! Settings commands (`lib/commands/settings.ts`): the effective settings,
+//! one layer's table, and writes to the user, project or local file. Every
+//! write reloads the sessions it affects.
 
+use std::path::{Path, PathBuf};
+
+use serde_json::Value;
+use tauri::State;
+use z_engine_config::{ConfigError, HookConfig, LoadedSettings, McpServerConfig, RuleKind, writer};
+use z_engine_engine::McpTestReport;
+
+use crate::ipc::{IpcResult, fail};
+use crate::layers::{LayerFile, Scope, layer_file, read_layer, toml_value};
+use crate::state::AppState;
+
+/// Effective settings with every layer; no project loads the user level.
 #[tauri::command]
-pub(crate) fn set_model(model: String, state: tauri::State<'_, GuiState>) -> Result<(), String> {
-    state.handle_for(None)?.set_model(model.clone());
-    *state.model.lock().map_err(|_| "state poisoned")? = model;
-    Ok(())
-}
-
-/// Current agent-facing configuration for UI chrome (model picker,
-/// context meter, cost estimate, settings tabs).
-#[tauri::command]
-pub(crate) fn get_config(state: tauri::State<'_, GuiState>) -> Result<serde_json::Value, String> {
-    let model = state.model.lock().map_err(|_| "state poisoned")?.clone();
-    let ctx_guard = state.ctx.lock().map_err(|_| "state poisoned")?;
-    let Some(ctx) = ctx_guard.as_ref() else {
-        return Err("not initialized".into());
-    };
-    let cfg = Config::load(Some(&ctx.project_root)).map_err(|e| e.to_string())?;
-    let key_st = z_engine_core::config::current_key_status_for_base_url(&cfg.base_url);
-    let pricing = cfg.pricing_for(&model).map(|p| {
-        json!({
-            "usdPerMtokInput": p.usd_per_mtok_input,
-            "usdPerMtokOutput": p.usd_per_mtok_output,
-        })
-    });
-    let mcp_servers: Vec<serde_json::Value> = cfg
-        .mcp_servers
-        .iter()
-        .map(|s| json!({ "name": s.name, "command": s.command, "args": s.args }))
-        .collect();
-    Ok(json!({
-        "model": model,
-        "maxContextTokens": cfg.max_context_tokens,
-        "maxOutputTokens": cfg.max_output_tokens,
-        "compactAtPercent": cfg.compact_at_percent,
-        "baseUrl": cfg.base_url,
-        "reviewEnabled": cfg.review_enabled,
-        "maxTaskContinuations": cfg.max_task_continuations,
-        "taskReportView": cfg.task_report_view,
-        "hasApiKey": key_st.has_key,
-        "apiKeyHint": key_st.hint,
-        "pricing": pricing,
-        "mcpServers": mcp_servers,
-        "version": env!("CARGO_PKG_VERSION"),
-        "projectName": ctx
-            .project_root
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| ctx.project_root.to_string_lossy().into_owned()),
-    }))
-}
-
-/// Settings → General: persist scalars into `.z-engine/config.toml` and
-/// hot-apply the model to the running agent when one exists.
-fn persist_project_general_if_valid(
-    project_root: Option<&std::path::Path>,
-    over: &z_engine_core::config::GeneralOverrides,
-) -> Result<(), String> {
-    let Some(project_root) = project_root.filter(|root| crate::state::is_valid_project_root(root))
-    else {
-        return Ok(());
-    };
-    z_engine_core::config::persist_general(project_root, over)
-        .map(|_| ())
-        .map_err(|e| e.to_string())
-}
-
-/// `task_report_view` is a global presentation preference: it follows the
-/// reader across workspaces and must never land in a project's shared
-/// `.z-engine/config.toml`.
-fn project_scoped_general(
-    over: &z_engine_core::config::GeneralOverrides,
-) -> z_engine_core::config::GeneralOverrides {
-    z_engine_core::config::GeneralOverrides {
-        task_report_view: None,
-        ..over.clone()
-    }
+pub(crate) fn get_settings(
+    project_root: Option<String>,
+    state: State<'_, AppState>,
+) -> LoadedSettings {
+    let root = project_root.map(PathBuf::from);
+    state.engine.settings(root.as_deref())
 }
 
 #[tauri::command]
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn save_general(
-    model: Option<String>,
-    base_url: Option<String>,
-    max_context_tokens: Option<u32>,
-    review: Option<bool>,
-    max_task_continuations: Option<u32>,
-    task_report_view: Option<z_engine_core::config::TaskReportView>,
-    state: tauri::State<'_, GuiState>,
-) -> Result<(), String> {
-    let over = z_engine_core::config::GeneralOverrides {
-        model: model.clone(),
-        base_url: base_url.clone(),
-        max_context_tokens,
-        review_enabled: review,
-        max_task_continuations,
-        task_report_view,
-    };
-    // Persist to global config so default preferences stick across sessions & workspaces.
-    z_engine_core::config::persist_global_general(&over).map_err(|e| e.to_string())?;
-
-    let ctx_guard = state.ctx.lock().map_err(|_| "state poisoned")?;
-    if let Some(ctx) = ctx_guard.as_ref() {
-        persist_project_general_if_valid(Some(&ctx.project_root), &project_scoped_general(&over))?;
-    }
-    drop(ctx_guard);
-
-    if let Some(m) = model {
-        if let Ok(h) = state.handle_for(None) {
-            h.set_model(m.clone());
-        }
-        *state.model.lock().map_err(|_| "state poisoned")? = m;
-    }
-    if let Some(base_url) = base_url {
-        let api_key = z_engine_core::config::resolve_api_key_for(&base_url);
-        let loops = state.loops.lock().map_err(|_| "state poisoned")?;
-        for handle in loops.values() {
-            handle.set_provider(base_url.clone(), api_key.clone());
-        }
-    }
-    Ok(())
-}
-
-/// Settings → General: persist the active provider key to `auth.json` and
-/// hot-apply it to every running agent loop.
-#[tauri::command]
-pub(crate) fn save_api_key(
-    key: Option<String>,
-    state: tauri::State<'_, GuiState>,
-) -> Result<(), String> {
-    z_engine_core::config::ensure_user_config().map_err(|e| e.to_string())?;
-    let trimmed = key.as_deref().map(str::trim).filter(|s| !s.is_empty());
-    let ctx_guard = state.ctx.lock().map_err(|_| "state poisoned")?;
-    let base_url = ctx_guard
-        .as_ref()
-        .and_then(|ctx| {
-            Config::load(Some(&ctx.project_root))
-                .ok()
-                .map(|c| c.base_url)
-        })
-        .unwrap_or_else(|| Config::default().base_url);
-    drop(ctx_guard);
-    z_engine_core::config::set_current_key_for_base_url(&base_url, trimmed)
-        .map_err(|e| e.to_string())?;
-    let loops = state.loops.lock().map_err(|_| "state poisoned")?;
-    for h in loops.values() {
-        h.set_api_key(trimmed.map(str::to_string));
-    }
-    Ok(())
-}
-
-/// Settings → MCP: add or replace a stdio server in project config.
-#[tauri::command]
-pub(crate) fn save_mcp_server(
-    name: String,
-    command: String,
-    args: Vec<String>,
-    state: tauri::State<'_, GuiState>,
-) -> Result<(), String> {
-    let ctx_guard = state.ctx.lock().map_err(|_| "state poisoned")?;
-    let ctx = ctx_guard.as_ref().ok_or("not initialized")?;
-    if !crate::state::is_valid_project_root(&ctx.project_root) {
-        return Err("No active workspace folder".into());
-    }
-    z_engine_core::config::persist_mcp_server(&ctx.project_root, &name, &command, args)
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+pub(crate) fn get_layer(
+    scope: Scope,
+    project_root: Option<String>,
+    state: State<'_, AppState>,
+) -> IpcResult<LayerFile> {
+    let root = project_root.map(PathBuf::from);
+    read_layer(state.engine.paths(), scope, root.as_deref())
 }
 
 #[tauri::command]
-pub(crate) fn remove_mcp_server(
-    name: String,
-    state: tauri::State<'_, GuiState>,
-) -> Result<(), String> {
-    let ctx_guard = state.ctx.lock().map_err(|_| "state poisoned")?;
-    let ctx = ctx_guard.as_ref().ok_or("not initialized")?;
-    if !crate::state::is_valid_project_root(&ctx.project_root) {
-        return Ok(());
-    }
-    z_engine_core::config::remove_mcp_server(&ctx.project_root, &name).map_err(|e| e.to_string())
+pub(crate) fn set_setting(
+    scope: Scope,
+    project_root: Option<String>,
+    key_path: Vec<String>,
+    value: Value,
+    state: State<'_, AppState>,
+) -> IpcResult<()> {
+    let value = toml_value(value)?;
+    write(&state, scope, project_root, |file| {
+        writer::set_value(file, &keys(&key_path), value)
+    })
 }
 
 #[tauri::command]
-pub(crate) fn list_permission_rules(
-    state: tauri::State<'_, GuiState>,
-) -> Result<Vec<String>, String> {
-    let guard = state.ctx.lock().map_err(|_| "state poisoned")?;
-    let Some(ctx) = guard.as_ref() else {
-        return Err("not initialized".into());
-    };
-    if !crate::state::is_valid_project_root(&ctx.project_root) {
-        return Ok(Vec::new());
-    }
-    z_engine_core::config::list_bash_rules(&ctx.project_root).map_err(|e| e.to_string())
+pub(crate) fn remove_setting(
+    scope: Scope,
+    project_root: Option<String>,
+    key_path: Vec<String>,
+    state: State<'_, AppState>,
+) -> IpcResult<()> {
+    write(&state, scope, project_root, |file| {
+        writer::remove_value(file, &keys(&key_path))
+    })
 }
 
 #[tauri::command]
-pub(crate) fn save_permission_rule(
+pub(crate) fn add_permission_rule(
+    scope: Scope,
+    project_root: Option<String>,
+    kind: RuleKind,
     rule: String,
-    state: tauri::State<'_, GuiState>,
-) -> Result<(), String> {
-    let guard = state.ctx.lock().map_err(|_| "state poisoned")?;
-    let Some(ctx) = guard.as_ref() else {
-        return Err("not initialized".into());
-    };
-    if !crate::state::is_valid_project_root(&ctx.project_root) {
-        return Err("No active workspace folder".into());
-    }
-    z_engine_core::config::persist_bash_rule(&ctx.project_root, &rule)
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    state: State<'_, AppState>,
+) -> IpcResult<()> {
+    write(&state, scope, project_root, |file| {
+        writer::add_permission_rule(file, kind, &rule)
+    })
 }
 
 #[tauri::command]
 pub(crate) fn remove_permission_rule(
+    scope: Scope,
+    project_root: Option<String>,
+    kind: RuleKind,
     rule: String,
-    state: tauri::State<'_, GuiState>,
-) -> Result<(), String> {
-    let guard = state.ctx.lock().map_err(|_| "state poisoned")?;
-    let Some(ctx) = guard.as_ref() else {
-        return Err("not initialized".into());
-    };
-    if !crate::state::is_valid_project_root(&ctx.project_root) {
-        return Ok(());
-    }
-    z_engine_core::config::remove_bash_rule(&ctx.project_root, &rule).map_err(|e| e.to_string())
+    state: State<'_, AppState>,
+) -> IpcResult<()> {
+    write(&state, scope, project_root, |file| {
+        writer::remove_permission_rule(file, kind, &rule)
+    })
 }
 
-/// Resolved MCP server table for the Settings tab.
 #[tauri::command]
-pub(crate) fn list_mcp_servers(
-    state: tauri::State<'_, GuiState>,
-) -> Result<Vec<serde_json::Value>, String> {
-    let ctx_guard = state.ctx.lock().map_err(|_| "state poisoned")?;
-    let ctx = ctx_guard.as_ref().ok_or("not initialized")?;
-    let cfg = Config::load(Some(&ctx.project_root)).map_err(|e| e.to_string())?;
-    Ok(cfg
-        .mcp_servers
-        .iter()
-        .map(|s| json!({ "name": s.name, "command": s.command, "args": s.args }))
-        .collect())
+pub(crate) fn set_mcp_server(
+    scope: Scope,
+    project_root: Option<String>,
+    name: String,
+    server: McpServerConfig,
+    state: State<'_, AppState>,
+) -> IpcResult<()> {
+    write(&state, scope, project_root, |file| {
+        writer::set_mcp_server(file, &name, &server)
+    })
 }
 
-/// Settings → MCP Test button: spawn the server, handshake, tools/list.
-/// Returns tool names; the connection is dropped afterwards.
+#[tauri::command]
+pub(crate) fn remove_mcp_server(
+    scope: Scope,
+    project_root: Option<String>,
+    name: String,
+    state: State<'_, AppState>,
+) -> IpcResult<()> {
+    write(&state, scope, project_root, |file| {
+        writer::remove_mcp_server(file, &name)
+    })
+}
+
+/// Replaces the layer's hooks for `event`; an empty list removes them.
+#[tauri::command]
+pub(crate) fn set_hooks(
+    scope: Scope,
+    project_root: Option<String>,
+    event: String,
+    hooks: Vec<HookConfig>,
+    state: State<'_, AppState>,
+) -> IpcResult<()> {
+    write(&state, scope, project_root, |file| {
+        writer::set_hooks(file, &event, &hooks)
+    })
+}
+
+/// Connects, lists and disconnects within the server's timeout.
 #[tauri::command]
 pub(crate) async fn test_mcp_server(
-    name: String,
-    state: tauri::State<'_, GuiState>,
-) -> Result<Vec<String>, String> {
-    use z_engine_core::mcp::McpConnection;
-    let project_root = {
-        let ctx_guard = state.ctx.lock().map_err(|_| "state poisoned")?;
-        ctx_guard
-            .as_ref()
-            .ok_or_else(|| "not initialized".to_string())?
-            .project_root
-            .clone()
-    };
-    let cfg = Config::load(Some(&project_root)).map_err(|e| e.to_string())?;
-    let srv = cfg
-        .mcp_servers
-        .iter()
-        .find(|s| s.name == name)
-        .ok_or_else(|| format!("no mcp server named '{name}'"))?;
-    let conn = McpConnection::new(&srv.name, &srv.command, &srv.args, &project_root);
-    conn.ensure().await?;
-    Ok(conn
-        .list_tools()
-        .await
-        .into_iter()
-        .map(|t| t.name)
-        .collect())
+    server: McpServerConfig,
+    project_root: Option<String>,
+    state: State<'_, AppState>,
+) -> IpcResult<McpTestReport> {
+    let root = project_root.map(PathBuf::from);
+    Ok(state
+        .engine
+        .test_mcp_server("test", &server, root.as_deref())
+        .await)
+}
+
+fn keys(key_path: &[String]) -> Vec<&str> {
+    key_path.iter().map(String::as_str).collect()
+}
+
+/// Applies `change` to the scope's file, then reloads: every session for
+/// the user file, that project's sessions otherwise.
+fn write(
+    state: &AppState,
+    scope: Scope,
+    project_root: Option<String>,
+    change: impl FnOnce(&Path) -> Result<(), ConfigError>,
+) -> IpcResult<()> {
+    let root = project_root.map(PathBuf::from);
+    let file = layer_file(state.engine.paths(), scope, root.as_deref())?;
+    change(&file).map_err(fail)?;
+    state
+        .engine
+        .reload_settings(reload_root(scope, root.as_deref()));
+    Ok(())
+}
+
+fn reload_root(scope: Scope, root: Option<&Path>) -> Option<&Path> {
+    match scope {
+        Scope::User => None,
+        Scope::Project | Scope::Local => root,
+    }
 }
 
 #[cfg(test)]
-#[path = "settings_tests.rs"]
-mod tests;
+mod tests {
+    use super::*;
+
+    #[test]
+    fn user_writes_reload_every_session_and_project_writes_one_project() {
+        let root = Path::new("/p");
+        assert_eq!(reload_root(Scope::User, Some(root)), None);
+        assert_eq!(reload_root(Scope::Project, Some(root)), Some(root));
+        assert_eq!(reload_root(Scope::Local, Some(root)), Some(root));
+        assert_eq!(keys(&["model".into(), "main".into()]), ["model", "main"]);
+    }
+}

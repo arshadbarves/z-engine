@@ -2,6 +2,7 @@
   import Markdown from "svelte-exmarkdown";
   import { gfmPlugin } from "svelte-exmarkdown/gfm";
   import type { Snippet } from "svelte";
+  import type { HTMLAttributes } from "svelte/elements";
   import { highlightRoot } from "$lib/highlight";
   import Icon, { Check, Copy } from "$lib/ui/icons";
 
@@ -67,7 +68,7 @@
         <pre>{#if children}{@render children()}{/if}</pre>
       </div>
     {/snippet}
-    {#snippet code({ children, class: className }: { children?: Snippet; class?: any })}
+    {#snippet code({ children, class: className }: HTMLAttributes<HTMLElement>)}
       <code class={className}>{#if children}{@render children()}{/if}</code>
     {/snippet}
   </Markdown>

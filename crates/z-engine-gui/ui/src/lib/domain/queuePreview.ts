@@ -1,19 +1,23 @@
-import type { QueuedMessage } from "../types";
-
 const PREVIEW_CHARS = 48;
 
-/** One-line label for a queued follow-up so the composer queue row never wraps. */
-export function queuePreview(item: QueuedMessage): string {
-  const text = item.text.replace(/\s*[\r\n]+\s*/g, " ").trim();
-  if (text) {
-    return text.length > PREVIEW_CHARS ? `${text.slice(0, PREVIEW_CHARS - 1)}…` : text;
-  }
-  const count = item.images.length;
-  if (count > 0) return `${count} ${count === 1 ? "image" : "images"}`;
-  return "Empty follow-up";
+/** One-line label for a queued steering message so the composer queue row never wraps. */
+export function queuePreview(item: string): string {
+  const text = item.replace(/\s*[\r\n]+\s*/g, " ").trim();
+  if (!text) return "Empty follow-up";
+  return text.length > PREVIEW_CHARS ? `${text.slice(0, PREVIEW_CHARS - 1)}…` : text;
 }
 
-/** Hover text for a queued follow-up: the full prompt, never blank. */
-export function queueTitle(item: QueuedMessage): string {
-  return item.text.trim() || queuePreview(item);
+/** Hover text for a queued message: the full prompt, never blank. */
+export function queueTitle(item: string): string {
+  return item.trim() || queuePreview(item);
+}
+
+export function replaceQueued(queue: string[], index: number, text: string): string[] {
+  const clean = text.trim();
+  if (!clean) return removeQueued(queue, index);
+  return queue.map((item, i) => (i === index ? clean : item));
+}
+
+export function removeQueued(queue: string[], index: number): string[] {
+  return queue.filter((_, i) => i !== index);
 }

@@ -1,5 +1,3 @@
-import type { Msg } from "../types";
-
 export interface ScrollControllerOptions {
   /** Distance from bottom in pixels to consider "at bottom". Defaults to 50. */
   bottomThreshold?: number;
@@ -15,7 +13,7 @@ export function createScrollController(options: ScrollControllerOptions = {}) {
   let lastScrollTop = 0;
   let isProgrammatic = false;
   let scrollRaf = 0;
-  let lastUserMsgId: number | null = null;
+  let lastUserMsgId: string | null = null;
   let lastSessionId: string | null = null;
   let resizeObserver: ResizeObserver | null = null;
 
@@ -131,29 +129,22 @@ export function createScrollController(options: ScrollControllerOptions = {}) {
     };
   }
 
-  function onMessagesUpdated(
-    messages: Msg[],
-    sessionId: string | null,
-    onNewUserMessage?: () => void,
-  ) {
-    // Session switch detection
+  /** Call on every transcript change; `lastUserId` is the newest prompt's message id. */
+  function onContentUpdated(sessionId: string | null, lastUserId: string | null) {
     if (sessionId !== lastSessionId) {
       lastSessionId = sessionId;
-      lastUserMsgId = null;
+      lastUserMsgId = lastUserId;
       isPinned = true;
       showJump = false;
       scrollToBottom(false);
       return;
     }
 
-    const last = messages[messages.length - 1];
-
-    // Detect if a NEW user message was appended (transition only)
-    if (last?.kind === "user" && last.id !== lastUserMsgId) {
-      lastUserMsgId = last.id;
+    // A new prompt always re-pins the view to the bottom.
+    if (lastUserId !== null && lastUserId !== lastUserMsgId) {
+      lastUserMsgId = lastUserId;
       isPinned = true;
       showJump = false;
-      onNewUserMessage?.();
       scrollToBottom(false);
       return;
     }
@@ -204,7 +195,7 @@ export function createScrollController(options: ScrollControllerOptions = {}) {
     handleWheel,
     handlePointerDown,
     handleKeydown,
-    onMessagesUpdated,
+    onContentUpdated,
     jumpToLatest,
     jumpToElement,
     scrollToBottom,

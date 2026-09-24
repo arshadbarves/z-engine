@@ -8,10 +8,18 @@ import {
   ArrowRight02Icon,
   ArrowShrink01Icon,
   ArrowUp02Icon,
+  ArrowTurnBackwardIcon,
   Attachment01Icon,
+  Book02Icon,
+  Bookmark01Icon,
   Brain02Icon,
   Cancel01Icon,
+  CheckListIcon,
   CheckmarkCircle02Icon,
+  CheckmarkSquare02Icon,
+  CircleIcon,
+  Clock01Icon,
+  Coins01Icon,
   Copy01Icon,
   CornerDownLeftIcon,
   Delete02Icon,
@@ -27,13 +35,21 @@ import {
   FolderGitTwoIcon,
   GitBranchIcon,
   GitCompareIcon,
+  GitMergeIcon,
+  Globe02Icon,
+  HelpCircleIcon,
+  Image01Icon,
   InformationCircleIcon,
+  Layers01Icon,
   KeyRoundIcon,
   Loading03Icon,
   MessageSquareIcon,
   OctagonAlertIcon,
   PanelLeftIcon,
+  PencilEdit02Icon,
+  Plug01Icon,
   Refresh01Icon,
+  Robot01Icon,
   Search02Icon,
   ServerIcon,
   Settings03Icon,
@@ -109,4 +125,20 @@ export const User = User02Icon;
 export const Zap = EnergyIcon;
 export const Flash = EnergyIcon;
 export const Target = Target01Icon;
+export const Rewind = ArrowTurnBackwardIcon;
+export const Book = Book02Icon;
+export const Bookmark = Bookmark01Icon;
+export const ListChecks = CheckListIcon;
+export const CheckSquare = CheckmarkSquare02Icon;
+export const Circle = CircleIcon;
+export const Clock = Clock01Icon;
+export const Coins = Coins01Icon;
+export const GitMerge = GitMergeIcon;
+export const Globe = Globe02Icon;
+export const HelpCircle = HelpCircleIcon;
+export const ImageIcon = Image01Icon;
+export const Layers = Layers01Icon;
+export const Pencil = PencilEdit02Icon;
+export const Plug = Plug01Icon;
+export const Bot = Robot01Icon;
 

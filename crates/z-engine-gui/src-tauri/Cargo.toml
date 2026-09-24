@@ -1,6 +1,6 @@
 [package]
 name = "z-engine-gui"
-description = "Desktop shell wrapping the z-engine-core brain"
+description = "Desktop shell (Tauri 2) over the z-engine v2 engine"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,20 +11,24 @@ name = "zengine-gui"
 path = "src/main.rs"
 
 [dependencies]
-z-engine-core = { path = "../../z-engine-core" }
+z-engine-engine.workspace = true
+z-engine-protocol.workspace = true
+z-engine-config.workspace = true
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+anyhow = "1"
 semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 reqwest.workspace = true
 tracing.workspace = true
-dirs.workspace = true
 tracing-subscriber.workspace = true
+toml.workspace = true
+tempfile.workspace = true
 window-vibrancy = "0.6"
 
 [build-dependencies]
