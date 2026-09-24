@@ -40,7 +40,10 @@ fn estimating_a_long_working_set_is_fast() {
     let tokens = estimate_messages(&messages);
     let elapsed = started.elapsed();
 
-    println!("estimated {tokens} tokens over {} messages in {elapsed:?}", messages.len());
+    println!(
+        "estimated {tokens} tokens over {} messages in {elapsed:?}",
+        messages.len()
+    );
     assert!(tokens > 0);
     assert!(elapsed.as_millis() < 500, "estimation took {elapsed:?}");
 }
