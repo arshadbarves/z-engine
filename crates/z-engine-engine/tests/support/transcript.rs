@@ -56,6 +56,17 @@ fn part_text(content: &[ToolResultPart]) -> String {
         .join("\n")
 }
 
+/// A request any provider accepts: it opens with a user message, roles
+/// alternate, and every tool use is answered.
+pub fn assert_valid_request(request: &ModelRequest) {
+    let roles: Vec<Role> = request.messages.iter().map(|m| m.role).collect();
+    assert_eq!(roles.first(), Some(&Role::User), "{roles:?}");
+    for pair in roles.windows(2) {
+        assert_ne!(pair[0], pair[1], "roles must alternate: {roles:?}");
+    }
+    assert_valid_transcript(&request.messages);
+}
+
 /// Every `tool_use` is answered by exactly one `tool_result` in the next
 /// message, and no result is duplicated.
 pub fn assert_valid_transcript(messages: &[Message]) {

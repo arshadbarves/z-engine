@@ -2,7 +2,8 @@
 //! deterministic answers computed from the open documents (see
 //! `lsp_text.rs`). Diagnostics are published after every didOpen/didChange.
 //! Flags: `--crash-on-init` exits during `initialize`; `--minimal` offers no
-//! implementation or call hierarchy; `--quiet` never publishes diagnostics.
+//! implementation or call hierarchy; `--quiet` never publishes diagnostics;
+//! `--busy` begins an indexing progress that never ends.
 
 mod lsp_text;
 
@@ -198,6 +199,7 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let flag = |name: &str| args.iter().any(|a| a == name);
     let (crash, minimal, quiet) = (flag("--crash-on-init"), flag("--minimal"), flag("--quiet"));
+    let busy = flag("--busy");
     let mut input = std::io::stdin().lock();
     let mut out = std::io::stdout().lock();
     let mut docs = Docs::default();
@@ -220,6 +222,11 @@ fn main() {
                 let progress = json!({"jsonrpc": "2.0", "id": "progress-1",
                                       "method": "window/workDoneProgress/create", "params": {"token": "t"}});
                 write_message(&mut out, &progress);
+                if busy {
+                    let begin = json!({"jsonrpc": "2.0", "method": "$/progress",
+                                       "params": {"token": "index", "value": {"kind": "begin", "title": "Indexing"}}});
+                    write_message(&mut out, &begin);
+                }
                 continue;
             }
             "shutdown" => Value::Null,

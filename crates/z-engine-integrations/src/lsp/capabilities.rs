@@ -50,7 +50,7 @@ fn client_capabilities() -> Value {
             "rename": {"dynamicRegistration": false, "prepareSupport": false},
             "publishDiagnostics": {"relatedInformation": false, "versionSupport": false},
         },
-        "window": {"workDoneProgress": false},
+        "window": {"workDoneProgress": true},
     })
 }
 

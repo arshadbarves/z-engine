@@ -79,8 +79,25 @@ impl McpManager {
     /// `(server, tool)` for every tool of every ready server; servers that
     /// announced a change are listed again first (concurrently).
     pub async fn tools(&self) -> Vec<(String, McpToolInfo)> {
+        self.list_tools(false).await
+    }
+
+    /// [`McpManager::tools`] plus the last listed tools of servers whose
+    /// connection was lost, which reconnect when one is called.
+    pub async fn tools_or_last_known(&self) -> Vec<(String, McpToolInfo)> {
+        self.list_tools(true).await
+    }
+
+    async fn list_tools(&self, last_known: bool) -> Vec<(String, McpToolInfo)> {
         let entries = self.entries();
-        let listed = futures::future::join_all(entries.iter().map(|entry| entry.tools())).await;
+        let listed = futures::future::join_all(entries.iter().map(|entry| async move {
+            if last_known {
+                entry.tools_or_last_known().await
+            } else {
+                entry.tools().await
+            }
+        }))
+        .await;
         entries
             .iter()
             .zip(listed)

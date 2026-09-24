@@ -1,6 +1,8 @@
-//! Error diagnostics for files the model just wrote, collected with a
-//! bounded wait. Only fresh diagnostics count: a server that has not
-//! analyzed the new content in time adds nothing.
+//! Error diagnostics for files the model just wrote, opportunistically:
+//! only a server that is already running and has analyzed the file before
+//! is waited on, for at most [`WAIT`]. A server still starting or indexing
+//! adds nothing (edit-heavy sessions never stall on it); one not running
+//! yet is started in the background so later writes benefit.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -15,9 +17,13 @@ use z_engine_prompts::reminders::LSP_ERRORS;
 use super::worker::LspWorker;
 
 /// Longest wait for all files together.
-const WAIT: Duration = Duration::from_secs(5);
+const WAIT: Duration = Duration::from_secs(2);
+/// Bounds the hand-off to the worker thread beyond the servers' own wait.
+const SLACK: Duration = Duration::from_millis(500);
 /// Error lines quoted per file.
 const MAX_LINES: usize = 20;
+
+type Report = Result<Option<FileDiagnostics>, IntegrationError>;
 
 /// A `<system-reminder>` per written file that has errors.
 pub(crate) async fn error_notes(
@@ -29,27 +35,33 @@ pub(crate) async fn error_notes(
         let checks = files.into_iter().map(|file| {
             let manager = Arc::clone(&manager);
             async move {
-                let report = manager.diagnostics(&file).await;
+                let report = manager.diagnostics_if_running(&file, WAIT).await;
                 (file, report)
             }
         });
         futures::future::join_all(checks).await
     });
-    let reports: Vec<(PathBuf, Result<FileDiagnostics, IntegrationError>)> =
-        match tokio::time::timeout(WAIT, collect).await {
-            Ok(Some(reports)) => reports,
-            Ok(None) => return HashMap::new(),
-            Err(_) => {
-                tracing::debug!("post-edit diagnostics timed out");
-                return HashMap::new();
-            }
-        };
+    let reports: Vec<(PathBuf, Report)> = match tokio::time::timeout(WAIT + SLACK, collect).await {
+        Ok(Some(reports)) => reports,
+        Ok(None) => return HashMap::new(),
+        Err(_) => {
+            tracing::debug!("post-edit diagnostics timed out");
+            return HashMap::new();
+        }
+    };
+    let idle: Vec<PathBuf> = reports
+        .iter()
+        .filter(|(_, report)| matches!(report, Ok(None)))
+        .map(|(file, _)| file.clone())
+        .collect();
+    start_in_background(&worker, idle);
     reports
         .into_iter()
         .filter_map(|(file, report)| {
             let report = report
                 .map_err(|error| tracing::debug!(%error, file = %file.display(), "no diagnostics"))
                 .ok()
+                .flatten()
                 .filter(|report| report.fresh)?;
             let errors: Vec<&Diagnostic> = report
                 .diagnostics
@@ -60,6 +72,21 @@ pub(crate) async fn error_notes(
             Some((file, note))
         })
         .collect()
+}
+
+/// Starts the servers of `files` (and lets them see the files) without
+/// anyone waiting; failures only matter to later queries, which report them.
+fn start_in_background(worker: &LspWorker, files: Vec<PathBuf>) {
+    if files.is_empty() {
+        return;
+    }
+    worker.detach(move |manager| async move {
+        for file in files {
+            if let Err(error) = manager.start_for(&file).await {
+                tracing::debug!(%error, file = %file.display(), "language server not started");
+            }
+        }
+    });
 }
 
 fn note(root: &Path, file: &Path, errors: &[&Diagnostic]) -> Option<String> {

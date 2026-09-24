@@ -14,6 +14,7 @@ use super::capabilities::{initialize_params, provides, server_capabilities, want
 use super::convert;
 use super::diagnostics::DiagnosticsStore;
 use super::documents::{Documents, SyncOutcome};
+use super::progress::ProgressTracker;
 use super::resolve::Texts;
 use super::spec::LspServerSpec;
 use super::types::FileDiagnostics;
@@ -38,6 +39,7 @@ pub struct LspClient {
     stderr: StderrLog,
     documents: Documents,
     diagnostics: Arc<DiagnosticsStore>,
+    progress: Arc<ProgressTracker>,
     capabilities: Value,
     sync_lock: tokio::sync::Mutex<()>,
 }
@@ -80,9 +82,14 @@ impl LspClient {
         };
         let spawned = spawn_server(&command, &stderr)?;
         let diagnostics = Arc::new(DiagnosticsStore::default());
+        let progress = Arc::new(ProgressTracker::default());
         let options = RpcOptions {
             cancel_style: CancelStyle::Lsp,
-            on_notification: Some(notification_handler(&spec.name, Arc::clone(&diagnostics))),
+            on_notification: Some(notification_handler(
+                &spec.name,
+                Arc::clone(&diagnostics),
+                Arc::clone(&progress),
+            )),
         };
         let rpc = RpcClient::over_io(
             spawned.stdout,
@@ -109,6 +116,7 @@ impl LspClient {
             stderr,
             documents: Documents::default(),
             diagnostics,
+            progress,
             capabilities,
             sync_lock: tokio::sync::Mutex::new(()),
         })
@@ -225,10 +233,38 @@ impl LspClient {
         path: &Path,
         wait: Duration,
     ) -> Result<FileDiagnostics, IntegrationError> {
+        self.collect_diagnostics(path, wait, false).await
+    }
+
+    /// [`LspClient::diagnostics`] that never stalls a caller who only wants
+    /// them if they come quickly: no wait while the server reports
+    /// work in progress (indexing) or before it has published anything for
+    /// `path` (the sync still lets it analyze the file for next time).
+    pub async fn diagnostics_if_quick(
+        &self,
+        path: &Path,
+        wait: Duration,
+    ) -> Result<FileDiagnostics, IntegrationError> {
+        self.collect_diagnostics(path, wait, true).await
+    }
+
+    /// Whether the server reports work in progress (e.g. indexing).
+    pub fn is_busy(&self) -> bool {
+        self.progress.busy()
+    }
+
+    async fn collect_diagnostics(
+        &self,
+        path: &Path,
+        wait: Duration,
+        only_if_quick: bool,
+    ) -> Result<FileDiagnostics, IntegrationError> {
         let before = self.diagnostics.generation(path);
         let outcome = self.sync(path).await?;
         let fresh = if outcome == SyncOutcome::Unchanged && before > 0 {
             true
+        } else if only_if_quick && (before == 0 || self.is_busy()) {
+            false
         } else {
             self.diagnostics.wait_newer(path, before, wait).await
         };
@@ -280,10 +316,15 @@ async fn handshake(rpc: &RpcClient, root: &Path, name: &str) -> Result<Value, In
     Ok(capabilities)
 }
 
-fn notification_handler(server: &str, diagnostics: Arc<DiagnosticsStore>) -> NotificationHandler {
+fn notification_handler(
+    server: &str,
+    diagnostics: Arc<DiagnosticsStore>,
+    progress: Arc<ProgressTracker>,
+) -> NotificationHandler {
     let server = server.to_string();
     Arc::new(move |notification| match notification.method.as_str() {
         "textDocument/publishDiagnostics" => diagnostics.publish(notification.params.as_ref()),
+        "$/progress" => progress.update(notification.params.as_ref()),
         method => tracing::trace!(%server, method, "LSP notification ignored"),
     })
 }

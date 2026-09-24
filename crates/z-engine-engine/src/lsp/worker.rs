@@ -9,6 +9,7 @@ use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 
 use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinSet;
 use z_engine_integrations::{LspManager, LspServerSpec};
 
 use crate::sync::lock;
@@ -55,6 +56,21 @@ impl LspWorker {
         answer.await.ok()
     }
 
+    /// Runs `work` against the manager without waiting for it.
+    pub(crate) fn detach<F, Fut>(&self, work: F)
+    where
+        F: FnOnce(Arc<LspManager>) -> Fut + Send + 'static,
+        Fut: Future<Output = ()> + 'static,
+    {
+        let work: Work = Box::new(move |manager| Box::pin(work(manager)));
+        let sent = self
+            .sender()
+            .is_some_and(|s| s.send(Message::Run(work)).is_ok());
+        if !sent {
+            tracing::debug!("language server worker gone; work dropped");
+        }
+    }
+
     /// Stops the servers and the thread; a worker never started is a no-op.
     pub(crate) async fn shutdown(&self) {
         let Some(sender) = lock(&self.sender).take() else {
@@ -99,21 +115,24 @@ fn serve(root: PathBuf, specs: Vec<LspServerSpec>, mut messages: mpsc::Unbounded
     let local = tokio::task::LocalSet::new();
     local.block_on(&runtime, async move {
         let manager = Arc::new(LspManager::new(root, specs));
-        while let Some(message) = messages.recv().await {
-            match message {
-                Message::Run(work) => {
-                    tokio::task::spawn_local(work(Arc::clone(&manager)));
+        let mut work_in_flight = JoinSet::new();
+        let done = loop {
+            while work_in_flight.try_join_next().is_some() {}
+            match messages.recv().await {
+                Some(Message::Run(work)) => {
+                    work_in_flight.spawn_local(work(Arc::clone(&manager)));
                 }
-                Message::Shutdown(done) => {
-                    manager.shutdown_all().await;
-                    if done.send(()).is_err() {
-                        tracing::debug!("shutdown waiter left");
-                    }
-                    return;
-                }
+                Some(Message::Shutdown(done)) => break Some(done),
+                None => break None,
             }
-        }
+        };
+        // A server start in flight holds its slot (initialize may take a
+        // minute); aborting it kills that server and frees the slot.
+        work_in_flight.shutdown().await;
         manager.shutdown_all().await;
+        if done.is_some_and(|done| done.send(()).is_err()) {
+            tracing::debug!("shutdown waiter left");
+        }
     });
 }
 

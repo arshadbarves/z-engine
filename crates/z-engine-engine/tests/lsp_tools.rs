@@ -1,6 +1,7 @@
 //! The `LSP` tool answers through the configured language server, and a
-//! written file with errors gets them appended to the write's result;
-//! a clean file adds nothing.
+//! written file the server has analyzed gets its errors appended to the
+//! write's result; a file it never saw is not waited on (but is analyzed
+//! for its next write).
 
 mod support;
 
@@ -26,20 +27,27 @@ async fn lsp_queries_and_post_edit_errors() {
     );
     let mut h = Harness::builder(repo).settings(&settings).start().await;
     let lib = h.path("src/lib.rs");
-    h.model.push(Script::tool(
-        "LSP",
-        json!({"operation": "documentSymbols", "file_path": lib}),
-    ));
+    h.model.push(Script::tools(&[
+        (
+            "LSP",
+            json!({"operation": "documentSymbols", "file_path": lib}),
+        ),
+        ("Read", json!({"file_path": lib})),
+    ]));
     h.model.push(Script::tools(&[
         (
             "Write",
-            json!({"file_path": h.path("src/broken.rs"), "content": "fn broken() {} // ERROR here\n"}),
+            json!({"file_path": lib, "content": "fn broken() {} // ERROR here\n"}),
         ),
         (
             "Write",
             json!({"file_path": h.path("src/clean.rs"), "content": "fn clean() {}\n"}),
         ),
     ]));
+    h.model.push(Script::tool(
+        "Write",
+        json!({"file_path": h.path("src/clean.rs"), "content": "fn now() {} // ERROR too\n"}),
+    ));
     h.model.push(Script::text("Done."));
     let turn = h.run_turn("look and write").await;
     assert_eq!(turn.outcome, TurnOutcome::Completed);
@@ -56,11 +64,16 @@ async fn lsp_queries_and_post_edit_errors() {
     let written = results(requests[2].messages.last().unwrap());
     let broken = &written[0].2;
     assert!(broken.contains("<system-reminder>"), "{broken}");
-    assert!(broken.contains("errors in src/broken.rs"), "{broken}");
+    assert!(broken.contains("errors in src/lib.rs"), "{broken}");
     assert!(broken.contains("found an ERROR marker"), "{broken}");
     assert!(
         !written[1].2.contains("<system-reminder>"),
-        "{:?}",
+        "a file the server never analyzed is not waited on: {:?}",
         written[1]
+    );
+    let rewritten = &results(requests[3].messages.last().unwrap())[0].2;
+    assert!(
+        rewritten.contains("errors in src/clean.rs"),
+        "once analyzed, its next write is checked: {rewritten}"
     );
 }

@@ -14,6 +14,7 @@ use super::ring::OutputRing;
 use super::{JobEvent, JobEventSink, JobRead, JobSnapshot};
 use crate::process::lines::pump;
 use crate::process::spawn::drain;
+use crate::process::tree::TreeGuard;
 
 const RING_BYTES: usize = 1024 * 1024;
 const SNAPSHOT_TAIL_BYTES: usize = 4 * 1024;
@@ -153,6 +154,7 @@ impl Job {
 /// Owns `child` until it exits: streams its output into the job, then
 /// records the final status and emits `JobEvent::Exited`.
 pub(super) async fn monitor(job: Arc<Job>, mut child: Child, events: Option<JobEventSink>) {
+    let tree = TreeGuard::new(job.pid);
     let mut readers = vec![
         reader(child.stdout.take(), &job, &events),
         reader(child.stderr.take(), &job, &events),
@@ -165,6 +167,7 @@ pub(super) async fn monitor(job: Arc<Job>, mut child: Child, events: Option<JobE
         }
     };
     drain(&mut readers, job.pid, None).await;
+    tree.disarm();
     let (status, exit_code) = job.finish(status);
     if let Some(events) = &events {
         events(JobEvent::Exited {

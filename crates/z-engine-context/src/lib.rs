@@ -14,6 +14,7 @@ pub mod system;
 pub mod template;
 mod text;
 pub mod tokens;
+pub mod wellformed;
 
 pub use breakdown::context_breakdown;
 pub use cache::{message_breakpoints, system_breakpoint};
@@ -36,3 +37,4 @@ pub use tokens::{
     MEDIA_TOKENS, estimate_block, estimate_message, estimate_messages, estimate_text,
     estimate_tools,
 };
+pub use wellformed::{MISSING_RESULT, merge_adjacent_roles, well_formed};

@@ -4,8 +4,6 @@
 //! were still running are recorded as failed, and questions or plans
 //! nobody can answer any more are resolved as dismissed.
 
-use std::collections::HashSet;
-
 use z_engine_protocol::{
     AgentStatus, CallId, ContentBlock, Message, Role, TurnOutcome, TurnRecord, Usage,
     VerificationOutcome, now_ms,
@@ -98,20 +96,14 @@ pub(crate) fn repair(journal: &Journal, replay: &ReplayState) -> Result<bool, En
     Ok(repaired)
 }
 
-/// Tool calls without a result anywhere in the working set.
+/// Calls of a trailing assistant message (the round a crash cut off). An
+/// earlier call whose result write was lost cannot be answered in place
+/// by appending; request assembly fills that gap instead.
 fn unanswered(working: &[Message]) -> Vec<CallId> {
-    let answered: HashSet<&CallId> = working
-        .iter()
-        .flat_map(|message| &message.content)
-        .filter_map(|block| match block {
-            ContentBlock::ToolResult { tool_use_id, .. } => Some(tool_use_id),
-            _ => None,
-        })
-        .collect();
-    working
-        .iter()
-        .flat_map(Message::tool_uses)
-        .filter(|(id, _, _)| !answered.contains(id))
-        .map(|(id, _, _)| id.clone())
-        .collect()
+    match working.last() {
+        Some(last) if last.role == Role::Assistant => {
+            last.tool_uses().map(|(id, _, _)| id.clone()).collect()
+        }
+        _ => Vec::new(),
+    }
 }

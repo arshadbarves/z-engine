@@ -7,7 +7,7 @@
 use serde_json::{Value, json};
 use z_engine_context::{
     Environment, PromptSection, SystemInputs, build_system, estimate_text, estimate_tools,
-    message_breakpoints, system_breakpoint, today,
+    message_breakpoints, system_breakpoint, today, well_formed,
 };
 use z_engine_llm::{ModelRequest, SystemBlock, ThinkingConfig, ToolChoice, ToolSpec};
 use z_engine_protocol::Message;
@@ -124,7 +124,7 @@ pub(crate) fn assemble(
         })
         .collect();
     let effort = ctx.core.with_state(|state| state.effort);
-    let mut request = ModelRequest::new(model, messages)
+    let mut request = ModelRequest::new(model, well_formed(messages))
         .with_system(system)
         .with_tools(prepared.tools.clone())
         .with_max_tokens(models::max_output_tokens(

@@ -278,6 +278,17 @@ impl ServerEntry {
         lock(&self.state).tools.clone()
     }
 
+    /// [`ServerEntry::tools`], except that a server whose connection was
+    /// lost (or is being re-established) keeps the tools it last listed:
+    /// calling one reconnects it. Servers that never connected offer none.
+    pub(super) async fn tools_or_last_known(&self) -> Vec<McpToolInfo> {
+        match self.snapshot().0 {
+            McpServerState::Ready => self.tools().await,
+            McpServerState::Disabled => Vec::new(),
+            McpServerState::Connecting | McpServerState::Failed(_) => self.cached_tools(),
+        }
+    }
+
     pub(super) fn ready_client(&self) -> Option<Arc<McpClient>> {
         match self.snapshot() {
             (McpServerState::Ready, Some(client)) if !client.is_closed() => Some(client),

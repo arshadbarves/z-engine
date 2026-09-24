@@ -12,6 +12,7 @@ mod shell;
 #[cfg(windows)]
 mod shell_windows;
 mod spawn;
+mod tree;
 
 pub use background::{
     BackgroundShells, BackgroundSpec, JobEvent, JobEventSink, JobRead, JobSnapshot,

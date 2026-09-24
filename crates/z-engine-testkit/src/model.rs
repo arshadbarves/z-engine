@@ -20,6 +20,8 @@ pub enum Script {
     Stall(Vec<ModelEvent>),
     /// Wait before emitting (cancellable).
     Delayed(Duration, Vec<ModelEvent>),
+    /// Emit these events, then fail the stream (a connection lost mid-response).
+    FailAfter(Vec<ModelEvent>, LlmError),
 }
 
 impl Script {
@@ -206,6 +208,7 @@ impl ModelClient for ScriptedModel {
                 Script::Stall(events) => (None, events, true, None),
                 Script::Delayed(delay, events) => (Some(delay), events, false, None),
                 Script::Error(error) => (None, Vec::new(), false, Some(error)),
+                Script::FailAfter(events, error) => (None, events, false, Some(error)),
             };
             if let Some(delay) = delay {
                 tokio::select! {
@@ -213,15 +216,15 @@ impl ModelClient for ScriptedModel {
                     _ = tokio::time::sleep(delay) => {}
                 }
             }
-            if let Some(error) = error {
-                let _ = tx.send(Err(error)).await;
-                return;
-            }
             for event in events {
                 if cancel.is_cancelled() || tx.send(Ok(event)).await.is_err() {
                     return;
                 }
                 tokio::task::yield_now().await;
+            }
+            if let Some(error) = error {
+                let _ = tx.send(Err(error)).await;
+                return;
             }
             if stall {
                 cancel.cancelled().await;

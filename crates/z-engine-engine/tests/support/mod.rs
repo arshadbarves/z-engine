@@ -8,8 +8,10 @@
 
 mod agents;
 mod commands;
+mod crash;
 mod fakes;
 mod hooks;
+mod processes;
 mod transcript;
 
 use std::sync::Arc;
@@ -25,9 +27,13 @@ pub use agents::{
     tool_names, write_agent,
 };
 pub use commands::user_blocks;
+pub use crash::Remains;
 pub use fakes::{fake_lsp_bin, fake_mcp_bin, fake_mcp_toml, py_mcp_toml, skip};
 pub use hooks::{hook_script, hook_toml};
-pub use transcript::{all_text, assert_valid_transcript, last_user_text, results};
+pub use processes::{PROCESS_WAIT, exec_recording_pid, group_gone, group_running, read_pid};
+pub use transcript::{
+    all_text, assert_valid_request, assert_valid_transcript, last_user_text, results,
+};
 
 pub const BASE_SETTINGS: &str = "schema = 2\n\n[model]\nmain = \"test-model\"\n";
 pub const TITLE_NEEDLE: &str = "You write the title shown for a coding session";
@@ -44,6 +50,23 @@ impl ClientFactory for Factory {
     ) -> Result<Arc<dyn ModelClient>, EngineError> {
         Ok(Arc::new(self.0.clone()))
     }
+}
+
+/// An engine over `paths` answering from `model`, with side requests routed.
+fn boot(paths: &Paths, model: &ScriptedModel) -> (Engine, EventRecorder) {
+    model.route_system(TITLE_NEEDLE, Script::text("Test session"));
+    model.route_system(SUMMARY_NEEDLE, Script::text("Summary of the earlier work."));
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let engine = Engine::new(EngineOptions {
+        paths: paths.clone(),
+        event_sink: Arc::new(move |envelope| {
+            tx.send(envelope).ok();
+        }),
+        client_factory: Some(Arc::new(Factory(model.clone()))),
+        env: EnvOverrides::default(),
+    })
+    .unwrap();
+    (engine, EventRecorder::new(rx))
 }
 
 pub struct Builder {
@@ -89,19 +112,7 @@ impl Builder {
             trust.save(&paths.trust_file).unwrap();
         }
         let model = self.model;
-        model.route_system(TITLE_NEEDLE, Script::text("Test session"));
-        model.route_system(SUMMARY_NEEDLE, Script::text("Summary of the earlier work."));
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let engine = Engine::new(EngineOptions {
-            paths: paths.clone(),
-            event_sink: Arc::new(move |envelope| {
-                tx.send(envelope).ok();
-            }),
-            client_factory: Some(Arc::new(Factory(model.clone()))),
-            env: EnvOverrides::default(),
-        })
-        .unwrap();
-        let mut events = EventRecorder::new(rx);
+        let (engine, mut events) = boot(&paths, &model);
         let session = engine.open_session(self.repo.path(), None).await.unwrap();
         events
             .wait_for(|event| matches!(event, Event::Snapshot { .. }))

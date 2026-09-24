@@ -11,6 +11,7 @@ pub mod format;
 mod manager;
 mod ops;
 mod position;
+mod progress;
 mod resolve;
 mod routing;
 mod spec;

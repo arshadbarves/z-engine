@@ -5,10 +5,12 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use super::client::LspClient;
 use super::routing::{Route, Router};
 use super::spec::LspServerSpec;
+use super::types::FileDiagnostics;
 use super::uri::plain_path;
 use crate::error::IntegrationError;
 use crate::process::StderrLog;
@@ -97,6 +99,15 @@ impl Slot {
                 *state = SlotState::Failed(error.to_string());
                 Err(error)
             }
+        }
+    }
+
+    /// The client when it is up; `None` while idle, starting (the state is
+    /// locked), restarting or failed.
+    fn running(&self) -> Option<Arc<LspClient>> {
+        match self.state.try_lock().as_deref() {
+            Ok(SlotState::Running(client)) if !client.is_closed() => Some(Arc::clone(client)),
+            _ => None,
         }
     }
 
@@ -189,10 +200,7 @@ impl LspManager {
         let running: Vec<Arc<LspClient>> = self
             .slots()
             .iter()
-            .filter_map(|slot| match slot.state.try_lock().as_deref() {
-                Ok(SlotState::Running(client)) if !client.is_closed() => Some(Arc::clone(client)),
-                _ => None,
-            })
+            .filter_map(|slot| slot.running())
             .collect();
         if !running.is_empty() {
             return running;
@@ -231,6 +239,30 @@ impl LspManager {
             )));
         }
         Ok(canonical)
+    }
+
+    /// Diagnostics of a file the caller just wrote, only from a server that
+    /// is already up and only if they come quickly (see
+    /// [`LspClient::diagnostics_if_quick`]). `None` when no server for the
+    /// file is running yet; [`LspManager::start_for`] brings one up.
+    pub async fn diagnostics_if_running(
+        &self,
+        path: &Path,
+        wait: Duration,
+    ) -> Result<Option<FileDiagnostics>, IntegrationError> {
+        let path = self.resolve_file(path).await?;
+        let route = self.router.route(&path).await?;
+        let Some(client) = self.slot(route).running() else {
+            return Ok(None);
+        };
+        client.diagnostics_if_quick(&path, wait).await.map(Some)
+    }
+
+    /// Starts the server for `path` when needed and syncs the file, so the
+    /// server analyzes it before it is next asked about.
+    pub async fn start_for(&self, path: &Path) -> Result<(), IntegrationError> {
+        let path = self.resolve_file(path).await?;
+        self.client_for(&path).await?.sync(&path).await.map(|_| ())
     }
 
     /// Every server started so far, including failed ones.

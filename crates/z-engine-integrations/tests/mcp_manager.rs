@@ -159,6 +159,11 @@ async fn a_crashed_server_fails_the_call_then_reconnects_once() {
         manager.tools().await.is_empty(),
         "a failed server offers no tools"
     );
+    assert_eq!(
+        manager.tools_or_last_known().await.len(),
+        9,
+        "but its last listed tools stay known, so a call can reconnect it"
+    );
 
     let echoed = manager
         .call_tool("fake", "echo", json!({"text": "back"}), &cancel)

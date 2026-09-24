@@ -17,6 +17,7 @@ use super::lines::pump;
 use super::script::CwdProbe;
 use super::shell::{ShellSpec, resolve_shell};
 use super::spawn::{check_command, drain, shell_command, spawn_error, terminate};
+use super::tree::TreeGuard;
 use crate::HostError;
 
 /// Receives stdout and stderr lines (with their terminator) as they arrive.
@@ -106,6 +107,7 @@ pub async fn run(
     }
     let mut child = command.spawn().map_err(|e| spawn_error(&spec.shell, e))?;
     let pid = child.id();
+    let tree = TreeGuard::new(pid);
     let writer = match (spec.stdin, child.stdin.take()) {
         (Some(input), Some(pipe)) => Some(tokio::spawn(feed_stdin(pipe, input))),
         _ => None,
@@ -134,6 +136,7 @@ pub async fn run(
             None
         }
     };
+    tree.disarm();
     // The tree is gone, so the pipe is closed; a writer still pending was
     // blocked on a reader that no longer exists.
     if let Some(writer) = writer {

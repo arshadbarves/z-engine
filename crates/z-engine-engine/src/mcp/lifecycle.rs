@@ -52,8 +52,9 @@ fn live(weak: &Weak<SessionCore>) -> Option<Arc<SessionCore>> {
     weak.upgrade().filter(|core| !core.cancel.is_cancelled())
 }
 
-/// Rebuilds the catalog from every ready server (minus disabled tools)
-/// and the registry when the tools changed; returns whether they did.
+/// Rebuilds the catalog from every ready server, and servers that lost
+/// their connection (a call reconnects them), minus disabled tools; the
+/// registry follows when the tools changed. Returns whether they did.
 pub(super) async fn refresh(core: &SessionCore) -> bool {
     let mut tools: Vec<CatalogTool> = Vec::new();
     let mut prompts = Vec::new();
@@ -64,7 +65,7 @@ pub(super) async fn refresh(core: &SessionCore) -> bool {
                 tracing::debug!(server = %plan.spec.name, %error, "MCP prompts not listed")
             }
         }
-        for (server, info) in manager.tools().await {
+        for (server, info) in manager.tools_or_last_known().await {
             if plan.disabled_tools.contains(&info.name) {
                 continue;
             }
