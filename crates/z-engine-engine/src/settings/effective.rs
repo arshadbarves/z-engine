@@ -161,24 +161,7 @@ fn restrict_to_user_level(
     settings: &mut Settings,
 ) -> Vec<String> {
     let user = load_with_env(paths, None, env).settings;
-    let permissions = &settings.permissions;
-    let loosened = permissions.mode != user.permissions.mode
-        || permissions.allow != user.permissions.allow
-        || permissions.additional_directories != user.permissions.additional_directories
-        || permissions.auto_allow_read_only_bash != user.permissions.auto_allow_read_only_bash;
-    let differs = [
-        ("hooks", settings.hooks != user.hooks),
-        ("MCP servers", settings.mcp != user.mcp),
-        (
-            "checks",
-            settings.verification.checks != user.verification.checks,
-        ),
-        ("permission rules and mode", loosened),
-        ("shell and sandbox", settings.shell != user.shell),
-        ("provider", settings.provider != user.provider),
-        ("web access", settings.web != user.web),
-        ("language servers", settings.lsp != user.lsp),
-    ];
+    let withheld = trust_gated(settings, &user);
     settings.hooks = user.hooks;
     settings.mcp = user.mcp;
     settings.verification.checks = user.verification.checks;
@@ -190,6 +173,31 @@ fn restrict_to_user_level(
     settings.provider = user.provider;
     settings.web = user.web;
     settings.lsp = user.lsp;
+    withheld
+}
+
+/// What `project` (all layers merged) sets differently from the user layer
+/// among the settings only a trusted project may supply, named for people
+/// (`hooks`, `permission rules and mode`, ...).
+pub(crate) fn trust_gated(project: &Settings, user: &Settings) -> Vec<String> {
+    let permissions = &project.permissions;
+    let loosened = permissions.mode != user.permissions.mode
+        || permissions.allow != user.permissions.allow
+        || permissions.additional_directories != user.permissions.additional_directories
+        || permissions.auto_allow_read_only_bash != user.permissions.auto_allow_read_only_bash;
+    let differs = [
+        ("hooks", project.hooks != user.hooks),
+        ("MCP servers", project.mcp != user.mcp),
+        (
+            "checks",
+            project.verification.checks != user.verification.checks,
+        ),
+        ("permission rules and mode", loosened),
+        ("shell and sandbox", project.shell != user.shell),
+        ("provider", project.provider != user.provider),
+        ("web access", project.web != user.web),
+        ("language servers", project.lsp != user.lsp),
+    ];
     differs
         .into_iter()
         .filter(|(_, differs)| *differs)

@@ -218,8 +218,10 @@ pub enum Event {
     QueueChanged {
         queued: Vec<String>,
     },
-    /// The project defines hooks, MCP servers or checks that stay off
-    /// until the user trusts it (`defines` names them, e.g. `hooks`).
+    /// The project sets things only a trusted project may (hooks, MCP
+    /// servers, checks, looser permissions, shell, provider, web or
+    /// language servers); they stay off until the user trusts it
+    /// (`defines` names them, e.g. `hooks`).
     TrustRequired {
         project_root: String,
         defines: Vec<String>,

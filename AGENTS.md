@@ -60,13 +60,16 @@ testkit      -> llm (dev-dependency of other crates only)
   shell calls `Engine` (sessions, settings, catalog, and the queries in
   `engine/queries/`) and uses `config` only for settings files, credentials,
   trust and extension/instruction discovery.
-- Only `host` touches the OS or network (processes, git, HTTP); the
-  documented exception is `integrations`, which owns its server processes.
+- Only `host` touches the OS or network (processes, git, HTTP). The
+  documented exceptions: `integrations` owns its server processes and MCP
+  HTTP connections, `llm` sends the model-provider and models.dev
+  requests, and the GUI shell checks GitHub for updates and installs them.
   `config` and `store` read/write their own files; `context` and `policy`
   do no I/O.
 - Prompt prose lives only in `crates/z-engine-prompts/prompts/<area>/`,
   one `pub const` per file in `src/<area>.rs`. Tool descriptions are
-  `prompts/tools/<tool>.md`. Never inline prompt text in logic files.
+  `prompts/tools/<snake_name>.md` (e.g. `multi_edit.md`). Never inline
+  prompt text in logic files.
 - Protocol types are the GUI contract: change them only in
   `z-engine-protocol` (config types in `z-engine-config`), then run
   `cargo test -p z-engine-protocol` / `-p z-engine-config` and commit the
@@ -137,15 +140,16 @@ ui/src/
     ├── chrome/ sidebar/ home/  # top bar, status, sidebar, home screen
 ```
 
-Rules: screens never `invoke()` or import `bits-ui`; event listening only
-in `lib/runtime/listen.ts`; file budget ≤300 / hard cap 400. Do not add
+Rules: screens never `invoke()` or import `bits-ui`; engine events are
+listened to only in `lib/runtime/listen.ts` (the updater's progress events
+in `lib/updateStore.ts`); file budget ≤300 / hard cap 400. Do not add
 SvelteKit, Tailwind, shadcn-svelte, React, or a second design system.
 
 ## How to add things (follow exactly)
 
 | Adding… | Do this |
 |---|---|
-| a tool | `z-engine-tools/src/builtin/<name>.rs` implementing `Tool`, description in `prompts/tools/<Name>.md`, register in the registry |
+| a tool | `z-engine-tools/src/builtin/<snake_name>.rs` implementing `Tool`, declared in `builtin/mod.rs` and registered in `builtin/list.rs`; its name in `z-engine-tools/src/names.rs`; description in `z-engine-prompts/prompts/tools/<snake_name>.md` with a `pub const` and a table entry in `src/tools.rs` |
 | a prompt | `z-engine-prompts/prompts/<area>/<name>.md` + one `pub const` in `src/<area>.rs` |
 | an IPC command | fn in the matching `src-tauri/src/commands/<domain>.rs` with `#[tauri::command]`, add it to `generate_handler!` in `main.rs`, wrapper in `ui/src/lib/commands/<domain>.ts` |
 | a GUI query | `impl Engine` method in `z-engine-engine/src/engine/queries/<topic>.rs` with camelCase `Serialize` results and unit tests |

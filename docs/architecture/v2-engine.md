@@ -204,7 +204,9 @@ still apply. A project agent definition cannot run looser than its caller
 grant nothing (`commands/expand.rs`). Opening a session of an untrusted
 project that sets any withheld category emits `trustRequired`;
 `trustWorkspace { trusted: true }` records the root in `trust.json` and
-reloads the session (`false` only dismisses the request).
+reloads the session (`false` only dismisses the request). The categories
+come from one function, `trust_gated`, which the settings screen also
+reads through `Engine::trust_report` (`engine/queries/trust.rs`).
 
 ## Commands
 

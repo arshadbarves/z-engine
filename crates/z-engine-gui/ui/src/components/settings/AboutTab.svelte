@@ -41,7 +41,7 @@
     return [
       { id: "user", label: "User settings", path: layerPath("user") ?? inConfig("settings.toml"), desc: "Your defaults for every project", icon: FileText },
       { id: "auth", label: "API keys", path: inConfig("auth.json"), desc: "Stored API keys, kept out of settings files", icon: KeyRound },
-      { id: "trust", label: "Trusted workspaces", path: inConfig("trust.json"), desc: "Projects allowed to run their hooks and servers", icon: Shield },
+      { id: "trust", label: "Trusted workspaces", path: inConfig("trust.json"), desc: "Projects whose own settings apply in full", icon: Shield },
       { id: "project", label: "Project settings", path: layerPath("project") ?? ".z-engine/settings.toml", desc: "Shared with the team", icon: FileText },
       { id: "local", label: "Personal project settings", path: layerPath("projectLocal") ?? ".z-engine/settings.local.toml", desc: "Git-ignored overrides", icon: FileText },
       { id: "data", label: "Sessions & checkpoints", path: app ? joinPath(app.dataDir, "sessions") : "sessions", desc: "Chat history and shadow checkpoints", icon: Folder },

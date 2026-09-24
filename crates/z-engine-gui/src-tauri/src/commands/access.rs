@@ -4,11 +4,11 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use serde::Serialize;
 use tauri::State;
 use z_engine_config::{
-    Credentials, KeyStatus, SearchBackend, Settings, TrustStore, credential_key, search_key_bucket,
+    Credentials, KeyStatus, SearchBackend, TrustStore, credential_key, search_key_bucket,
 };
+use z_engine_engine::TrustReport;
 
 use crate::ipc::{IpcResult, fail};
 use crate::state::AppState;
@@ -25,13 +25,6 @@ const BUCKETS: &[(&str, &str)] = &[
 ];
 /// Applies to the configured provider, whatever its bucket.
 const ANY_PROVIDER_VAR: &str = "ZENGINE_API_KEY";
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct TrustStatus {
-    trusted: bool,
-    project_defines: Vec<String>,
-}
 
 #[tauri::command]
 pub(crate) fn credential_status(
@@ -73,15 +66,9 @@ pub(crate) fn save_search_key(
 pub(crate) fn trust_status(
     project_root: String,
     state: State<'_, AppState>,
-) -> IpcResult<TrustStatus> {
+) -> IpcResult<TrustReport> {
     let root = AppState::root_arg(&project_root)?;
-    let store = TrustStore::load(&state.engine.paths().trust_file).map_err(fail)?;
-    let project = state.engine.settings(Some(&root)).settings;
-    let user = state.engine.settings(None).settings;
-    Ok(TrustStatus {
-        trusted: store.is_trusted(&root),
-        project_defines: project_defines(&project, &user),
-    })
+    state.engine.trust_report(&root).map_err(fail)
 }
 
 #[tauri::command]
@@ -157,22 +144,6 @@ fn statuses(
     out
 }
 
-/// What the project layers add beyond the user level and would run once
-/// trusted.
-fn project_defines(project: &Settings, user: &Settings) -> Vec<String> {
-    let mut defines = Vec::new();
-    if project.hooks != user.hooks {
-        defines.push("hooks".to_string());
-    }
-    if project.mcp != user.mcp {
-        defines.push("mcp servers".to_string());
-    }
-    if project.verification.checks != user.verification.checks {
-        defines.push("checks".to_string());
-    }
-    defines
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -194,23 +165,5 @@ mod tests {
         let out = statuses(&credentials, &stored, "custom:proxy", any);
         assert!(out["custom:proxy"].has_key);
         assert!(!out["openrouter"].has_key);
-    }
-
-    #[test]
-    fn trust_lists_what_the_project_adds() {
-        let user = Settings::default();
-        let mut project = Settings::default();
-        assert!(project_defines(&project, &user).is_empty());
-        project.hooks.insert("Stop".into(), Vec::new());
-        project
-            .verification
-            .checks
-            .push(z_engine_config::CheckConfig {
-                id: "test".into(),
-                label: "Tests".into(),
-                command: "cargo test".into(),
-                ..Default::default()
-            });
-        assert_eq!(project_defines(&project, &user), ["hooks", "checks"]);
     }
 }

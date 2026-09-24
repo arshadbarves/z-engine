@@ -1,6 +1,7 @@
 //! Workspace trust from the chat: `TrustRequired` when an untrusted
-//! project defines hooks, MCP servers or checks, and `TrustWorkspace`,
-//! which records the answer and reloads the session's settings.
+//! project sets something only a trusted project may (see
+//! `settings::trust_gated`), and `TrustWorkspace`, which records the answer
+//! and reloads the session's settings.
 
 use std::sync::Arc;
 
@@ -27,8 +28,8 @@ pub(crate) async fn trust_workspace(core: &Arc<SessionCore>, trusted: bool) {
     if !trusted {
         core.events.notice(
             NoticeLevel::Info,
-            "The workspace stays untrusted for this chat; project hooks, MCP servers and checks \
-             remain off.",
+            "The workspace stays untrusted for this chat; its project settings that run programs \
+             or loosen yours remain off.",
         );
         return;
     }
@@ -43,7 +44,7 @@ pub(crate) async fn trust_workspace(core: &Arc<SessionCore>, trusted: bool) {
     core.events.notice(
         NoticeLevel::Info,
         format!(
-            "Trusted {}; its hooks, MCP servers and checks are enabled.",
+            "Trusted {}; all of its project settings now apply.",
             core.root.display()
         ),
     );

@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   day old, so newly released models appear without deleting the cache.
 - The WebFetch setting (`web.fetch_extract`) is described as what it does:
   the fast model answers the agent's question about the page.
+- The **Trust this workspace** setting and the chat's trust notices name
+  everything an untrusted project is held back from; the list used to stop
+  at hooks, MCP servers and checks.
 
 ### Security
 - An untrusted workspace can no longer loosen your settings: its permission

@@ -11,7 +11,7 @@ mod rules;
 pub(crate) mod sandbox;
 
 pub(crate) use client::session_client;
-pub(crate) use effective::{SessionSettings, load_session_settings};
+pub(crate) use effective::{SessionSettings, load_session_settings, trust_gated};
 pub(crate) use instructions::nested_docs;
 pub(crate) use policy::build_policy;
 pub(crate) use rules::scoped_rules;

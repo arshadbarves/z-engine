@@ -21,7 +21,7 @@ mod verify;
 
 pub use engine::{
     AgentCard, ChangedKind, ChangedPath, Engine, GitChangedFile, McpTestReport, SlashCommandInfo,
-    SlashKind,
+    SlashKind, TrustReport,
 };
 pub use error::EngineError;
 pub use options::{ClientFactory, EngineOptions, EventSink, ExportFormat};

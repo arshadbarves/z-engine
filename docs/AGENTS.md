@@ -44,13 +44,13 @@ beyond their banner, and never link to them as current behavior.
 
 | When you change… | Update |
 |---|---|
-| a tool (new, renamed, new input, new limit) | its description `crates/z-engine-prompts/prompts/tools/<tool>.md`; the user-guide page that explains the workflow; [how-it-works/features-core.md](how-it-works/features-core.md) (tools); the README tools list |
+| a tool (new, renamed, new input, new limit) | its description `crates/z-engine-prompts/prompts/tools/<snake_name>.md`; the user-guide page that explains the workflow; [how-it-works/features-core.md](how-it-works/features-core.md) (tools); the README tools list |
 | a settings key or default | [user-guide/12-settings-reference.md](user-guide/12-settings-reference.md) and the feature's user-guide page; the commented example in `crates/z-engine-config/src/default_config.toml`; the how-it-works page when behavior changes |
-| a slash command | [user-guide/06-commands-and-skills.md](user-guide/06-commands-and-skills.md); the README commands paragraph |
+| a slash command | [user-guide/06-commands-and-skills.md](user-guide/06-commands-and-skills.md); [how-it-works/features-interaction.md](how-it-works/features-interaction.md); the README commands paragraph |
 | a built-in or custom-agent feature | [user-guide/04-agents.md](user-guide/04-agents.md); [how-it-works/features-agents-and-context.md](how-it-works/features-agents-and-context.md) |
-| hooks (event, input field, output field) | [user-guide/08-hooks.md](user-guide/08-hooks.md); [architecture/v2-engine.md](architecture/v2-engine.md#hooks); how-it-works hooks section |
+| hooks (event, input field, output field) | [user-guide/08-hooks.md](user-guide/08-hooks.md); [architecture/v2-engine.md](architecture/v2-engine.md#hooks); [how-it-works/features-interaction.md](how-it-works/features-interaction.md) (hooks) |
 | permissions, trust or the sandbox | [user-guide/03-permissions-and-safety.md](user-guide/03-permissions-and-safety.md); [how-it-works/features-core.md](how-it-works/features-core.md) and [features-integrations-and-safety.md](how-it-works/features-integrations-and-safety.md) |
-| plan mode, questions, todos, steering | [user-guide/05-plan-mode-questions-and-todos.md](user-guide/05-plan-mode-questions-and-todos.md) or [02-everyday-use.md](user-guide/02-everyday-use.md); how-it-works core page |
+| plan mode, questions, todos, steering | [user-guide/05-plan-mode-questions-and-todos.md](user-guide/05-plan-mode-questions-and-todos.md) or [02-everyday-use.md](user-guide/02-everyday-use.md); [how-it-works/features-interaction.md](how-it-works/features-interaction.md) |
 | memory, rules, context, compaction, caching | [user-guide/07-memory-and-context.md](user-guide/07-memory-and-context.md); [how-it-works/features-agents-and-context.md](how-it-works/features-agents-and-context.md) |
 | MCP or language servers | [user-guide/09-mcp-and-code-intelligence.md](user-guide/09-mcp-and-code-intelligence.md); how-it-works integrations page |
 | verification | [user-guide/10-verification.md](user-guide/10-verification.md); how-it-works integrations page |

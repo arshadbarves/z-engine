@@ -42,8 +42,8 @@
       <SettingRow
         title="Trust this workspace"
         description={trust?.projectDefines.length
-          ? `Lets this project run what it defines: ${trust.projectDefines.join(", ")}.`
-          : "Lets this project's own hooks, MCP servers and checks run."}
+          ? `Lets this project use its own settings for ${trust.projectDefines.join(", ")}.`
+          : "Lets this project's own settings run programs or loosen yours. Its deny and ask rules always apply."}
         controlId={id}
         inline
         {error}

@@ -97,7 +97,8 @@ workspace yet, **New chat** asks you for a folder first.
 > **Tip:** Z Engine works best in a git repository. Run `git init` in a new
 > project so checkpoints and the diff panel work.
 
-If the project contains its own hooks, MCP servers or checks (see
+If the project's own settings would run programs or loosen yours (hooks,
+MCP servers, checks, permission rules and a few more; see
 [workspace trust](03-permissions-and-safety.md#workspace-trust)), a banner
 asks whether you trust the workspace. Choose **Not now** if you are unsure;
 everything else still works.
