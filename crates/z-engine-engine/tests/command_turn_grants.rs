@@ -15,7 +15,7 @@ async fn allowed_tools_are_turn_scoped() {
         ".z-engine/commands/make.md",
         "---\nallowed-tools: Bash(touch:*)\n---\nCreate the files.",
     );
-    let mut h = Harness::start(repo).await;
+    let mut h = Harness::builder(repo).trusted().start().await;
 
     h.model
         .push(Script::tool("Bash", json!({ "command": "touch one.txt" })));

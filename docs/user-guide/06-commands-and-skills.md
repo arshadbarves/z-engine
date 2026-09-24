@@ -114,7 +114,7 @@ Run it with `/fix-issue 128 "keep the old API"`.
 |---|---|
 | `description` | Shown in the command menu. Defaults to the first line of the body (up to 100 characters). |
 | `argument-hint` | Shown after the name in the menu, for example `<issue-number> [notes]`. |
-| `allowed-tools` | Permission rules granted **for that turn only**, as a list or a comma-separated string, for example `Bash(git add:*)`. |
+| `allowed-tools` | Permission rules granted **for that turn only**, as a list or a comma-separated string, for example `Bash(git add:*)`. Ignored for commands from an [untrusted](03-permissions-and-safety.md#workspace-trust) project. |
 | `model` | Model for that turn only. `inherit` or empty keeps the chat's model. |
 
 ### Placeholders in the body

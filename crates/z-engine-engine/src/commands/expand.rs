@@ -3,6 +3,7 @@
 //! for MCP prompts, plus the turn-scoped grants and model override.
 
 use tokio_util::sync::CancellationToken;
+use z_engine_config::{CommandDef, ExtensionScope};
 
 use super::args::substitute;
 use super::catalog::Target;
@@ -50,13 +51,14 @@ pub(crate) async fn expand(
 ) -> Result<Expansion, String> {
     let (body, grants, model) = match &call.target {
         Target::Template(def) => {
+            let grants = trusted_grants(core, def);
             let body = substitute(&def.body, &call.args);
             let files = included_files(core, &body).await;
-            let mut body = run_inline_commands(core, &body, &def.allowed_tools, cancel).await;
+            let mut body = run_inline_commands(core, &body, &grants, cancel).await;
             if !files.is_empty() {
                 body = format!("{}\n\n{files}", body.trim_end());
             }
-            (body, def.allowed_tools.clone(), def.model.clone())
+            (body, grants, def.model.clone())
         }
         Target::Mcp { server, prompt } => {
             let body = render_mcp_prompt(core, &call.name, server, prompt, &call.args).await?;
@@ -77,4 +79,18 @@ pub(crate) async fn expand(
 
 fn wrap(name: &str, body: &str) -> String {
     format!("<command name=\"{name}\">\n{}\n</command>", body.trim())
+}
+
+/// A command shipped by an untrusted project grants nothing: a repository
+/// must not approve its own inline commands or tool calls.
+fn trusted_grants(core: &SessionCore, def: &CommandDef) -> Vec<String> {
+    let from_project = matches!(
+        def.source.scope,
+        ExtensionScope::Project | ExtensionScope::ClaudeProject
+    );
+    if from_project && !core.settings().trusted {
+        Vec::new()
+    } else {
+        def.allowed_tools.clone()
+    }
 }

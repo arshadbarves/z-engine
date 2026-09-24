@@ -41,8 +41,13 @@ Problems never stop the app:
 - A file with a wrong value type is **skipped entirely** until you fix it;
   the Settings screen says "This file is not applied until it is fixed".
 - Files larger than 1 MiB are refused.
-- In an untrusted project, hooks, MCP servers and checks come from your
-  user settings only ([workspace trust](03-permissions-and-safety.md#workspace-trust)).
+- In an untrusted project, anything that runs programs or loosens
+  permissions comes from your user settings only: `hooks`, `mcp`,
+  `verification.checks`, `permissions.mode`, `permissions.allow`,
+  `permissions.additional_directories`,
+  `permissions.auto_allow_read_only_bash`, and the whole `shell`,
+  `provider`, `web` and `lsp` sections. The project's `deny` and `ask`
+  rules still apply ([workspace trust](03-permissions-and-safety.md#workspace-trust)).
 
 The first line of each file is `schema = 2`; the app manages it.
 

@@ -143,8 +143,11 @@ variable (`OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
 `OPENCODE_API_KEY`). OpenCode Zen (`https://opencode.ai/zen/v1`) serves its
 free models without a key.
 
-Project-defined hooks, MCP servers and checks run only after you trust the
-workspace: a banner in the chat asks when a project defines them, and
+Until you trust a workspace, its project settings can only make things
+stricter: hooks, MCP servers, checks, permission modes and allow rules,
+shell, provider, web and language-server settings come from your user
+settings, while the project's deny and ask rules still apply. A banner in
+the chat asks when a project sets any of them, and
 **Settings → Advanced → Workspace** changes it later.
 
 ## Tools

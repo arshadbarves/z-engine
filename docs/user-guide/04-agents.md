@@ -168,7 +168,7 @@ saves a copy in Z Engine's folder that takes precedence.
 | `tools` | Allowed tools, as a list or a comma-separated string. Omit it or use `*` for all tools. Entries ending in `*` match by prefix (`mcp__github__*`). |
 | `disallowedTools` | Tools to remove (also `disallowed_tools`). |
 | `model` | `inherit` (default: the caller's model), `main`, `fast`, `review`, or a model id. |
-| `permissionMode` | `default`, `acceptEdits`, `plan` or `bypass`. Default: the caller's mode. |
+| `permissionMode` | `default`, `acceptEdits`, `plan` or `bypass`. Default: the caller's mode. An agent from an [untrusted](03-permissions-and-safety.md#workspace-trust) project can't use a looser mode than its caller. |
 | `isolation` | `shared` (default) or `worktree`. |
 | `maxTurns` | Model turns this agent may take (also `max_turns`). Default: `agents.max_turns`. |
 | `color` | A display color; stored with the definition. |

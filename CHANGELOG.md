@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   subagent, and a CI link check, so feature changes update the docs in the
   same change.
 
+### Security
+- An untrusted workspace can no longer loosen your settings: its permission
+  mode, allow rules, extra directories, shell, provider, web and
+  language-server settings are ignored until you trust it (its deny and ask
+  rules still apply). Its custom agents cannot run in a looser permission
+  mode than their caller, and its custom commands' `allowed-tools` grant
+  nothing.
+
 ---
 
 ## [2.0.0] - 2026-09-24

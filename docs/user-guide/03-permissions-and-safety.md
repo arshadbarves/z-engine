@@ -192,21 +192,44 @@ Bypass mode allows them; only a deny rule stops them there.
 
 ## Workspace trust
 
-A project can define hooks, MCP servers and checks in its own
-`.z-engine/settings.toml` (or `settings.local.toml`). These run commands on
-your machine, so they stay **off** until you trust the workspace. When you
-open a chat in such a project, a **Trust this workspace?** banner lists
-what it defines; choose **Trust this workspace** or **Not now**.
+A project can ship its own settings (`.z-engine/settings.toml` or
+`settings.local.toml`), agents, and commands. Some of those could run
+programs on your machine or loosen your permissions, so until you trust the
+workspace an untrusted project can only make things **stricter**. When you
+open a chat in a project that sets any of them, a **Trust this workspace?**
+banner lists what it sets; choose **Trust this workspace** or **Not now**.
+
+Until you trust it, these project settings are ignored and yours are used
+instead:
+
+| Ignored from the project | Why |
+|---|---|
+| hooks, MCP servers, checks | they run programs |
+| permission `mode`, `allow` rules, `additional_directories`, `auto_allow_read_only_bash` | they would approve actions for you |
+| everything under `[shell]` (shell path, environment, sandbox) | it decides how commands run |
+| everything under `[provider]` | it decides where your code is sent |
+| everything under `[web]` | it controls web access, including private networks |
+| everything under `[lsp]` | language server commands are programs |
+
+The project's `deny` and `ask` rules **do** apply, because they only add
+caution. Model choices, context, verification mode and appearance also
+apply. In addition:
+
+- A project's custom agent can't run in a looser permission mode than the
+  agent that started it.
+- A project's custom command gets nothing from its `allowed-tools`: its
+  inline `` !`command` `` lines are not run and it grants no extra
+  permissions for its turn.
+- Automatic verification checks don't run.
+
+Trust details:
 
 - Trust is stored in `trust.json` in your config folder, per project
   folder. Subfolders and worktrees are separate folders and need their own
   trust.
 - Change it later under **Settings → Advanced → Workspace → Trust this
   workspace**.
-- Hooks, MCP servers and checks in your *user* settings always run.
-- Everything else from the project's settings (models, permission rules,
-  mode) applies whether or not the project is trusted.
-- In untrusted projects, automatic verification checks don't run.
+- Your *user* settings, agents and commands always apply.
 
 ## The sandbox
 

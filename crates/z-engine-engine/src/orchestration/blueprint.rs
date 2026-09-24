@@ -6,8 +6,8 @@
 
 use std::path::PathBuf;
 
-use z_engine_config::{AgentDef, Settings};
-use z_engine_protocol::{AgentId, Isolation};
+use z_engine_config::{AgentDef, ExtensionScope, Settings};
+use z_engine_protocol::{AgentId, Isolation, PermissionMode};
 use z_engine_tools::names;
 
 use crate::run::{AgentSpec, ModelChoice, RunContext, ToolFilter, WorktreeScope};
@@ -45,7 +45,7 @@ pub(crate) fn child_spec(
             deny,
         },
         model: ModelChoice::Fixed(model_for(def, &settings.settings, &parent.model())),
-        mode: def.permission_mode.or(parent.spec.mode),
+        mode: child_mode(def, parent, settings.trusted),
         max_turns: def.max_turns.unwrap_or(limits.max_turns).max(1),
         root: placement.root,
         depth,
@@ -69,6 +69,43 @@ pub(crate) fn model_for(def: &AgentDef, settings: &Settings, parent_model: &str)
 /// The caller's explicit choice wins over the definition's.
 pub(crate) fn isolation(def: &AgentDef, requested: Option<Isolation>) -> Isolation {
     requested.unwrap_or(def.isolation)
+}
+
+/// The definition's mode, else the caller's. A definition shipped by an
+/// untrusted project may not run looser than its caller (a repository must
+/// not be able to start a `bypass` subagent).
+fn child_mode(def: &AgentDef, parent: &RunContext, trusted: bool) -> Option<PermissionMode> {
+    let from_project = matches!(
+        def.source.scope,
+        ExtensionScope::Project | ExtensionScope::ClaudeProject
+    );
+    resolve_mode(
+        def.permission_mode,
+        parent.spec.mode,
+        parent.mode(),
+        trusted || !from_project,
+    )
+}
+
+fn resolve_mode(
+    requested: Option<PermissionMode>,
+    inherited: Option<PermissionMode>,
+    caller: PermissionMode,
+    may_loosen: bool,
+) -> Option<PermissionMode> {
+    match requested {
+        Some(mode) if may_loosen || looseness(mode) <= looseness(caller) => Some(mode),
+        _ => inherited,
+    }
+}
+
+fn looseness(mode: PermissionMode) -> u8 {
+    match mode {
+        PermissionMode::Plan => 0,
+        PermissionMode::Default => 1,
+        PermissionMode::AcceptEdits => 2,
+        PermissionMode::Bypass => 3,
+    }
 }
 
 #[cfg(test)]
@@ -107,6 +144,25 @@ mod tests {
         assert_eq!(
             model_for(&def("model: vendor/x-1\n"), &settings, "parent"),
             "vendor/x-1"
+        );
+    }
+
+    #[test]
+    fn untrusted_definitions_cannot_run_looser_than_the_caller() {
+        use PermissionMode::{AcceptEdits, Bypass, Default, Plan};
+        assert_eq!(resolve_mode(Some(Bypass), None, Default, false), None);
+        assert_eq!(
+            resolve_mode(Some(AcceptEdits), Some(Plan), Default, false),
+            Some(Plan)
+        );
+        assert_eq!(resolve_mode(Some(Plan), None, Default, false), Some(Plan));
+        assert_eq!(
+            resolve_mode(Some(Bypass), None, Default, true),
+            Some(Bypass)
+        );
+        assert_eq!(
+            resolve_mode(None, Some(AcceptEdits), Bypass, false),
+            Some(AcceptEdits)
         );
     }
 

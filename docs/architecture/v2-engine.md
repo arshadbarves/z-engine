@@ -192,9 +192,17 @@ becomes context for `UserPromptSubmit`/`SessionStart`); exit 2 blocks with
 stderr as the reason; other codes warn. JSON stdout may set `decision`
 (`block`/`approve`), `reason`, `continue: false` with `stopReason`, and
 `hookSpecificOutput` (`permissionDecision`, `permissionDecisionReason`,
-`updatedInput`, `additionalContext`). Project-defined hooks, MCP servers
-and checks run only after the user trusts the workspace. Opening a session
-of an untrusted project that defines any of them emits `trustRequired`;
+`updatedInput`, `additionalContext`).
+
+**Workspace trust.** Until the user trusts a workspace, its project layers
+may only restrict: `settings/effective.rs` takes hooks, MCP servers,
+checks, the permission mode, allow rules, additional directories,
+`auto_allow_read_only_bash`, and the whole `shell`, `provider`, `web` and
+`lsp` sections from the user layer, while the project's deny and ask rules
+still apply. A project agent definition cannot run looser than its caller
+(`orchestration/blueprint.rs`), and a project command's `allowed-tools`
+grant nothing (`commands/expand.rs`). Opening a session of an untrusted
+project that sets any withheld category emits `trustRequired`;
 `trustWorkspace { trusted: true }` records the root in `trust.json` and
 reloads the session (`false` only dismisses the request).
 

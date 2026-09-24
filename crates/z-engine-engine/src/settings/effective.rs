@@ -18,11 +18,13 @@ use super::instructions::instruction_docs;
 /// reload swaps the whole value, so a running round sees one version.
 #[derive(Debug, Clone)]
 pub(crate) struct SessionSettings {
-    /// Project hooks, MCP servers and checks are removed when untrusted.
+    /// When untrusted, everything that runs code or loosens permissions
+    /// comes from the user layer (see `restrict_to_user_level`).
     pub settings: Settings,
     pub trusted: bool,
-    /// What an untrusted project defines that stays off (`hooks`,
-    /// `MCP servers`, `checks`); empty when trusted.
+    /// What an untrusted project set that is ignored (`hooks`,
+    /// `permission rules and mode`, `shell and sandbox`, ...); empty when
+    /// trusted.
     pub withheld: Vec<String>,
     pub extensions: Extensions,
     pub instructions: Vec<InstructionDoc>,
@@ -66,9 +68,11 @@ pub(crate) fn load_session_settings(paths: &Paths, root: &Path, env: &EnvOverrid
     if !withheld.is_empty() {
         notices.push((
             NoticeLevel::Warn,
-            "This workspace is not trusted: hooks, MCP servers and checks defined by the \
-             project are disabled until you trust it."
-                .to_string(),
+            format!(
+                "This workspace is not trusted: project settings for {} are ignored until you \
+                 trust it. Its deny and ask rules still apply.",
+                withheld.join(", ")
+            ),
         ));
     }
     if let Some(reason) = super::sandbox::unavailable_reason(&settings) {
@@ -147,14 +151,21 @@ fn web_search(
     }
 }
 
-/// Takes hooks, MCP servers and checks from the user layer only; returns
-/// which of them the project had defined differently.
+/// An untrusted project may only make things stricter: everything that
+/// runs code, loosens permissions or redirects traffic comes from the user
+/// layer, while the project's `deny` and `ask` rules still apply. Returns
+/// what the project had set differently.
 fn restrict_to_user_level(
     paths: &Paths,
     env: &EnvOverrides,
     settings: &mut Settings,
 ) -> Vec<String> {
     let user = load_with_env(paths, None, env).settings;
+    let permissions = &settings.permissions;
+    let loosened = permissions.mode != user.permissions.mode
+        || permissions.allow != user.permissions.allow
+        || permissions.additional_directories != user.permissions.additional_directories
+        || permissions.auto_allow_read_only_bash != user.permissions.auto_allow_read_only_bash;
     let differs = [
         ("hooks", settings.hooks != user.hooks),
         ("MCP servers", settings.mcp != user.mcp),
@@ -162,10 +173,23 @@ fn restrict_to_user_level(
             "checks",
             settings.verification.checks != user.verification.checks,
         ),
+        ("permission rules and mode", loosened),
+        ("shell and sandbox", settings.shell != user.shell),
+        ("provider", settings.provider != user.provider),
+        ("web access", settings.web != user.web),
+        ("language servers", settings.lsp != user.lsp),
     ];
     settings.hooks = user.hooks;
     settings.mcp = user.mcp;
     settings.verification.checks = user.verification.checks;
+    settings.permissions.mode = user.permissions.mode;
+    settings.permissions.allow = user.permissions.allow;
+    settings.permissions.additional_directories = user.permissions.additional_directories;
+    settings.permissions.auto_allow_read_only_bash = user.permissions.auto_allow_read_only_bash;
+    settings.shell = user.shell;
+    settings.provider = user.provider;
+    settings.web = user.web;
+    settings.lsp = user.lsp;
     differs
         .into_iter()
         .filter(|(_, differs)| *differs)
