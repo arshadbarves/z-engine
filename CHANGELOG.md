@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-09-25
+
 ### Added
 - **User guide** (`docs/user-guide/`): complete documentation for using the
   app, from getting started to the settings reference and troubleshooting.

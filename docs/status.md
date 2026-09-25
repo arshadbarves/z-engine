@@ -18,7 +18,7 @@ gone; they remain in git history.
 | 9 | Commands, MCP prompts, workspace trust | done |
 | 10 | Sandbox, fault injection, flakiness, performance, docs, 2.0.0 | done |
 
-## GUI redesign (after 2.0.0)
+## GUI redesign (shipped as 2.1.0)
 
 | Step | Scope | Status |
 |---|---|---|
@@ -30,6 +30,12 @@ gone; they remain in git history.
 | 6 | Agents panel, Changes panel, prompt inspector, palette, every Settings tab, worktree dialog, shell drawer | done |
 | 7 | Errors after edits (engine event) | pending |
 | 8 | Remove legacy stylesheets and token aliases | done |
+
+## After 2.0.0: documentation website
+
+- VitePress site at [arshadbarves.github.io/z-engine](https://arshadbarves.github.io/z-engine/),
+  built from `docs/` and deployed by `.github/workflows/docs-site.yml` on
+  pushes to `release`.
 
 ## Release checks (2.0.0)
 
