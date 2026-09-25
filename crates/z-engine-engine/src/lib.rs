@@ -20,8 +20,8 @@ mod sync;
 mod verify;
 
 pub use engine::{
-    AgentCard, ChangedKind, ChangedPath, Engine, GitChangedFile, McpTestReport, SlashCommandInfo,
-    SlashKind, TrustReport,
+    AgentCard, ChangedKind, ChangedPath, Engine, GitChangedFile, McpTestReport, RepoSummary,
+    SlashCommandInfo, SlashKind, TrustReport,
 };
 pub use error::EngineError;
 pub use options::{ClientFactory, EngineOptions, EventSink, ExportFormat};

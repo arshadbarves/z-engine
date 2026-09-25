@@ -3,8 +3,8 @@
 Slash commands are shortcuts you type in the composer, starting with `/`.
 Some are answered by Z Engine directly, some send a prepared prompt to the
 agent, and some control the app. This page lists every built-in command,
-shows how to write your own, explains MCP prompts, and covers skills and the
-`#` memory shortcut.
+covers the command palette, shows how to write your own commands, explains
+MCP prompts, and covers skills and the `#` memory shortcut.
 
 Type `/` to see the list. It's grouped into **Prompts** (sent to the
 model), **Session** (answered by Z Engine without the model) and **App**
@@ -19,7 +19,6 @@ These are answered immediately, without using the model.
 | Command | What it does |
 |---|---|
 | `/compact [instructions]` | Summarizes older history to free context. Optional text tells the summary what to focus on. Only when the agent is idle. |
-| `/context` | Shows how many tokens each prompt layer uses (system prompt, tool definitions, instructions, messages) and opens the context details in the Now card. |
 | `/cost` | Shows this chat's cost and token counts (input, output, cache read, cache write), plus tokens per agent when subagents ran. |
 | `/status` | Shows the session id, project and its trust state, model and fast model, provider, permission mode, effort, context use, whether code checkpoints are on, and running background jobs. |
 | `/model [id]` | Without an id, shows the current model. With an id, switches this chat's model. |
@@ -50,20 +49,44 @@ instructions go to the model.
 | Command | What it does |
 |---|---|
 | `/help` | Lists commands and keyboard shortcuts. |
-| `/agents` | Opens the Agents panel. |
-| `/jobs` | Opens the Jobs panel. |
+| `/agents` | Opens the agents panel on its **Agents** tab. |
+| `/jobs` | Opens the agents panel on its **Jobs** tab. |
+| `/context` | Opens the [context card](07-memory-and-context.md#the-context-window): how full the context is, by layer, with **Compact now** and **Inspect prompt**. Without an open chat, it prints the per-layer breakdown in a new chat instead. |
 | `/permissions` | Opens Settings → Permissions. |
 | `/hooks` | Shows the recent hook runs of this chat. |
 | `/memory` | Starts a `#` memory note in the composer. |
-| `/config` | Opens Settings. |
+| `/config` | Opens Settings at **Models**. |
 | `/resume` | Opens the palette listing your chats. |
 | `/export [markdown\|json]` | Copies the transcript to the clipboard. |
 | `/clear` | Starts a new chat (the old one is kept). |
-| `/context` | Opens the Now card with context use; **Inspect prompt** there shows the per-layer breakdown. |
 
 Commands that prompt the model can't be queued while the agent is working;
 you'll see "/name waits for an idle session". An unknown command shows a
 suggestion ("Did you mean /review?").
+
+## The command palette
+
+Press ⌘K (Ctrl+K on Windows and Linux), or click **Search** in the sidebar,
+to open the command palette. One search field finds actions, chats,
+projects and settings. Before you type, it lists:
+
+| Group | Entries |
+|---|---|
+| **Actions** | **New chat**, **New chat in a worktree…**, **Add a project…** |
+| **Go to** | **Home**, **Inbox**, **Settings**, **Show or hide the sidebar** |
+| **Recent chats** | Your six latest chats |
+| **This chat** | **Review changes**, **Agents**, **Background jobs**, **Inspect the prompt**, **Context usage**, **Compact the conversation**, **Copy the chat as Markdown**, **Copy the chat as JSON** |
+| **Permission mode** | **Switch to …** each mode except the current one and Bypass |
+| **Help** | **Commands and shortcuts** (the same as `/help`) |
+| **Projects** | Your project folders; picking one makes it the active project |
+
+Once you type, single settings join the list under **Settings**, found by
+their name or by everyday words ("budget" finds **Session cost cap**, "api
+key" finds **Providers and API keys**); picking one opens Settings at that
+row. Names that start with what you typed rank first, then names with a
+word that starts with it, then names that contain it, then related
+keywords; letters typed in order also match ("nc" finds **New chat**).
+↑ and ↓ move, Enter opens, Esc closes.
 
 ## Custom commands
 

@@ -8,7 +8,7 @@
   type Props = {
     title: string;
     description?: string;
-    /** Enables the source badge, the override note and Reset. */
+    /** Enables the source badge (shown once a file sets the value), the override note and Reset. */
     keyPath?: KeyPath;
     controlId?: string;
     /** Title and control on one line, for switches. */
@@ -34,7 +34,7 @@
   }
 </script>
 
-<div class="setting-row" class:inline>
+<div class="setting-row" class:inline data-setting={keyPath ? keyPath.join(".") : `@${title}`}>
   <div class="setting-row-head">
     <div class="setting-row-copy">
       {#if controlId}
@@ -45,7 +45,7 @@
       {#if description}<span class="form-label-desc">{description}</span>{/if}
     </div>
     <div class="setting-row-meta">
-      {#if source}<SourceBadge {source} />{/if}
+      {#if source && source !== "default"}<SourceBadge {source} />{/if}
       {#if definedHere}
         <button
           type="button"

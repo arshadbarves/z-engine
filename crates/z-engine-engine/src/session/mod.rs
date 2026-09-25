@@ -41,6 +41,7 @@ pub(crate) use journal::Journal;
 pub(crate) use open::open_session;
 pub(crate) use reload::git_info;
 pub(crate) use reminders::ReminderBox;
+pub(crate) use reports::context_report;
 pub(crate) use snapshot::emit_snapshot;
 pub(crate) use state::SessionState;
 pub(crate) use status::StatusTracker;

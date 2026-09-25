@@ -115,16 +115,48 @@ tokens a model can take in one request (for example 200,000). Everything
 counts: the system prompt, instruction files, tool definitions, the
 conversation, and every file or command output the agent has looked at.
 
-Click the status line at the top of the window to open the Now card. It
-shows how full the context is (used tokens and the limit), the chat's cost,
-and two actions: **Compact** (when the
-agent is idle) and **Inspect prompt** (the full last request: system
-prompt, tools and messages, with a breakdown by layer). `/context` prints
-the breakdown in the chat and opens the same card.
+The small ring to the right of the island in the title bar shows how full
+this chat's context is. Its percentage appears from 65% (amber, red from
+85%); hover it for the numbers, such as "Context 42% · 84k of 200k". Click
+it, or type `/context`, for the context card:
+
+- the percentage used, the tokens used of the limit, and how many are left;
+- a bar split by layer, with a legend: **System prompt**, **Tool
+  definitions**, **Instructions**, **Conversation**;
+- when compaction starts on its own ("Z Engine compacts older messages by
+  itself at 92%.");
+- **Compact now** (when the agent is idle) and **Inspect prompt**.
 
 Z Engine takes the window size from the model catalog; set
 `model.context_window` to override it. Unknown models are assumed to have
 128,000 tokens.
+
+### Inspect the prompt
+
+**Inspect prompt** (in the context card) or **Inspect the prompt** (in the
+command palette) opens the prompt inspector: the last request sent to the
+model, part by part. Its title bar shows the model and **Copy all**.
+
+- **The map** at the top left says how much of the context window the
+  request fills (for example "42% of the context window · 84k of 200k
+  tokens") and splits it into four kinds: **Instructions** (the system
+  prompt), **Project** (`AGENTS.md`, the repository map, saved notes),
+  **Conversation** (messages and tool results) and **Tools** (tool
+  definitions). Click a kind to show only its parts; click it again to show
+  all.
+- **The outline** below lists the parts by kind with their token counts;
+  conversation parts show their first line. **Search the request** also
+  searches the text inside the parts, and ↑/↓ move through them.
+- **Insights**, folded at the bottom, names the largest part, how many
+  tokens are reusable across turns (system prompt and tools, which the
+  provider can cache) and how many change every turn, with hints to shrink
+  the request.
+- **The selected part** fills the right side, with its kind, tokens and
+  share of the request. **Reader** shows it formatted (a tool as its
+  description and input schema); **Raw** shows the exact text with line
+  numbers and a **Wrap lines** switch. A button copies the part.
+
+Esc closes the inspector.
 
 ## Automatic compaction
 
@@ -146,8 +178,9 @@ everything; compaction only affects what is sent to the model. The todo
 list survives compaction. If the provider reports that a request is too
 long, Z Engine compacts and retries once.
 
-You can compact yourself when the agent is idle with `/compact` or **Compact
-Now**, optionally with focus instructions:
+You can compact yourself when the agent is idle with `/compact`, **Compact
+now** in the context card, or **Compact the conversation** in the command
+palette. `/compact` takes optional focus instructions:
 
 ```text
 /compact keep the details of the database migration decisions
@@ -188,8 +221,8 @@ points on the system prompt, the tool list and the last two user messages.
 - **Anthropic:** on by default.
 - **OpenRouter:** on by default (passed through to models that support it).
 - **Other providers:** off by default; turn it on per provider in
-  **Settings → Providers → Configure → Endpoint → Prompt caching**
-  (`provider.cache_control`).
+  **Settings → Providers → Configure → Endpoint and advanced options →
+  Prompt caching** (`provider.cache_control`).
 
 Cache reads and writes are counted separately in `/cost`. See
 [Models, providers and cost](11-models-providers-and-cost.md#prompt-caching-and-cost).

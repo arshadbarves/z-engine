@@ -2,10 +2,10 @@
   import { saveApiKey } from "$lib/commands";
   import { credentialKey, keyHintText, keyStatus } from "$lib/domain/settings/credentials";
   import { PROVIDER_KIND_OPTIONS } from "$lib/domain/settings/options";
-  import { connectWrites, normalizeBaseUrl } from "$lib/domain/settings/providerWrites";
   import type { Settings } from "$lib/protocol/config/Settings";
-  import { detectProviderId, isProviderConnected, PROVIDERS, requiresApiKey, type ConnectFormValues, type ProviderPreset } from "$lib/providers";
-  import { errorText, pushToast, sessions, setModel } from "$lib/runtime";
+  import { detectProviderId, isProviderConnected, PROVIDERS, requiresApiKey, type ProviderPreset } from "$lib/providers";
+  import { errorText, pushToast } from "$lib/runtime";
+  import { connectProvider } from "$lib/stores/providerConnect";
   import { settingsStore } from "$lib/stores/settings.svelte";
   import Icon, { Check, KeyRound, Sparkles } from "$lib/ui/icons";
   import ProviderConnectModal from "./ProviderConnectModal.svelte";
@@ -43,21 +43,6 @@
     await settingsStore.loadCredentials();
   }
 
-  async function connect(p: ProviderPreset, form: ConnectFormValues, apiKey: string): Promise<string | null> {
-    if (apiKey) {
-      try {
-        await saveApiKey(normalizeBaseUrl(form.baseUrl), apiKey);
-      } catch (e) {
-        return `Could not save the key: ${errorText(e)}`;
-      }
-    }
-    const error = await settingsStore.apply(connectWrites(form, settings.provider));
-    await settingsStore.loadCredentials();
-    if (error) return error;
-    if (sessions.activeId && form.model.trim()) void setModel(form.model.trim());
-    pushToast(`Connected to ${p.name}`, "ok");
-    return null;
-  }
 </script>
 
 <div class="tab-body providers-tab">
@@ -135,7 +120,7 @@
       live={settings.provider}
       credentials={settingsStore.credentials}
       onClose={() => (modalProvider = null)}
-      onSave={(values, apiKey) => connect(p, values, apiKey)}
+      onSave={(values, apiKey) => connectProvider(p, values, apiKey)}
     />
   {/if}
 </div>

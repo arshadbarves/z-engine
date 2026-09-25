@@ -1,0 +1,314 @@
+/* First-run setup: a quiet full-window stage with one card at a time.
+   Choices are large, readable cards; the way forward is always bottom-right. */
+
+.onboarding {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(90% 70% at 50% 0%, rgba(255, 255, 255, 0.05), transparent 60%),
+    var(--glass-chrome);
+}
+.onboarding.is-entering {
+  animation: blur-in var(--dur-slow) var(--ease-out) both;
+}
+.onboarding-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  height: var(--titlebar-h);
+  -webkit-app-region: drag;
+}
+.onboarding-controls {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  -webkit-app-region: no-drag;
+}
+.onboarding-progress {
+  display: flex;
+  gap: 6px;
+}
+.onboarding-dot {
+  width: 18px;
+  height: 4px;
+  border-radius: var(--r-full);
+  background: var(--fill-press);
+  transition:
+    background var(--dur-med) var(--ease-out),
+    width var(--dur-med) var(--spring-smooth);
+}
+.onboarding-dot.is-done {
+  background: var(--label-3);
+}
+.onboarding-dot.is-current {
+  width: 28px;
+  background: var(--label);
+}
+.onboarding-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+  padding: 12px 24px 40px;
+  overflow-y: auto;
+}
+.onboarding-card {
+  width: min(560px, 100%);
+  margin: auto 0;
+  padding: 32px;
+  border-radius: var(--r-xl);
+  background: var(--sheet);
+  box-shadow: var(--sheet-shadow);
+}
+.onboarding-card.step-welcome {
+  padding: 40px 36px 32px;
+}
+.onboarding-primary {
+  height: 32px;
+  padding: 0 18px;
+}
+
+.welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.welcome-orb {
+  display: grid;
+  place-items: center;
+  width: 108px;
+  height: 108px;
+  margin-bottom: 18px;
+  border-radius: var(--r-full);
+  background: radial-gradient(circle, rgba(236, 238, 244, 0.1), transparent 70%);
+}
+.welcome-title {
+  margin: 0;
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.02em;
+}
+.welcome-lead {
+  margin: 8px 0 26px;
+  color: var(--label-2);
+  font-size: var(--text-l);
+}
+.welcome-promises {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  margin: 0 0 30px;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+.welcome-promises li {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.welcome-icon,
+.choice-icon,
+.starter-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-s);
+  background: var(--fill-hover);
+  border: 1px solid var(--separator);
+  color: var(--label-2);
+}
+.starter-icon {
+  width: 28px;
+  height: 28px;
+}
+.welcome-promise {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.welcome-promise-title {
+  font-weight: var(--weight-semibold);
+}
+.welcome-promise-text {
+  color: var(--label-3);
+  line-height: 1.45;
+}
+.welcome-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.step-title {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.015em;
+}
+.step-lead {
+  margin: 6px 0 0;
+  color: var(--label-3);
+  line-height: 1.5;
+}
+.step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.step-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.step-error {
+  flex: 1;
+  margin: 0;
+}
+
+.choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.choice-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--separator);
+  border-radius: var(--r-m);
+  background: var(--fill-quiet);
+  color: var(--label);
+  font: inherit;
+  text-align: left;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+.choice-card:hover {
+  border-color: var(--separator-strong);
+  background: var(--fill-hover);
+}
+.choice-card.is-selected {
+  border-color: var(--label-2);
+  background: var(--fill-hover);
+  box-shadow: 0 0 0 3px var(--fill-press);
+}
+.choice-card.is-selected .choice-icon {
+  color: var(--label);
+}
+.choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.choice-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: var(--weight-semibold);
+}
+.choice-tag {
+  padding: 1px 7px;
+  border-radius: var(--r-full);
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+.choice-desc {
+  color: var(--label-3);
+  line-height: 1.45;
+}
+.choice-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border-radius: var(--r-m);
+  background: var(--fill-quiet);
+  border: 1px solid var(--separator);
+  animation: disclosure-in var(--dur-fast) var(--ease-out) both;
+}
+.provider-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.provider-chip {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--separator-strong);
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--label-2);
+  font: inherit;
+  font-size: var(--text-s);
+}
+.provider-chip:hover {
+  color: var(--label);
+  background: var(--fill-hover);
+}
+.provider-chip.is-selected {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 36px 20px;
+  border: 1.5px dashed var(--separator-strong);
+  border-radius: var(--r-l);
+  background: var(--fill-quiet);
+  color: var(--label);
+  font: inherit;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    scale var(--dur-med) var(--spring-snappy);
+}
+.drop-zone:hover,
+.drop-zone.is-hovering {
+  border-color: var(--label-2);
+  background: var(--fill-hover);
+}
+.drop-zone.is-hovering {
+  scale: 1.015;
+}
+.drop-zone-icon {
+  color: var(--label-2);
+}
+.drop-zone-title {
+  font-size: var(--text-l);
+  font-weight: var(--weight-semibold);
+}
+.drop-zone-hint {
+  color: var(--label-3);
+}

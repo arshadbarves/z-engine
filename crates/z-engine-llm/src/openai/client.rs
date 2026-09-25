@@ -9,6 +9,7 @@ use super::stream::ChatStreamParser;
 use crate::client::ModelClient;
 use crate::transport::Endpoint;
 use crate::types::{ModelRequest, ModelStream};
+use crate::zen;
 
 #[derive(Debug, Clone)]
 pub(crate) struct OpenAiChatClient {
@@ -24,7 +25,10 @@ impl OpenAiChatClient {
 
 impl ModelClient for OpenAiChatClient {
     fn stream(&self, request: ModelRequest, cancel: CancellationToken) -> ModelStream {
-        let body = build_body(&request, self.dialect);
+        let mut body = build_body(&request, self.dialect);
+        if self.endpoint.zen_session.is_some() {
+            zen::apply_free_tier_body(&mut body);
+        }
         self.endpoint.stream(
             &body,
             HeaderMap::new(),

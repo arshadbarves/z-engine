@@ -38,7 +38,6 @@ Rules:
   change code to make a document true; report the mismatch instead.
 - Never document planned or unimplemented behavior. Remove documentation of
   removed features.
-- Never edit documents marked "Historical (v1)" beyond their banner.
 - Keep pages under about 380 lines; split by topic instead of growing them.
 
 Finish with a short report: which documents you changed and why, facts you

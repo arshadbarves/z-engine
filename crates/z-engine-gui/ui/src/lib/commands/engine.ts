@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Command } from "../protocol/Command";
+import type { ContextBreakdown } from "../protocol/ContextBreakdown";
 import type { Message } from "../protocol/Message";
 import type { SessionSummary } from "../protocol/SessionSummary";
 
@@ -52,6 +53,10 @@ export const exportSession = (sessionId: string, format: ExportFormat) =>
 /** Last model request JSON, or null when no request was sent yet. */
 export const inspectRequest = (sessionId: string) =>
   invoke<unknown>("inspect_request", { sessionId });
+
+/** Token estimate per prompt layer of the next request, or null when the chat is not open. */
+export const contextBreakdown = (sessionId: string) =>
+  invoke<ContextBreakdown | null>("context_breakdown", { sessionId });
 
 export const listCommands = (projectRoot: string) =>
   invoke<SlashCommandInfo[]>("list_commands", { projectRoot });

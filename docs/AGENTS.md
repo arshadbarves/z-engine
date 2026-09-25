@@ -37,9 +37,6 @@ behavior as if it works; remove documentation of removed features.
 | [../README.md](../README.md) | first-time visitors | highlights, install, quick start, pointers |
 | [../CHANGELOG.md](../CHANGELOG.md) | everyone | every user-visible change, under `[Unreleased]` until a release |
 
-Documents marked "Historical (v1)" describe deleted code: never update them
-beyond their banner, and never link to them as current behavior.
-
 ## 3. What to update for each kind of change
 
 | When you change… | Update |
@@ -56,14 +53,14 @@ beyond their banner, and never link to them as current behavior.
 | verification | [user-guide/10-verification.md](user-guide/10-verification.md); how-it-works integrations page |
 | providers, models, cost | [user-guide/11-models-providers-and-cost.md](user-guide/11-models-providers-and-cost.md); how-it-works integrations page |
 | sessions, data locations, checkpoints, rewind | [user-guide/13-sessions-and-data.md](user-guide/13-sessions-and-data.md); how-it-works integrations page |
-| a UI surface or shortcut | the user-guide page for that flow; [how-it-works/features-desktop-app.md](how-it-works/features-desktop-app.md) |
+| a UI surface or shortcut | the user-guide page for that flow; [how-it-works/features-desktop-screens.md](how-it-works/features-desktop-screens.md) (the window and engine link: [features-desktop-app.md](how-it-works/features-desktop-app.md)) |
 | a protocol event/command, a crate, crate ownership | [how-it-works/crates.md](how-it-works/crates.md) (and its diagram); [../AGENTS.md](../AGENTS.md); [architecture/v2-engine.md](architecture/v2-engine.md) |
 | an error message, a new failure mode, a diagnostic | [user-guide/14-troubleshooting.md](user-guide/14-troubleshooting.md) |
 | anything user-visible | an entry under `## [Unreleased]` in [../CHANGELOG.md](../CHANGELOG.md) (Added / Changed / Fixed / Removed) |
 
-A new page goes into its folder's `README.md` table of contents and gets a
-"See also" link from related pages. A new term goes into
-[how-it-works/glossary.md](how-it-works/glossary.md).
+A new page goes into its folder's `README.md` table of contents and the
+website sidebar (section 6), and gets a "See also" link from related pages.
+A new term goes into [how-it-works/glossary.md](how-it-works/glossary.md).
 
 ## 4. Facts come from the code
 
@@ -105,7 +102,27 @@ Everywhere: short paragraphs; relative links; Mermaid diagrams with node ids
 without spaces, special-character labels in double quotes, no colors; keep a
 page under about 380 lines and split by topic rather than growing it.
 
-## 6. Checklist before you finish a change
+## 6. The website
+
+The docs are also a website,
+[arshadbarves.github.io/z-engine](https://arshadbarves.github.io/z-engine/).
+It publishes the pages in place: everything under `docs/`, plus the root
+`README.md`, `AGENTS.md` and `CHANGELOG.md`. [website/](../website/) holds
+only the VitePress site around them (config, theme, sidebar and the home
+page). The [docs-site workflow](../.github/workflows/docs-site.yml) builds
+and deploys it on every push to `release` that changes a page or the site.
+
+- Preview it with `npm ci --prefix website` (once), then
+  `npm run dev --prefix website`.
+- List every new page in
+  [website/.vitepress/sidebar.ts](../website/.vitepress/sidebar.ts):
+  `npm test --prefix website` and `npm run build --prefix website` both
+  fail while a page under `docs/` is missing from it.
+- Keep writing relative links. On the site, a link to a source file or
+  folder (anything that is not a published page) becomes a link to it on
+  GitHub's `release` branch.
+
+## 7. Checklist before you finish a change
 
 1. List what changed: `git status --short` and `git diff --stat`.
 2. Map every change to documents with the table in section 3.
@@ -113,5 +130,6 @@ page under about 380 lines and split by topic rather than growing it.
    the `[Unreleased]` changelog entry.
 4. Search for stale mentions of anything renamed or removed, e.g.
    `grep -rn "<old name>" README.md AGENTS.md docs .claude`.
-5. Run `python3 scripts/check_docs_links.py` (CI runs it too).
+5. Run `python3 scripts/check_docs_links.py`, `npm test --prefix website`
+   and `npm run build --prefix website` (CI runs all three).
 6. Say in your summary which documents you updated, or why none needed to.

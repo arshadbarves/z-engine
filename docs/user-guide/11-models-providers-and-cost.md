@@ -15,11 +15,16 @@ formats:
   OpenRouter, OpenAI, OpenCode Zen, Google Gemini, DeepSeek, Groq, Mistral,
   Ollama, LM Studio and custom servers.
 
-Connect a provider in **Settings → Providers** (see
+On a fresh install, the setup guide's model step connects one for you:
+**Start free** (OpenCode Zen's free models, no key), **Use my API key**, or
+**Run on this computer** (Ollama or LM Studio); see
+[First launch](01-getting-started.md#first-launch). Later, connect a
+provider in **Settings → Providers** (see
 [Getting started](01-getting-started.md#connect-a-model-provider)). This
 writes `provider.kind`, `provider.base_url` and `model.main` to the
-settings file selected at the top of the page. The default is OpenRouter
-(`https://openrouter.ai/api/v1`) with `anthropic/claude-sonnet-4.5`.
+settings file chosen under **Saving to** at the top of the page. The
+default is OpenRouter (`https://openrouter.ai/api/v1`) with
+`anthropic/claude-sonnet-4.5`.
 
 ```toml
 [provider]
@@ -28,6 +33,10 @@ base_url = "https://api.anthropic.com"
 headers = { "X-Team" = "platform" } # extra HTTP headers on every request
 # cache_control = true             # unset: on for Anthropic and OpenRouter
 ```
+
+The bottom of the sidebar always shows the default model and its provider.
+When the provider needs a key and has none, it reads **Connect a model** in
+amber. Click it to open **Settings → Providers**.
 
 ### Where keys are stored
 
@@ -79,18 +88,21 @@ active provider names them (OpenRouter uses `vendor/model`, Anthropic uses
 
 ## Choosing a model for a chat
 
-The model button under the composer lists the active provider's models from
-the model catalog, with context size, output limit and a **Reasoning** tag
-for models that think before answering. Type to search. Picking one
-switches **this chat** only; **Custom model ID** at the bottom accepts any
-id. `/model <id>` does the same, and `/model` alone shows the current one.
+The model chip in the composer's bar shows the chat's model (and its
+reasoning effort, when set). Click it for the model picker: the active
+provider's models from the model catalog, with context size, output limit
+and a brain icon for models that think before answering. Type in **Search
+models or providers…** to filter. Picking one switches **this chat** only;
+the field at the bottom (**Another model id, e.g.
+anthropic/claude-sonnet-4.5**) with **Use** accepts any id. `/model <id>`
+does the same, and `/model` alone shows the current one.
 
 To change the default for new chats, set **Main model** in Settings →
 Models.
 
 The list is empty when the active provider needs a key and has none, or
 when the provider isn't in the catalog (for example Ollama or LM Studio):
-type the model name in **Custom model ID** instead.
+type the model name in the field at the bottom instead.
 
 ### The model catalog
 
@@ -119,11 +131,13 @@ Some models can think before they answer. *Effort* controls how much:
 `low`, `medium`, `high` or `max`. Unset (**default**) sends nothing and the
 model uses its own default.
 
-- The **effort** button under the composer (shown for models the catalog
-  marks as reasoning models, or when an effort is set) changes it for this
-  chat, as does `/effort high` or `/effort default`.
-- **Settings → Models → Reasoning effort** (`model.effort`) sets the
-  default for new chats.
+- The **Effort** row at the top of the model picker (**auto**, **low**,
+  **medium**, **high**, **max**; shown for models the catalog marks as
+  reasoning models, or when an effort is set) changes it for this chat;
+  **auto** sends none. `/effort high` or `/effort default` does the same.
+  The model chip shows the chosen effort next to the model's name.
+- **Settings → Models → Requests → Reasoning effort** (`model.effort`) sets
+  the default for new chats.
 - On Anthropic, effort turns on *extended thinking* with a thinking budget
   of about 2k (low), 8k (medium), 16k (high) or 32k (max) tokens. On
   OpenAI-compatible providers it is sent as a reasoning-effort value; `max`
@@ -137,8 +151,8 @@ More effort is slower and costs more.
 When a request fails for a temporary reason (rate limit, overload, server
 error, timeout, lost connection), Z Engine retries automatically: up to 5
 attempts in total, waiting 0.5 s, 1 s, 2 s, ... (at most 16 s), or as long
-as the provider asks (at most 60 s). A **Provider busy · retry N in Xs**
-banner shows what's happening.
+as the provider asks (at most 60 s). Meanwhile the island in the title bar
+says **Provider busy** and counts down (**retry 2 in 4s**).
 
 If the request still fails before any answer text arrived, Z Engine tries
 the **fallback models** in order:
@@ -167,14 +181,17 @@ Z Engine prices every request with the model's rates (from `[pricing]` in
 your settings, else the catalog, else a small built-in price table) and
 adds it up:
 
-- the footer under each turn shows its tokens and cost;
-- the status line at the top of the window shows the current turn's cost
-  while the agent works and the chat's total while it's idle; the Now card
-  (click the line) shows both;
+- hovering the receipt under a turn shows its time, tokens and cost; the
+  **Compact** and **Detailed** views of **Settings → Appearance → Task
+  report detail** show the cost on the receipt itself;
+- the open island (click it in the title bar) shows this turn's cost while
+  the agent works, and the chat's total;
+- the project home's **Continue** card shows each recent chat's cost;
 - `/cost` shows the chat's cost and its input, output, cache-read and
   cache-write tokens, plus tokens per agent;
-- the **Agents** panel's **Usage by agent** table shows input tokens,
-  output tokens and cost for the main agent and each subagent.
+- **Usage by agent**, folded at the bottom of the agents panel's **Agents**
+  tab, shows input tokens, output tokens and cost for the main agent and
+  each subagent.
 
 Costs are estimates from published prices; your provider's bill is
 authoritative. Models without a known price show no cost. Set your own
@@ -189,8 +206,9 @@ cache_write = 1.25  # optional; defaults to the input price
 ```
 
 To limit spending, set **Settings → Advanced → Agent limits → Session cost
-cap** (`agents.session_cost_cap_usd`). When a chat reaches it, the agent
-stops with "Stopped · reached the session cost cap".
+cap** (`agents.session_cost_cap_usd`; typing "budget" in the Settings
+search finds it). When a chat reaches it, the agent stops with "Stopped ·
+reached the session cost cap".
 
 ### Prompt caching and cost
 
@@ -199,7 +217,7 @@ the provider's cache at a much lower price. Z Engine keeps that beginning
 stable (system prompt, instructions, tool list) and marks cache points, so
 long chats get cheaper per request. Caching is on by default for Anthropic
 and OpenRouter; for other providers turn it on under **Settings →
-Providers → Configure → Endpoint → Prompt caching** if the provider
-supports it. Details: [Memory and context](07-memory-and-context.md#prompt-caching).
+Providers → Configure → Endpoint and advanced options → Prompt caching** if
+the provider supports it. Details: [Memory and context](07-memory-and-context.md#prompt-caching).
 
 See also: [Getting started](01-getting-started.md) · [Settings reference](12-settings-reference.md#model) · [Troubleshooting](14-troubleshooting.md)

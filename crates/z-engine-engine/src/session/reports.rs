@@ -14,6 +14,12 @@ use crate::session::SessionCore;
 use crate::settings::models::fast_model;
 
 pub(crate) fn context(core: &Arc<SessionCore>) -> String {
+    render_breakdown(&context_report(core))
+}
+
+/// Token estimate per prompt layer of the next main-agent request, also
+/// sent to the GUI as a `ContextReport`.
+pub(crate) fn context_report(core: &Arc<SessionCore>) -> ContextBreakdown {
     let settings = core.settings();
     let ctx = RunContext::new(
         Arc::clone(core),
@@ -45,7 +51,7 @@ pub(crate) fn context(core: &Arc<SessionCore>) -> String {
         limit,
     );
     core.events.emit(Event::ContextReport { breakdown });
-    render_breakdown(&breakdown)
+    breakdown
 }
 
 fn render_breakdown(breakdown: &ContextBreakdown) -> String {

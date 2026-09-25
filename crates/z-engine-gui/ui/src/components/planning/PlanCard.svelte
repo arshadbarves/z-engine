@@ -36,7 +36,7 @@
   }
 </script>
 
-<div class="msg interaction-card plan-card">
+<div class="msg interaction-card plan-card" data-pending-card>
   <div class="interaction-kicker">
     <Icon icon={ListChecks} size={13} />
     <span>Plan ready for review</span>

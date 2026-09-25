@@ -3,6 +3,7 @@ import {
   listWorkspaces,
   removeWorkspace as invokeRemove,
 } from "./commands";
+import { sameWorkspacePath } from "./domain/paths";
 
 /** Registered workspace roots (Codex-desktop style projects) plus the
  * active one new tasks run against. Persisted backend-side in
@@ -61,20 +62,4 @@ export const workspaceStore = {
   },
 };
 
-export function wsBasename(root: string): string {
-  const parts = root.replace(/\/+$/, "").split(/[/\\]/);
-  return parts[parts.length - 1] || root;
-}
-
-/** True when two workspace roots refer to the same folder. */
-export function sameWorkspacePath(
-  a: string | null | undefined,
-  b: string | null | undefined,
-): boolean {
-  if (!a || !b) return false;
-  return normalizeWsPath(a) === normalizeWsPath(b);
-}
-
-function normalizeWsPath(p: string): string {
-  return p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-}
+export { joinPath, sameWorkspacePath, wsBasename } from "./domain/paths";

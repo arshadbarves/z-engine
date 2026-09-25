@@ -2,11 +2,13 @@ import type { SubmissionPlan } from "../domain/composerSubmit";
 import { REMEMBER_TARGETS, rememberArgs, type RememberScope } from "../domain/remember";
 import { interrupt, pushToast, runCommand, runShell, steer, submitPrompt } from "../runtime";
 import { composer } from "./composer.svelte";
+import { ui } from "./ui.svelte";
 import { runUiCommand } from "./uiCommands";
 
-/** Clear the draft optimistically; put it back if the engine refused the command. */
+/** Clear the draft optimistically; put it back if the engine refused the command. Sending shows the chat. */
 async function sendClearing(draft: string, run: () => Promise<boolean>): Promise<boolean> {
   composer.setDraft("", false);
+  ui.view = "chat";
   const ok = await run();
   if (!ok && !composer.draft) composer.setDraft(draft, false);
   return ok;

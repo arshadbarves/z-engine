@@ -28,7 +28,7 @@ sees only its task, and brings back a short report instead of every page.
 | Kind | What the caller gets | Stopped by |
 |---|---|---|
 | **Foreground** (default) | The report plus a footer: duration, tool calls, tokens, cost, changed files | **Esc**, with the turn that started it |
-| **Background** (`run_in_background: true`) | A job id at once; a reminder when the agent finishes | `JobKill` or **Kill**; it survives **Esc** |
+| **Background** (`run_in_background: true`) | A job id at once; a reminder when the agent finishes | `JobKill` or **Stop** in the Jobs tab; it survives **Esc** |
 | **Resume** (`resume: "<agent_id>"`) | A finished agent continues with its full earlier transcript; `prompt` is the follow-up | As foreground or background |
 
 Each run has a *depth*: the main agent is 0, its subagents 1, theirs 2. A
@@ -163,8 +163,8 @@ it's done.
   the job to finish first. For an agent, the output is its latest message.
   `JobKill` stops a shell with its whole process tree, or cancels an agent.
 - When a job exits, a "job finished" reminder is queued for the agent that
-  started it. The Jobs tab follows `JobUpdated` events (throttled per job;
-  an exit always emits); its **Kill** button sends `KillJob`.
+  started it. The agents panel's Jobs tab follows `JobUpdated` events
+  (throttled per job; an exit always emits); **Stop** sends `KillJob`.
 - Jobs belong to the chat, not the turn: **Esc** leaves them running. When
   the session shuts down (for example when you close the app), every job
   still running is killed.
@@ -248,15 +248,17 @@ tidy up before anything falls off.
 - Local estimates: characters divided by four, rounded up; a Chinese,
   Japanese or Korean character is one token; an image or other media block
   is 1,600; tools count their name, description and schema.
-- The Now card (click the status line at the top of the window) shows how
-  full the context is; `/context` shows the numbers by prompt layer.
-  Estimates only steer compaction; cost uses the provider's reported usage.
+- A ring beside the island at the top of the window shows how full the
+  context is; clicking it, or `/context`, opens a card with the numbers by
+  prompt layer and **Compact now**. Estimates only steer compaction; cost
+  uses the provider's reported usage.
 
 **For developers.**
 [`context/src/tokens.rs`](../../crates/z-engine-context/src/tokens.rs)
 (estimates), [`breakdown.rs`](../../crates/z-engine-context/src/breakdown.rs)
 (`/context` layers), [`run/meter.rs`](../../crates/z-engine-engine/src/run/meter.rs)
-(`ContextMeter`).
+(`ContextMeter`); the GUI's context card asks
+[`Engine::context_breakdown`](../../crates/z-engine-engine/src/engine/queries/context.rs).
 
 ## Compaction
 
@@ -286,7 +288,7 @@ messages sent to the model); the transcript you see is never shortened.
    warning appears and the run continues with what it has.
 
 A **Context compacted** divider shows the sizes before and after.
-`/compact [focus]` and **Compact Now** take the same path. The todo list
+`/compact [focus]` and **Compact now** take the same path. The todo list
 survives. Subagents compact the same way, but their stored transcript keeps
 every message, so a resumed agent starts from its full history.
 

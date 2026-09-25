@@ -1,95 +1,77 @@
 <script lang="ts">
-  import type { CatalogData } from "$lib/catalog";
   import { modLabel } from "$lib/platform";
-  import Icon, { ArrowUp, CornerDownLeft, ImageIcon, Square, Terminal, Zap } from "$lib/ui/icons";
-  import EffortSelector from "./EffortSelector.svelte";
+  import Icon, { ArrowUp, CornerDownLeft, Square, Terminal } from "$lib/ui/icons";
+  import ComposerPlusMenu from "./ComposerPlusMenu.svelte";
   import ModePicker from "./ModePicker.svelte";
   import ModelPicker from "./ModelPicker.svelte";
 
+  /**
+   * Under the draft: the + menu and the mode on the left; the model and Send
+   * on the right. While a turn runs, Send becomes Stop and a typed message is
+   * queued (Enter) or interrupts (⌘Enter).
+   */
   type Props = {
     shellMode: boolean;
     busy: boolean;
     canSend: boolean;
     hasText: boolean;
-    catalog: CatalogData | null;
-    showTerminalBtn: boolean;
-    onAttachClick: () => void;
+    showTerminal: boolean;
+    onAttach: () => void;
+    onInsert: (prefix: string) => void;
     onShowShell: () => void;
     onSend: () => void;
     onInterrupt: () => void;
     onCancel: () => void;
   };
 
-  let {
-    shellMode,
-    busy,
-    canSend,
-    hasText,
-    catalog,
-    showTerminalBtn,
-    onAttachClick,
-    onShowShell,
-    onSend,
-    onInterrupt,
-    onCancel,
-  }: Props = $props();
+  let { shellMode, busy, canSend, hasText, showTerminal, onAttach, onInsert, onShowShell, onSend, onInterrupt, onCancel }: Props =
+    $props();
+
+  const mod = modLabel();
 </script>
 
 <div class="composer-bar">
   {#if shellMode}
-    <div class="shell-bar-left">
+    <div class="composer-controls-left">
       <span class="shell-mode-pill">
         <Icon icon={Terminal} size={11} />
-        <span>Bash Mode</span>
+        <span>Shell</span>
       </span>
-      <span class="shell-hint-inline"><kbd>Esc</kbd> to return</span>
+      <span class="composer-hint">Runs in the project, without the agent · <kbd class="kbd">Esc</kbd> to leave</span>
     </div>
   {:else}
     <div class="composer-controls-left">
+      <ComposerPlusMenu {showTerminal} {onAttach} {onInsert} onShowTerminal={onShowShell} />
       <ModePicker />
-      <ModelPicker />
-      <EffortSelector {catalog} />
-      <span class="composer-bar-divider" aria-hidden="true"></span>
-      <button type="button" class="composer-icon-btn" title="Attach images" onclick={onAttachClick}>
-        <Icon icon={ImageIcon} size={13} />
-      </button>
-      {#if showTerminalBtn}
-        <button type="button" class="composer-icon-btn" title="Show terminal drawer" onclick={onShowShell}>
-          <Icon icon={Terminal} size={13} />
-        </button>
-      {/if}
     </div>
   {/if}
 
   <div class="composer-actions-right">
     {#if busy && hasText && !shellMode}
-      <button
-        type="button"
-        class="composer-interrupt"
-        title={`Stop this round and send now (${modLabel()}Enter)`}
-        onclick={onInterrupt}
-      >
-        <Icon icon={Zap} size={11} />
-        <span>Interrupt</span>
-      </button>
+      <span class="composer-hint">
+        Enter queues ·
+        <button type="button" class="composer-hint-btn" onclick={onInterrupt}>{mod}Enter interrupts</button>
+      </span>
     {/if}
+    {#if !shellMode}<ModelPicker />{/if}
     {#if busy}
-      <button class="stop" title="Cancel the turn (Esc)" onclick={onCancel} type="button">
+      <button type="button" class="composer-send is-stop" title="Stop the turn (Esc)" aria-label="Stop the turn" onclick={onCancel}>
         <Icon icon={Square} size={11} />
       </button>
     {/if}
     {#if shellMode}
-      <button class="send shell-send" title="Run shell command (Enter)" onclick={onSend} disabled={!canSend} type="button">
+      <button type="button" class="composer-send is-run" title="Run (Enter)" onclick={onSend} disabled={!canSend}>
         <Icon icon={CornerDownLeft} size={12} />
         <span>Run</span>
       </button>
     {:else if !busy || hasText}
       <button
-        class="send"
-        title={busy ? "Queue as steering (Enter)" : "Send (Enter)"}
+        type="button"
+        class="composer-send"
+        title={busy ? "Queue for the agent (Enter)" : "Send (Enter)"}
+        aria-label={busy ? "Queue message" : "Send"}
         onclick={onSend}
         disabled={!canSend}
-        type="button"
       >
         <Icon icon={ArrowUp} size={15} strokeWidth={2.4} />
       </button>

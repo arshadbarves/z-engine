@@ -25,8 +25,9 @@ Tool events also run for tool calls made by subagents.
 ## Configure hooks
 
 In **Settings → Hooks**, each event has a card where you add, edit and
-remove hooks for the settings file selected at the top (User, This
-project, Personal). Or write them in a settings file:
+remove hooks in the settings file chosen under **Saving to** at the top of
+the page (**User**, **This project** or **Personal (local)**). Or write
+them in a settings file:
 
 ```toml
 [[hooks.PreToolUse]]
@@ -48,12 +49,14 @@ command = "./scripts/format-changed.sh"
 - Hooks from all settings files run, user file first, then the project file,
   then your personal project file; within a file, in the order written. The
   first hook that blocks or stops ends the chain.
-- The Hooks tab shows the matcher field only for `PreToolUse` and
-  `PostToolUse`; in a settings file you can also set it for `SessionStart`
-  and `PreCompact`.
+- The Hooks tab shows a matcher field for the four events that use one:
+  **Tools** for `PreToolUse` and `PostToolUse`, **Start source** for
+  `SessionStart` and **Trigger** for `PreCompact`. Leave it blank to match
+  everything; saving keeps the matcher in the file.
 - A hook under an unknown event name never runs; a warning names it.
 - `/hooks` lists the recent hook runs in the current chat. When a hook
-  blocks something, a pop-up says so.
+  blocks something, a notice in the title bar's island says so, and the
+  [Inbox](02-everyday-use.md#the-inbox) keeps it.
 
 ## What the hook receives
 
@@ -99,7 +102,7 @@ agent's shell commands get (see [Settings reference](12-settings-reference.md#sh
 |---|---|
 | `0` | Continue. For `SessionStart` and `UserPromptSubmit`, plain text on standard output is added as context for the model. |
 | `2` | Block, with standard error as the reason (what "block" means depends on the event; see the table above). |
-| Anything else | A warning pop-up shows the error; the agent continues. |
+| Anything else | A warning notice shows the error; the agent continues. |
 
 **JSON output:** with exit code 0, standard output that starts with `{` is
 read as JSON:

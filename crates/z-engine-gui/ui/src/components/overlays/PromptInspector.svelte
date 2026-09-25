@@ -1,285 +1,114 @@
 <script lang="ts">
   import { inspectRequest } from "$lib/commands";
+  import { outlineGroups, stepSelection } from "$lib/domain/inspectOutline";
   import { parseInspectRequest, type PromptInspect } from "$lib/domain/requestInspect";
-  import {
-    categorizeRow,
-    inspectBody,
-    inspectCopyText,
-    inspectRows,
-    type ContextCategory,
-  } from "$lib/promptInspectView";
+  import { categorizeRow, inspectCopyText, inspectRows, type ContextCategory } from "$lib/promptInspectView";
   import { errorText, sessions } from "$lib/runtime";
-  import Icon, {
-    AlertTriangle,
-    Brain,
-    Check,
-    ChevronLeft,
-    Copy,
-  } from "$lib/ui/icons";
-  import { fmtTokens } from "$lib/util";
+  import { EmptyState } from "$lib/ui";
+  import { copyFeedback } from "$lib/ui/copyFeedback.svelte";
+  import Icon, { Brain, Check, ChevronLeft, Copy } from "$lib/ui/icons";
   import WindowControlsMaybe from "../chrome/WindowControlsMaybe.svelte";
-  import PromptInspectContent from "./PromptInspectContent.svelte";
-  import PromptInspectSidebar from "./PromptInspectSidebar.svelte";
-  import "../../settings.css";
-  import "../promptInspect.css";
+  import InspectorInsights from "./InspectorInsights.svelte";
+  import InspectorMap from "./InspectorMap.svelte";
+  import InspectorOutline from "./InspectorOutline.svelte";
+  import InspectorReader from "./InspectorReader.svelte";
 
+  /**
+   * The last request sent to the model, part by part: a map of what fills
+   * the window, an outline to move through, and each part to read.
+   */
   type Props = { isClosing?: boolean; onClose: () => void };
   let { isClosing = false, onClose }: Props = $props();
 
   let snap = $state<PromptInspect | null>(null);
   let err = $state<string | null>(null);
-  let loading = $state(true);
-  let sel = $state(0);
-  let copied = $state(false);
-  let activeCategory = $state<ContextCategory | "all">("all");
+  let selected = $state(0);
+  let query = $state("");
+  let only = $state<ContextCategory | null>(null);
+  const copied = copyFeedback();
 
   const rows = $derived(snap ? inspectRows(snap) : []);
-  const activeRow = $derived(rows[sel] ?? rows[0]);
-
-  // Context category token distribution
-  const categoryStats = $derived.by(() => {
-    const stats = {
-      instructions: 0,
-      project: 0,
-      conversation: 0,
-      capabilities: 0,
-      total: snap?.totalTokens ?? 0,
-    };
-    if (!snap) return stats;
-    for (const r of rows) {
-      const cat = categorizeRow(r);
-      const tok = r.kind === "msg" ? r.part.tokens : r.tool.tokens;
-      stats[cat] += tok;
-    }
-    return stats;
-  });
-
-  const maxContext = $derived(sessions.active?.contextLimit || 200_000);
-  const memoryPct = $derived(
-    categoryStats.total > 0
-      ? Math.min(100, Math.round((categoryStats.total / maxContext) * 100))
-      : 0,
-  );
-
-  const memoryStatus = $derived.by(() => {
-    if (memoryPct < 40) return { text: "Plenty of room", color: "#00d68f" };
-    if (memoryPct < 75) return { text: "Normal usage", color: "#38bdf8" };
-    if (memoryPct < 90) return { text: "Getting full", color: "#f5a623" };
-    return { text: "Near limit", color: "#ff453a" };
+  const groups = $derived(outlineGroups(rows, query, only));
+  const visible = $derived(groups.flatMap((g) => g.items.map((i) => i.index)));
+  const limit = $derived(sessions.active?.contextLimit || 200_000);
+  const totals = $derived.by(() => {
+    const t: Record<ContextCategory, number> = { instructions: 0, project: 0, conversation: 0, capabilities: 0 };
+    for (const row of rows) t[categorizeRow(row)] += row.kind === "msg" ? row.part.tokens : row.tool.tokens;
+    return t;
   });
 
   $effect(() => {
     const id = sessions.activeId;
-    loading = true;
+    snap = null;
+    err = null;
     if (!id) {
-      err = "Open a chat and send a message to capture a request.";
-      loading = false;
+      err = "Open a chat and send a message; its request shows up here.";
       return;
     }
     inspectRequest(id)
       .then((raw) => {
         snap = parseInspectRequest(raw);
-        err = snap ? null : "No model request yet — send a message first.";
-        sel = 0;
-        loading = false;
+        err = snap ? null : "No request yet. Send a message first.";
+        selected = 0;
       })
-      .catch((e: unknown) => {
-        err = errorText(e);
-        loading = false;
-      });
+      .catch((e: unknown) => (err = errorText(e)));
+  });
+
+  // What is selected stays visible when the outline is filtered.
+  $effect(() => {
+    if (visible.length && !visible.includes(selected)) selected = visible[0] ?? 0;
   });
 
   $effect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      e.preventDefault();
+      onClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  async function onCopyAll() {
-    if (!snap) return;
-    try {
-      await navigator.clipboard.writeText(inspectCopyText(snap));
-      copied = true;
-      setTimeout(() => (copied = false), 1400);
-    } catch (e) {
-      console.error(e);
-    }
+  function step(dir: -1 | 1) {
+    const next = stepSelection(visible, selected, dir);
+    if (next !== null) selected = next;
   }
 </script>
 
-<div class={`settings-overlay${isClosing ? " is-closing" : ""}`} role="presentation">
-  <div
-    class={`settings-page prompt-inspect-page${isClosing ? " is-closing" : ""}`}
-    role="dialog"
-    tabindex="-1"
-    aria-label="Context and memory inspector"
-  >
-    <header class="app-titlebar settings-topbar" data-tauri-drag-region>
+<div class="inspector-overlay" class:is-closing={isClosing} role="presentation">
+  <div class="inspector-page" class:is-closing={isClosing} role="dialog" tabindex="-1" aria-label="Prompt inspector">
+    <header class="app-titlebar inspector-head" data-tauri-drag-region>
       <div class="titlebar-side" data-tauri-drag-region>
-        <button
-          type="button"
-          class="icon-btn settings-back-btn"
-          title="Back (Esc)"
-          onclick={onClose}
-          aria-label="Back"
-        >
-          <Icon icon={ChevronLeft} size={15} strokeWidth={1.8} />
+        <button type="button" class="icon-btn" aria-label="Back" title="Back (Esc)" onclick={onClose}>
+          <Icon icon={ChevronLeft} size={15} />
         </button>
-        <div class="settings-breadcrumb">
-          <span class="settings-breadcrumb-root">Context & Memory</span>
-          {#if snap?.model}
-            <span class="settings-breadcrumb-sep">/</span>
-            <span class="prompt-model-badge" title={snap.model}>{snap.model}</span>
-          {/if}
-        </div>
+        <h1 class="inspector-title">Prompt</h1>
+        {#if snap}<span class="inspector-model" title={snap.model}>{snap.model}</span>{/if}
       </div>
-
       <div class="titlebar-side" data-tauri-drag-region>
-        <button
-          type="button"
-          class="settings-copy-btn"
-          onclick={() => void onCopyAll()}
-          disabled={!snap}
-          aria-label="Copy all context"
-          title="Copy entire context and instructions to clipboard"
-        >
-          <Icon icon={copied ? Check : Copy} size={13} />
-          <span>{copied ? "Context Copied" : "Copy All Context"}</span>
+        <button type="button" class="btn-ghost inspector-copy" disabled={!snap} onclick={() => snap && void copied.copy(inspectCopyText(snap))}>
+          <Icon icon={copied.copied ? Check : Copy} size={13} />
+          {copied.copied ? "Copied" : "Copy all"}
         </button>
         <WindowControlsMaybe />
       </div>
     </header>
 
-    <div class="app-body settings-body prompt-inspect-body">
-      <PromptInspectSidebar
-        {rows}
-        selected={sel}
-        onSelect={(idx) => (sel = idx)}
-        {activeCategory}
-        onSelectCategory={(cat) => (activeCategory = cat)}
-        {loading}
-        {err}
-      />
-
-      <section class="canvas-pane settings-canvas-pane prompt-canvas-pane">
-        <div class="settings-content-wrap">
-          <div class="prompt-main-scrollable">
-            {#if err}
-              <div class="prompt-inspect-err" role="alert">
-                <Icon icon={AlertTriangle} size={18} />
-                <div>
-                  <strong>Context Unavailable</strong>
-                  <p>{err}</p>
-                </div>
-              </div>
-            {:else if !snap}
-              <div class="settings-loading">
-                <Icon icon={Brain} size={24} />
-                <span>Reading assistant context and active memory…</span>
-              </div>
-            {:else}
-              <!-- Unified Apple Memory Health Meter (Zero Duplicates) -->
-              <div class="prompt-memory-card">
-                <div class="memory-card-header">
-                  <div class="memory-title-wrap">
-                    <span class="memory-card-title">Memory Capacity</span>
-                    <span class="memory-card-sub">
-                      ~{fmtTokens(categoryStats.total)} tokens used ({memoryPct}% capacity) · 
-                      <span style={`color: ${memoryStatus.color}; font-weight: 550;`}>{memoryStatus.text}</span>
-                    </span>
-                  </div>
-                </div>
-
-                <!-- Multi-Segmented Proportional Memory Track -->
-                <div class="memory-track" aria-label="Context memory breakdown">
-                  {#if categoryStats.instructions > 0}
-                    <div
-                      class="memory-segment seg-instructions"
-                      style={`width: ${(categoryStats.instructions / Math.max(1, categoryStats.total)) * 100}%;`}
-                      title={`Instructions: ~${fmtTokens(categoryStats.instructions)} tokens`}
-                    ></div>
-                  {/if}
-                  {#if categoryStats.project > 0}
-                    <div
-                      class="memory-segment seg-project"
-                      style={`width: ${(categoryStats.project / Math.max(1, categoryStats.total)) * 100}%;`}
-                      title={`Project Knowledge: ~${fmtTokens(categoryStats.project)} tokens`}
-                    ></div>
-                  {/if}
-                  {#if categoryStats.conversation > 0}
-                    <div
-                      class="memory-segment seg-conversation"
-                      style={`width: ${(categoryStats.conversation / Math.max(1, categoryStats.total)) * 100}%;`}
-                      title={`Conversation: ~${fmtTokens(categoryStats.conversation)} tokens`}
-                    ></div>
-                  {/if}
-                  {#if categoryStats.capabilities > 0}
-                    <div
-                      class="memory-segment seg-capabilities"
-                      style={`width: ${(categoryStats.capabilities / Math.max(1, categoryStats.total)) * 100}%;`}
-                      title={`Capabilities: ~${fmtTokens(categoryStats.capabilities)} tokens`}
-                    ></div>
-                  {/if}
-                </div>
-
-                <!-- Interactive Category Pills -->
-                <div class="memory-pills-row">
-                  <button
-                    type="button"
-                    class={`memory-pill pill-instructions${activeCategory === "instructions" ? " active" : ""}`}
-                    onclick={() => (activeCategory = activeCategory === "instructions" ? "all" : "instructions")}
-                  >
-                    <span class="pill-dot seg-instructions"></span>
-                    <span class="pill-label">Instructions</span>
-                    <span class="pill-stat">~{fmtTokens(categoryStats.instructions)}</span>
-                  </button>
-                  <button
-                    type="button"
-                    class={`memory-pill pill-project${activeCategory === "project" ? " active" : ""}`}
-                    onclick={() => (activeCategory = activeCategory === "project" ? "all" : "project")}
-                  >
-                    <span class="pill-dot seg-project"></span>
-                    <span class="pill-label">Project</span>
-                    <span class="pill-stat">~{fmtTokens(categoryStats.project)}</span>
-                  </button>
-                  <button
-                    type="button"
-                    class={`memory-pill pill-conversation${activeCategory === "conversation" ? " active" : ""}`}
-                    onclick={() => (activeCategory = activeCategory === "conversation" ? "all" : "conversation")}
-                  >
-                    <span class="pill-dot seg-conversation"></span>
-                    <span class="pill-label">Chat</span>
-                    <span class="pill-stat">~{fmtTokens(categoryStats.conversation)}</span>
-                  </button>
-                  <button
-                    type="button"
-                    class={`memory-pill pill-capabilities${activeCategory === "capabilities" ? " active" : ""}`}
-                    onclick={() => (activeCategory = activeCategory === "capabilities" ? "all" : "capabilities")}
-                  >
-                    <span class="pill-dot seg-capabilities"></span>
-                    <span class="pill-label">Tools</span>
-                    <span class="pill-stat">~{fmtTokens(categoryStats.capabilities)}</span>
-                  </button>
-                </div>
-              </div>
-
-              <!-- Apple Reader Section Viewer -->
-              <PromptInspectContent
-                {activeRow}
-                rawContent={activeRow ? inspectBody(activeRow) : ""}
-              />
-            {/if}
-          </div>
-        </div>
-      </section>
-    </div>
+    {#if err}
+      <div class="inspector-state"><EmptyState icon={Brain} title="Nothing to inspect yet" description={err} /></div>
+    {:else if !snap}
+      <p class="inspector-state inspector-loading">Reading the last request…</p>
+    {:else}
+      <div class="inspector-body">
+        <aside class="inspector-side">
+          <InspectorMap {totals} used={snap.totalTokens} {limit} active={only} onPick={(c) => (only = c)} />
+          <InspectorOutline {groups} {selected} {query} total={rows.length} onQuery={(q) => (query = q)} onSelect={(i) => (selected = i)} onStep={step} />
+          <InspectorInsights {snap} />
+        </aside>
+        <section class="inspector-main">
+          <InspectorReader row={rows[selected]} totalTokens={snap.totalTokens} />
+        </section>
+      </div>
+    {/if}
   </div>
 </div>
-
-
-

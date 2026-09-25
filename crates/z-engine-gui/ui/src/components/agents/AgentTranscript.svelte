@@ -66,19 +66,20 @@
     </span>
     <button
       type="button"
-      class={`icon-btn-mini${loading ? " spinning" : ""}`}
+      class={`icon-btn${loading ? " spinning" : ""}`}
       title="Reload transcript"
+      aria-label="Reload transcript"
       onclick={() => void load()}
     >
-      <Icon icon={RefreshCw} size={12} />
+      <Icon icon={RefreshCw} size={13} />
     </button>
   </div>
 
   {#if todos.length > 0}
-    <section class="work-section"><TodoChecklist {todos} /></section>
+    <section class="work-section agent-transcript-plan"><TodoChecklist {todos} /></section>
   {/if}
   {#if agent.error}<p class="agent-row-note is-error">{agent.error}</p>{/if}
-  {#if error}<p class="work-empty">Could not load the transcript · {error}</p>{/if}
+  {#if error}<p class="work-empty">Could not load the transcript: {error}</p>{/if}
 
   <div class="agent-transcript-body">
     {#each timeline as turn, i (turn.key)}

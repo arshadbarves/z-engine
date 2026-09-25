@@ -2,13 +2,19 @@
   import { elapsed } from "$lib/domain/format";
   import type { JobInfo } from "$lib/protocol/JobInfo";
   import { killJob } from "$lib/runtime";
+  import { Disclosure } from "$lib/ui";
   import Icon, { Bot, SquareTerminal } from "$lib/ui/icons";
   import StatusChip from "./StatusChip.svelte";
 
+  /** A background job: what runs, for how long, the last lines while it runs, all of it on request. */
   type Props = { job: JobInfo; now: number; onOpenAgent: (agentId: string) => void };
   let { job, now, onOpenAgent }: Props = $props();
 
+  const TAIL = 6;
   let killing = $state(false);
+  let open = $state(false);
+  const running = $derived(job.status === "running");
+  const tail = $derived((job.outputTail ?? "").replace(/\n+$/, "").split("\n").slice(-TAIL).join("\n"));
 
   async function kill() {
     killing = true;
@@ -18,7 +24,7 @@
 
 <div class={`job-row status-${job.status}`}>
   <div class="job-row-head">
-    <Icon icon={job.kind === "agent" ? Bot : SquareTerminal} size={12} class="job-kind-icon" />
+    <Icon icon={job.kind === "agent" ? Bot : SquareTerminal} size={13} class="job-kind-icon" />
     <span class="job-label" title={job.label}>{job.label}</span>
     <StatusChip status={job.status} />
   </div>
@@ -30,16 +36,20 @@
     {#if job.agentId}
       <button type="button" class="job-link" onclick={() => job.agentId && onOpenAgent(job.agentId)}>Transcript</button>
     {/if}
-    {#if job.status === "running"}
+    {#if running}
       <button type="button" class="btn-danger job-kill" disabled={killing} onclick={() => void kill()}>
-        {killing ? "Killing…" : "Kill"}
+        {killing ? "Stopping…" : "Stop"}
       </button>
     {/if}
   </div>
   {#if job.outputTail}
-    <details class="job-output" open={job.status === "running"}>
-      <summary>Output</summary>
-      <pre>{job.outputTail}</pre>
-    </details>
+    {#if running}
+      <pre class="job-tail">{tail}</pre>
+    {:else}
+      <Disclosure bind:open summaryClass="job-output-summary">
+        {#snippet summary()}<span>Output</span>{/snippet}
+        <pre class="job-output">{job.outputTail}</pre>
+      </Disclosure>
+    {/if}
   {/if}
 </div>

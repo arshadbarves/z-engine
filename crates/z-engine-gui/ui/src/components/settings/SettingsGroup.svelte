@@ -1,41 +1,51 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import { groupOfSetting } from "$lib/domain/settings/searchIndex";
+  import { ui } from "$lib/stores/ui.svelte";
+  import { Disclosure } from "$lib/ui";
+  import { groupsFold } from "./folding";
 
+  /**
+   * A titled block of settings. A folding group shows only its title and
+   * line until opened, and opens by itself when search points inside it.
+   */
   type Props = {
     title: string;
     description: string;
+    /** Fold this group; groups under `foldGroups()` fold without it. */
+    collapsible?: boolean;
     children: Snippet;
   };
 
-  let { title, description, children }: Props = $props();
+  let { title, description, collapsible, children }: Props = $props();
+
+  const inherited = groupsFold();
+  const folds = $derived(collapsible ?? inherited);
+  let open = $state(false);
+
+  $effect(() => {
+    if (folds && groupOfSetting(ui.settingsFocus) === title) open = true;
+  });
 </script>
 
-<section class="settings-group">
-  <div class="settings-group-header">
-    <h3>{title}</h3>
-    <span class="settings-group-sub">{description}</span>
-  </div>
-  {@render children()}
-</section>
-
-<style>
-  .settings-group-header {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  h3 {
-    margin: 0;
-    color: var(--text);
-    font-size: 13px;
-    font-weight: 650;
-    letter-spacing: -0.01em;
-  }
-
-  .settings-group-sub {
-    color: var(--text-3);
-    font-size: 11.5px;
-    line-height: 1.4;
-  }
-</style>
+{#if folds}
+  <section class="settings-group is-folding" data-setting={`@${title}`}>
+    <Disclosure bind:open summaryClass="settings-group-summary">
+      {#snippet summary()}
+        <span class="settings-group-head">
+          <span class="settings-group-title">{title}</span>
+          <span class="settings-group-sub">{description}</span>
+        </span>
+      {/snippet}
+      <div class="settings-group-body">{@render children()}</div>
+    </Disclosure>
+  </section>
+{:else}
+  <section class="settings-group" data-setting={`@${title}`}>
+    <div class="settings-group-head">
+      <h3 class="settings-group-title">{title}</h3>
+      <span class="settings-group-sub">{description}</span>
+    </div>
+    {@render children()}
+  </section>
+{/if}

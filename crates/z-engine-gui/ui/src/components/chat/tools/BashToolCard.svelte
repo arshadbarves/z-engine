@@ -14,9 +14,14 @@
   const running = $derived(call.status === "running");
   const liveText = $derived(running ? call.progress : "");
   const finalText = $derived(running ? "" : call.output || call.progress);
+  const tail = $derived(liveText.replace(/\n+$/, "").split("\n").slice(-3).join("\n"));
   let toggled = $state<boolean | null>(null);
-  const open = $derived(toggled ?? ((running && Boolean(call.progress)) || call.status === "error"));
+  const open = $derived(toggled ?? call.status === "error");
 </script>
+
+{#snippet peek()}
+  {#if running && tail}<pre class="tool-peek is-live">{tail}</pre>{/if}
+{/snippet}
 
 <ToolFrame
   {call}
@@ -27,6 +32,7 @@
   extra={!running && call.summary ? call.summary : undefined}
   expandable={Boolean(command || call.output || call.progress)}
   bind:open={() => open, (value) => (toggled = value)}
+  {peek}
 >
   {#if description}
     <p class="tool-note">{description}</p>

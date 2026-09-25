@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { turnFiles } from "$lib/domain/receipt";
   import type { StreamingMessage, ToolCallView } from "$lib/domain/sessionView";
   import type { ToolResultInfo } from "$lib/domain/timeline/blocks";
+  import { groupTurnItems } from "$lib/domain/timeline/groups";
   import type { TimelineTurn } from "$lib/domain/timeline/turns";
   import type { AgentInfo } from "$lib/protocol/AgentInfo";
   import type { CheckRecord } from "$lib/protocol/CheckRecord";
@@ -12,6 +14,7 @@
   import TurnFooter from "./TurnFooter.svelte";
   import UserCard from "./UserCard.svelte";
   import ToolCall from "./tools/ToolCall.svelte";
+  import ToolGroup from "./tools/ToolGroup.svelte";
 
   type Props = {
     turn: TimelineTurn;
@@ -40,6 +43,20 @@
     onRewind,
     onOpenAgent,
   }: Props = $props();
+
+  const blocks = $derived(groupTurnItems(turn.items));
+  const files = $derived(
+    turn.record
+      ? turnFiles(
+          turn.items.flatMap((item) =>
+            item.kind === "tool"
+              ? [{ name: item.use.name, input: item.use.input, ok: results[item.use.callId]?.isError !== true }]
+              : [],
+          ),
+          projectRoot,
+        )
+      : [],
+  );
 </script>
 
 <section class="turn" data-turn={turn.key}>
@@ -49,24 +66,36 @@
 
   {#if turn.items.length > 0 || live.length > 0}
     <div class="assistant-turn">
-      {#each turn.items as item (item.key)}
-        {#if item.kind === "text"}
-          <AssistantText text={item.text} />
-        {:else if item.kind === "thinking"}
-          <ThinkingDisclosure text={item.text} redacted={item.redacted} />
-        {:else if item.kind === "tool"}
-          {@const agentId = agentLinks[item.use.callId]}
+      {#each blocks as block (block.key)}
+        {#if block.kind === "run"}
+          <ToolGroup
+            uses={block.uses}
+            {results}
+            {tools}
+            busy={turn.active}
+            {projectRoot}
+            {agents}
+            {agentLinks}
+            {onOpenAgent}
+          />
+        {:else if block.item.kind === "text"}
+          <AssistantText text={block.item.text} />
+        {:else if block.item.kind === "thinking"}
+          <ThinkingDisclosure text={block.item.text} redacted={block.item.redacted} />
+        {:else if block.item.kind === "tool"}
+          {@const use = block.item.use}
+          {@const agentId = agentLinks[use.callId]}
           <ToolCall
-            toolUse={item.use}
-            result={results[item.use.callId]}
-            live={tools[item.use.callId]}
+            toolUse={use}
+            result={results[use.callId]}
+            live={tools[use.callId]}
             busy={turn.active}
             {projectRoot}
             agent={agentId ? (agents[agentId] ?? null) : null}
             {onOpenAgent}
           />
         {:else}
-          <LocalCards {item} />
+          <LocalCards item={block.item} />
         {/if}
       {/each}
       {#each live as stream (stream.messageId)}
@@ -81,6 +110,6 @@
   {/if}
 
   {#if turn.record}
-    <TurnFooter record={turn.record} {checks} />
+    <TurnFooter record={turn.record} {checks} {files} />
   {/if}
 </section>

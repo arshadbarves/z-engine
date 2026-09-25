@@ -14,8 +14,9 @@ HTTP transport).
 
 ### From Settings
 
-1. Open **Settings → MCP** and pick the settings file at the top (User for
-   all projects, This project, or Personal).
+1. Open **Settings → MCP** and choose the settings file under **Saving
+   to** at the top of the page (**User** for all projects, **This
+   project**, or **Personal (local)**).
 2. Click **Add server**.
 3. Enter a **Name** (it becomes part of the tool names) and choose
    **Command (stdio)** or **URL (HTTP)**.

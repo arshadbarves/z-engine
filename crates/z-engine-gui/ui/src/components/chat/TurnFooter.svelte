@@ -1,28 +1,53 @@
 <script lang="ts">
   import { fmtDuration } from "$lib/domain/format";
+  import { receiptPlan } from "$lib/domain/receipt";
+  import { baseName } from "$lib/domain/tools/toolInput";
   import { usageLine } from "$lib/domain/usage";
   import { outcomeNote, turnEvidence } from "$lib/domain/verification";
   import type { CheckRecord } from "$lib/protocol/CheckRecord";
   import type { TurnRecord } from "$lib/protocol/TurnRecord";
+  import { settingsStore } from "$lib/stores/settings.svelte";
+  import { ui } from "$lib/stores/ui.svelte";
   import { fmtCost } from "$lib/util";
   import VerificationBadge from "./VerificationBadge.svelte";
 
-  type Props = { record: TurnRecord; checks: CheckRecord[] };
-  let { record, checks }: Props = $props();
+  /**
+   * The turn's receipt: one quiet line whose detail follows
+   * `ui.task_report_view`. Hovering it always gives time, tokens and cost.
+   */
+  type Props = { record: TurnRecord; checks: CheckRecord[]; files: string[] };
+  let { record, checks, files }: Props = $props();
 
+  const FILES_SHOWN = 4;
+  const plan = $derived(receiptPlan(settingsStore.settings?.ui.task_report_view ?? "quiet", record));
   const note = $derived(outcomeNote(record.outcome));
   const evidence = $derived(turnEvidence(record, checks));
-  const stats = $derived(
-    [
-      fmtDuration(record.finishedAt - record.startedAt),
-      usageLine(record.usage),
-      record.costUsd > 0 ? fmtCost(record.costUsd) : "",
-    ].filter(Boolean),
-  );
+  const duration = $derived(fmtDuration(record.finishedAt - record.startedAt));
+  const usage = $derived(usageLine(record.usage));
+  const cost = $derived(record.costUsd > 0 ? fmtCost(record.costUsd) : "");
+  const stats = $derived([plan.stats && duration, plan.usage && usage, plan.stats && cost].filter(Boolean));
+  const hint = $derived([duration, usage, cost].filter(Boolean).join(" · "));
+  const showFiles = $derived(plan.files && files.length > 0);
 </script>
 
-<footer class="turn-footer">
-  <VerificationBadge outcome={record.verification} {evidence} />
-  {#if note}<span class={`turn-outcome tone-${note.tone}`}>{note.label}</span>{/if}
-  {#if stats.length > 0}<span class="turn-stats">{stats.join(" · ")}</span>{/if}
-</footer>
+{#if plan.badge || note || stats.length || showFiles}
+  <footer class="turn-receipt" title={hint || undefined}>
+    {#if plan.badge}<VerificationBadge outcome={record.verification} {evidence} startOpen={plan.checksOpen} />{/if}
+    {#if note}<span class={`turn-outcome tone-${note.tone}`}>{note.label}</span>{/if}
+    {#if showFiles}
+      <span class="receipt-files" aria-label="Files changed in this turn">
+        {#each files.slice(0, FILES_SHOWN) as file (file)}
+          <button type="button" class="receipt-file" title={`Review ${file}`} onclick={() => ui.openDiff(file, "session")}>
+            {baseName(file)}
+          </button>
+        {/each}
+        {#if files.length > FILES_SHOWN}
+          <button type="button" class="receipt-file is-more" onclick={() => ui.openDiff(null, "session")}>
+            +{files.length - FILES_SHOWN}
+          </button>
+        {/if}
+      </span>
+    {/if}
+    {#if stats.length > 0}<span class="turn-stats">{stats.join(" · ")}</span>{/if}
+  </footer>
+{/if}

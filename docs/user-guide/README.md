@@ -33,21 +33,23 @@ permission rules, records everything, and lets you undo changes.
 
 | Area | What it is |
 |---|---|
-| **Sidebar** (left) | Your workspaces (project folders) and their chats. **New chat** starts a conversation and **Search** finds one. A dot on a chat means it is working, needs you (amber), finished while you were away, or its last response failed; the open chat reports its status in the title bar instead. Hover a chat or workspace to delete or remove it. |
-| **Top bar** | In the middle, a small glass orb (the **companion**) and a **status line** name the workspace and chat and say what the agent is doing, with plan progress, time and cost (for example "Running the parser tests · 2/4 · 42s · $0.08"). The orb's expression follows the work and turns amber when you're needed, and the line briefly shows how each turn ended. Click the line for the plan, context use, cost, agents and recent notices. The buttons are **Review changes** (⌘D / Ctrl+D) and **Settings** (⌘, / Ctrl+,); while the sidebar is hidden, **New chat** and search (⌘K / Ctrl+K) move here too. |
-| **Transcript** (center) | Your messages, the agent's replies, a card for every tool it uses, approval cards, and a footer under each turn with the badge, time and cost. |
-| **Composer** (bottom) | Where you type. Above it: queued messages. Below it: the permission mode, model, reasoning effort, and an image button. |
-| **Side panels** (right) | The agents and jobs panel, the diff (review) panel, and the git worktree panel open here. |
+| **Sidebar** (left) | At the top: **New chat** (⌘N / Ctrl+N), **Search** (⌘K / Ctrl+K, the command palette), **Home** and **Inbox**, whose badge counts what is waiting for you. Below: **Projects** (your project folders) with their git branch, number of uncommitted changes, and chats. A dot before a chat means it is working, needs you (amber), finished while you were away, or its last response didn't complete. At the bottom: the model in use, an **Update** button when a new version is ready, and **Settings** (⌘, / Ctrl+,). |
+| **Title bar** | In the middle, the **island**: a small glass orb (the **companion**) and one line saying what the agent is doing, with at most one number (the elapsed time, the finished turn's duration, or a retry countdown). Click it for the live steps, plan, helpers, cost and recent warnings. Left of it, an amber count of other chats that need you; right of it, a ring showing how full the context is. At the right, the changes button (**Review changes**, ⌘D / Ctrl+D) with the number of files this chat changed. |
+| **Main area** (center) | The project home when no chat is open, the chat's transcript (your messages, the agent's replies, its tool calls, approval cards and a receipt under each turn), or the Inbox. |
+| **Composer** (bottom) | Where you type. Above it: queued messages and attachments. In its bar: the **+** menu, the permission mode, the model with its reasoning effort, and Send (**Stop** while the agent works). |
+| **Side panels** (right) | The agents panel (**Agents** and **Jobs**) and the **Changes** panel open here. |
 
-On the empty home screen, starter cards fill the composer with example
-tasks. The composer's placeholder lists what `@`, `/`, `!` and `#` do.
+The project home shows starter prompts that fit the project and cards for
+recent chats, uncommitted changes and project setup. The composer's **+**
+menu lists what `@`, `/`, `#` and `!` do.
 
 ## Contents
 
-1. [Getting started](01-getting-started.md) – install, connect a model
-   provider, open a project, and run your first task.
-2. [Everyday use](02-everyday-use.md) – asking, fixing, reviewing,
-   committing, attaching files, steering, rewinding and exporting.
+1. [Getting started](01-getting-started.md) – install, first-run setup,
+   connect a model provider, open a project, and run your first task.
+2. [Everyday use](02-everyday-use.md) – the project home, title bar and
+   Inbox; asking, fixing, reviewing changes, committing, attaching files,
+   steering, rewinding and exporting.
 3. [Permissions and safety](03-permissions-and-safety.md) – permission
    modes, approval cards, allow/ask/deny rules, workspace trust and the
    sandbox.
@@ -57,7 +59,7 @@ tasks. The composer's placeholder lists what `@`, `/`, `!` and `#` do.
    reviewing plans before any change, answering the agent's questions, and
    the todo list.
 6. [Commands and skills](06-commands-and-skills.md) – every slash command,
-   writing custom commands, MCP prompts and skills.
+   the command palette, writing custom commands, MCP prompts and skills.
 7. [Memory and context](07-memory-and-context.md) – `AGENTS.md` files,
    rules, the context window, compaction and prompt caching.
 8. [Hooks](08-hooks.md) – run your own scripts on agent events.

@@ -9,9 +9,12 @@
   import ToggleSetting from "./ToggleSetting.svelte";
   import WebCard from "./WebCard.svelte";
   import WorkspaceCard from "./WorkspaceCard.svelte";
+  import { foldGroups } from "./folding";
 
   type Props = { settings: Settings };
   let { settings }: Props = $props();
+
+  foldGroups();
 </script>
 
 <div class="tab-body advanced-tab">

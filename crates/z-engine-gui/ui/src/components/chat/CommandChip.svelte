@@ -41,11 +41,11 @@
     align-self: flex-start;
     max-width: 100%;
     padding: 3px 8px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--separator);
     border-radius: 6px;
-    background: var(--surface-quiet);
-    color: var(--text-2);
-    font-family: var(--mono);
+    background: var(--fill-quiet);
+    color: var(--label-2);
+    font-family: var(--font-mono);
     font-size: 12px;
     cursor: pointer;
   }
@@ -80,9 +80,9 @@
     overflow: auto;
     padding: 8px 10px;
     border-radius: 6px;
-    background: var(--surface-quiet);
-    color: var(--text-2);
-    font-family: var(--mono);
+    background: var(--fill-quiet);
+    color: var(--label-2);
+    font-family: var(--font-mono);
     font-size: 11.5px;
     line-height: 1.5;
     white-space: pre-wrap;

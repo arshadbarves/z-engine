@@ -1,0 +1,306 @@
+/* ── Settings: about, updates ────────────────────────────────────────────── */
+
+/* ── About Tab ── */
+
+.about-tab {
+  gap: 24px;
+}
+
+.about-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 0 8px;
+}
+
+.about-hero-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.about-hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.about-hero-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.about-hero-title-row h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--label);
+  letter-spacing: -0.02em;
+}
+
+.about-hero-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--separator);
+  color: var(--label-2);
+}
+
+.about-hero-sub {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--label-3);
+}
+
+/* ── About Update Section ──────────────────────────────────────────────── */
+
+.about-update-card {
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: var(--r-m);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.about-update-card.has-update {
+  background: rgba(94, 106, 210, 0.06);
+  border: 1px solid rgba(94, 106, 210, 0.22);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+}
+
+.about-update-card.is-current {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--separator);
+}
+
+.about-update-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.about-update-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  flex-shrink: 0;
+}
+
+.about-update-icon-wrap.pulse {
+  background: rgba(94, 106, 210, 0.14);
+  color: var(--accent);
+  border: 1px solid rgba(94, 106, 210, 0.25);
+  animation: icon-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes icon-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(94, 106, 210, 0); }
+  50%      { box-shadow: 0 0 0 6px rgba(94, 106, 210, 0.1); }
+}
+
+.about-update-icon-wrap.ok {
+  background: rgba(0, 214, 143, 0.1);
+  color: var(--green);
+  border: 1px solid rgba(0, 214, 143, 0.22);
+}
+
+.about-update-detail {
+  flex: 1;
+  min-width: 0;
+}
+
+.about-update-headline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.about-update-label {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--label);
+}
+
+.about-update-ver-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  background: rgba(94, 106, 210, 0.1);
+  border: 1px solid rgba(94, 106, 210, 0.2);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ver-from {
+  color: var(--label-3);
+}
+
+.ver-arrow-sm {
+  color: var(--label-3);
+}
+
+.ver-to {
+  color: var(--accent);
+}
+
+.about-update-summary {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--label-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.about-uptodate-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--label-3);
+}
+
+/* ── Update Progress ─────────────────────────────────────────────────── */
+
+.about-update-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.about-progress-track {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.about-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #7c85e0, var(--accent));
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.about-progress-pct {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--accent);
+  min-width: 32px;
+  text-align: right;
+}
+
+/* ── Update Action Buttons ───────────────────────────────────────────── */
+
+.about-update-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.about-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: #000000;
+  background: #ffffff;
+  border: none;
+  border-radius: 9999px;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.about-btn-primary:hover:not(:disabled) {
+  background: #e8e8ed;
+  color: #000000;
+  transform: scale(1.02);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.about-btn-primary:active:not(:disabled) {
+  background: #d2d2d7;
+  transform: scale(0.97);
+}
+
+.about-btn-primary:disabled {
+  opacity: 0.35;
+  background: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.38);
+  cursor: not-allowed;
+}
+
+.about-btn-ghost {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+  background: transparent;
+  border: 1px solid var(--separator);
+  cursor: pointer;
+  color: var(--label-3);
+  transition: all 0.14s ease;
+}
+
+.about-btn-ghost:hover:not(:disabled) {
+  color: var(--label);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--separator-strong);
+}
+
+.about-btn-ghost:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.about-btn-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--label);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.14s ease;
+}
+
+.about-btn-outline:hover:not(:disabled) {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.about-btn-outline:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

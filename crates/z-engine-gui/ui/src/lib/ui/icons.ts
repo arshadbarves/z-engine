@@ -3,23 +3,30 @@ import {
   Alert02Icon,
   ArrowDown01Icon,
   ArrowDown02Icon,
+  ArrowExpand01Icon,
   ArrowLeft01Icon,
   ArrowRight01Icon,
   ArrowRight02Icon,
   ArrowShrink01Icon,
+  ArrowShrink02Icon,
+  ArrowUpRight01Icon,
   ArrowUp02Icon,
   ArrowTurnBackwardIcon,
   Attachment01Icon,
   Book02Icon,
   Bookmark01Icon,
   Brain02Icon,
+  BubbleChatIcon,
   Cancel01Icon,
   CheckListIcon,
+  CheckmarkBadge01Icon,
   CheckmarkCircle02Icon,
   CheckmarkSquare02Icon,
   CircleIcon,
   Clock01Icon,
+  CloudIcon,
   Coins01Icon,
+  ComputerIcon,
   Copy01Icon,
   CornerDownLeftIcon,
   Delete02Icon,
@@ -32,21 +39,31 @@ import {
   FileCodeIcon,
   FilePenLineIcon,
   Folder02Icon,
+  FolderAddIcon,
   FolderGitTwoIcon,
+  FolderOpenIcon,
   GitBranchIcon,
   GitCompareIcon,
   GitMergeIcon,
   Globe02Icon,
   HelpCircleIcon,
+  Home01Icon,
+  Idea01Icon,
   Image01Icon,
+  InboxIcon,
   InformationCircleIcon,
   Layers01Icon,
+  LayoutTwoColumnIcon,
   KeyRoundIcon,
   Loading03Icon,
+  LockIcon,
+  MagicWand01Icon,
   MessageSquareIcon,
+  MoreHorizontalIcon,
   OctagonAlertIcon,
   PanelLeftIcon,
   PencilEdit02Icon,
+  PlayIcon,
   Plug01Icon,
   Refresh01Icon,
   Robot01Icon,
@@ -56,6 +73,7 @@ import {
   Shield02Icon,
   ShieldAlertIcon,
   SlidersHorizontalIcon,
+  SourceCodeIcon,
   SparklesIcon,
   SquareTerminalIcon,
   StopIcon,
@@ -141,4 +159,22 @@ export const Layers = Layers01Icon;
 export const Pencil = PencilEdit02Icon;
 export const Plug = Plug01Icon;
 export const Bot = Robot01Icon;
+export const Home = Home01Icon;
+export const Inbox = InboxIcon;
+export const FolderOpen = FolderOpenIcon;
+export const FolderPlus = FolderAddIcon;
+export const MoreHorizontal = MoreHorizontalIcon;
+export const Expand = ArrowExpand01Icon;
+export const Shrink = ArrowShrink02Icon;
+export const ArrowUpRight = ArrowUpRight01Icon;
+export const Code = SourceCodeIcon;
+export const Play = PlayIcon;
+export const Wand = MagicWand01Icon;
+export const BadgeCheck = CheckmarkBadge01Icon;
+export const Computer = ComputerIcon;
+export const Cloud = CloudIcon;
+export const Lock = LockIcon;
+export const Lightbulb = Idea01Icon;
+export const Chat = BubbleChatIcon;
+export const Columns = LayoutTwoColumnIcon;
 

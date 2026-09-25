@@ -2,7 +2,8 @@ import type { AgentInfo } from "../protocol/AgentInfo";
 import type { AgentStatus } from "../protocol/AgentStatus";
 import type { JobInfo } from "../protocol/JobInfo";
 import type { Usage } from "../protocol/Usage";
-import { MAIN_AGENT } from "./sessionView/types";
+import { MAIN_AGENT, type ToolCallView } from "./sessionView/types";
+import { activityLabel } from "./tools/activityLabel";
 import { sumUsage } from "./usage";
 
 export interface AgentNode {
@@ -43,6 +44,31 @@ export function agentTree(agents: Record<string, AgentInfo>): AgentNode[] {
   };
   for (const root of roots) walk(root, 0);
   return out;
+}
+
+export interface AgentSections {
+  /** Worktree results waiting for Apply or Discard. */
+  ready: AgentNode[];
+  working: AgentNode[];
+  finished: AgentNode[];
+}
+
+/** The agents panel's order: what needs a decision, what runs, what is done. */
+export function agentSections(tree: AgentNode[]): AgentSections {
+  const waiting = (n: AgentNode) => n.info.worktree?.state === "pending" || n.info.worktree?.state === "conflicted";
+  return {
+    ready: tree.filter(waiting),
+    working: tree.filter((n) => !waiting(n) && !isAgentDone(n.info.status)),
+    finished: tree.filter((n) => !waiting(n) && isAgentDone(n.info.status)),
+  };
+}
+
+/** What a subagent is doing right now, in words, from its latest running tool. */
+export function agentActivity(tools: Record<string, ToolCallView>, agentId: string): string | null {
+  const running = Object.values(tools)
+    .filter((t) => t.agentId === agentId && t.status === "running")
+    .sort((a, b) => b.startedAt - a.startedAt)[0];
+  return running ? activityLabel(running.tool, running.input) : null;
 }
 
 export interface WorkCounts {

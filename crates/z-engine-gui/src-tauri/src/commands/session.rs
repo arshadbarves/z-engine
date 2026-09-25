@@ -1,10 +1,11 @@
 //! Session commands (`lib/commands/engine.ts`): open, drive, list, delete,
-//! transcripts, export, the prompt inspector, and the session-scope diff.
+//! transcripts, export, the prompt inspector, the context card's
+//! breakdown, and the session-scope diff.
 
 use serde_json::Value;
 use tauri::State;
 use z_engine_engine::ExportFormat;
-use z_engine_protocol::{AgentId, Command, Message, SessionId, SessionSummary};
+use z_engine_protocol::{AgentId, Command, ContextBreakdown, Message, SessionId, SessionSummary};
 
 use crate::ipc::{IpcResult, fail, json};
 use crate::state::AppState;
@@ -83,6 +84,16 @@ pub(crate) fn export_session(
 #[tauri::command]
 pub(crate) fn inspect_request(session_id: String, state: State<'_, AppState>) -> Option<Value> {
     state.engine.last_request(&SessionId::from(session_id))
+}
+
+/// Token estimate per prompt layer of a live session's next request, or
+/// null; the view also receives it as a `contextReport` event.
+#[tauri::command]
+pub(crate) fn context_breakdown(
+    session_id: String,
+    state: State<'_, AppState>,
+) -> Option<ContextBreakdown> {
+    state.engine.context_breakdown(&SessionId::from(session_id))
 }
 
 #[tauri::command]

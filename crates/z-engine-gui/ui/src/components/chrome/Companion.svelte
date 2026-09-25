@@ -13,8 +13,10 @@
     progress: number | null;
     /** Running agents and jobs, drawn as orbiting sprites (at most four). */
     helpers: number;
+    /** Drawn size in pixels; the title bar uses 30. */
+    size?: number;
   };
-  let { pose, progress, helpers }: Props = $props();
+  let { pose, progress, helpers, size = 30 }: Props = $props();
 
   const uid = $props.id();
   const RING = 2 * Math.PI * 13;
@@ -75,8 +77,8 @@
 <svg
   bind:this={root}
   class={`companion mood-${pose.mood} tone-${pose.tone} gaze-${pose.gaze}${blinking ? " is-blinking" : ""}`}
-  width="30"
-  height="30"
+  width={size}
+  height={size}
   viewBox="0 0 30 30"
   aria-hidden="true"
   style:--gx={gaze.current.x}

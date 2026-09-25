@@ -15,8 +15,9 @@ mode is read-only".
 
 ### Enter plan mode
 
-- Press **Shift+Tab** in the composer until the mode button reads **Plan**.
-- Or choose **Plan** from the mode button under the composer.
+- Press **Shift+Tab** in the composer until the mode chip reads **Plan**.
+- Or choose **Plan** from the mode chip in the composer's bar, or **Switch
+  to Plan** in the command palette.
 - Or type `/mode plan`.
 - To start every new chat in plan mode, set **Settings → Permissions →
   Permission mode** to **Plan** (`permissions.mode = "plan"`).
@@ -41,8 +42,10 @@ steps, how it will be verified, and risks or open questions.
 | **Keep planning** | Opens a feedback box. Type what should change and click **Send feedback** (or press ⌘Enter / Ctrl+Enter). The agent stays in plan mode, revises, and proposes again. Esc closes the box. |
 
 If you edited the plan, the agent is told to implement *your* version. While
-the card waits, the status line says **Waiting for you**; you can still send
-messages, which are queued.
+the card waits, the island in the title bar says **Plan ready for review**
+in amber (click it to scroll to the card), and the plan is listed in the
+[Inbox](02-everyday-use.md#the-inbox). You can still send messages, which
+are queued.
 
 > **Tip:** Plans are only proposed for work that changes files. If you ask
 > a question in plan mode, the agent simply answers it.
@@ -68,7 +71,8 @@ multiple-choice questions at once. A **Question** card appears:
 - **Dismiss** declines to answer. The agent is told not to ask again and to
   continue on its best judgment or explain what is blocked.
 
-Only the main agent can ask questions; subagents can't.
+While a question waits, the island says **Question for you**. Only the main
+agent can ask questions; subagents can't.
 
 ## Todos
 
@@ -76,10 +80,11 @@ For tasks with several steps, the agent keeps a todo list with the
 `TodoWrite` tool. Each item is pending, in progress, or completed; the agent
 keeps exactly one item in progress at a time.
 
-- **The status line** at the top of the window shows the count (for
-  example `2/5`) next to the current step, such as "Running the parser
-  tests", and a ring around the companion fills as items are done.
-- **Click the status line** to see the full checklist.
+- **The island** in the title bar shows the current step, such as "Running
+  the parser tests", and a ring around the companion fills as items are
+  done.
+- **Click the island** to open it: its **Plan** section says how many items
+  are done (for example **2 of 5 done**) and unfolds to the full checklist.
 - **`/todos`** prints the list in the transcript as a checklist.
 - A subagent's own todo list is shown in its transcript in the **Agents**
   panel.

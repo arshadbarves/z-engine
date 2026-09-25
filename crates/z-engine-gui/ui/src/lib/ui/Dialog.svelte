@@ -1,6 +1,7 @@
 <script lang="ts" module>
   import { Dialog as Bits } from "bits-ui";
-  export { Bits as Root };
+  export const Root = Bits.Root;
+  export const Close = Bits.Close;
 </script>
 
 <script lang="ts">
@@ -8,6 +9,8 @@
 
   type Props = {
     title?: string;
+    /** Names the dialog for assistive tech when it shows no title. */
+    label?: string;
     overlayClass?: string;
     contentClass?: string;
     closing?: boolean;
@@ -16,6 +19,7 @@
 
   let {
     title,
+    label,
     overlayClass = "",
     contentClass = "",
     closing = false,
@@ -25,7 +29,7 @@
 
 <Bits.Portal>
   <Bits.Overlay class="modal-overlay{closing ? ' is-closing' : ''} {overlayClass}" />
-  <Bits.Content class="modal{closing ? ' is-closing' : ''} {contentClass}">
+  <Bits.Content class="modal{closing ? ' is-closing' : ''} {contentClass}" aria-label={title ? undefined : label}>
     {#if title}
       <Bits.Title class="modal-head">{title}</Bits.Title>
     {/if}

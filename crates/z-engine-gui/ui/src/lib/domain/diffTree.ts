@@ -64,17 +64,20 @@ export function buildDiffTree(files: DiffTreeFile[]): DiffTreeNode[] {
     });
   }
 
+  // A folder holding only one folder shows as one row: `crates/app/src`.
+  function compact(d: MutableDir): DiffTreeNode {
+    let name = d.name;
+    let cur = d;
+    while (cur.files.length === 0 && cur.dirs.size === 1) {
+      const only = [...cur.dirs.values()][0]!;
+      name = `${name}/${only.name}`;
+      cur = only;
+    }
+    return { kind: "dir", name, path: cur.path, children: freeze(cur) };
+  }
+
   function freeze(dir: MutableDir): DiffTreeNode[] {
-    const dirs = [...dir.dirs.values()]
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map(
-        (d): DiffTreeNode => ({
-          kind: "dir",
-          name: d.name,
-          path: d.path,
-          children: freeze(d),
-        }),
-      );
+    const dirs = [...dir.dirs.values()].sort((a, b) => a.name.localeCompare(b.name)).map(compact);
     const files = [...dir.files].sort((a, b) => a.name.localeCompare(b.name));
     return [...dirs, ...files];
   }

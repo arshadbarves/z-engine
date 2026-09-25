@@ -13,13 +13,13 @@
     body {
       margin: 0;
       height: 100%;
-      background: #1a1a1c;
+      background: #08080a;
       color: #ededf0;
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
         "Segoe UI", Roboto, sans-serif;
     }
   </style>
-  <link rel="stylesheet" href="/src/splash.css" />
+  <link rel="stylesheet" href="/src/styles/splash.css" />
   <script>
     // Fatal-error surface: replaces the app only when Svelte never
     // mounted (blank screen debugging). Runtime rejections after mount
@@ -60,17 +60,20 @@
 </head>
 
 <body>
-  <div id="boot-splash" class="splash" role="status" aria-label="Z Engine">
-    <div class="splash-minimal">
-      <svg class="splash-mark" width="72" height="72" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <rect x="1.5" y="1.5" width="21" height="21" rx="5.5" stroke="currentColor" stroke-width="1.2" />
+  <div id="boot-splash" class="splash" role="status" aria-label="Z Engine is starting">
+    <div class="splash-stage">
+      <div class="splash-glow" aria-hidden="true"></div>
+      <svg class="splash-mark" width="76" height="76" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect class="splash-frame" x="1.5" y="1.5" width="21" height="21" rx="5.5" stroke="currentColor"
+          stroke-width="1.2" pathLength="100" />
         <g fill="currentColor">
-          <rect class="logo-bar logo-bar-top" x="5.53" y="5.53" width="12.94" height="3" rx="0.47" />
-          <path class="logo-bar logo-bar-fold" d="M15.384 9.281h3.085L8.625 14.719H5.531z" />
-          <rect class="logo-bar logo-bar-bot" x="5.53" y="15.47" width="12.94" height="3" rx="0.47" />
+          <rect class="splash-bar splash-bar-top" x="5.53" y="5.53" width="12.94" height="3" rx="0.47" />
+          <path class="splash-bar splash-bar-fold" d="M15.384 9.281h3.085L8.625 14.719H5.531z" />
+          <rect class="splash-bar splash-bar-bot" x="5.53" y="15.47" width="12.94" height="3" rx="0.47" />
         </g>
       </svg>
-      <div class="splash-word">Z Engine <span class="splash-beta">BETA</span></div>
+      <div class="splash-word">Z Engine</div>
+      <div class="splash-progress" aria-hidden="true"></div>
     </div>
   </div>
   <div id="root"></div>

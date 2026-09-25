@@ -43,17 +43,18 @@ html.plat-win .app-titlebar {
   min-width: 0;
 }
 
-/* Centered in the window by auto margins, not left: 50%, so it may use the
-   full width between the side clusters instead of half the bar. */
+/* A fixed box between the side clusters, so the island is centred in the
+   window and can never grow under them; it is click-through except for
+   the island itself, so the bar stays draggable around it. */
 .titlebar-center {
   position: absolute;
-  top: calc((var(--titlebar-h) - 30px) / 2);
-  left: 0;
-  right: 0;
+  top: calc((var(--titlebar-h) - var(--island-h)) / 2);
+  left: var(--titlebar-side);
+  right: var(--titlebar-side);
   display: flex;
-  width: fit-content;
-  max-width: calc(100% - 2 * var(--titlebar-side));
-  margin-inline: auto;
+  justify-content: center;
+  min-width: 0;
+  pointer-events: none;
 }
 
 .titlebar-btn {
@@ -104,7 +105,7 @@ html.plat-win .app-titlebar {
 }
 
 .sidebar-slot {
-  width: 264px;
+  width: var(--sidebar-w);
   flex-shrink: 0;
   display: flex;
   overflow: hidden;
@@ -150,4 +151,49 @@ html.plat-win .app-titlebar {
 }
 .app.app-enter .canvas-pane {
   animation: blur-in var(--dur-slow) var(--ease-out) 120ms both;
+}
+
+/* Windows caption buttons: minimize, maximize, close. */
+.win-controls {
+  display: flex;
+  align-self: stretch;
+  flex-shrink: 0;
+  margin-left: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.win-ctrl {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 100%;
+  padding: 0;
+  color: #c8c8cc;
+  background: transparent;
+  border: none;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.win-ctrl svg {
+  width: 10px;
+  height: 10px;
+}
+
+.win-ctrl:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f0f0f2;
+}
+
+.win-ctrl.close:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+.win-ctrl:active {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.win-ctrl.close:active {
+  background: #bf0f1d;
 }

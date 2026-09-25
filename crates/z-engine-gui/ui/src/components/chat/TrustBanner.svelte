@@ -15,7 +15,7 @@
   }
 </script>
 
-<div class="msg interaction-card trust-banner" role="region" aria-label="Workspace trust">
+<div class="msg interaction-card trust-banner" role="region" aria-label="Workspace trust" data-pending-card>
   <div class="interaction-kicker">
     <Icon icon={ShieldAlert} size={13} />
     <span>Trust this workspace?</span>
@@ -37,7 +37,7 @@
     margin: 0;
     font-size: 12.5px;
     line-height: 1.5;
-    color: var(--text-2);
+    color: var(--label-2);
     overflow-wrap: anywhere;
   }
 </style>

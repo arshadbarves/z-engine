@@ -3,9 +3,7 @@
 
 Checks README.md, AGENTS.md, CHANGELOG.md and every markdown file under
 docs/ and .claude/. External links (http, mailto) and pure anchors are
-skipped; anchors after a path are ignored. Documents marked
-"Historical (v1)" near the top describe deleted code and are skipped.
-Run from anywhere:
+skipped; anchors after a path are ignored. Run from anywhere:
 
     python3 scripts/check_docs_links.py
 """
@@ -26,12 +24,7 @@ def markdown_files() -> list[Path]:
     files = [ROOT / name for name in ("README.md", "AGENTS.md", "CHANGELOG.md")]
     for folder in ("docs", ".claude"):
         files.extend(sorted((ROOT / folder).rglob("*.md")))
-    return [path for path in files if path.is_file() and not historical(path)]
-
-
-def historical(path: Path) -> bool:
-    head = path.read_text(encoding="utf-8").splitlines()[:5]
-    return any("Historical (v1)" in line for line in head)
+    return [path for path in files if path.is_file()]
 
 
 def links(path: Path) -> list[tuple[int, str]]:

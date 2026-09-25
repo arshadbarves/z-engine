@@ -43,7 +43,7 @@
 </script>
 
 {#if question && draft}
-  <div class="msg interaction-card question-card">
+  <div class="msg interaction-card question-card" data-pending-card>
     <div class="interaction-kicker">
       <Icon icon={HelpCircle} size={13} />
       <span>{questions.length > 1 ? `${questions.length} questions` : "Question"}</span>

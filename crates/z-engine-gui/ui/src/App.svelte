@@ -1,108 +1,88 @@
 <script lang="ts">
-  import { getCurrentWindow } from "@tauri-apps/api/window";
-  import WorkPanel from "./components/agents/WorkPanel.svelte";
-  import Composer from "./components/chat/Composer.svelte";
-  import Transcript from "./components/chat/Transcript.svelte";
-  import JumpLatest from "./components/chrome/JumpLatest.svelte";
+  import AppShell from "./components/chrome/AppShell.svelte";
   import SplashScreen from "./components/chrome/SplashScreen.svelte";
-  import TopBar from "./components/chrome/TopBar.svelte";
+  import Onboarding from "./components/onboarding/Onboarding.svelte";
   import CommandPalette from "./components/overlays/CommandPalette.svelte";
-  import DiffPanel from "./components/overlays/DiffPanel.svelte";
   import PromptInspector from "./components/overlays/PromptInspector.svelte";
-  import WorktreePanel from "./components/overlays/WorktreePanel.svelte";
   import SettingsPage from "./components/settings/SettingsPage.svelte";
-  import AppSidebar from "./components/sidebar/AppSidebar.svelte";
-  import { sessionLabel, viewTitle } from "./lib/domain/sessionList";
-  import { lastPromptId } from "./lib/domain/timeline/blocks";
+  import { needsOnboarding } from "./lib/domain/onboarding";
   import { paletteActions } from "./lib/paletteActions";
   import { initEvents, sessionList, sessions } from "./lib/runtime";
   import {
     addWorkspace,
-    createWorktreeAndStart,
     openChat,
-    removeChat,
-    removeWorkspace,
     startNewChat,
   } from "./lib/stores/app-actions";
+  import { confirmStore } from "./lib/stores/confirm.svelte";
+  import { onboarding } from "./lib/stores/onboarding.svelte";
   import { settingsStore } from "./lib/stores/settings.svelte";
+  import { shortcutFor, type ShortcutAction } from "./lib/stores/shortcuts";
   import { ui } from "./lib/stores/ui.svelte";
   import { userSignals } from "./lib/stores/userSignals.svelte";
   import { bindStore } from "./lib/svelte/bind.svelte";
+  import { ConfirmDialog } from "./lib/ui";
   import { presence } from "./lib/ui/presence.svelte";
-  import { createScrollController } from "./lib/ui/scrollController.svelte";
   import { updateStore } from "./lib/updateStore";
-  import { workspaceStore, wsBasename } from "./lib/workspaces";
+  import { workspaceStore } from "./lib/workspaces";
 
   const workspaces = bindStore(workspaceStore);
-  const scroller = createScrollController({ bottomThreshold: 24 });
 
   let splash = $state(true);
-  let transcriptEl: HTMLDivElement | undefined = $state();
+  let booted = $state(false);
 
   const palettePresence = presence(() => ui.paletteOpen, 180);
   const settingsPresence = presence(() => ui.settingsOpen, 180);
   const inspectPresence = presence(() => ui.inspectOpen, 180);
-  const worktreePresence = presence(() => ui.worktreeOpen, 180);
-  const diffPresence = presence(() => ui.diffOpen, 180);
-  const workPresence = presence(() => ui.workPanel !== null, 180);
 
-  const view = $derived(sessions.active);
-  const chatTitle = $derived(view ? sessionLabel(viewTitle(view)) : null);
-  const projectRoot = $derived(view?.info?.projectRoot ?? workspaces.current.active);
-  const workspaceName = $derived(projectRoot ? wsBasename(projectRoot) : null);
-  const lastPrompt = $derived(lastPromptId(view?.messages));
-  let booted = $state(false);
+  const projectRoot = $derived(sessions.active?.info?.projectRoot ?? workspaces.current.active);
+
+  const SHORTCUTS: Record<ShortcutAction, () => void> = {
+    palette: () => ui.togglePalette(),
+    newChat: () => void startNewChat(),
+    toggleSidebar: () => (ui.sidebarOpen = !ui.sidebarOpen),
+    toggleDiff: () => ui.toggleDiff(),
+    settings: () => (ui.settingsOpen = !ui.settingsOpen),
+  };
 
   $effect(() => {
     void (async () => {
-      await initEvents();
-      await workspaceStore.load();
-      await sessionList.refresh();
-      await settingsStore.init(projectRoot ?? null);
-      booted = true;
+      try {
+        await initEvents();
+        await workspaceStore.load();
+        await sessionList.refresh();
+        await settingsStore.init(projectRoot ?? null);
+        const fresh = needsOnboarding({
+          projects: workspaceStore.getSnapshot().roots.length,
+          chats: sessionList.summaries.length,
+        });
+        if (fresh) onboarding.start();
+      } catch (e) {
+        console.error("boot failed", e);
+      } finally {
+        booted = true;
+      }
       void updateStore.check();
     })();
   });
+
+  function splashDone() {
+    splash = false;
+    userSignals.greet();
+  }
 
   $effect(() => {
     const root = projectRoot ?? null;
     if (booted) void settingsStore.ensure(root);
   });
 
-  $effect(() => scroller.bindContainer(transcriptEl));
-
   $effect(() => userSignals.track());
 
   $effect(() => {
-    userSignals.scrolledBack = scroller.showJump;
-  });
-
-  $effect(() => {
-    void view;
-    scroller.onContentUpdated(sessions.activeId, lastPrompt);
-  });
-
-  $effect(() => {
-    function onDblClick(e: MouseEvent) {
-      const target = e.target as HTMLElement;
-      if (target.closest("button, input, textarea, a, .chat-row, .ws-head")) return;
-      if (target.closest(".app-sidebar, .chat-head")) void getCurrentWindow().toggleMaximize();
-    }
-    window.addEventListener("dblclick", onDblClick);
-    return () => window.removeEventListener("dblclick", onDblClick);
-  });
-
-  $effect(() => {
     function onKey(e: KeyboardEvent) {
-      if (!(e.metaKey || e.ctrlKey)) return;
-      const k = e.key.toLowerCase();
-      if (k === "k") ui.togglePalette();
-      else if (k === "n") void startNewChat();
-      else if (k === "b") ui.sidebarOpen = !ui.sidebarOpen;
-      else if (k === "d") ui.diffOpen = !ui.diffOpen;
-      else if (e.key === ",") ui.settingsOpen = !ui.settingsOpen;
-      else return;
+      const action = shortcutFor(e);
+      if (!action) return;
       e.preventDefault();
+      SHORTCUTS[action]();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -110,108 +90,51 @@
 </script>
 
 {#if splash}
-  <SplashScreen onDone={() => (splash = false)} />
+  <SplashScreen ready={booted} onDone={splashDone} />
 {/if}
 
-<main class={`app${ui.sidebarOpen ? "" : " no-sidebar"}${splash ? "" : " app-enter"}`}>
-  <TopBar
-    {workspaceName}
-    {chatTitle}
-    diffOpen={ui.diffOpen}
-    sidebarOpen={ui.sidebarOpen}
-    onToggleSidebar={() => (ui.sidebarOpen = !ui.sidebarOpen)}
-    onPalette={() => ui.openPalette()}
-    onToggleDiff={() => (ui.diffOpen = !ui.diffOpen)}
-    onNewChat={() => void startNewChat()}
-    onSettings={() => ui.openSettings()}
+{#if booted}
+  {#if onboarding.active}
+    <Onboarding entering={!splash} />
+  {:else}
+    <AppShell entering={!splash} />
+  {/if}
+{/if}
+
+{#if palettePresence.mounted}
+  <CommandPalette
+    isClosing={palettePresence.closing}
+    onClose={() => (ui.paletteOpen = false)}
+    sessions={sessionList.items}
+    sessionsOnly={ui.paletteSessionsOnly}
+    workspaces={workspaces.current.roots}
+    activeWorkspace={workspaces.current.active}
+    actions={paletteActions({
+      newTask: () => void startNewChat(),
+      addWorkspace: () => void addWorkspace(),
+      openWorktree: () => ui.openWorktree(),
+      openDiff: () => ui.openDiff(),
+      openSettings: () => ui.openSettings(),
+      openInspector: () => (ui.inspectOpen = true),
+      toggleSidebar: () => (ui.sidebarOpen = !ui.sidebarOpen),
+    })}
+    onOpenSession={(id, root) => void openChat(id, root)}
+    onActivateWorkspace={(root) => workspaceStore.setActive(root)}
   />
+{/if}
+{#if settingsPresence.mounted}
+  <SettingsPage isClosing={settingsPresence.closing} onClose={() => (ui.settingsOpen = false)} />
+{/if}
+{#if inspectPresence.mounted}
+  <PromptInspector isClosing={inspectPresence.closing} onClose={() => (ui.inspectOpen = false)} />
+{/if}
 
-  <div class="app-body">
-    <AppSidebar
-      sessions={sessionList.items}
-      workspaces={workspaces.current.roots}
-      activeWorkspace={workspaces.current.active}
-      activeSessionId={sessions.activeId}
-      activity={sessions.activity}
-      unread={sessions.unread}
-      onOpen={(id, root) => void openChat(id, root)}
-      onDelete={(id) => void removeChat(id)}
-      onAddWorkspace={() => void addWorkspace()}
-      onRemoveWorkspace={(root) => void removeWorkspace(root)}
-      onActivateWorkspace={(root) => workspaceStore.setActive(root)}
-      onNewChat={() => void startNewChat()}
-      onSearch={() => ui.openPalette(true)}
-    />
-
-    <section class="workstation-stage">
-      <div class="canvas-pane">
-        <div class="transcript-wrap">
-          {#if sessions.hydrating}
-            <div class="hydrate-shimmer" aria-label="Restoring chat"></div>
-          {/if}
-          <div class="edge-fade top" aria-hidden="true"></div>
-          <div class="transcript" bind:this={transcriptEl}>
-            <Transcript />
-          </div>
-          <div class="edge-fade bottom" aria-hidden="true"></div>
-          {#if scroller.showJump}
-            <JumpLatest onJump={() => scroller.jumpToLatest()} />
-          {/if}
-        </div>
-
-        <Composer />
-      </div>
-
-      {#if worktreePresence.mounted}
-        <WorktreePanel
-          isClosing={worktreePresence.closing}
-          onClose={() => (ui.worktreeOpen = false)}
-          onCreate={(name) => void createWorktreeAndStart(name)}
-          workspaces={workspaces.current.roots}
-          activeWorkspace={workspaces.current.active}
-          onActivateWorkspace={(root) => workspaceStore.setActive(root)}
-        />
-      {/if}
-
-      {#if workPresence.mounted}
-        <WorkPanel isClosing={workPresence.closing} onClose={() => ui.closeWork()} />
-      {/if}
-
-      {#if diffPresence.mounted}
-        <DiffPanel isClosing={diffPresence.closing} onClose={() => (ui.diffOpen = false)} />
-      {/if}
-    </section>
-  </div>
-
-  {#if palettePresence.mounted}
-    <CommandPalette
-      isClosing={palettePresence.closing}
-      onClose={() => (ui.paletteOpen = false)}
-      sessions={sessionList.items}
-      sessionsOnly={ui.paletteSessionsOnly}
-      workspaces={workspaces.current.roots}
-      activeWorkspace={workspaces.current.active}
-      actions={paletteActions({
-        newTask: () => void startNewChat(),
-        addWorkspace: () => void addWorkspace(),
-        openWorktree: () => ui.openWorktree(),
-        openDiff: () => (ui.diffOpen = true),
-        openSettings: () => ui.openSettings(),
-        openInspector: () => (ui.inspectOpen = true),
-        toggleSidebar: () => (ui.sidebarOpen = !ui.sidebarOpen),
-      })}
-      onOpenSession={(id, root) => void openChat(id, root)}
-      onActivateWorkspace={(root) => workspaceStore.setActive(root)}
-    />
-  {/if}
-  {#if settingsPresence.mounted}
-    <SettingsPage
-      isClosing={settingsPresence.closing}
-      initialTab={ui.settingsTab}
-      onClose={() => (ui.settingsOpen = false)}
-    />
-  {/if}
-  {#if inspectPresence.mounted}
-    <PromptInspector isClosing={inspectPresence.closing} onClose={() => (ui.inspectOpen = false)} />
-  {/if}
-</main>
+<ConfirmDialog
+  open={confirmStore.request !== null}
+  title={confirmStore.request?.title ?? ""}
+  description={confirmStore.request?.description}
+  confirmLabel={confirmStore.request?.confirmLabel}
+  tone={confirmStore.request?.tone}
+  onConfirm={() => confirmStore.settle(true)}
+  onCancel={() => confirmStore.settle(false)}
+/>

@@ -14,6 +14,8 @@
     extra?: string;
     expandable?: boolean;
     open?: boolean;
+    /** A glimpse shown under the row while it is folded (a live output tail). */
+    peek?: Snippet;
     children?: Snippet;
   };
 
@@ -26,6 +28,7 @@
     extra,
     expandable = false,
     open = $bindable(false),
+    peek,
     children,
   }: Props = $props();
 
@@ -75,5 +78,7 @@
   </button>
   {#if open && children}
     <div class="tool-body">{@render children()}</div>
+  {:else if peek}
+    {@render peek()}
   {/if}
 </div>

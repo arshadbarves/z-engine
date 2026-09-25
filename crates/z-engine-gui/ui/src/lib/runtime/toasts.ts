@@ -1,3 +1,6 @@
+import { inbox } from "./inbox.svelte";
+import { sessions } from "./sessions.svelte";
+
 export interface ToastAction {
   label: string;
   onclick?: () => void;
@@ -62,6 +65,14 @@ export function pushToast(input: ToastInput, toneArg: Toast["tone"] = "info"): n
       : { ...input, id, tone: input.tone ?? toneArg };
   toasts = [...toasts.slice(-3), toast];
   emit();
+  inbox.record({
+    key: `t${id}`,
+    tone: toast.tone,
+    title: toast.title ?? toast.text,
+    text: toast.text,
+    sessionId: sessions.activeId,
+    at: Date.now(),
+  });
   const life = toast.actions?.length ? 9000 : toast.tone === "warn" || toast.tone === "error" ? 6000 : 4500;
   setTimeout(() => {
     toasts = toasts.filter((t) => t.id !== id);

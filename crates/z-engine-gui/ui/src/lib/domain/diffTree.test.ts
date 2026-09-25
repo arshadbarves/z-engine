@@ -19,6 +19,15 @@ describe("buildDiffTree", () => {
     if (src?.kind !== "dir") return;
     expect(src.children.map((n) => n.name)).toEqual(["a", "b.ts"]);
   });
+
+  it("shows a chain of single folders as one row", () => {
+    const tree = buildDiffTree([
+      { path: "crates/app/src/a.rs", status: "modified" },
+      { path: "crates/app/src/b.rs", status: "modified" },
+    ]);
+    expect(tree).toHaveLength(1);
+    expect(tree[0]).toMatchObject({ kind: "dir", name: "crates/app/src", path: "crates/app/src" });
+  });
 });
 
 describe("flattenDiffTree", () => {

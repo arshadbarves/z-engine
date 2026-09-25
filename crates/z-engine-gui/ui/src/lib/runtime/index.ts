@@ -1,6 +1,10 @@
 export { sessions } from "./sessions.svelte";
 export { sessionList } from "./sessionList.svelte";
 export { catalogs, searchFiles } from "./catalogs.svelte";
+export { chatChanges } from "./chatChanges.svelte";
+export { inbox, inboxSnapshot, type InboxSnapshot } from "./inbox.svelte";
+export { projects, type ProjectDetails } from "./projects.svelte";
+export { chatTitle } from "./titles";
 export { initEvents } from "./listen";
 export { dismissToast, errorText, pushToast, toastStore, type Toast, type ToastAction } from "./toasts";
 export * from "./actions";

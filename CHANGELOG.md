@@ -16,16 +16,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Documentation contract** (`docs/AGENTS.md`), a `docs-maintainer`
   subagent, and a CI link check, so feature changes update the docs in the
   same change.
-- **Companion and status line**: the title bar names the workspace and chat
-  and says what the agent is doing in plain words, with plan progress,
-  elapsed time and this turn's cost. A small glass orb beside it shows the
-  same state as body language (reading, running, needs you, verified,
-  failed), orbited by running agents, and reacts to you at the default
-  **Lively** level (listening while you type, dozing when idle, waving with a
-  recap when you return). Click the line for the Now card: plan, context
-  (**Compact**, **Inspect prompt**), cost, agents, and recent warnings and
-  errors. New setting `ui.companion` (`lively`, `calm`, `off`) under
+- **Documentation website** at
+  [arshadbarves.github.io/z-engine](https://arshadbarves.github.io/z-engine/):
+  the user guide, how it works and the contributor docs, with search,
+  published from `docs/` whenever the docs change on `release`.
+- **Title bar island**: the companion orb and one line in the middle of the
+  title bar say what the agent is doing in plain words, with one number
+  (elapsed time, the turn's duration, or a retry countdown). The orb shows
+  the same state as body language, orbited by running helpers, and reacts
+  to you at the default **Lively** level. Click the island for the live
+  steps, plan, helpers, cost and recent warnings; long notices, errors and
+  notices with actions open it by themselves, and when the chat needs you,
+  clicking it scrolls to the card. Beside it, an amber count of other chats
+  that need you and a ring showing how full the context is (click it, or
+  type `/context`, for the context card with **Compact now** and **Inspect
+  prompt**). New setting `ui.companion` (`lively`, `calm`, `off`) under
   Settings → Appearance.
+- **First-run setup** on a fresh install: connect a model (free OpenCode Zen
+  models with no key, your own API key, or Ollama and LM Studio), add and
+  trust a project, and choose the permission mode and companion. An
+  animated splash shows while the app loads.
+- **Project home**: the project and branch, a centred composer, starter
+  prompts that fit the project, and cards for recent chats, uncommitted
+  changes and project setup.
+- **Inbox**: approvals (answerable in place), questions, plans and trust
+  requests from every chat, chats that finished in the background, and
+  every notice in full, kept for the app session. The sidebar badge counts
+  what is waiting.
 - Real window translucency: macOS vibrancy and Windows 11 Mica show through
   the window chrome; other systems get solid surfaces.
 
@@ -34,22 +51,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and SF Pro, glass only for chrome that floats above content, a solid
   content sheet, spring and blur-in motion, and Reduce Motion and Reduce
   Transparency support.
-- The sidebar shows one status dot per chat instead of pills, icons and
-  counts, and gains **Search**. The top bar keeps **Review changes** and
-  **Settings**; **New chat** and search join them while the sidebar is
-  hidden.
+- **Sidebar**: **New chat**, **Search** (the full command palette), **Home**
+  and **Inbox** at the top; **Projects** (formerly Workspaces) with their
+  branch, uncommitted-change count and a right-click menu, and one status
+  dot and age per chat; the model in use (amber **Connect a model** when a
+  key is missing), an **Update** button and Settings at the bottom. The
+  title bar keeps only the changes button, with the number of files this
+  chat changed.
+- **Transcript and composer**: runs of tool calls fold into one line, small
+  edits and successful commands stay folded, and subagents take one line.
+  The turn receipt follows **Settings → Appearance → Task report detail**.
+  Approval cards ask a question ("Allow Bash to run cargo test?") with
+  **Allow once**, **Always allow…** (**In this chat** or **In this
+  project**) and **Deny…**. The composer has a **+** menu, mode and model
+  chips with reasoning effort inside the model picker, **Stop**, and an
+  "Enter queues · ⌘Enter interrupts" hint; `!` output opens in a **Shell**
+  drawer above it.
+- **Changes panel** (formerly Review): **This chat** or **Uncommitted**,
+  **Unified** or **Split**, a whole-window view, a compact file tree, file
+  actions (open, reveal, copy the path or diff), syntax colors and folded
+  unchanged lines.
+- **Agents panel**: worktree changes **Ready to apply** come first, then
+  running helpers with what each is doing now; finished helpers and usage
+  fold away. Jobs show their live output and **Stop**. **New chat in a
+  worktree** is a short dialog.
+- **Prompt inspector** (formerly Context & Memory): a map of what fills the
+  context window, an outline by kind with search, **Reader** and **Raw**
+  views, and **Insights**.
+- **Settings and palette**: Settings pages are grouped as General, Agent,
+  Integrations and System; search finds single settings; a **Saving to**
+  menu replaces the scope bar; long pages fold; source badges show only
+  when a file sets a value; Settings reopens on the last page. The command
+  palette is grouped, lists single settings as you type, and ranks results
+  better.
 
 ### Removed
-- The top-bar context ring, update chip, **Agents & jobs** button and
-  Working/Review label, the working pill under the transcript, the todo
-  strip above the composer, the live verification badge and the separate
-  toast capsule. The companion and status line replace all of them.
+- The top-bar update chip, **Agents & jobs** button and Working/Review
+  label, the working pill under the transcript, the todo strip above the
+  composer, the live verification badge and the separate toast capsule.
+  The title-bar island replaces them.
 - Toasts that only confirmed something already visible (chat deleted,
   workspace added or removed, worktree created), the command palette's
   starter prompts (they remain on the home screen), and the home screen's
   logo, badge, tagline and shortcut rows.
+- The historical v1 design documents, the old roadmap, `docs/deviations.md`
+  and the old design specs under `docs/superpowers/`; git history keeps
+  them.
 
 ### Fixed
+- Deleting a chat or removing a project asks you to confirm first.
+- The Changes panel's `[` and `]` keys (also `k` and `j`) step through the
+  files; the diff panel's tooltips promised them, but nothing handled them.
+- **Settings → Appearance → Task report detail** now changes what finished
+  turns show; it used to be saved but ignored.
+- The Hooks tab keeps the matcher of `SessionStart` and `PreCompact` hooks
+  when it saves them, and offers a matcher field for both.
 - OpenCode Zen free models no longer fail with `FreeTierError` ("can only
   be used from within OpenCode"): requests use the gateway's required
   client fingerprint (OpenCode user-agent, session id shape, and

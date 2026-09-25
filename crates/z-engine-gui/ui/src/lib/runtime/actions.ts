@@ -135,11 +135,6 @@ export async function reloadExtensions(): Promise<void> {
   if (await send({ type: "reloadExtensions" })) await catalogs.reload(activeProjectRoot());
 }
 
-/** Ask the engine for a fresh `contextReport` (used by the context meter). */
-export async function requestContextReport(): Promise<void> {
-  if (sessions.activeId) await send({ type: "runCommand", name: "context", args: "" });
-}
-
 export async function exportTranscript(format: ExportFormat): Promise<void> {
   const id = sessions.activeId;
   if (!id) {

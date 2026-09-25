@@ -1,9 +1,16 @@
 <script lang="ts">
+  import { groupPalette, rankPalette } from "$lib/domain/palette";
   import type { SessionListItem } from "$lib/domain/sessionList";
+  import { paletteSettings } from "$lib/paletteActions";
   import type { PaletteItem } from "$lib/paletteTypes";
-  import { wsBasename } from "$lib/workspaces";
+  import { Dialog, DialogPanel, Kbd } from "$lib/ui";
   import { FolderGit2, Icon, MessageSquare, Search, X } from "$lib/ui/icons";
+  import { wsBasename } from "$lib/workspaces";
 
+  /**
+   * ⌘K: every action, chat, project and setting behind one search field.
+   * Settings only join the list once you type, so the first view stays short.
+   */
   type Props = {
     isClosing?: boolean;
     onClose: () => void;
@@ -17,223 +24,130 @@
     onActivateWorkspace: (root: string) => void;
   };
 
-  let {
-    isClosing = false,
-    onClose,
-    sessions,
-    workspaces,
-    activeWorkspace,
-    actions,
-    sessionsOnly = false,
-    onOpenSession,
-    onActivateWorkspace,
-  }: Props = $props();
+  let { isClosing = false, onClose, sessions, workspaces, activeWorkspace, actions, sessionsOnly = false, onOpenSession, onActivateWorkspace }: Props =
+    $props();
 
   let query = $state("");
   let sel = $state(0);
   let listEl: HTMLDivElement | undefined = $state();
-
-  /** Subsequence fuzzy match: every query char must appear in order.
-   * Score = total span of matched positions (lower is better). */
-  function fuzzyScore(qRaw: string, item: PaletteItem): number | null {
-    const q = qRaw.trim().toLowerCase();
-    if (!q) return Number.POSITIVE_INFINITY;
-    const hay = `${item.label} ${item.keywords} ${item.group ?? ""}`.toLowerCase();
-    let hi = 0;
-    let prev = -1;
-    let first = -1;
-    for (const ch of q) {
-      const idx = hay.indexOf(ch, prev + 1);
-      if (idx === -1) return null;
-      if (first === -1) first = idx;
-      if (idx === prev + 1) {
-        if (hi - first > 64) return null;
-      }
-      prev = idx;
-      hi = idx;
-    }
-    return hi - Math.max(0, first - 8);
-  }
+  const settingItems = paletteSettings();
 
   const items = $derived.by(() => {
-    const sessionItems: PaletteItem[] = sessions.slice(0, sessionsOnly ? 40 : 8).map((s) => ({
+    const chats: PaletteItem[] = sessions.slice(0, sessionsOnly ? 40 : 6).map((s) => ({
       label: s.title,
       hint: `${s.projectRoot ? wsBasename(s.projectRoot) : "Chat"}${s.legacy ? " · v1" : ""}`,
-      keywords: `session chat resume ${s.sessionId} ${s.projectRoot}`,
-      group: "Recent Chats",
+      keywords: `chat resume ${s.sessionId} ${s.projectRoot}`,
+      group: "Recent chats",
       icon: MessageSquare,
       run: () => onOpenSession(s.sessionId, s.projectRoot),
     }));
-    if (sessionsOnly) return rank(sessionItems);
-
-    const wsItems: PaletteItem[] = workspaces.map((root) => ({
+    if (sessionsOnly) return rankPalette(chats, query);
+    const projects: PaletteItem[] = workspaces.map((root) => ({
       label: wsBasename(root),
-      hint: root === activeWorkspace ? "Active Workspace" : "Switch Workspace",
-      keywords: `workspace project folder ${root}`,
-      group: "Workspaces",
+      hint: root === activeWorkspace ? "Current project" : "Switch to this project",
+      keywords: `project workspace folder ${root}`,
+      group: "Projects",
       icon: FolderGit2,
       run: () => onActivateWorkspace(root),
     }));
-
-    return rank([...actions, ...wsItems, ...sessionItems]);
+    const [lead, others] = groupsInOrder(actions);
+    const all = [...lead, ...chats, ...others, ...projects, ...(query.trim() ? settingItems : [])];
+    return rankPalette(all, query);
   });
 
-  function rank(list: PaletteItem[]): PaletteItem[] {
-    return list
-      .map((item) => ({ item, score: fuzzyScore(query, item) }))
-      .filter(({ score }) => score !== null)
-      .sort((a, b) => (a.score as number) - (b.score as number))
-      .map(({ item }) => item);
+  /** Actions and places first, then the recent chats, then the rest. */
+  function groupsInOrder(list: PaletteItem[]): [PaletteItem[], PaletteItem[]] {
+    const lead = list.filter((i) => i.group === "Actions" || i.group === "Go to");
+    return [lead, list.filter((i) => !lead.includes(i))];
   }
 
   const selIndex = $derived(Math.min(sel, Math.max(0, items.length - 1)));
-
-  const groups = $derived.by(() => {
-    const out: { name: string | undefined; items: { item: PaletteItem; index: number }[] }[] = [];
-    let i = 0;
-    for (const item of items) {
-      const entry = { item, index: i++ };
-      const g = out.find((x) => x.name === item.group);
-      if (g) g.items.push(entry);
-      else out.push({ name: item.group, items: [entry] });
-    }
-    return out;
-  });
+  const groups = $derived(groupPalette(items));
 
   $effect(() => {
     void selIndex;
-    const activeEl = listEl?.querySelector(".palette-row.is-selected");
-    if (activeEl) activeEl.scrollIntoView({ block: "nearest" });
+    listEl?.querySelector(".palette-row.is-selected")?.scrollIntoView({ block: "nearest" });
   });
 
   function run(i: number) {
     const item = items[i];
-    if (item) {
-      onClose();
-      item.run();
-    }
-  }
-
-  function onQueryInput() {
-    sel = 0;
+    if (!item) return;
+    onClose();
+    item.run();
   }
 
   function onInputKey(e: KeyboardEvent) {
     const n = Math.max(1, items.length);
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      sel = (sel + 1) % n;
+      sel = (selIndex + 1) % n;
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      sel = (sel - 1 + items.length) % n;
+      sel = (selIndex - 1 + n) % n;
     } else if (e.key === "Enter") {
       e.preventDefault();
       run(selIndex);
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      onClose();
     }
   }
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="palette-backdrop{isClosing ? ' is-closing' : ''}" onmousedown={onClose}>
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="palette-spotlight{isClosing ? ' is-closing' : ''}" onmousedown={(e) => e.stopPropagation()}>
-    <div class="palette-header">
-      <div class="palette-search-icon-box">
-        <Icon icon={Search} size={15} strokeWidth={2} />
-      </div>
-      <!-- svelte-ignore a11y_autofocus -->
+<Dialog.Root
+  open={true}
+  onOpenChange={(open) => {
+    if (!open) onClose();
+  }}
+>
+  <DialogPanel label="Command palette" contentClass="palette" closing={isClosing}>
+    <label class="palette-field">
+      <Icon icon={Search} size={16} />
       <input
-        autofocus
-        class="palette-input"
         bind:value={query}
-        oninput={onQueryInput}
+        oninput={() => (sel = 0)}
         onkeydown={onInputKey}
-        placeholder={sessionsOnly ? "Search chats to resume…" : "Type a command or search actions, chats, workspaces…"}
+        placeholder={sessionsOnly ? "Search chats to resume" : "Search actions, chats, projects and settings"}
         spellcheck={false}
+        aria-label="Search"
+        aria-controls="palette-list"
       />
       {#if query}
-        <button
-          type="button"
-          class="palette-clear-btn"
-          title="Clear search"
-          onclick={() => {
-            query = "";
-            sel = 0;
-          }}
-        >
-          <Icon icon={X} size={13} strokeWidth={2} />
+        <button type="button" class="palette-clear" aria-label="Clear the search" onclick={() => ((query = ""), (sel = 0))}>
+          <Icon icon={X} size={13} />
         </button>
-      {:else}
-        <span class="palette-count-chip">{items.length}</span>
       {/if}
-    </div>
+    </label>
 
-    <div class="palette-body" bind:this={listEl}>
+    <div class="palette-list" id="palette-list" role="listbox" bind:this={listEl}>
       {#if items.length === 0}
-        <div class="palette-empty-state">
-          <div class="palette-empty-icon">
-            <Icon icon={Search} size={22} strokeWidth={1.5} />
-          </div>
-          <span class="palette-empty-title">No matching results</span>
-          <span class="palette-empty-sub">
-            Try typing an action name, workspace, or session keyword.
-          </span>
-        </div>
+        <p class="palette-empty">Nothing matches “{query.trim()}”.</p>
       {:else}
-        {#each groups as g (g.name ?? "_general")}
-          <div class="palette-section">
-            {#if g.name}
-              <div class="palette-section-title">{g.name}</div>
-            {/if}
-            {#each g.items as { item, index } (`${item.label}-${index}`)}
-              {@const isSelected = index === selIndex}
+        {#each groups as g (g.name ?? "_")}
+          <section class="palette-group" aria-label={g.name}>
+            {#if g.name}<h3 class="palette-group-title">{g.name}</h3>{/if}
+            {#each g.items as { item, index } (`${item.group}-${item.label}-${index}`)}
               <button
                 type="button"
-                class="palette-row{isSelected ? ' is-selected' : ''}"
+                role="option"
+                aria-selected={index === selIndex}
+                class="palette-row"
+                class:is-selected={index === selIndex}
                 onmouseenter={() => (sel = index)}
                 onclick={() => run(index)}
               >
-                <div class="palette-row-icon-box">
-                  <Icon icon={item.icon ?? Search} size={14} strokeWidth={1.8} />
-                </div>
-                <div class="palette-row-content">
-                  <span class="palette-row-label">{item.label}</span>
-                  {#if item.hint}
-                    <span class="palette-row-hint">{item.hint}</span>
-                  {/if}
-                </div>
-                <div class="palette-row-trailing">
-                  {#if item.shortcut}
-                    <kbd class="palette-shortcut-badge">{item.shortcut}</kbd>
-                  {:else if isSelected}
-                    <kbd class="palette-shortcut-badge">↵</kbd>
-                  {/if}
-                </div>
+                <Icon icon={item.icon ?? Search} size={15} class="palette-row-icon" />
+                <span class="palette-row-label">{item.label}</span>
+                {#if item.hint}<span class="palette-row-hint">{item.hint}</span>{/if}
+                {#if item.shortcut}<Kbd keys={item.shortcut} />{/if}
               </button>
             {/each}
-          </div>
+          </section>
         {/each}
       {/if}
     </div>
 
-    <div class="palette-footer">
-      <div class="palette-footer-shortcuts">
-        <span class="footer-shortcut-item">
-          <kbd>↑↓</kbd> Navigate
-        </span>
-        <span class="footer-shortcut-item">
-          <kbd>↵</kbd> Execute
-        </span>
-        <span class="footer-shortcut-item">
-          <kbd>Esc</kbd> Close
-        </span>
-      </div>
-      <div class="palette-footer-brand">
-        <span class="footer-brand-text">Z Engine Spotlight</span>
-      </div>
-    </div>
-  </div>
-</div>
+    <footer class="palette-foot">
+      <span><Kbd keys="↑" /><Kbd keys="↓" /> move</span>
+      <span><Kbd keys="↵" /> open</span>
+      <span><Kbd keys="Esc" /> close</span>
+    </footer>
+  </DialogPanel>
+</Dialog.Root>

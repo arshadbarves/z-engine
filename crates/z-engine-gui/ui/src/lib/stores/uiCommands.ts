@@ -5,7 +5,6 @@ import {
   catalogs,
   ensureSession,
   exportTranscript,
-  requestContextReport,
   runCommand,
   sessions,
 } from "../runtime";
@@ -54,8 +53,9 @@ export async function runUiCommand(name: string, args: string): Promise<void> {
     case "clear":
       return startNewChat();
     case "context":
-      companion.open = true;
-      return requestContextReport();
+      if (sessions.active?.info) companion.contextOpen = true;
+      else await runCommand("context", args);
+      return;
     default:
       await runCommand(name, args);
   }

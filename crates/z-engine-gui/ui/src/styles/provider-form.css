@@ -1,0 +1,168 @@
+/* Connecting a model provider: the form shared by Settings (in a dialog)
+   and first-run setup. Advanced endpoint options stay folded. */
+
+.provider-dialog {
+  width: min(500px, 94vw);
+  gap: 16px;
+}
+.provider-dialog-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.provider-badge-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-s);
+  background: var(--fill-hover);
+  border: 1px solid var(--separator);
+}
+.provider-dialog-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.provider-dialog-titles p {
+  margin: 0;
+}
+.provider-dialog-title {
+  font-size: var(--text-l);
+  font-weight: var(--weight-semibold);
+}
+.provider-dialog-desc {
+  color: var(--label-3);
+  font-size: var(--text-s);
+  line-height: 1.45;
+}
+
+.provider-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.provider-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.provider-field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.provider-field-label {
+  font-size: var(--text-s);
+  font-weight: var(--weight-semibold);
+  color: var(--label);
+}
+.provider-field-hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  color: var(--label-3);
+}
+.provider-saved-hint {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--green);
+}
+.provider-key-link,
+.provider-model-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--label-3);
+  font: inherit;
+  font-size: var(--text-xs);
+}
+.provider-key-link:hover,
+.provider-model-reset:hover {
+  color: var(--label);
+}
+.provider-key-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.provider-form input:not([type="checkbox"], [type="radio"]) {
+  width: 100%;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--separator-strong);
+  border-radius: var(--r-s);
+  background: var(--field);
+  color: var(--label);
+  font: inherit;
+  outline: none;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.provider-key-input-wrap input:not([type="checkbox"], [type="radio"]) {
+  padding-right: 36px;
+}
+.provider-form input:focus {
+  border-color: var(--separator-hover);
+}
+.provider-eye-btn {
+  position: absolute;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--label-3);
+}
+.provider-eye-btn:hover {
+  color: var(--label);
+}
+.provider-advanced-toggle {
+  gap: 6px;
+  color: var(--label-3);
+  font-size: var(--text-s);
+}
+.provider-advanced-toggle:hover {
+  color: var(--label-2);
+}
+.provider-advanced-url {
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--label-4);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.provider-advanced-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+}
+.provider-form .setting-textarea,
+.provider-form .segmented-choice {
+  width: 100%;
+}
+.provider-form-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+.provider-scope-hint {
+  margin-right: auto;
+  color: var(--label-3);
+  font-size: var(--text-xs);
+}

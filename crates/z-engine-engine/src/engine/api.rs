@@ -230,7 +230,7 @@ impl Engine {
         join_all(handles.iter().map(|handle| handle.close("shutdown"))).await;
     }
 
-    fn handle(&self, id: &SessionId) -> Option<Arc<SessionHandle>> {
+    pub(super) fn handle(&self, id: &SessionId) -> Option<Arc<SessionHandle>> {
         lock(&self.inner.sessions).get(id).cloned()
     }
 

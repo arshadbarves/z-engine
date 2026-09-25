@@ -1,0 +1,131 @@
+/* ── Settings: extension, instruction and style lists ─────────────────── */
+
+/* ── Extension, instruction and style lists ─────────────────────────────── */
+
+.extension-empty {
+  padding: 16px;
+  color: var(--label-3);
+  font-size: 12px;
+}
+
+.extension-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--separator);
+}
+
+.extension-row-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.extension-row-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--label);
+  font-size: 12.5px;
+}
+
+.extension-row-desc {
+  color: var(--label-3);
+  font-size: 11.5px;
+}
+
+.extension-row-path {
+  overflow: hidden;
+  color: var(--label-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extension-scope {
+  padding: 1px 6px;
+  border: 1px solid var(--separator);
+  border-radius: 999px;
+  color: var(--label-3);
+  font-size: 10px;
+  font-weight: 550;
+}
+
+.extension-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.extension-foot {
+  display: flex;
+  padding: 10px 16px;
+}
+
+.extension-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.extension-editor-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.extension-editor-fields {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.extension-editor-text {
+  min-height: 240px;
+}
+
+.memory-editor {
+  margin: 8px 12px;
+}
+
+.style-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.style-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 12px;
+  background: transparent;
+  border: 1px solid var(--separator);
+  border-radius: var(--r-s);
+  color: var(--label-2);
+  font: inherit;
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-out);
+}
+
+.style-option strong {
+  color: var(--label);
+  font-size: 12.5px;
+}
+
+.style-option:hover {
+  background: var(--fill-hover);
+}
+
+.style-option[aria-checked="true"] {
+  background: var(--raised-3);
+  border-color: var(--separator-strong);
+}

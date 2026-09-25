@@ -24,31 +24,32 @@ export function categorizeRow(row: InspectRow): ContextCategory {
   return "conversation";
 }
 
+/** Plain names and the context-map color for each kind of prompt part. */
 export function categoryMeta(cat: ContextCategory): { label: string; desc: string; color: string } {
   switch (cat) {
     case "instructions":
       return {
         label: "Instructions",
-        desc: "Core operating rules and behavioral guidelines given to the assistant.",
-        color: "#38bdf8",
+        desc: "The system prompt: how the agent works and the rules it follows.",
+        color: "var(--layer-system)",
       };
     case "project":
       return {
-        label: "Project Knowledge",
-        desc: "Workspace structure, repository map, and custom AGENTS.md rules.",
-        color: "#00d68f",
+        label: "Project",
+        desc: "What the agent knows about this project: AGENTS.md, the repository map and saved notes.",
+        color: "var(--layer-instructions)",
       };
     case "conversation":
       return {
         label: "Conversation",
-        desc: "Recent messages and tool results exchanged in this session.",
-        color: "#a78bfa",
+        desc: "This chat's messages and tool results so far.",
+        color: "var(--layer-messages)",
       };
     case "capabilities":
       return {
-        label: "Capabilities",
-        desc: "Tools the assistant is authorized to execute (files, terminal, search).",
-        color: "#f5a623",
+        label: "Tools",
+        desc: "The tools the agent may call, with the input each one accepts.",
+        color: "var(--layer-tools)",
       };
   }
 }
@@ -94,8 +95,4 @@ export function inspectCopyText(snap: PromptInspect): string {
     }
   }
   return chunks.join("\n");
-}
-
-export function pct(n: number): string {
-  return `${Math.round(n * 100)}%`;
 }

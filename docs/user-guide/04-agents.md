@@ -51,22 +51,37 @@ also ask in plain words ("use a review agent to check my changes").
 
 ## Watching agents
 
-Every subagent appears as an **Agent** card in the transcript with its
-type, task, status, model, tokens, cost and duration. Click **Open
-transcript** to follow it.
+Every subagent appears in the transcript as a one-line **Agent** card with
+its type, task, status and time. **Open** shows its transcript; click the
+line for its model, tokens, cost, tool calls and result.
 
-While subagents or background jobs run, a pill such as **2 agents** appears
-next to the status line at the top of the window, and small dots orbit the
-companion. The pill counts running agents, running background jobs, and
-worktree changes waiting for you; click it to open the agents and jobs
-panel. The command palette (⌘K / Ctrl+K) opens it too.
+While subagents or background jobs run, small dots orbit the companion in
+the title bar. Click the island to see what runs (for example "2 agents
+working · 1 job running · 1 ready to apply") and **Open** the agents panel.
+`/agents`, `/jobs` and the command palette's **Agents** and **Background
+jobs** open it too.
 
-- **Agents** tab: every subagent of this chat as a tree (nested agents are
-  indented), with status, model, tokens, cost, tool calls and time. Click a
-  row to read its transcript and todo list. A **Usage by agent** table
-  shows input tokens, output tokens and cost per agent.
-- **Jobs** tab: background shells and background agents, with their output
-  and a **Kill** button while they run.
+The panel has two tabs, **Agents** and **Jobs**, each with a count and a
+green dot while something runs. Esc closes it, or goes back from a
+transcript.
+
+- **Agents** tab, top to bottom:
+  - **Ready to apply**: worktree agents whose changes wait for you
+    ([below](#apply-or-discard)).
+  - **Working**: running subagents (nested ones indented) with status,
+    type, task and elapsed time, plus a live line saying what each is doing
+    now, such as "Searching for set_path". The arrow opens its transcript
+    and todo list; click the row for model, tokens, cost and tool calls.
+  - **Finished**, folded: the same rows; click one for its result or
+    error.
+  - **Usage by agent**, folded: input tokens, output tokens and cost for
+    the main agent and each subagent.
+
+  Before the first subagent it says **No helpers yet**.
+- **Jobs** tab: background shells and background agents. A running job
+  shows its last six lines of output and a **Stop** button; a finished
+  job's output folds under **Output**. **Transcript** opens a background
+  agent's transcript.
 
 Approval cards from a subagent show up in the main transcript, labelled
 with the agent's type and task.
@@ -75,7 +90,7 @@ with the agent's type and task.
 
 The main agent can start a subagent in the background: it continues its own
 work and is notified when the subagent finishes. Background agents appear
-in the **Jobs** tab; **Kill** stops one, **Transcript** opens it.
+in the **Jobs** tab; **Stop** stops one, **Transcript** opens it.
 
 The agent can also *resume* a finished subagent, continuing it with its
 full earlier context instead of starting over. Each report ends with the
@@ -104,14 +119,15 @@ Use it by asking for it ("do this in an isolated worktree") or by setting
 
 ### Apply or discard
 
-In the **Agents** panel, a finished worktree agent shows its branch, file
-count and diffstat with two buttons:
+A finished worktree agent is pinned at the top of the **Agents** tab under
+**Ready to apply**, as a card with its type and task, branch, file count
+and diffstat, and two buttons:
 
 - **Apply** merges the agent's changes into your working folder with a
   three-way merge, so your own uncommitted changes are kept. If the changes
-  conflict, *nothing* is changed, the row says so (state `conflicted`), and
-  the worktree is kept; you can resolve the conflicting files and try
-  again, or discard.
+  conflict, *nothing* is changed, the card says "Applying hit a conflict,
+  so your files were left as they were.", and the worktree is kept; you can
+  resolve the conflicting files and try again, or discard.
 - **Discard** deletes the worktree and its branch.
 
 A worktree agent that changed nothing is cleaned up automatically. The main
@@ -120,10 +136,12 @@ which asks for your approval like any other edit. In a folder that isn't a
 git repository, the agent runs in the shared project folder and a notice
 tells you why.
 
-> **Note:** The command palette's **New task in git worktree…** is
-> different: it creates a worktree (`.z-engine/worktrees/<name>`, branch
-> `zengine/<name>`), adds it as its own workspace, and starts a new chat in
-> it.
+> **Note:** **New chat in a worktree…** (in the command palette, or
+> right-click a project in the sidebar) is different. A dialog asks **What
+> is it for?** (and which project, when you have several); a short name
+> such as `fix auth redirect` becomes the branch `zengine/fix-auth-redirect`
+> in `.z-engine/worktrees/fix-auth-redirect`. **Create and start** adds that
+> folder as its own project and starts a new chat in it.
 
 ## Custom agents
 

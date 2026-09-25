@@ -49,6 +49,8 @@
   --blue: #0a84ff;
   --blue-soft: rgba(10, 132, 255, 0.14);
   --blue-ring: rgba(10, 132, 255, 0.32);
+  --link: #9ecbff;
+  --link-underline: rgba(158, 203, 255, 0.35);
 
   /* materials: glass floats above content, the sheet holds it */
   --glass: rgba(30, 30, 34, 0.62);
@@ -108,6 +110,49 @@
 
   --titlebar-h: 44px;
   --shell-gap: 6px;
+  --sidebar-w: 264px;
+  --panel-w: 440px;
+
+  /* the title-bar island and its satellites */
+  --island-bg: rgba(0, 0, 0, 0.4);
+  --island-bg-hover: rgba(0, 0, 0, 0.55);
+  --island-edge: rgba(255, 255, 255, 0.08);
+  --island-h: 30px;
+  --island-min: 132px;
+  --island-max: 560px;
+  --island-open-w: 440px;
+  --island-open-radius: 20px;
+
+  /* the floating composer */
+  --composer-radius: 18px;
+  --composer-shadow: 0 10px 32px rgba(0, 0, 0, 0.34), 0 1px 3px rgba(0, 0, 0, 0.3);
+
+  /* diffs: added, removed, hunk headers */
+  --diff-add: rgba(48, 209, 88, 0.09);
+  --diff-add-mark: rgba(48, 209, 88, 0.32);
+  --diff-add-text: #7ee2a0;
+  --diff-del: rgba(255, 69, 58, 0.09);
+  --diff-del-mark: rgba(255, 69, 58, 0.32);
+  --diff-del-text: #ff9d95;
+  --diff-hunk: rgba(10, 132, 255, 0.07);
+
+  /* syntax colours: quiet accents on the dark sheet */
+  --code-bg: #121214;
+  --code-text: #d8d8de;
+  --syn-keyword: #c792ea;
+  --syn-type: #ffcb6b;
+  --syn-string: #c3e88d;
+  --syn-number: #f78c6c;
+  --syn-comment: #6a6a72;
+  --syn-function: #82aaff;
+  --syn-variable: #f07178;
+  --syn-meta: #89ddff;
+
+  /* context layers, one hue each (legend, bars and the prompt inspector) */
+  --layer-system: #8b8b96;
+  --layer-tools: #a78bfa;
+  --layer-instructions: #7c85e0;
+  --layer-messages: #f0a090;
 }
 
 /* Nothing to see through (Linux) or Reduce Transparency: every material turns solid. */
@@ -116,6 +161,8 @@ html.solid-surfaces {
   --glass-strong: #0b0b0d;
   --glass-chrome: var(--canvas);
   --glass-filter: none;
+  --island-bg: #030304;
+  --island-bg-hover: #141417;
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -124,36 +171,13 @@ html.solid-surfaces {
     --glass-strong: #0b0b0d;
     --glass-chrome: var(--canvas);
     --glass-filter: none;
+    --island-bg: #030304;
+    --island-bg-hover: #141417;
   }
 }
 
-/* Legacy names: kept only until every area uses the tokens above. */
+/* Status tones: what a color means (live work, needs you, failed, your shell). */
 :root {
-  --bg: var(--sheet);
-  --bg-sidebar: var(--raised);
-  --bg-elev: var(--raised-2);
-  --surface: var(--raised);
-  --surface-2: var(--raised-2);
-  --surface-3: var(--raised-3);
-  --surface-raised: var(--raised-2);
-  --surface-input: var(--field);
-  --surface-quiet: var(--fill-quiet);
-  --border: var(--separator);
-  --border-strong: var(--separator-strong);
-  --border-hover: var(--separator-hover);
-  --text: var(--label);
-  --text-2: var(--label-2);
-  --text-3: var(--label-3);
-  --hover-quiet: var(--fill-hover);
-  --hover-strong: var(--fill-press);
-  --shimmer-sheen: var(--shimmer);
-  --accent-dim: var(--fill-press);
-  --accent-ring: var(--focus-ring);
-  --accent-active: var(--accent-press);
-  --accent-blue: var(--blue);
-  --ok: var(--green);
-  --warn: var(--amber);
-  --err: var(--red);
   --tone-working: var(--green);
   --tone-working-soft: var(--green-soft);
   --tone-working-ring: var(--green-ring);
@@ -168,15 +192,4 @@ html.solid-surfaces {
   --tone-shell: var(--blue);
   --tone-shell-soft: var(--blue-soft);
   --tone-shell-ring: var(--blue-ring);
-  --sans: var(--font-sans);
-  --mono: var(--font-mono);
-  --radius-s: var(--r-s);
-  --radius-m: var(--r-m);
-  --radius-l: var(--r-l);
-  --radius-pill: var(--r-s);
-  --shadow-pop: var(--elev-2), 0 0 0 1px var(--separator);
-  --shadow-floating: var(--elev-3), 0 0 0 1px var(--separator);
-  --shadow-island: var(--elev-2);
-  --shadow-input: var(--elev-2);
-  --shadow-input-focus: var(--elev-3);
 }

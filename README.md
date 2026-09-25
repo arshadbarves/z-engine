@@ -222,6 +222,10 @@ app log is `z-engine-gui.log` in the same data directory.
 
 ## Documentation
 
+Read it on the documentation website,
+[arshadbarves.github.io/z-engine](https://arshadbarves.github.io/z-engine/),
+or here in the repository:
+
 - [User guide](docs/user-guide/README.md): everything about using the app,
   from getting started to the full settings reference.
 - [How Z Engine works](docs/how-it-works/README.md): each feature and crate
@@ -234,5 +238,4 @@ app log is `z-engine-gui.log` in the same data directory.
 file budget, and the [documentation contract](docs/AGENTS.md)). Read next:
 [v2 engine](docs/architecture/v2-engine.md),
 [GUI UI guide](docs/design/gui-ui-guide.md), and the
-[style guide](docs/engineering/style-guide.md). Documents marked
-"Historical (v1)" describe the previous implementation.
+[style guide](docs/engineering/style-guide.md).

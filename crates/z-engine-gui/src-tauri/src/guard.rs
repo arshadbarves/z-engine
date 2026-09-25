@@ -1,7 +1,8 @@
 //! Defence in depth for commands that take file paths from the webview:
 //! extension and instruction files may only be read, written or deleted
-//! in the folders the engine discovers them in, and never through `..` or
-//! a symlink that leads elsewhere.
+//! in the folders the engine discovers them in, files are only opened or
+//! revealed inside a project, and never through `..` or a symlink that
+//! leads elsewhere.
 
 use std::path::{Component, Path, PathBuf};
 
@@ -124,6 +125,23 @@ pub(crate) fn instruction_file(
         Ok(path)
     } else {
         Err(format!("{} is not an instruction file", path.display()))
+    }
+}
+
+/// `path` as an existing file or folder inside one of `roots`, once
+/// symlinks resolve.
+pub(crate) fn project_path(path: &str, roots: &[PathBuf]) -> IpcResult<PathBuf> {
+    let path = plain_absolute(path)?;
+    let real =
+        std::fs::canonicalize(&path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let inside = roots.iter().any(|root| {
+        let root = std::fs::canonicalize(root).unwrap_or_else(|_| root.clone());
+        real.starts_with(root)
+    });
+    if inside {
+        Ok(real)
+    } else {
+        Err(format!("{} is not inside a project", path.display()))
     }
 }
 
@@ -262,5 +280,31 @@ mod tests {
         assert!(instruction_file(&nested, &dirs, &[]).is_err());
         assert!(instruction_file(&nested, &dirs, std::slice::from_ref(&nested)).is_ok());
         assert!(instruction_file("/etc/AGENTS.md", &dirs, &[]).is_err());
+    }
+
+    #[test]
+    fn opened_paths_must_exist_inside_a_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("project");
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src/a.rs"), "").unwrap();
+        std::fs::write(dir.path().join("secret.txt"), "").unwrap();
+        let roots = vec![root.clone()];
+        let path = |p: PathBuf| p.to_string_lossy().into_owned();
+        assert!(project_path(&path(root.join("src/a.rs")), &roots).is_ok());
+        assert!(project_path(&path(root.clone()), &roots).is_ok());
+        for bad in [
+            root.join("src/missing.rs"),
+            root.join("src/../../secret.txt"),
+            dir.path().join("secret.txt"),
+        ] {
+            assert!(project_path(&path(bad.clone()), &roots).is_err(), "{bad:?}");
+        }
+        assert!(project_path("src/a.rs", &roots).is_err());
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(dir.path().join("secret.txt"), root.join("link")).unwrap();
+            assert!(project_path(&path(root.join("link")), &roots).is_err());
+        }
     }
 }

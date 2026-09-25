@@ -1,12 +1,15 @@
-//! Git-scope review panel and the worktree panel: working-tree changes
-//! versus `HEAD` with line counts, one file's diff, and a linked worktree
-//! for a new chat. Paths are relative to the repository root.
+//! Git-scope review panel, the sidebar's project summary and the worktree
+//! panel: working-tree changes versus `HEAD` with line counts, one file's
+//! diff, the branch with a changed-file count, and a linked worktree for a
+//! new chat. Paths are relative to the repository root.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use z_engine_host::{create_worktree, diff_head_file, git, repo_root, status_porcelain};
+use z_engine_host::{
+    create_worktree, current_branch, diff_head_file, git, repo_root, status_porcelain,
+};
 
 use crate::engine::Engine;
 use crate::error::EngineError;
@@ -25,7 +28,37 @@ pub struct GitChangedFile {
     pub deleted: u32,
 }
 
+/// What the sidebar shows beside a project's name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RepoSummary {
+    /// Top-level directory: git-scope paths are relative to it.
+    pub root: String,
+    /// `None` on a detached HEAD.
+    pub branch: Option<String>,
+    /// Changed, staged and untracked files.
+    pub changed: u32,
+}
+
 impl Engine {
+    /// Branch and changed-file count of the repository containing
+    /// `project_root`; `None` when it is not inside a git repository.
+    pub async fn git_summary(
+        &self,
+        project_root: &Path,
+    ) -> Result<Option<RepoSummary>, EngineError> {
+        let Some(repo) = repo_root(project_root).await else {
+            return Ok(None);
+        };
+        let branch = current_branch(&repo).await?;
+        let changed = u32::try_from(status_porcelain(&repo).await?.len()).unwrap_or(u32::MAX);
+        Ok(Some(RepoSummary {
+            root: repo.to_string_lossy().into_owned(),
+            branch,
+            changed,
+        }))
+    }
+
     /// Changed, staged and untracked files of the repository containing
     /// `project_root`.
     pub async fn git_changed_files(
@@ -202,5 +235,37 @@ mod tests {
         let outside = dir.path().join("plain");
         std::fs::create_dir(&outside).unwrap();
         assert!(engine.git_changed_files(&outside).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn summary_names_the_branch_and_counts_changed_files() {
+        if !git_available() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let engine = engine(dir.path());
+        let root = dir.path().join("repo");
+        std::fs::create_dir(&root).unwrap();
+        git(&root, &["init", "--quiet"]);
+        git(&root, &["checkout", "--quiet", "-b", "feature"]);
+        std::fs::write(root.join("a.txt"), "one\n").unwrap();
+        git(&root, &["add", "-A"]);
+        git(&root, &["commit", "--quiet", "-m", "init"]);
+        let clean = engine.git_summary(&root).await.unwrap().unwrap();
+        assert_eq!(clean.branch.as_deref(), Some("feature"));
+        assert_eq!(clean.changed, 0);
+        assert_eq!(
+            std::fs::canonicalize(&clean.root).unwrap(),
+            std::fs::canonicalize(&root).unwrap()
+        );
+
+        std::fs::write(root.join("a.txt"), "two\n").unwrap();
+        std::fs::write(root.join("b.txt"), "new\n").unwrap();
+        let dirty = engine.git_summary(&root.join("a.txt")).await.unwrap();
+        assert_eq!(dirty.map(|s| s.changed), Some(2));
+
+        let plain = dir.path().join("plain");
+        std::fs::create_dir(&plain).unwrap();
+        assert_eq!(engine.git_summary(&plain).await.unwrap(), None);
     }
 }

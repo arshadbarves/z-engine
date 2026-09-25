@@ -208,9 +208,9 @@ last edit.
    bring the files back later.
 2. **Round 1: see the failure.** The model calls `Verify` to run the
    project's test check, for example `npm test`. In **Ask** mode a test
-   command is not read-only, so an approval card appears. You click
-   **Allow for session**, which adds a rule such as `Bash(npm test:*)` for
-   the rest of the chat. The check fails; the engine records the exit code, the
+   command is not read-only, so an approval card appears. You choose
+   **Always allow…** then **In this chat**, which adds a rule such as
+   `Bash(npm test:*)` for the rest of the chat. The check fails; the engine records the exit code, the
    failed test count and the full output.
 3. **Round 2: investigate.** The model calls `Grep` for the test name and
    `Read` on two files. Reading inside the project doesn't ask, and these
@@ -248,7 +248,7 @@ stale and the badge would say so.
 - `Edit` ([builtin/edit.rs](../../crates/z-engine-tools/src/builtin/edit.rs))
   checks read-before-edit with the file tracker
   ([fs/tracker.rs](../../crates/z-engine-host/src/fs/tracker.rs)).
-- **Allow for session** arrives as `resolveApproval` with
+- **Always allow…** › **In this chat** arrives as `resolveApproval` with
   `ApprovalDecision::AllowSession { rule }`
   ([permission.rs](../../crates/z-engine-protocol/src/permission.rs)); the
   rule joins the session policy for the rest of the chat.
@@ -290,7 +290,8 @@ stale and the badge would say so.
 | [Interaction features](features-interaction.md) | Steering, interrupt and cancel; plan mode, questions and todos; hooks; slash commands, custom commands and skills |
 | [Agents and context](features-agents-and-context.md) | Subagents and background agents; what the model sees and how instruction files, memory, compaction and caching shape it |
 | [Integrations and safety](features-integrations-and-safety.md) | MCP and language servers, verification, checkpoints and rewind, sessions, providers, models and cost, settings layers and workspace trust, the sandbox |
-| [The desktop app](features-desktop-app.md) | The screens and controls of the app and how they follow the engine |
+| [The desktop app](features-desktop-app.md) | How the window follows the engine: events, many chats at once, self-updates |
+| [The desktop app's screens](features-desktop-screens.md) | Each screen and panel: home, Inbox, transcript, island, agents, Changes, prompt inspector, settings, composer and palette |
 | [Crates](crates.md) | What each crate does, its main modules, and how the crates depend on each other |
 | [Glossary](glossary.md) | Short definitions of every term used on these pages |
 

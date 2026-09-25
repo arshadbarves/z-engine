@@ -19,71 +19,111 @@
     id: SettingsTab;
     label: string;
     hint: string;
-    tone: string;
     icon: IconSvgElement;
     /** Edits layered settings, so the page shows which file it writes. */
     scoped: boolean;
   }
 
   export const SETTINGS_TABS: readonly TabMeta[] = [
-    { id: "models", label: "Models", hint: "Main, fast & review models", tone: "settings-tone-working", icon: Brain, scoped: true },
-    { id: "providers", label: "Providers", hint: "Model APIs & keys", tone: "settings-tone-shell", icon: Sparkles, scoped: true },
-    { id: "permissions", label: "Permissions", hint: "Mode, rules & folders", tone: "settings-tone-shell", icon: Shield, scoped: true },
-    { id: "hooks", label: "Hooks", hint: "Commands on agent events", tone: "settings-tone-attention", icon: Workflow, scoped: true },
-    { id: "extensions", label: "Agents & Commands", hint: "Agents, commands, skills, rules", tone: "settings-tone-working", icon: Bot, scoped: false },
-    { id: "mcp", label: "MCP", hint: "External tool servers", tone: "settings-tone-attention", icon: Server, scoped: true },
-    { id: "verification", label: "Verification", hint: "Checks & continuations", tone: "settings-tone-working", icon: ListChecks, scoped: true },
-    { id: "memory", label: "Memory", hint: "AGENTS.md instructions", tone: "settings-tone-accent", icon: Book, scoped: false },
-    { id: "advanced", label: "Advanced", hint: "Context, limits, web, shell, LSP", tone: "settings-tone-accent", icon: Sliders, scoped: true },
-    { id: "appearance", label: "Appearance", hint: "Report detail & response style", tone: "settings-tone-accent", icon: Eye, scoped: true },
-    { id: "about", label: "About & Updates", hint: "Version, updates & files", tone: "settings-tone-attention", icon: Info, scoped: false },
+    { id: "models", label: "Models", hint: "Which models answer, and how hard they think.", icon: Brain, scoped: true },
+    { id: "providers", label: "Providers", hint: "The model services you use and their API keys.", icon: Sparkles, scoped: true },
+    { id: "appearance", label: "Appearance", hint: "The companion, how much detail turns show, and the response style.", icon: Eye, scoped: true },
+    { id: "permissions", label: "Permissions", hint: "What the agent may do without asking.", icon: Shield, scoped: true },
+    { id: "memory", label: "Memory", hint: "AGENTS.md and the other instructions every prompt includes.", icon: Book, scoped: false },
+    { id: "verification", label: "Verification", hint: "The checks that show a change works.", icon: ListChecks, scoped: true },
+    { id: "extensions", label: "Agents & Commands", hint: "Custom agents, commands, skills and rules.", icon: Bot, scoped: false },
+    { id: "mcp", label: "MCP", hint: "External tool servers the agent can use.", icon: Server, scoped: true },
+    { id: "hooks", label: "Hooks", hint: "Your own commands, run on agent events.", icon: Workflow, scoped: true },
+    { id: "advanced", label: "Advanced", hint: "Context, limits, web, shell and language servers.", icon: Sliders, scoped: true },
+    { id: "about", label: "About & Updates", hint: "Version, updates and where files live.", icon: Info, scoped: false },
   ];
 </script>
 
 <script lang="ts">
-  import Icon, { Search } from "$lib/ui/icons";
+  import { searchSettings, SETTINGS_SECTIONS, type SettingEntry } from "$lib/domain/settings/searchIndex";
+  import Icon, { Search, X } from "$lib/ui/icons";
 
-  type Props = { tab: SettingsTab; version: string | null; updateAvailable: boolean; onSelect: (tab: SettingsTab) => void };
-  let { tab, version, updateAvailable, onSelect }: Props = $props();
+  /** Pages grouped by what they are about; searching finds single settings. */
+  type Props = {
+    tab: SettingsTab;
+    version: string | null;
+    updateAvailable: boolean;
+    onSelect: (tab: SettingsTab) => void;
+    onJump: (entry: SettingEntry) => void;
+  };
+  let { tab, version, updateAvailable, onSelect, onJump }: Props = $props();
 
-  let search = $state("");
-  const filtered = $derived.by(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return SETTINGS_TABS;
-    return SETTINGS_TABS.filter((t) => t.label.toLowerCase().includes(q) || t.hint.toLowerCase().includes(q));
-  });
+  let query = $state("");
+  let highlighted = $state(0);
+  const results = $derived(searchSettings(query));
+  const byId = new Map(SETTINGS_TABS.map((t) => [t.id, t]));
+
+  function jump(entry: SettingEntry) {
+    query = "";
+    onJump(entry);
+  }
+
+  function onKey(e: KeyboardEvent) {
+    if (!results.length) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      highlighted = (highlighted + step + results.length) % results.length;
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const entry = results[highlighted];
+      if (entry) jump(entry);
+    }
+  }
 </script>
 
-<aside class="sidebar settings-nav-island" aria-label="Settings navigation">
-  <div class="prefs-search-wrap">
-    <Icon icon={Search} size={13} class="prefs-search-icon" />
-    <input type="text" bind:value={search} placeholder="Search settings…" spellcheck={false} />
-    {#if search}
-      <button type="button" class="prefs-search-clear" onclick={() => (search = "")} aria-label="Clear search">✕</button>
-    {/if}
-  </div>
-
-  <nav class="settings-nav">
-    {#each filtered as t (t.id)}
-      <button
-        type="button"
-        class={`settings-nav-btn${tab === t.id ? " active" : ""}`}
-        aria-current={tab === t.id ? "page" : undefined}
-        onclick={() => onSelect(t.id)}
-      >
-        <span class={`settings-nav-icon ${t.tone}`}><Icon icon={t.icon} size={15} /></span>
-        <span class="settings-nav-copy">
-          <em>{t.label}</em>
-          <small>{t.hint}</small>
-        </span>
-        {#if t.id === "about" && updateAvailable}
-          <span class="update-dot" role="status" aria-label="Update available"></span>
-        {/if}
+<aside class="settings-nav" aria-label="Settings pages">
+  <label class="settings-search">
+    <Icon icon={Search} size={13} />
+    <input
+      type="text"
+      bind:value={query}
+      oninput={() => (highlighted = 0)}
+      onkeydown={onKey}
+      placeholder="Search settings"
+      spellcheck={false}
+      aria-label="Search settings"
+    />
+    {#if query}
+      <button type="button" class="settings-search-clear" aria-label="Clear the search" onclick={() => (query = "")}>
+        <Icon icon={X} size={11} />
       </button>
-    {/each}
+    {/if}
+  </label>
+
+  <nav class="settings-nav-list">
+    {#if query.trim()}
+      {#each results as entry, i (entry.key)}
+        <button type="button" class="settings-result" class:is-active={i === highlighted} onclick={() => jump(entry)}>
+          <span class="settings-result-title">{entry.title}</span>
+          <span class="settings-result-tab">{byId.get(entry.tab)?.label}</span>
+        </button>
+      {:else}
+        <p class="settings-results-empty">No setting matches “{query.trim()}”.</p>
+      {/each}
+    {:else}
+      {#each SETTINGS_SECTIONS as section (section.label)}
+        <section class="settings-nav-section">
+          <h3>{section.label}</h3>
+          {#each section.tabs as id (id)}
+            {@const t = byId.get(id)}
+            {#if t}
+              <button type="button" class="settings-nav-item" aria-current={tab === id ? "page" : undefined} onclick={() => onSelect(id)}>
+                <Icon icon={t.icon} size={15} />
+                <span>{t.label}</span>
+                {#if id === "about" && updateAvailable}<span class="update-dot" role="status" aria-label="Update available"></span>{/if}
+              </button>
+            {/if}
+          {/each}
+        </section>
+      {/each}
+    {/if}
   </nav>
 
-  <div class="settings-rail-foot">
-    <span>{version ? `v${version}` : "Z Engine"}</span>
-  </div>
+  <p class="settings-nav-foot">{version ? `Z Engine ${version}` : "Z Engine"}</p>
 </aside>

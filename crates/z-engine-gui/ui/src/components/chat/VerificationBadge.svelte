@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { plural } from "$lib/domain/format";
   import { verificationBadge } from "$lib/domain/verification";
   import type { CheckRecord } from "$lib/protocol/CheckRecord";
@@ -6,13 +7,13 @@
   import Icon, { AlertOctagon, AlertTriangle, CheckCircle2, Info } from "$lib/ui/icons";
   import CheckEvidence from "./CheckEvidence.svelte";
 
-  type Props = { outcome: VerificationOutcome; evidence: CheckRecord[] };
-  let { outcome, evidence }: Props = $props();
+  type Props = { outcome: VerificationOutcome; evidence: CheckRecord[]; startOpen?: boolean };
+  let { outcome, evidence, startOpen = false }: Props = $props();
 
   const ICONS = { ok: CheckCircle2, warn: AlertTriangle, err: AlertOctagon, neutral: Info } as const;
   const badge = $derived(verificationBadge(outcome));
   const hasDetail = $derived(evidence.length > 0 || Boolean(badge.reason));
-  let open = $state(false);
+  let open = $state(untrack(() => startOpen));
 </script>
 
 <div class="verify-wrap">

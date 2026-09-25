@@ -1,13 +1,20 @@
 <script lang="ts">
   import { tick } from "svelte";
+  import { approvalQuestion, PREVIEW_LINES, previewLines } from "$lib/domain/approvals";
   import { compactJson } from "$lib/domain/tools/toolInput";
   import { toolSubject } from "$lib/domain/tools/toolMeta";
   import type { ApprovalDecision } from "$lib/protocol/ApprovalDecision";
   import type { ApprovalRequest } from "$lib/protocol/ApprovalRequest";
   import { resolveApproval } from "$lib/runtime";
-  import Icon, { ShieldAlert } from "$lib/ui/icons";
-  import DiffView from "../overlays/DiffView.svelte";
+  import { Kbd, Menu } from "$lib/ui";
+  import Icon, { ChevronDown, ShieldAlert } from "$lib/ui/icons";
+  import DiffRows from "../overlays/DiffRows.svelte";
 
+  /**
+   * An approval as a question with the few words that decide it: a short
+   * preview (unfold for all of it), Allow once, "Always allow…" for rules,
+   * and Deny with optional feedback. y / s / p / n answer while it has focus.
+   */
   type Props = { request: ApprovalRequest; agentLabel: string | null; autoFocus?: boolean };
   let { request, agentLabel, autoFocus = false }: Props = $props();
 
@@ -16,19 +23,21 @@
   let denying = $state(false);
   let feedback = $state("");
   let sending = $state(false);
+  let expanded = $state(false);
 
   const preview = $derived(request.preview);
   const rule = $derived(request.suggestedRule);
   const canProject = $derived(request.canPersist && Boolean(rule));
   const fallback = $derived(toolSubject(request.tool, request.input) || compactJson(request.input, 400));
+  const previewText = $derived(
+    preview?.type === "diff" ? preview.diff : preview?.type === "command" ? preview.command : preview?.type === "text" ? preview.text : fallback,
+  );
+  const long = $derived(previewLines(previewText) > PREVIEW_LINES);
 
   $effect(() => {
     if (!autoFocus || !root) return;
     const active = document.activeElement;
-    const idle =
-      !active ||
-      active === document.body ||
-      (active instanceof HTMLTextAreaElement && active.value.trim() === "");
+    const idle = !active || active === document.body || (active instanceof HTMLTextAreaElement && active.value.trim() === "");
     if (idle) root.focus({ preventScroll: true });
   });
 
@@ -45,8 +54,7 @@
   }
 
   function deny() {
-    const text = feedback.trim();
-    void decide({ type: "deny", feedback: text || null });
+    void decide({ type: "deny", feedback: feedback.trim() || null });
   }
 
   function onKey(e: KeyboardEvent) {
@@ -64,31 +72,41 @@
 <!-- The card takes focus so y/s/p/n answer it without a pointer. -->
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div
-  class="msg approval"
+  class="msg approval-card"
   role="group"
-  aria-label={`Approval needed: ${request.title}`}
+  aria-label={approvalQuestion(request)}
   tabindex="0"
+  data-pending-card
   bind:this={root}
   onkeydown={onKey}
 >
-  <div class="approval-kicker">
-    <Icon icon={ShieldAlert} size={13} class="approval-kicker-icon" />
-    <span>Needs approval</span>
-    <span class="approval-tool-tag">{request.tool}</span>
-    {#if agentLabel}<span class="interaction-agent">{agentLabel}</span>{/if}
-  </div>
-  <div class="approval-title">{request.title}</div>
-  {#if request.reason}<p class="approval-reason">{request.reason}</p>{/if}
+  <header class="approval-head">
+    <span class="approval-icon" aria-hidden="true"><Icon icon={ShieldAlert} size={15} /></span>
+    <div class="approval-titles">
+      <p class="approval-question">{approvalQuestion(request)}</p>
+      {#if request.reason || agentLabel}
+        <p class="approval-why">
+          {#if agentLabel}<span class="interaction-agent">{agentLabel}</span>{/if}
+          {#if request.reason}<span>{request.reason}</span>{/if}
+        </p>
+      {/if}
+    </div>
+  </header>
 
-  {#if preview?.type === "diff"}
-    <DiffView text={preview.diff} filePath={preview.path} />
-  {:else if preview?.type === "command"}
-    <pre class="approval-cmd"><code>{preview.command}</code></pre>
-    {#if preview.description}<p class="approval-reason">{preview.description}</p>{/if}
-  {:else if preview?.type === "text"}
-    <pre class="approval-body">{preview.text}</pre>
-  {:else if fallback}
-    <pre class="approval-cmd"><code>{fallback}</code></pre>
+  {#if previewText}
+    <div class="approval-preview" class:is-folded={long && !expanded}>
+      {#if preview?.type === "diff"}
+        <DiffRows text={preview.diff} path={preview.path} maxRows={120} />
+      {:else}
+        <pre class="approval-code"><code>{previewText}</code></pre>
+      {/if}
+    </div>
+    {#if preview?.type === "command" && preview.description}<p class="approval-note">{preview.description}</p>{/if}
+    {#if long}
+      <button type="button" class="approval-more" onclick={() => (expanded = !expanded)}>
+        {expanded ? "Show less" : `Show all ${previewLines(previewText)} lines`}
+      </button>
+    {/if}
   {/if}
 
   {#if denying}
@@ -105,33 +123,43 @@
           }
         }}
       />
-      <button type="button" class="deny" disabled={sending} onclick={deny}>Deny</button>
+      <button type="button" class="btn-danger" disabled={sending} onclick={deny}>Deny</button>
+      <button type="button" class="btn-ghost" onclick={() => (denying = false)}>Cancel</button>
+    </div>
+  {:else}
+    <div class="approval-actions">
+      <button type="button" class="btn-accent" disabled={sending} onclick={() => void decide({ type: "allowOnce" })}>
+        Allow once
+      </button>
+      {#if rule}
+        <Menu.Root>
+          <Menu.Trigger class="btn-secondary" disabled={sending}>
+            <span>Always allow…</span>
+            <Icon icon={ChevronDown} size={11} />
+          </Menu.Trigger>
+          <Menu.Portal>
+            <Menu.Content class="menu" side="bottom" align="start" sideOffset={6}>
+              <Menu.Item class="menu-item is-stacked" onSelect={() => void decide({ type: "allowSession", rule })}>
+                <span class="menu-item-label">In this chat</span>
+                <span class="menu-item-sub">Rule {rule}</span>
+              </Menu.Item>
+              {#if canProject}
+                <Menu.Item class="menu-item is-stacked" onSelect={() => void decide({ type: "allowProject", rule })}>
+                  <span class="menu-item-label">In this project</span>
+                  <span class="menu-item-sub">Saved to .z-engine/settings.local.toml</span>
+                </Menu.Item>
+              {/if}
+            </Menu.Content>
+          </Menu.Portal>
+        </Menu.Root>
+      {/if}
+      <button type="button" class="btn-ghost approval-deny" disabled={sending} onclick={() => void startDeny()}>Deny…</button>
+      <span class="approval-keys" aria-hidden="true">
+        <Kbd keys="y" /> once
+        {#if rule}<Kbd keys="s" /> chat{/if}
+        {#if canProject}<Kbd keys="p" /> project{/if}
+        <Kbd keys="n" /> deny
+      </span>
     </div>
   {/if}
-
-  <div class="approval-actions">
-    <button class="primary" type="button" disabled={sending} onclick={() => void decide({ type: "allowOnce" })}>
-      Allow once
-    </button>
-    {#if rule}
-      <button type="button" disabled={sending} title={rule} onclick={() => void decide({ type: "allowSession", rule })}>
-        Allow for session
-      </button>
-    {/if}
-    {#if canProject && rule}
-      <button type="button" disabled={sending} title={rule} onclick={() => void decide({ type: "allowProject", rule })}>
-        Always for project
-      </button>
-    {/if}
-    {#if !denying}
-      <button class="deny" type="button" disabled={sending} onclick={() => void startDeny()}>Deny…</button>
-    {/if}
-    <span class="hint">
-      <kbd>y</kbd> once
-      {#if rule}<kbd>s</kbd> session{/if}
-      {#if canProject}<kbd>p</kbd> project{/if}
-      <kbd>n</kbd> deny
-    </span>
-  </div>
-  {#if rule}<p class="approval-rule">Rule: <code>{rule}</code></p>{/if}
 </div>

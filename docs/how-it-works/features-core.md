@@ -220,11 +220,12 @@ flowchart TD
   `.claude/settings.json`, `.claude/settings.local.json`, `.mcp.json`)
   always ask before a change, even with an allow rule or in Auto-accept
   edits; only Bypass allows them.
-- **Approval cards** show a title and a preview (a diff or a command).
-  **Allow once** runs this call; **Allow for session** also adds the
-  suggested rule, such as `Bash(npm test:*)`, for the rest of the chat;
-  **Always for project** also saves it to `.z-engine/settings.local.toml`;
-  **Deny** sends your optional feedback to the model. Targets outside the
+- **Approval cards** ask a question ("Allow Bash to run npm test?") over a
+  preview (a diff or a command). **Allow once** runs this call; **Always
+  allow…** then **In this chat** also adds the suggested rule, such as
+  `Bash(npm test:*)`, for the rest of the chat, and **In this project**
+  also saves it to `.z-engine/settings.local.toml`; **Deny…** sends your
+  optional feedback to the model. Targets outside the
   project can be allowed for the session only; protected paths never offer
   a rule. Subagents pass the same gate, with cards labelled by agent.
 

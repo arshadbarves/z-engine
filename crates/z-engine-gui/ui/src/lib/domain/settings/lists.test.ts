@@ -24,7 +24,7 @@ describe("list edits", () => {
 });
 
 describe("hooks", () => {
-  it("lists the nine events with the tool events marked", () => {
+  it("lists the nine events and which take a matcher", () => {
     expect(HOOK_EVENTS.map((e) => e.name)).toEqual([
       "SessionStart",
       "UserPromptSubmit",
@@ -36,7 +36,12 @@ describe("hooks", () => {
       "Notification",
       "SessionEnd",
     ]);
-    expect(HOOK_EVENTS.filter((e) => e.toolEvent).map((e) => e.name)).toEqual(["PreToolUse", "PostToolUse"]);
+    expect(HOOK_EVENTS.filter((e) => e.matcher).map((e) => e.name)).toEqual([
+      "SessionStart",
+      "PreToolUse",
+      "PostToolUse",
+      "PreCompact",
+    ]);
   });
 
   it("reads a layer's hooks with the loader's defaults", () => {
@@ -49,20 +54,26 @@ describe("hooks", () => {
     expect(normalizeHook("junk")).toEqual(emptyHook());
   });
 
+  const event = (name: string) => HOOK_EVENTS.find((e) => e.name === name)!;
+
   it("validates command, timeout and matcher", () => {
     const hook = { matcher: "Bash|Edit", command: "./x.sh", timeout_secs: 60 };
-    expect(hookError(hook, true)).toBeNull();
-    expect(hookError({ ...hook, command: " " }, true)).toContain("command");
-    expect(hookError({ ...hook, timeout_secs: 0 }, true)).toContain("at least 1");
-    expect(hookError({ ...hook, matcher: "(" }, true)).toContain("not a valid");
-    expect(hookError({ ...hook, matcher: "(?=Bash)" }, true)).toContain("lookaround");
-    expect(hookError({ ...hook, matcher: "(" }, false)).toBeNull();
+    const pre = event("PreToolUse");
+    expect(hookError(hook, pre)).toBeNull();
+    expect(hookError({ ...hook, command: " " }, pre)).toContain("command");
+    expect(hookError({ ...hook, timeout_secs: 0 }, pre)).toContain("at least 1");
+    expect(hookError({ ...hook, matcher: "(" }, pre)).toContain("not a valid");
+    expect(hookError({ ...hook, matcher: "(?=Bash)" }, pre)).toContain("lookaround");
+    expect(hookError({ ...hook, matcher: "(" }, event("SessionStart"))).toContain("not a valid");
+    expect(hookError({ ...hook, matcher: "(" }, event("Stop"))).toBeNull();
   });
 
-  it("drops the matcher of events that do not match tools", () => {
-    const hook = { matcher: " Bash ", command: " ./x.sh ", timeout_secs: 9 };
-    expect(hookForEvent(hook, true)).toEqual({ matcher: "Bash", command: "./x.sh", timeout_secs: 9 });
-    expect(hookForEvent(hook, false)).toEqual({ matcher: null, command: "./x.sh", timeout_secs: 9 });
+  it("keeps the matcher of events the engine matches, drops it elsewhere", () => {
+    const hook = { matcher: " resume ", command: " ./x.sh ", timeout_secs: 9 };
+    expect(hookForEvent(hook, event("PreToolUse"))).toEqual({ matcher: "resume", command: "./x.sh", timeout_secs: 9 });
+    expect(hookForEvent(hook, event("SessionStart"))).toEqual({ matcher: "resume", command: "./x.sh", timeout_secs: 9 });
+    expect(hookForEvent({ ...hook, matcher: "auto" }, event("PreCompact"))?.matcher).toBe("auto");
+    expect(hookForEvent(hook, event("Stop"))).toEqual({ matcher: null, command: "./x.sh", timeout_secs: 9 });
   });
 });
 

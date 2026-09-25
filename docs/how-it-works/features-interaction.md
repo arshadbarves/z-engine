@@ -21,9 +21,9 @@ done, park here".
   and delivered at the next round boundary, inside the message that carries
   the tool results. If the model is just finishing, a waiting message keeps
   the turn going. You can edit or remove queued messages until then.
-- **Interrupt** (⌘Enter or Ctrl+Enter): the running turn stops and your
-  message goes out at once as a new turn, which is told the previous one
-  was interrupted.
+- **Interrupt** (⌘Enter or Ctrl+Enter, or the **⌘Enter interrupts** hint
+  under the composer): the running turn stops and your message goes out at
+  once as a new turn, which is told the previous one was interrupted.
 - **Cancel** (Esc or the stop button): the turn and its foreground
   subagents end; unfinished calls get "cancelled by user" results after a
   short grace period for tools to stop their processes. Background jobs
@@ -89,6 +89,8 @@ visible checklist.
   survives compaction, and an agent working on a multi-step task for a
   while without one is reminded to create it.
 - While a card waits you can still queue messages, change mode or cancel.
+  Another chat waiting on a card is counted beside the island, and the
+  Inbox lists its card.
 
 **For developers**
 
@@ -140,6 +142,11 @@ timeout_secs = 60                     # the default
 | `Notification` | Z Engine is waiting for you | No |
 | `SessionEnd` | A chat closes | No |
 
+- `matcher` must match the whole target: the tool name for `PreToolUse`
+  and `PostToolUse`, the start source (`startup` or `resume`) for
+  `SessionStart`, the trigger (`auto` or `manual`) for `PreCompact`. Empty
+  or `*` matches everything; other events run every hook. **Settings →
+  Hooks** shows the field for those four events.
 - The hook gets JSON on standard input: `session_id`, `transcript_path`,
   `cwd`, `hook_event_name` and fields such as `tool_name`, `tool_input`,
   `tool_response`, `prompt` or `stop_hook_active`.
@@ -194,7 +201,8 @@ and takes out only when a task needs one.
 
 An unknown name gets a notice with close matches. App commands (`/help`,
 `/agents`, `/export`, `/clear` and others) are handled by the window and
-never reach the engine.
+never reach the engine; `/context` opens the context card when the chat is
+open and otherwise goes to the engine built-in.
 
 - Commands 2 to 4 start a turn. The transcript shows `/name args`; the
   model also gets the body, after `$ARGUMENTS` and `$1`..`$9` are filled

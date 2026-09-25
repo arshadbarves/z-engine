@@ -29,7 +29,7 @@
 
   async function save(list: HookConfig[]): Promise<boolean> {
     busy = true;
-    const hooks = list.map((hook) => hookForEvent(hook, event.toolEvent));
+    const hooks = list.map((hook) => hookForEvent(hook, event));
     error = await settingsStore.write((target) => setHooks(target, event.name, hooks));
     busy = false;
     return error === null;
@@ -57,13 +57,13 @@
             {#if mine && editing === index}
               <HookForm
                 {hook}
-                toolEvent={event.toolEvent}
+                {event}
                 onSave={(next) => save(replaceItem(own, index, next))}
                 onCancel={() => (editing = null)}
               />
             {:else}
               <div class="hook-row-main">
-                {#if event.toolEvent}<code class="hook-matcher">{hook.matcher ?? "every tool"}</code>{/if}
+                {#if event.matcher}<code class="hook-matcher" title={event.matcher.label}>{hook.matcher ?? event.matcher.any}</code>{/if}
                 <code class="hook-command" title={hook.command}>{hook.command}</code>
                 <span class="hook-timeout">{hook.timeout_secs}s</span>
               </div>
@@ -101,7 +101,7 @@
   {#if editing === "new"}
     <HookForm
       hook={emptyHook()}
-      toolEvent={event.toolEvent}
+      {event}
       onSave={(next) => save(appendItem(own, next))}
       onCancel={() => (editing = null)}
     />

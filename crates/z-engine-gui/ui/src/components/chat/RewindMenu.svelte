@@ -23,7 +23,7 @@
       <div class="menu-head">Rewind to before this prompt</div>
       {#each OPTIONS as option (option.scope)}
         <Menu.Item
-          class="menu-item"
+          class="menu-item is-stacked"
           disabled={option.needsCode && !canRestoreCode}
           onSelect={() => onRewind(option.scope)}
         >

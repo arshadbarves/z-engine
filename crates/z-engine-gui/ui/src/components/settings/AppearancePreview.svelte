@@ -51,7 +51,7 @@
   .preview-head {
     justify-content: space-between;
     padding-bottom: 12px;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--separator);
   }
 
   .preview-eyebrow,
@@ -67,13 +67,13 @@
   .preview-eyebrow,
   .preview-detail-label,
   .preview-disclosure {
-    color: var(--text-3);
+    color: var(--label-3);
   }
 
   .preview-mode {
-    color: var(--text);
+    color: var(--label);
     padding: 2px 7px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--separator);
     border-radius: 999px;
   }
 
@@ -95,12 +95,12 @@
     width: 46%;
     height: 6px;
     border-radius: 999px;
-    background: var(--surface-3);
+    background: var(--raised-3);
   }
 
   .preview-line-strong {
     width: 62%;
-    background: var(--text-2);
+    background: var(--label-2);
     opacity: 0.55;
   }
 
@@ -111,12 +111,12 @@
   .preview-summary {
     justify-content: space-between;
     padding: 8px 10px;
-    background: var(--surface-quiet);
-    border-radius: var(--radius-s);
+    background: var(--fill-quiet);
+    border-radius: var(--r-s);
   }
 
   .preview-count {
-    color: var(--text-2);
+    color: var(--label-2);
   }
 
   .preview-detail {
@@ -126,7 +126,7 @@
     gap: 8px;
     min-height: 28px;
     padding: 8px 10px;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--separator);
   }
 
   .preview-detail .preview-line-short {
@@ -136,6 +136,6 @@
   .preview-disclosure {
     margin-top: 8px;
     padding: 8px 10px;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--separator);
   }
 </style>

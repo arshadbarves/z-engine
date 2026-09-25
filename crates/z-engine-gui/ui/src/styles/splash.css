@@ -1,0 +1,230 @@
+/* Boot splash: pure CSS, so it animates before any script runs. The frame
+   draws itself, the three bars fold in, the glow breathes while the app
+   loads. On the way out (SplashScreen.svelte) the glow flies to the
+   companion's place and the backdrop dissolves into the app beneath. */
+
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  color: #f5f5f7;
+  user-select: none;
+  overflow: hidden;
+  transition: opacity 220ms ease;
+}
+.splash::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 90% at 50% 40%, #16161a 0%, #08080a 64%);
+  transition: opacity 340ms ease;
+}
+
+.splash-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+.splash-glow {
+  position: absolute;
+  top: 38px;
+  left: 50%;
+  width: 180px;
+  height: 180px;
+  margin: -90px 0 0 -90px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(236, 238, 244, 0.26) 0%, rgba(123, 129, 147, 0.1) 40%, transparent 70%);
+  filter: blur(6px);
+  opacity: 0;
+  animation:
+    splash-glow-in 900ms cubic-bezier(0.16, 1, 0.3, 1) 120ms forwards,
+    splash-breathe 2.8s ease-in-out 1.1s infinite;
+}
+.splash-mark {
+  position: relative;
+  filter: drop-shadow(0 0 22px rgba(255, 255, 255, 0.22));
+}
+.splash-frame {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: splash-draw 720ms cubic-bezier(0.65, 0, 0.35, 1) 80ms forwards;
+}
+.splash-bar {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.splash-bar-top {
+  animation: splash-from-left 460ms cubic-bezier(0.16, 1, 0.3, 1) 420ms forwards;
+}
+.splash-bar-fold {
+  animation: splash-fold 460ms cubic-bezier(0.16, 1, 0.3, 1) 540ms forwards;
+}
+.splash-bar-bot {
+  animation: splash-from-right 460ms cubic-bezier(0.16, 1, 0.3, 1) 660ms forwards;
+}
+.splash-word {
+  padding-left: 0.3em;
+  font-size: 12px;
+  font-weight: 560;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(245, 245, 247, 0.66);
+  opacity: 0;
+  animation: splash-word 700ms cubic-bezier(0.16, 1, 0.3, 1) 760ms forwards;
+}
+.splash-progress {
+  width: 64px;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  opacity: 0;
+  animation: splash-fade 400ms ease 1500ms forwards;
+}
+.splash-progress::after {
+  content: "";
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.5);
+  animation: splash-sweep 1.1s ease-in-out infinite;
+}
+
+/* Leaving: marks fade, the glow condenses and flies, the backdrop dissolves. */
+.splash.is-leaving {
+  pointer-events: none;
+}
+.splash.is-leaving::before {
+  opacity: 0;
+}
+.splash.is-leaving .splash-mark,
+.splash.is-leaving .splash-word,
+.splash.is-leaving .splash-progress {
+  opacity: 0;
+  scale: 0.94;
+  transition:
+    opacity 200ms ease,
+    scale 200ms ease;
+}
+.splash.is-leaving:not(.is-flying) {
+  opacity: 0;
+}
+.splash.is-flying {
+  opacity: 0;
+  transition: opacity 200ms ease 540ms;
+}
+.splash.is-flying .splash-glow {
+  animation: none;
+  opacity: 0.95;
+  filter: blur(1px);
+  translate: var(--to-x, 0) var(--to-y, 0);
+  scale: var(--to-scale, 0.2);
+  background: radial-gradient(circle, #ffffff 0%, #eceef4 45%, rgba(123, 129, 147, 0.5) 70%, transparent 72%);
+  transition:
+    translate 640ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    scale 640ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    filter 640ms ease,
+    background 300ms ease;
+}
+
+@keyframes splash-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes splash-from-left {
+  from {
+    opacity: 0;
+    translate: -5px 0;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+@keyframes splash-from-right {
+  from {
+    opacity: 0;
+    translate: 5px 0;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+@keyframes splash-fold {
+  from {
+    opacity: 0;
+    scale: 1 0.2;
+  }
+  to {
+    opacity: 1;
+    scale: 1 1;
+  }
+}
+@keyframes splash-word {
+  from {
+    opacity: 0;
+    letter-spacing: 0.42em;
+  }
+  to {
+    opacity: 1;
+    letter-spacing: 0.3em;
+  }
+}
+@keyframes splash-glow-in {
+  from {
+    opacity: 0;
+    scale: 0.6;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+@keyframes splash-breathe {
+  0%,
+  100% {
+    opacity: 1;
+    scale: 1;
+  }
+  50% {
+    opacity: 0.7;
+    scale: 1.06;
+  }
+}
+@keyframes splash-fade {
+  to {
+    opacity: 1;
+  }
+}
+@keyframes splash-sweep {
+  from {
+    translate: -100% 0;
+  }
+  to {
+    translate: 250% 0;
+  }
+}
+
+/* Reduce Motion: the finished mark appears at once and simply fades out. */
+@media (prefers-reduced-motion: reduce) {
+  .splash-frame {
+    stroke-dashoffset: 0;
+  }
+  .splash-glow,
+  .splash-bar,
+  .splash-word {
+    opacity: 1;
+    animation: none;
+  }
+  .splash-progress {
+    display: none;
+  }
+}

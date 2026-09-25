@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { sameWorkspacePath, wsBasename } from "./workspaces";
+import { joinPath, sameWorkspacePath, wsBasename } from "./workspaces";
+
+describe("joinPath", () => {
+  it("joins with the root's separator and no doubled slashes", () => {
+    expect(joinPath("/Users/me/proj/", "/src/a.rs")).toBe("/Users/me/proj/src/a.rs");
+    expect(joinPath("C:\\work\\proj", "src/a.rs")).toBe("C:\\work\\proj\\src/a.rs");
+  });
+});
 
 describe("sameWorkspacePath", () => {
   it("treats trailing slashes as the same folder", () => {

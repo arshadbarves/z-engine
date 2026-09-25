@@ -8,7 +8,6 @@
   import { cancelTurn, rewind, sessions } from "$lib/runtime";
   import { composer } from "$lib/stores/composer.svelte";
   import { ui } from "$lib/stores/ui.svelte";
-  import HomeScreen from "../home/HomeScreen.svelte";
   import PendingInteractions from "../planning/PendingInteractions.svelte";
   import ChatTimeline from "./ChatTimeline.svelte";
   import TrustBanner from "./TrustBanner.svelte";
@@ -47,7 +46,6 @@
   const prompts = $derived(
     timeline.flatMap((t) => (t.user ? [{ id: t.user.id, text: visibleText(t.user) }] : [])),
   );
-  const empty = $derived(timeline.length === 0 && live.length === 0);
   const liveTurn: TimelineTurn = { key: "live", user: null, items: [], record: null, active: true };
 
   async function onRewind(message: Message, scope: RewindScope) {
@@ -62,10 +60,6 @@
 
 <div class="transcript-stage">
   <div class="transcript-inner">
-    {#if empty && !sessions.hydrating}
-      <HomeScreen />
-    {/if}
-
     {#each timeline as turn, i (turn.key)}
       <TurnView
         {turn}

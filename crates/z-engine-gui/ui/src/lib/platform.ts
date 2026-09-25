@@ -13,6 +13,12 @@ export function modLabel(): string {
   return isMacPlatform() ? "⌘" : "Ctrl+";
 }
 
+/** What the system file manager's "show this file" is called here. */
+export function revealLabel(): string {
+  if (isMacPlatform()) return "Reveal in Finder";
+  return isWinPlatform() ? "Show in Explorer" : "Show in file manager";
+}
+
 /** Surfaces start solid; `applyWindowMaterial` lets the native material through once it is confirmed. */
 export function applyPlatformClass(): void {
   const root = document.documentElement;

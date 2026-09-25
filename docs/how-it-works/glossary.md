@@ -21,9 +21,9 @@ See [Providers and models](features-integrations-and-safety.md#providers-and-mod
 
 ### Approval
 
-A card that asks you before an action runs, with **Allow once**, **Allow
-for session**, **Always for project** and **Deny…**. It appears when the
-permission check answers *ask*. See
+A card that asks you before an action runs, with **Allow once**, **Always
+allow…** (in this chat or in this project) and **Deny…**. It appears when
+the permission check answers *ask*. See
 [Permissions](features-core.md#permissions-modes-rules-and-approvals).
 
 ## B
@@ -118,12 +118,25 @@ context, block an action or send the agent back to work. See
 
 ## I
 
+### Inbox
+
+The app's list of what happened while you looked elsewhere: what needs you
+in every chat, chats that finished in the background, and every notice in
+full. See [The project home, the Inbox and first run](features-desktop-screens.md#the-project-home-the-inbox-and-first-run).
+
 ### Instruction file
 
 A markdown file of standing instructions the agent reads in every chat:
 `AGENTS.md` and `AGENTS.local.md` in the project (`CLAUDE.md` and
 `CLAUDE.local.md` are read too), and your own `AGENTS.md` in the config
 folder. See [Instruction files](features-agents-and-context.md#instruction-files).
+
+### Island
+
+The pill in the middle of the title bar: the companion orb and one line
+about what the agent is doing, which opens into a sheet with the details.
+A ring beside it shows how full the context is. See
+[The island and the companion](features-desktop-screens.md#the-island-and-the-companion).
 
 ## L
 
@@ -226,8 +239,8 @@ asks for and their results. A turn has one or more rounds. See
 ### Rule
 
 A pattern that allows, asks for or denies an action, such as
-`Bash(npm test:*)` or `Read(./.env)`. Rules come from settings or from
-**Allow for session** and **Always for project**. See
+`Bash(npm test:*)` or `Read(./.env)`. Rules come from settings or from an
+approval's **Always allow…**. See
 [Permissions](features-core.md#permissions-modes-rules-and-approvals).
 
 ### Rule file
@@ -322,7 +335,7 @@ one result. See [Tools and tool batches](features-core.md#tools-and-tool-batches
 
 The written record of a conversation: what you see in the chat, and the
 file that keeps each subagent's own conversation (`agents/<id>.jsonl`). See
-[The transcript and tool cards](features-desktop-app.md#the-transcript-and-tool-cards).
+[The transcript and tool cards](features-desktop-screens.md#the-transcript-and-tool-cards).
 
 ### Turn
 
@@ -335,9 +348,9 @@ or more [rounds](#round). It ends with an outcome, its cost and a
 
 ### Verification badge
 
-The label under a turn that changed files: **Verified**, **Unverified**,
-**Failed** or **Not applicable**. It comes from recorded
-[checks](#check), never from what the model claims. See
+The verdict on a turn's receipt: **Verified**, **Unverified**, **Failed**
+or **Not applicable** (shown only in the detailed receipt view). It comes
+from recorded [checks](#check), never from what the model claims. See
 [Verification](features-integrations-and-safety.md#verification).
 
 ## W

@@ -1,6 +1,7 @@
 import hljs from "highlight.js/lib/core";
 import bash from "highlight.js/lib/languages/bash";
 import css from "highlight.js/lib/languages/css";
+import ini from "highlight.js/lib/languages/ini";
 import javascript from "highlight.js/lib/languages/javascript";
 import json from "highlight.js/lib/languages/json";
 import markdown from "highlight.js/lib/languages/markdown";
@@ -34,6 +35,18 @@ hljs.registerLanguage("yaml", yaml);
 hljs.registerLanguage("yml", yaml);
 hljs.registerLanguage("md", markdown);
 hljs.registerLanguage("markdown", markdown);
+hljs.registerLanguage("ini", ini);
+hljs.registerLanguage("toml", ini);
+
+/** One line of code as escaped, syntax-colored HTML; null when the language is unknown. */
+export function highlightLine(text: string, language: string | null): string | null {
+  if (!language || !hljs.getLanguage(language)) return null;
+  try {
+    return hljs.highlight(text, { language, ignoreIllegals: true }).value;
+  } catch {
+    return null;
+  }
+}
 
 /** Highlight fenced code blocks inside a markdown root. Safe to call repeatedly. */
 export function highlightRoot(root: HTMLElement | null | undefined) {

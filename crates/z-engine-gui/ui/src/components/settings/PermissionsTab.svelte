@@ -60,7 +60,7 @@
   />
   <RuleListCard kind="deny" title="Deny" description="Never allowed, in any mode." presets={["Read(./.env)", "Read(~/.ssh/**)"]} />
 
-  <SettingsGroup title="Folders" description="Where the agent may read and write outside the project.">
+  <SettingsGroup collapsible title="Folders" description="Where the agent may read and write outside the project.">
     <SettingsCard>
       <ListSetting
         title="Additional directories"

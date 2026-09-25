@@ -8,9 +8,9 @@ evidence. This page explains the badges, where checks come from, the
 
 ## The badges
 
-The footer under each turn shows one badge. Click it to see the reason and
-the checks behind it (command, pass/fail or exit code, test counts,
-duration).
+The receipt under each turn shows one badge, with the number of checks
+behind it. Click it to see the reason and the checks (command, pass/fail or
+exit code, test counts, duration).
 
 | Badge | Meaning |
 |---|---|
@@ -31,10 +31,19 @@ Rules behind the badge:
   also count as changes for the next turn.
 - The badge never blocks you. It's information.
 
-While checks run at the end of a turn, the status line at the top of the
-window says **Checking the changes**. When the turn ends, it briefly shows
-the result, such as **Verified** or **Checks failed** (the companion cheers
-or droops), and the footer keeps the badge.
+How much of this the receipt shows depends on **Settings → Appearance →
+Task report detail** (`ui.task_report_view`):
+
+| Detail | Badge and checks |
+|---|---|
+| **Quiet** (default) | The badge only when it is **Verified**, **Unverified** or **Failed**; **Not applicable** is hidden. |
+| **Compact** | The same badge, plus the changed files, duration and cost. |
+| **Detailed** | Every badge, **Not applicable** included, with the checks already unfolded, plus tokens. |
+
+While checks run at the end of a turn, the island in the title bar says
+**Checking the changes**. When the turn ends, it briefly shows the result,
+such as **Verified**, **Checks failed** or **Done · not verified** (the
+companion cheers or droops), and the receipt keeps the badge.
 
 ## Where checks come from
 

@@ -134,6 +134,29 @@
   animation: spin 0.85s linear infinite;
 }
 
+/* Loading sheen sweeping across a placeholder. */
+@keyframes hydrate-sheen {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
+
+/* A status dot that swells and fades while something runs. */
+@keyframes pulse-dot {
+  0%,
+  100% {
+    scale: 0.85;
+    opacity: 0.4;
+  }
+  50% {
+    scale: 1.2;
+    opacity: 1;
+  }
+}
+
 /* Live work breathes; "needs you" pulses. */
 @keyframes live-breathe {
   0%,
@@ -153,6 +176,29 @@
   50% {
     scale: 0.8;
     opacity: 0.6;
+  }
+}
+
+/* Side panels (agents, changes) slide in from the edge they dock to. */
+@keyframes glide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes glide-out-right {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(16px);
   }
 }
 

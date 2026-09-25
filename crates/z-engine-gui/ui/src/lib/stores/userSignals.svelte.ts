@@ -28,6 +28,11 @@ class UserSignalsStore implements UserSignals {
     this.returnedAt = null;
   }
 
+  /** The companion waves hello (as on return), without a recap. */
+  greet() {
+    this.returnedAt = Date.now();
+  }
+
   #active(force = false) {
     const now = Date.now();
     if (!force && now - this.#activeMark < ACTIVITY_THROTTLE_MS) return;

@@ -19,13 +19,16 @@ Switch modes:
 
 - **Shift+Tab** in the composer cycles Ask → Auto-accept edits → Plan. It
   never enters Bypass.
-- The mode button under the composer lists all four. Choosing **Bypass**
-  shows a warning you must confirm.
+- The mode chip in the composer's bar lists all four with a short
+  description. Choosing **Bypass** shows a warning; **Turn on Bypass**
+  confirms it.
+- The command palette's **Switch to …** entries (every mode but Bypass).
 - `/mode acceptEdits` (or `default`, `plan`, `bypass`) from the composer.
 - **Settings → Permissions → Permission mode** sets the mode new chats
   start in (`permissions.mode`).
 
-The mode buttons, `/mode` and Shift+Tab change only the current chat.
+The mode chip, the palette, `/mode` and Shift+Tab change only the current
+chat.
 
 > **Warning:** Use Bypass only in a sandbox or a disposable checkout. The
 > agent can then delete files or run any command without asking.
@@ -55,26 +58,32 @@ shell commands without asking** (`permissions.auto_allow_read_only_bash`).
 
 ## Answering approval cards
 
+An approval card asks a question, such as **Allow Bash to run cargo
+test?**, says why approval is needed, and previews the diff or command
+(longer than six lines, it folds behind **Show all N lines**).
+
 | Button | Key | Effect |
 |---|---|---|
 | **Allow once** | `y` | Runs this action only. |
-| **Allow for session** | `s` | Runs it and adds the suggested rule for the rest of this chat. |
-| **Always for project** | `p` | Also saves the rule to `.z-engine/settings.local.toml` (your personal, git-ignored project settings). |
-| **Deny…** | `n` | Opens a box for optional feedback; Enter sends it, Esc goes back. The agent receives "The user denied this action" plus your feedback. |
+| **Always allow…** → **In this chat** | `s` | Runs it and adds the suggested rule for the rest of this chat. |
+| **Always allow…** → **In this project** | `p` | Also saves the rule to `.z-engine/settings.local.toml` (your personal, git-ignored project settings). |
+| **Deny…** | `n` | Opens a box for optional feedback; Enter or **Deny** sends it, Esc or **Cancel** goes back. The agent receives "The user denied this action" plus your feedback. |
 
-The keys work while the card has keyboard focus; click the card if needed.
-The rule offered is shown at the bottom of the card, for example
-`Bash(npm run test:*)`, `Edit`, `WebFetch(domain:docs.rs)` or
-`mcp__github__create_issue`.
+The keys work while the card has keyboard focus, and their hints appear on
+the card then; click the card if needed. The **Always allow…** menu shows
+the rule it offers, for example `Bash(npm run test:*)`, `Edit`,
+`WebFetch(domain:docs.rs)` or `mcp__github__create_issue`.
 
-- **Allow for session** appears only when there is a rule to suggest.
-- **Always for project** is hidden for targets outside the project (for
-  example reading `/etc/hosts`): those can be allowed for the session only.
+- **Always allow…** appears only when there is a rule to suggest.
+- **In this project** is missing for targets outside the project (for
+  example reading `/etc/hosts`): those can be allowed for this chat only.
 - Protected paths never offer a rule.
 
 When the agent makes several calls at once, all their cards appear together
 and you can answer them in any order. Cards from subagents are labelled
-with the agent's type and task.
+with the agent's type and task. Approvals waiting in other chats are listed
+in the [Inbox](02-everyday-use.md#the-inbox), where **Allow once** and
+**Deny** answer them without opening the chat.
 
 ## Writing rules
 
@@ -172,8 +181,8 @@ deny = ["Read(./.env)", "Read(.env.*)", "Read(~/.ssh/**)", "Read(~/.aws/**)",
 By default the agent may work only inside the project folder. To let it
 read and edit another folder too:
 
-- add it under **Settings → Permissions → Additional directories**
-  (`permissions.additional_directories`), or
+- add it under **Settings → Permissions → Folders → Additional
+  directories** (`permissions.additional_directories`), or
 - run `/add-dir ../shared-lib` for this chat, or
   `/add-dir ../shared-lib --save` to also save it to your personal project
   settings.
@@ -228,7 +237,8 @@ Trust details:
   folder. Subfolders and worktrees are separate folders and need their own
   trust.
 - Change it later under **Settings → Advanced → Workspace → Trust this
-  workspace**.
+  workspace**. The first-run setup and the project home's **Set up this
+  project** card can trust a project too.
 - Your *user* settings, agents and commands always apply.
 
 ## The sandbox

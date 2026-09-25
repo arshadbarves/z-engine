@@ -19,10 +19,10 @@ export interface CtxMeter {
 }
 
 const LAYERS: Array<{ id: keyof ContextBreakdown; label: string; color: string }> = [
-  { id: "system", label: "System", color: "#8b8b96" },
-  { id: "tools", label: "Tools", color: "#a78bfa" },
-  { id: "instructions", label: "Instructions", color: "#7c85e0" },
-  { id: "messages", label: "Messages", color: "#f0a090" },
+  { id: "system", label: "System prompt", color: "var(--layer-system)" },
+  { id: "tools", label: "Tool definitions", color: "var(--layer-tools)" },
+  { id: "instructions", label: "Instructions", color: "var(--layer-instructions)" },
+  { id: "messages", label: "Conversation", color: "var(--layer-messages)" },
 ];
 
 export function contextMeter(input: {
@@ -43,7 +43,7 @@ export function contextMeter(input: {
       tokens: Math.round(breakdown[l.id] * scale),
     })).filter((s) => s.tokens > 0);
   } else {
-    slices = used > 0 ? [{ id: "context", label: "Context", tokens: used, color: "#f0a090" }] : [];
+    slices = used > 0 ? [{ id: "context", label: "Context", tokens: used, color: "var(--layer-messages)" }] : [];
   }
   const pct = Math.min(100, Math.round((used / max) * 100));
   return {

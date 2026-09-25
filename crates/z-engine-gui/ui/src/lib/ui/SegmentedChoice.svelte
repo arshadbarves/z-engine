@@ -14,10 +14,12 @@
     /** Persisting a choice must not disable the controls: a disabled button
      *  loses focus, which drops a keyboard reader out of the group. */
     busy?: boolean;
+    /** Toolbar size: for panel headers and filters rather than forms. */
+    compact?: boolean;
     onSelect: (value: T) => void;
   };
 
-  let { label, options, value, busy = false, onSelect }: Props = $props();
+  let { label, options, value, busy = false, compact = false, onSelect }: Props = $props();
   let buttons: HTMLButtonElement[] = [];
 
   function activate(index: number) {
@@ -38,7 +40,7 @@
   }
 </script>
 
-<div class="segmented-choice" role="radiogroup" aria-label={label} aria-busy={busy}>
+<div class="segmented-choice" class:is-compact={compact} role="radiogroup" aria-label={label} aria-busy={busy}>
   {#each options as option, index (option.value)}
     <button
       bind:this={buttons[index]}
@@ -47,6 +49,7 @@
       aria-checked={value === option.value}
       class:active={value === option.value}
       tabindex={value === option.value ? 0 : -1}
+      title={option.description || undefined}
       onclick={() => activate(index)}
       onkeydown={(event) => moveSelection(event, index)}
     >
@@ -63,8 +66,8 @@
     grid-auto-columns: minmax(0, 1fr);
     gap: 4px;
     padding: 4px;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
+    background: var(--raised-2);
+    border: 1px solid var(--separator);
     border-radius: 10px;
   }
 
@@ -74,7 +77,7 @@
     border: 1px solid transparent;
     border-radius: 7px;
     background: transparent;
-    color: var(--text-3);
+    color: var(--label-3);
     font: inherit;
     font-size: 12px;
     font-weight: 600;
@@ -86,20 +89,34 @@
   }
 
   button:hover {
-    color: var(--text);
-    background: var(--hover-quiet);
+    color: var(--label);
+    background: var(--fill-hover);
   }
 
   button.active {
-    color: var(--text);
-    background: var(--surface-3);
-    border-color: var(--border-strong);
+    color: var(--label);
+    background: var(--raised-3);
+    border-color: var(--separator-strong);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
   }
 
   button:focus-visible {
-    outline: 2px solid var(--accent-ring);
+    outline: 2px solid var(--focus-ring);
     outline-offset: 1px;
+  }
+
+  .is-compact {
+    gap: 2px;
+    padding: 2px;
+    border-radius: 8px;
+  }
+
+  .is-compact button {
+    min-height: 24px;
+    padding: 2px 10px;
+    font-size: 11.5px;
+    font-weight: 550;
+    border-radius: 6px;
   }
 
   .segmented-choice[aria-busy="true"] button {

@@ -2,65 +2,63 @@
   import { MODES, modeMeta, type ModeMeta } from "$lib/domain/modes";
   import type { PermissionMode } from "$lib/protocol/PermissionMode";
   import { sessions, setMode } from "$lib/runtime";
-  import Icon, { AlertTriangle, ChevronDown, Shield, ShieldAlert } from "$lib/ui/icons";
+  import { Popover } from "$lib/ui";
+  import Icon, { AlertTriangle, Check, ChevronDown, Shield, ShieldAlert } from "$lib/ui/icons";
 
+  /** How much the agent may do without asking; Shift+Tab cycles the safe three. */
   const mode: PermissionMode = $derived(sessions.active?.mode ?? "default");
   const current = $derived(modeMeta(mode));
   let open = $state(false);
   let confirming = $state<ModeMeta | null>(null);
 
-  function close() {
-    open = false;
-    confirming = null;
-  }
-
   function pick(meta: ModeMeta) {
-    if (meta.warning && !confirming) {
+    if (meta.warning && confirming?.id !== meta.id) {
       confirming = meta;
       return;
     }
-    close();
+    open = false;
+    confirming = null;
     if (meta.id !== mode) void setMode(meta.id);
   }
 </script>
 
-<div class="model-picker">
-  {#if open}
-    <button type="button" class="popover-backdrop" aria-label="Close permission mode menu" tabindex="-1" onclick={close}
-    ></button>
-  {/if}
-  <button
-    class={`mode model-btn${mode === "bypass" ? " mode-danger" : ""}`}
-    onclick={() => (open ? close() : (open = true))}
+<Popover.Root
+  bind:open
+  onOpenChange={(next) => {
+    if (!next) confirming = null;
+  }}
+>
+  <Popover.Trigger
+    class={`composer-chip${mode === "bypass" ? " is-danger" : ""}`}
     title="Permission mode (Shift+Tab cycles)"
   >
-    <Icon icon={mode === "bypass" ? ShieldAlert : Shield} size={11} />
+    <Icon icon={mode === "bypass" ? ShieldAlert : Shield} size={12} />
     <span>{current.label}</span>
-    <Icon icon={ChevronDown} size={9} strokeWidth={2.4} />
-  </button>
-  {#if open}
-    <div class="popover" role="menu">
-      <div class="popover-head">Permission mode</div>
-      <div class="popover-current">{current.label} · {current.description}</div>
+    <Icon icon={ChevronDown} size={10} strokeWidth={2.2} />
+  </Popover.Trigger>
+  <Popover.Portal>
+    <Popover.Content class="chip-pop" side="top" align="start" sideOffset={8}>
+      <p class="chip-pop-head">Permission mode</p>
       {#if confirming}
         <div class="mode-warning" role="alert">
-          <Icon icon={AlertTriangle} size={13} />
+          <Icon icon={AlertTriangle} size={14} />
           <span>{confirming.warning}</span>
         </div>
         <div class="mode-warning-actions">
-          <button type="button" class="btn-danger" onclick={() => confirming && pick(confirming)}>
-            Enable {confirming.label}
-          </button>
+          <button type="button" class="btn-danger" onclick={() => confirming && pick(confirming)}>Turn on {confirming.label}</button>
           <button type="button" class="btn-ghost" onclick={() => (confirming = null)}>Back</button>
         </div>
       {:else}
-        {#each MODES.filter((m) => m.id !== mode) as meta (meta.id)}
-          <button class={`popover-item${meta.warning ? " danger" : ""}`} role="menuitem" onclick={() => pick(meta)}>
-            {meta.label}
-            <span class="popover-sub">{meta.description}</span>
+        {#each MODES as meta (meta.id)}
+          <button type="button" class={`chip-pop-row${meta.warning ? " is-danger" : ""}`} onclick={() => pick(meta)}>
+            <span class="chip-pop-text">
+              <span class="chip-pop-label">{meta.label}</span>
+              <span class="chip-pop-sub">{meta.description}</span>
+            </span>
+            {#if meta.id === mode}<Icon icon={Check} size={13} strokeWidth={2.2} />{/if}
           </button>
         {/each}
       {/if}
-    </div>
-  {/if}
-</div>
+    </Popover.Content>
+  </Popover.Portal>
+</Popover.Root>

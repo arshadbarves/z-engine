@@ -24,22 +24,3 @@
     <span class="bubble-action-label">{feedback.copied ? "Copied" : "Copy"}</span>
   </button>
 </div>
-
-<style>
-  .assistant-message-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-height: 22px;
-    margin-top: 3px;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.15s ease;
-  }
-
-  :global(.assistant-block:hover) .assistant-message-actions,
-  :global(.assistant-block:focus-within) .assistant-message-actions {
-    opacity: 1;
-    pointer-events: auto;
-  }
-</style>

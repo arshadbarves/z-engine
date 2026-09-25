@@ -38,7 +38,7 @@ Updates → Files & Storage** shows the actual paths with copy buttons.
 | `sessions/<id>.jsonl` | v1 chat files not imported yet. |
 | `checkpoints/` | Shadow git repositories for code checkpoints, one per project. |
 | `cache/models-dev.json` | The cached model catalog. |
-| `workspaces.json` | The workspace folders listed in the sidebar. |
+| `workspaces.json` | The project folders listed under **Projects** in the sidebar. |
 | `z-engine-gui.log` | The app log. |
 
 **In each project:**
@@ -48,7 +48,11 @@ Updates → Files & Storage** shows the actual paths with copy buttons.
 | `AGENTS.md`, `AGENTS.local.md` (and `CLAUDE.md`, `CLAUDE.local.md`) | Instructions. |
 | `.z-engine/settings.toml`, `.z-engine/settings.local.toml` | Project and personal settings. |
 | `.z-engine/agents/`, `commands/`, `skills/`, `rules/`, `output-styles/` | Project extensions. |
-| `.z-engine/worktrees/` | Worktrees of isolated agents and worktree tasks. |
+| `.z-engine/worktrees/` | Worktrees of isolated agents and of chats started with **New chat in a worktree…**. |
+
+The [Inbox](02-everyday-use.md#the-inbox) is not saved anywhere: it lives
+in memory while the app runs, keeps up to 200 notices, and starts empty the
+next time you open Z Engine.
 
 ### Inside a chat folder
 
@@ -64,8 +68,9 @@ closes in the middle of a turn, that turn shows **Interrupted · the app
 closed mid-turn** when you reopen the chat; damaged lines at the end of a
 log are skipped with a notice.
 
-Deleting a chat (trash icon) removes its folder (and its v1 file). It does
-not remove code checkpoints, which are shared by all chats of a project.
+Deleting a chat (trash icon, then **Delete chat** to confirm) removes its
+folder (and its v1 file). It does not remove code checkpoints, which are
+shared by all chats of a project.
 
 ## Checkpoints and rewind
 
@@ -99,8 +104,8 @@ Rewinding the conversation records the rewind in the log and drops later
 messages from what you and the model see. The agent forgets which files it
 had read, so it reads them again before editing.
 
-The diff panel's **Chat** scope compares the project with the chat's first
-checkpoint.
+The Changes panel's **This chat** scope compares the project with the
+chat's first checkpoint.
 
 > **Warning:** Rewind can't undo effects outside your project files:
 > installed packages, database changes, network calls, `git push`.

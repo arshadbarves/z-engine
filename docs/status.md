@@ -24,12 +24,12 @@ gone; they remain in git history.
 |---|---|---|
 | 1 | Dead CSS and components removed; tokens, base, motion and materials in `ui/src/styles/`; native window translucency | done |
 | 2 | Title bar, sidebar, content sheet, scroll-edge fades, one-home-per-fact cleanup | done |
-| 3 | Companion orb and title status line with the Now card (replaces the first island design); `ui.companion` setting | done, awaiting visual review |
-| 4 | Transcript, tool grouping, turn receipt, composer | pending |
-| 5 | Home screen | pending |
-| 6 | Inspector sheet, palette, every Settings tab and the prompt inspector | pending |
-| 7 | Background notifications; errors after edits (engine event) | pending |
-| 8 | Remove legacy stylesheets and token aliases | pending |
+| 3 | Title bar island with the companion, the waiting and context satellites and the island sheet (replaces the status line and Now card); sidebar with Home, Inbox and Projects; `ui.companion` setting | done |
+| 4 | Transcript, tool grouping, turn receipt (`ui.task_report_view`), approval card, composer | done |
+| 5 | Splash, first-run setup, project home and the Inbox (background notifications) | done |
+| 6 | Agents panel, Changes panel, prompt inspector, palette, every Settings tab, worktree dialog, shell drawer | done |
+| 7 | Errors after edits (engine event) | pending |
+| 8 | Remove legacy stylesheets and token aliases | done |
 
 ## Release checks (2.0.0)
 
@@ -53,17 +53,8 @@ gone; they remain in git history.
 | `AGENTS.md` corrected: network exceptions, steps for adding a tool, updater listener | done |
 | Custom check ids in `auto_checks`, turning off built-in language servers, daily catalog refresh, `fetch_extract` wording | done |
 
-Open findings from the user-guide review; the GUI items are left for the
-GUI redesign:
+Open findings from the user-guide review:
 
-- The diff panel's tooltips promise `[`, `]` and Esc, but nothing handles
-  those keys.
-- Deleting a chat and removing a workspace ask for no confirmation.
-- **Appearance → task report view** (`ui.task_report_view`) is saved, but
-  nothing reads it.
-- The Hooks tab drops the matcher of `SessionStart` and `PreCompact` hooks
-  when it saves, although the engine matches them against the start source
-  and the compaction trigger.
 - Settings, agents, commands and skills edited outside the app reach an
   open chat only when it is reopened or something is saved in **Settings**:
   there is no file watcher, and `reloadExtensions` has no caller.
@@ -81,4 +72,4 @@ GUI redesign:
   `z-engine-config`; GUI-only queries live in `z-engine-engine/src/engine/queries/`.
 - v2 never modifies v1 `config.toml` files; it reads `settings.toml` and
   imports v1 settings. Spent cost stays in session totals after rewinds.
-- The v1 design documents are kept with a "Historical (v1)" banner.
+- The v1 design documents have been removed; git history keeps them.

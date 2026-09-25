@@ -1,9 +1,11 @@
 # The desktop app
 
 How the Z Engine window talks to the engine, how events become the screen
-you see, and what each main surface does. Terms such as *snapshot* and
-*reducer* are in the [glossary](glossary.md); the code layout is on
-[the crates page](crates.md), the UI rules in the [GUI UI guide](../design/gui-ui-guide.md).
+you see, and how the app updates itself. What each screen and panel does is
+on [The desktop app's screens](features-desktop-screens.md). Terms such as
+*snapshot* and *reducer* are in the [glossary](glossary.md); the code layout
+is on [the crates page](crates.md), the UI rules in the
+[GUI UI guide](../design/gui-ui-guide.md).
 
 ## The window and the engine
 
@@ -22,8 +24,9 @@ in through one hatch, and news comes back through another.
    needed.
 4. The events of all chats travel on one channel, `engineEvent`, each
    wrapped in an *envelope* with its session id and a sequence number.
-5. Simple questions with an immediate answer are *queries*: list saved
-   chats, read a subagent transcript, fetch a diff, show the last request.
+5. Simple questions with an immediate answer are *queries*: saved chats, a
+   subagent transcript, a diff, a project's branch and changed-file count,
+   the context breakdown, the last request.
 
 ```mermaid
 flowchart LR
@@ -41,17 +44,16 @@ flowchart LR
 **For developers**
 - [`src-tauri/src/commands/`](../../crates/z-engine-gui/src-tauri/src/commands/)
   has one file per domain (session, catalog, workspace, settings, access,
-  extensions, app, update), all listed in `generate_handler!` in `main.rs`.
-  The webview reaches them only through `ui/src/lib/commands/*.ts`; screens
-  call [`lib/runtime/actions.ts`](../../crates/z-engine-gui/ui/src/lib/runtime/actions.ts).
+  extensions, app, update), all in `generate_handler!` in `main.rs`; the
+  webview reaches them only through `ui/src/lib/commands/*.ts`, screens
+  through [`lib/runtime/actions.ts`](../../crates/z-engine-gui/ui/src/lib/runtime/actions.ts).
 - `Engine::send` ([`engine/api.rs`](../../crates/z-engine-engine/src/engine/api.rs))
   hands the `Command` to the session actor, which never blocks on the model
   or a tool ([runtime model](../architecture/v2-engine.md#runtime-model)).
 - [`events.rs`](../../crates/z-engine-gui/src-tauri/src/events.rs) emits
-  each `EventEnvelope` as `engineEvent`; the engine's
-  [`session/emitter.rs`](../../crates/z-engine-engine/src/session/emitter.rs)
-  numbers each session's events and delivers them in `seq` order.
-- The one subscription is `initEvents()` in
+  each `EventEnvelope` as `engineEvent`, numbered per session by
+  [`session/emitter.rs`](../../crates/z-engine-engine/src/session/emitter.rs);
+  the one subscription is `initEvents()` in
   [`lib/runtime/listen.ts`](../../crates/z-engine-gui/ui/src/lib/runtime/listen.ts).
   Adding an IPC command: [Where do I change X?](crates.md#where-do-i-change-x)
 
@@ -99,7 +101,7 @@ news, like a scorekeeper who updates the board after every play.
    on `assistantFinished`), `toolFinished` completes a tool card, and
    `approvalRequested` adds a pending approval.
 4. Some events also ask for a side effect: a passing notice (only for the
-   chat on screen), `!cmd` output for the shell overlay, or a chat-list
+   chat on screen), `!cmd` output for the shell drawer, or a chat-list
    refresh when a title changes or a turn starts or ends.
 
 **For developers**
@@ -107,13 +109,12 @@ news, like a scorekeeper who updates the board after every play.
   `eventEffects` and unread marks in
   [`lib/domain/sessions.ts`](../../crates/z-engine-gui/ui/src/lib/domain/sessions.ts);
   one `case` per `Event` type in [`lib/domain/sessionView/reduce.ts`](../../crates/z-engine-gui/ui/src/lib/domain/sessionView/reduce.ts)
-  (a new variant needs a case and a test there); turns and blocks for the
-  transcript in `lib/domain/timeline/`.
+  (a new variant needs a case and a test there); transcript turns, blocks
+  and tool-run groups in `lib/domain/timeline/`.
 - Live state: `SessionsStore` in
   [`lib/runtime/sessions.svelte.ts`](../../crates/z-engine-gui/ui/src/lib/runtime/sessions.svelte.ts)
   (`views`, `active`, `activity`, `unread`, `apply`); `effects.ts` runs the
-  side effects; `applyLocal` reduces window-made events (such as `/help`
-  output) without touching the sequence.
+  side effects; `applyLocal` reduces window-made events (such as `/help`).
 
 ## Many chats at once
 
@@ -122,246 +123,24 @@ or several. It is like a kitchen with several orders on the rail: you watch
 one, and the others keep cooking.
 
 **How it works**
-- The engine keeps every opened session alive with its own actor. Opening a
-  live chat again only re-sends its snapshot; opening a saved one resumes it
-  from its log.
-- Every event of every session arrives on the same channel, so the window
-  updates all views, not only the visible one. A background chat keeps
-  streaming, running tools and waiting for approvals.
-- The sidebar marks each chat you are not looking at: **Needs you** (a
-  pending approval, question or plan), **Working**, an *unread* mark when a
-  turn ended (coloured by its outcome and verification, cleared when you
-  open the chat), or a warning when its last turn failed, hit a budget or
-  was interrupted. A collapsed workspace shows its most urgent mark.
-- The title bar also tells you when another chat needs you, with a chip
-  beside the chat title; clicking it opens that chat.
-- Switching is instant: the window shows the view it already has and calls
-  `open_session` only for a chat not yet opened since the app started.
-- Quitting closes every session: turns stop, jobs end, logs are flushed.
+- The engine keeps every opened session alive with its own actor, and every
+  session's events arrive on the same channel, so a background chat keeps
+  streaming, running tools and waiting for approvals. Opening a live chat
+  again only re-sends its snapshot; a saved one resumes from its log.
+- The sidebar lists each project (branch, uncommitted-file count) with its
+  chats. A chat you are not looking at is marked **Needs you**, **Working**,
+  *unread* when a turn ended (coloured by outcome and verification), or with
+  a warning when its last turn failed, hit a budget or was interrupted; a
+  folded project shows its most urgent mark. Quitting closes every session.
 
 **For developers**
 - Engine: `open_session`, `send`, `close_session`, `shutdown` in
   [`engine/api.rs`](../../crates/z-engine-engine/src/engine/api.rs). Window:
-  `openSession` in `lib/runtime/actions.ts`, `activityMap` and `markRead` in
-  `lib/domain/sessions.ts`, `sidebarMark` in `lib/domain/sessionOutcome.ts`,
-  and [`components/sidebar/Sidebar.svelte`](../../crates/z-engine-gui/ui/src/components/sidebar/Sidebar.svelte).
-
-## The transcript and tool cards
-
-**In plain words.** The transcript is the chat history drawn as cards. Each
-tool call is a small card, like a receipt you can unfold for the details.
-
-**How it works**
-- A turn shows your message, the reply (Markdown, with a collapsible
-  thinking section), its tool calls, and a footer with duration, tokens,
-  cost and the verification badge (`Verified`, `Unverified`, `Failed`,
-  `NotApplicable`) with its check evidence.
-- A tool card follows `toolStarted`, `toolProgress` (streamed output) and
-  `toolFinished` with a status: ok, error, denied or cancelled.
-- The card depends on the tool's *family*: edits and writes show a diff;
-  Bash shows the command, live output and exit code; Agent shows the
-  subagent's type, model, tokens, cost and a transcript link; TodoWrite
-  shows the list; WebFetch and WebSearch have a web card; everything else,
-  including MCP tools (`mcp__server__tool`), uses a generic card.
-
-**For developers**
-- [`components/chat/`](../../crates/z-engine-gui/ui/src/components/chat/)
-  (`Transcript`, `TurnView`, `TurnFooter`, `VerificationBadge`, ...);
-  [`chat/tools/ToolCall.svelte`](../../crates/z-engine-gui/ui/src/components/chat/tools/ToolCall.svelte) picks
-  the card from the family in [`lib/domain/tools/toolMeta.ts`](../../crates/z-engine-gui/ui/src/lib/domain/tools/toolMeta.ts).
-- A tool gets its own card through a `FAMILIES` entry in `toolMeta.ts`, a
-  card in `components/chat/tools/` and a branch in `ToolCall.svelte`.
-
-## Approval, question and plan cards
-
-**In plain words.** When the agent needs your say (permission, an answer, or
-approval of a plan), it pauses and puts a card in the chat, like a builder
-who knocks before taking down a wall.
-
-**How it works**
-1. The engine's *gate* decides a tool call must ask (see
-   [core features](features-core.md)) and emits `approvalRequested` with a
-   title and a preview, such as the diff of an edit.
-2. The card offers: allow once, allow for this session (a session rule),
-   allow for this project (the rule is also saved to
-   `.z-engine/settings.local.toml`), or deny with feedback for the model.
-   The choice goes back as `resolveApproval`.
-3. `AskUserQuestion` shows a question card (`answerQuestion`; dismissing
-   sends no answers). `ExitPlanMode` shows a plan card: approve it, choosing
-   the mode to continue in and optionally editing the plan, or ask for
-   changes (`resolvePlan`).
-4. While a card waits you can still steer, change mode or cancel. Cards from
-   a subagent carry that agent's label.
-5. An untrusted project that sets anything trust withholds (hooks, MCP
-   servers, checks, permission modes or allow rules, shell, provider, web
-   or language-server settings) gets a trust banner (`trustRequired`,
-   answered with `trustWorkspace`).
-
-**For developers**
-- [`components/planning/PendingInteractions.svelte`](../../crates/z-engine-gui/ui/src/components/planning/PendingInteractions.svelte)
-  renders `chat/ApprovalCard`, `planning/QuestionCard` and
-  `planning/PlanCard`; the banner is `chat/TrustBanner`.
-- Types: `ApprovalRequest`, `ApprovalDecision`, `PlanDecision`,
-  `Question`, `QuestionAnswer`. The engine's
-  [`broker/`](../../crates/z-engine-engine/src/broker/) holds pending
-  requests so the session actor keeps accepting commands.
-
-## The companion and the status line
-
-**In plain words.** A small glass orb with eyes sits in the middle of the
-title bar, next to one line that names the chat and says what the agent is
-doing. The orb shows the mood of the work at a glance, like a colleague you
-can see working across the desk; the line gives the facts.
-
-**How it works**
-- The line names the workspace and chat, then shows one state, most urgent
-  first: this chat needs you, a passing notice, a provider retry, work in
-  progress (the step in plain words, plan progress, elapsed time and this
-  turn's cost), a turn that just ended, a recap of turns that ended while
-  you were away, or idle (the session cost). Another chat that needs you
-  appears as a chip beside it, and running agents and jobs as a pill.
-- The orb's pose follows the same state: its eyes scan while the agent
-  reads, it bobs while commands run, looks at you in amber when it needs
-  you, hops with sparkles when a turn is verified and droops when one
-  fails. Running agents orbit it as small dots, and a ring around it shows
-  plan progress (the agent keeps its to-do list with the `TodoWrite` tool;
-  the engine saves it in the session log and emits `todosUpdated`).
-- At the default **Lively** level (`ui.companion`) it also reacts to you: it
-  watches the composer while you type, looks up when you scroll back, dozes
-  after a few quiet minutes, and waves when you return after five minutes
-  away. **Calm** reacts only to the agent; **Off** replaces the orb with a
-  small dot. Under Reduce Motion it holds still poses.
-- Clicking the line opens the **Now card**: the full step, the plan
-  checklist, context use with **Compact** and **Inspect prompt**, this
-  turn's and the session's cost, running agents, and recent warnings and
-  errors. A dot on the line marks warnings you have not opened yet.
-
-**For developers**
-- [`chrome/TitleStatus.svelte`](../../crates/z-engine-gui/ui/src/components/chrome/TitleStatus.svelte)
-  (the line), `Companion.svelte` (the orb) and `NowCard.svelte` (the card,
-  on the kit `Popover`).
-- `liveStatus()` in [`lib/domain/liveStatus.ts`](../../crates/z-engine-gui/ui/src/lib/domain/liveStatus.ts)
-  picks the state from the session view and the toast store;
-  `companionPose()` in `lib/domain/companion.ts` maps it and the user's
-  signals (`lib/stores/userSignals.svelte.ts`, DOM events only) to a mood,
-  a gaze and particles. The live turn cost uses `activeTurn.costAtStart`.
-
-## The agents and jobs panel
-
-**In plain words.** Helpers the agent sends off (*subagents*) and commands
-left running in the background (*jobs*) are listed in one panel, like a
-board showing who is out on an errand.
-
-**How it works**
-- A subagent emits `agentStarted`, then `agentUpdated`; a background shell
-  or agent emits `jobUpdated`. The panel lists them with status, usage and
-  cost; open it from the agents pill in the title bar or the palette (**Agents**,
-  **Background jobs**).
-- Opening an agent loads its own transcript from disk (`agent_transcript`).
-- You can stop a job (`killJob`), and apply (`applyAgentChanges`) or discard
-  (`discardAgentChanges`) the work of an agent that ran in its own git
-  *worktree*.
-
-**For developers**
-- [`components/agents/`](../../crates/z-engine-gui/ui/src/components/agents/)
-  (`WorkPanel`, `AgentRow`, `JobRow`, `AgentTranscript`); counts from
-  `workCounts` in `lib/domain/agentTree.ts`; types `AgentInfo`, `JobInfo`.
-  How agents run: [agents and context](features-agents-and-context.md).
-
-## The diff panel
-
-**In plain words.** The review panel shows what changed in your files, like
-"track changes" in a word processor: either what this chat changed, or
-everything not yet committed.
-
-**How it works**
-- **Chat** scope compares the project with the chat's first *checkpoint*, a
-  copy of your files kept in a hidden git repository, without taking a new
-  one. **Git** scope compares the working tree with your last commit
-  (`HEAD`), with line counts. Both need git.
-- Pick a file to see its diff (cached per scope while the panel is open).
-  Open it with **Review changes** or ⌘D / Ctrl+D.
-
-**For developers**
-- [`components/overlays/DiffPanel.svelte`](../../crates/z-engine-gui/ui/src/components/overlays/DiffPanel.svelte)
-  with `DiffFileTree` and `DiffView`. Chat scope: `session_changed_files`,
-  `session_diff_for_file` ([`engine/queries/changes.rs`](../../crates/z-engine-engine/src/engine/queries/changes.rs)).
-  Git scope: `list_changed_files`, `diff_for_file` ([`engine/queries/git.rs`](../../crates/z-engine-engine/src/engine/queries/git.rs),
-  which also creates the worktree for **New task in git worktree**).
-
-## The prompt inspector
-
-**In plain words.** The prompt inspector lets you look over the agent's
-shoulder at exactly what was last sent to the model, like reading a letter
-before it goes in the post.
-
-**How it works**
-- It fetches the last request sent to the provider (`inspect_request`) and
-  lays out its system sections, tools and messages, with a breakdown of
-  where the context tokens go. You can copy all of it.
-- `/context` (**Context usage** in the palette) asks the engine for that
-  breakdown by category (`contextReport`); the Now card shows how full the
-  context is.
-
-**For developers**
-- [`overlays/PromptInspector.svelte`](../../crates/z-engine-gui/ui/src/components/overlays/PromptInspector.svelte)
-  with `lib/promptInspectView.ts`, reading `Engine::last_request`; context
-  figures from `lib/domain/contextMeter.ts` (type `ContextBreakdown`).
-
-## Settings and scopes
-
-**In plain words.** Settings are stacked like transparent sheets: defaults,
-then yours, then the project's, then your private project tweaks. The
-settings screen picks the sheet you write on and shows where each value
-comes from.
-
-**How it works**
-- Tabs (⌘, or Ctrl+,): Models, Providers, Permissions, Hooks, Agents &
-  Commands, MCP, Verification, Memory, Advanced, Appearance, About &
-  Updates.
-- Most tabs have a scope bar with three writable files: **User** (every
-  project), **This project** (`.z-engine/settings.toml`, shared) and
-  **Personal (local)** (`.z-engine/settings.local.toml`, kept out of git). A
-  badge names where each value came from: Default, User, Project, Personal
-  or Environment.
-- Saving writes that one file and reloads settings: every open session for
-  a user change, only that project's sessions otherwise.
-- Agents, commands, skills, rules and `AGENTS.md` files are edited as files,
-  after a check that the path is one the app knows.
-
-**For developers**
-- [`components/settings/`](../../crates/z-engine-gui/ui/src/components/settings/):
-  `SettingsPage.svelte` switches on the tab ids listed in `SettingsNav.svelte`;
-  one `*Tab.svelte` per tab; form logic in `lib/domain/settings/`.
-- Shell: [`commands/settings.rs`](../../crates/z-engine-gui/src-tauri/src/commands/settings.rs)
-  (`set_setting`, `add_permission_rule`, `set_hooks`, ...), `layers.rs`
-  (scope to file), `commands/access.rs` (keys, trust) and
-  `commands/extensions.rs` with `guard.rs` (path checks).
-
-## The composer, palette and shortcuts
-
-**In plain words.** The composer is the message box; the command palette is
-a search box for the whole app: press ⌘K, type a few letters, and jump to a
-chat, a workspace or an action.
-
-**How it works**
-- The composer sends `submit`. While a turn runs, a new message is queued as
-  steering (pills you can edit, sent as `editQueue`); ⌘Enter / Ctrl+Enter
-  sends `interrupt` and Esc sends `cancel`. It also offers `@` file and
-  agent mentions, `/` commands, `!cmd` shell commands (`shell`), `#` memory
-  notes and image attachments.
-- The palette (⌘K / Ctrl+K) lists recent chats, workspaces, actions and
-  controls such as the permission mode.
-- Global shortcuts (⌘ on macOS, Ctrl elsewhere): K palette, N new chat,
-  B sidebar, D diff panel, comma settings. In the composer, Shift+Enter adds
-  a line, Shift+Tab cycles the permission mode, ↑ and ↓ walk your history.
-
-**For developers**
-- [`chat/Composer.svelte`](../../crates/z-engine-gui/ui/src/components/chat/Composer.svelte);
-  keys in [`lib/domain/composerKeys.ts`](../../crates/z-engine-gui/ui/src/lib/domain/composerKeys.ts); app-only slash commands in `lib/stores/uiCommands.ts`.
-- [`overlays/CommandPalette.svelte`](../../crates/z-engine-gui/ui/src/components/overlays/CommandPalette.svelte)
-  on the `Combobox` primitive from `lib/ui/`, items from
-  `lib/paletteActions.ts`; global keys in `App.svelte`.
+  `activityMap` and `markRead` in `lib/domain/sessions.ts`, `sidebarMark`
+  and `sidebarModel` in `lib/domain/`, [`components/sidebar/AppSidebar.svelte`](../../crates/z-engine-gui/ui/src/components/sidebar/AppSidebar.svelte).
+- Branch and count: `git_summary` ([`Engine::git_summary`](../../crates/z-engine-engine/src/engine/queries/git.rs))
+  through `lib/runtime/projects.svelte.ts`, refreshed at start, on window
+  focus, when a project is added and when a turn ends.
 
 ## Self-updates
 
@@ -372,9 +151,9 @@ you to say yes.
 **How it works**
 1. The app asks GitHub for the latest release and compares versions; if the
    check fails (no network, 8-second timeout), nothing is shown.
-2. If it is newer, a notice says so once and the **Settings** button in the
-   title bar gets a dot; **Settings → About & Updates** has **Update &
-   Restart** and a link to the release page.
+2. If it is newer, a notice says so once, an **Update** button appears in
+   the sidebar's footer and a dot marks **About & Updates** in Settings,
+   which has **Update & Restart** and a link to the release page.
 3. Installing asks the updater for the release's `latest.json`, downloads
    the bundle for your platform and checks its signature against the public
    key built into the app.
@@ -388,7 +167,8 @@ you to say yes.
   [`tauri.conf.json`](../../crates/z-engine-gui/src-tauri/tauri.conf.json);
   signed bundles come from [`release.yml`](../../.github/workflows/release.yml).
 - Window: [`lib/updateStore.ts`](../../crates/z-engine-gui/ui/src/lib/updateStore.ts)
-  (check, install, `update-progress` listener), `chrome/TopBar`, `settings/AboutTab`.
+  (check, install, `update-progress` listener), `sidebar/SidebarFooter`,
+  `settings/AboutTab`.
 
 See also: [How Z Engine works](README.md) · [Everyday use](../user-guide/02-everyday-use.md) ·
 [Settings reference](../user-guide/12-settings-reference.md) · [The crates](crates.md) ·

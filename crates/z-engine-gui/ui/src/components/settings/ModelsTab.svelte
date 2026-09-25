@@ -51,7 +51,7 @@
     </SettingsCard>
   </SettingsGroup>
 
-  <SettingsGroup title="Fallbacks" description="Tried in order when the main model fails with a retryable error.">
+  <SettingsGroup collapsible title="Fallbacks" description="Tried in order when the main model fails with a retryable error.">
     <SettingsCard>
       <ListSetting
         title="Fallback models"
@@ -63,7 +63,7 @@
     </SettingsCard>
   </SettingsGroup>
 
-  <SettingsGroup title="Requests" description="Limits sent with every model request.">
+  <SettingsGroup collapsible title="Requests" description="Limits sent with every model request.">
     <SettingsCard>
       <ChoiceSetting
         title="Reasoning effort"

@@ -29,10 +29,10 @@ The log is `z-engine-gui.log` in the data folder:
 - Windows: `%APPDATA%\z-engine\z-engine-gui.log`
 
 For more detail, start Z Engine with the environment variable
-`RUST_LOG=debug`. Notices appear briefly in the status line at the top
-of the window; warnings and errors stay in the Now card's **Recent** list
-(click the line),
-which is usually the quickest clue.
+`RUST_LOG=debug`. Notices appear briefly in the island at the top of the
+window, and errors open it. Click the island for recent warnings and errors
+under **Recent**; the **Inbox** keeps every notice in full while the app
+runs. That is usually the quickest clue.
 
 ## Common problems
 
@@ -42,8 +42,8 @@ which is usually the quickest clue.
   needs a key and has none, the list is empty: add the key in **Settings →
   Providers**.
 - Local servers (Ollama, LM Studio) and some custom endpoints aren't in the
-  catalog. Type the model name in **Custom model ID** at the bottom of the
-  picker.
+  catalog. Type the model name in the field at the bottom of the picker
+  (**Another model id, e.g. …**) and click **Use**.
 - The catalog is downloaded from models.dev the first time you open the
   picker. If you were offline, it retries the next time you open it.
 - The cached catalog is refreshed in the background once it is a day old,
@@ -81,8 +81,9 @@ shaped session id, and `shell`/`read` tools). Z Engine sends that for
 ### Rate limits, "Provider busy", retrying
 
 Z Engine retries temporary failures (HTTP 408, 429, 500, 502, 503, 504,
-529, timeouts, lost connections) up to 5 attempts, showing **Provider busy ·
-retry N in Xs**. If it still fails, the turn ends with the provider's error.
+529, timeouts, lost connections) up to 5 attempts, while the island shows
+**Provider busy** and a countdown such as **retry 2 in 4s**. If it still
+fails, the turn ends with the provider's error.
 
 - Wait and send again, or choose another model.
 - Configure `model.fallbacks` so another model takes over automatically
@@ -92,7 +93,8 @@ retry N in Xs**. If it still fails, the turn ends with the provider's error.
 
 ### A tool was denied
 
-Expand the tool card; it says why:
+Expand the tool card (unfold its run first if it shares one line with
+other calls); it says why:
 
 - "denied by rule ..." – a deny rule in one of your settings files.
 - "plan mode is read-only" – switch modes (Shift+Tab) or approve a plan.
@@ -168,12 +170,12 @@ checkpoints.
 Settings changed in the Settings screens apply to open chats at once.
 Files you edit by hand (settings, agents, commands, skills, rules,
 instructions) are read when a chat opens; start a new chat or restart
-Z Engine. A settings file with an error is skipped: the Settings screen
-shows "This file is not applied until it is fixed".
+Z Engine. A settings file with an error is skipped: its Settings page shows
+"This settings file is not applied until it is fixed".
 
 ### The agent stopped by itself
 
-The turn footer or a notification explains why:
+The note on the turn's receipt or a notice explains why:
 
 - "Stopped · reached the limit of 200 model turns" – raise
   `agents.max_turns`.
@@ -191,8 +193,8 @@ installed, the project has more than 50,000 files, or the snapshot failed
 
 ### Keys don't answer the approval card
 
-The `y`/`s`/`p`/`n` keys work when the card has focus. Click the card
-(not a button), then press the key.
+The `y`/`s`/`p`/`n` keys work when the card has focus; their hints appear
+on the card then. Click the card (not a button), then press the key.
 
 ## FAQ
 
@@ -212,8 +214,14 @@ agent is instructed never to push unless you ask; add
 `ask = ["Bash(git push:*)"]` to be sure.
 
 **How do I stop everything?** Esc cancels the turn and its foreground
-subagents. Background jobs and agents are stopped from the **Jobs** tab.
-Quitting the app stops all of them.
+subagents. Background jobs and agents are stopped with **Stop** in the
+agents panel's **Jobs** tab. Quitting the app stops all of them.
+
+**Where did the Review panel, the Terminal and Context & Memory go?** They
+were renamed. The Review panel is the **Changes** panel (⌘D / Ctrl+D), the
+Terminal panel is the **Shell** drawer above the composer, Context & Memory
+is the **Prompt** inspector (**Inspect prompt** in the context card), and
+the Now card is the open island (click the island in the title bar).
 
 **Is there a command-line version?** No. Z Engine 2.0 is a desktop app.
 

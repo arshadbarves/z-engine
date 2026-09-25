@@ -1,172 +1,90 @@
 <script lang="ts">
-  import { tick } from "svelte";
-  import { catalogForPicker, catalogStore, fmtLimit, groupModels } from "$lib/catalog";
+  import { catalogForPicker, catalogStore, fmtLimit, groupModels, lookupModel } from "$lib/catalog";
   import { detectProviderId, PROVIDERS } from "$lib/providers";
   import { activeProjectRoot, sessions, setModel } from "$lib/runtime";
   import { settingsStore } from "$lib/stores/settings.svelte";
   import { bindStore } from "$lib/svelte/bind.svelte";
+  import { Popover } from "$lib/ui";
   import Icon, { Brain, Check, ChevronDown, Search, Sparkles, X } from "$lib/ui/icons";
   import { shortModel } from "$lib/util";
+  import EffortRow from "./EffortRow.svelte";
 
+  /** The model chip: which model answers (and how hard it thinks); the picker searches the catalog. */
   const catalog = bindStore(catalogStore);
   const provider = $derived(settingsStore.activeProvider);
-  const model = $derived({ current: sessions.active?.model || settingsStore.settings?.model.main || "" });
+  const current = $derived(sessions.active?.model || settingsStore.settings?.model.main || "");
+  const effort = $derived(sessions.active?.effort ?? null);
+  const reasons = $derived(Boolean(effort) || Boolean(lookupModel(catalog.current, current)?.model.reasoning));
   let open = $state(false);
   let custom = $state("");
   let query = $state("");
-  let searchInput = $state<HTMLInputElement>();
-  let triggerButton = $state<HTMLButtonElement>();
-  let menu = $state<HTMLDivElement>();
+
+  const groups = $derived(groupModels(catalogForPicker(catalog.current, provider?.baseUrl, provider?.hasKey ?? false), query));
+  const providerName = $derived(
+    PROVIDERS.find((preset) => preset.id === detectProviderId(provider?.baseUrl))?.name ?? "the active provider",
+  );
 
   $effect(() => {
-    if (open) {
-      void catalogStore.ensure();
-      void settingsStore.loadCredentials();
-      void settingsStore.ensure(activeProjectRoot());
-      void focusSearch();
-    }
+    if (!open) return;
+    void catalogStore.ensure();
+    void settingsStore.loadCredentials();
+    void settingsStore.ensure(activeProjectRoot());
   });
 
-  async function focusSearch() {
-    await tick();
-    searchInput?.focus();
-  }
-
-  async function closeMenu(restoreFocus: boolean) {
-    open = false;
-    if (!restoreFocus) return;
-    await tick();
-    triggerButton?.focus();
-  }
-
   async function pick(id: string) {
-    await closeMenu(true);
+    open = false;
     query = "";
-    if (id === model.current) return;
-    await setModel(id);
+    if (id !== current) await setModel(id);
   }
-
-  const groups = $derived(
-    groupModels(catalogForPicker(catalog.current, provider?.baseUrl, provider?.hasKey ?? false), query),
-  );
-
-  const activeProviderName = $derived(
-    PROVIDERS.find((preset) => preset.id === detectProviderId(provider?.baseUrl))?.name ?? "active provider",
-  );
 </script>
 
-<div class="model-picker">
-  {#if open}
-    <button
-      type="button"
-      class="popover-backdrop"
-      aria-label="Close model menu"
-      tabindex="-1"
-      onclick={() => void closeMenu(menu?.contains(document.activeElement) ?? false)}
-    ></button>
-  {/if}
-  <button
-    bind:this={triggerButton}
-    class={`mode model-btn${open ? " is-open" : ""}`}
-    onclick={() => (open = !open)}
-    title="Switch model"
-  >
-    <Icon icon={Sparkles} size={12} class="model-sparkle-icon" />
-    <span>{shortModel(model.current) || "model"}</span>
-    <Icon icon={ChevronDown} size={10} strokeWidth={2} class="model-chevron-icon" />
-  </button>
-  {#if open}
-    <div
-      bind:this={menu}
-      class="popover popover-wide model-picker-window"
-      role="menu"
-      tabindex="-1"
-      onkeydown={(e) => e.key === "Escape" && void closeMenu(true)}
-    >
-      <div class="model-picker-header">
-        <div class="model-picker-title-row">
-          <span class="model-picker-title">Model</span>
-          {#if model.current}
-            <div class="model-active-badge" title={`Active model: ${model.current}`}>
-              <span class="model-active-dot" aria-hidden="true"></span>
-              <span class="model-active-label">{shortModel(model.current)}</span>
-            </div>
-          {/if}
-        </div>
-        <div class="model-search-box">
-          <Icon icon={Search} size={12} class="model-search-icon" />
-          <input
-            bind:this={searchInput}
-            bind:value={query}
-            placeholder="Search models or providers…"
-            spellcheck={false}
-          />
-          {#if query}
-            <button
-              type="button"
-              class="model-search-clear"
-              onclick={() => (query = "")}
-              aria-label="Clear filter"
-            >
-              <Icon icon={X} size={11} />
-            </button>
-          {/if}
-        </div>
-      </div>
-      <div class="popover-scroll model-picker-scroll">
-        {#if groups.length === 0 && !query}
-          <div class="model-empty-note">
-            {catalog.current
-              ? `No ${activeProviderName} models available — check Settings.`
-              : "Loading catalog…"}
-          </div>
-        {:else if groups.length === 0 && query}
-          <div class="model-empty-note">
-            No models matching "{query}"
-          </div>
+<Popover.Root bind:open>
+  <Popover.Trigger class="composer-chip is-model" title="Switch model">
+    <Icon icon={Sparkles} size={12} />
+    <span>{shortModel(current) || "model"}</span>
+    {#if effort}<span class="composer-chip-sub">{effort}</span>{/if}
+    <Icon icon={ChevronDown} size={10} strokeWidth={2.2} />
+  </Popover.Trigger>
+  <Popover.Portal>
+    <Popover.Content class="chip-pop model-pop" side="top" align="end" sideOffset={8} collisionPadding={12}>
+      {#if reasons}<EffortRow {effort} />{/if}
+      <div class="model-search">
+        <Icon icon={Search} size={12} />
+        <!-- svelte-ignore a11y_autofocus -->
+        <input bind:value={query} placeholder="Search models or providers…" spellcheck={false} autofocus />
+        {#if query}
+          <button type="button" class="model-search-clear" onclick={() => (query = "")} aria-label="Clear the search">
+            <Icon icon={X} size={11} />
+          </button>
         {/if}
-        {#each groups as g}
-          <div class="model-provider-group">
-            <div class="model-provider-name">{g.provider}</div>
-            {#each g.items as m}
-              <button
-                class={`model-picker-row${m.id === model.current ? " active" : ""}`}
-                role="menuitem"
-                onclick={() => void pick(m.id)}
-              >
-                <div class="model-row-left">
-                  <div class="model-row-name-line">
-                    <span class="model-row-name">{m.name}</span>
-                    {#if m.reasoning}
-                      <span class="model-chip-reasoning">
-                        <Icon icon={Brain} size={9} />
-                        <span>Reasoning</span>
-                      </span>
-                    {/if}
-                  </div>
-                  <div class="model-row-sub">
-                    <span class="model-row-id">{m.id}</span>
-                  </div>
-                </div>
-                <div class="model-row-right">
-                  {#if m.contextWindow || m.maxOutput}
-                    <span class="model-chip-spec">
-                      {[fmtLimit(m.contextWindow), fmtLimit(m.maxOutput)].filter(Boolean).join(" / ")}
-                    </span>
-                  {/if}
-                  {#if m.id === model.current}
-                    <span class="model-active-check">
-                      <Icon icon={Check} size={12} strokeWidth={2.4} />
-                    </span>
-                  {/if}
-                </div>
-              </button>
-            {/each}
-          </div>
+      </div>
+      <div class="model-list">
+        {#if groups.length === 0}
+          <p class="model-empty">
+            {query ? `No models match “${query}”.` : catalog.current ? `No ${providerName} models available. Check Settings.` : "Loading the catalog…"}
+          </p>
+        {/if}
+        {#each groups as group (group.provider)}
+          <p class="model-group">{group.provider}</p>
+          {#each group.items as m (m.id)}
+            <button type="button" class={`model-row${m.id === current ? " is-current" : ""}`} onclick={() => void pick(m.id)}>
+              <span class="model-row-text">
+                <span class="model-row-name">
+                  {m.name}
+                  {#if m.reasoning}<Icon icon={Brain} size={10} class="model-row-reason" />{/if}
+                </span>
+                <span class="model-row-id">{m.id}</span>
+              </span>
+              {#if m.contextWindow || m.maxOutput}
+                <span class="model-row-spec">{[fmtLimit(m.contextWindow), fmtLimit(m.maxOutput)].filter(Boolean).join(" / ")}</span>
+              {/if}
+              {#if m.id === current}<Icon icon={Check} size={13} strokeWidth={2.2} />{/if}
+            </button>
+          {/each}
         {/each}
       </div>
       <form
-        class="model-picker-footer"
+        class="model-custom"
         onsubmit={(e) => {
           e.preventDefault();
           const id = custom.trim();
@@ -174,21 +92,9 @@
           custom = "";
         }}
       >
-        <div class="model-custom-input-wrap">
-          <input
-            bind:value={custom}
-            placeholder="Custom model ID (e.g. anthropic/claude-3.7-sonnet)…"
-            spellcheck={false}
-          />
-        </div>
-        <button
-          type="submit"
-          class="model-custom-btn"
-          disabled={!custom.trim()}
-        >
-          Set
-        </button>
+        <input bind:value={custom} placeholder="Another model id, e.g. anthropic/claude-sonnet-4.5" spellcheck={false} />
+        <button type="submit" class="btn-secondary" disabled={!custom.trim()}>Use</button>
       </form>
-    </div>
-  {/if}
-</div>
+    </Popover.Content>
+  </Popover.Portal>
+</Popover.Root>

@@ -22,9 +22,10 @@ where the customer sits.
   implementations; `z-engine-tools` reaches engine services only through
   *capability traits* (ports).
 - Only `z-engine-host` touches the operating system; `z-engine-integrations`
-  owns its server processes, and `z-engine-llm` makes the provider HTTP
-  calls. `config` and `store` read and write only their own files;
-  `context` and `policy` do no I/O at all.
+  owns its server processes, `z-engine-llm` makes the provider HTTP calls,
+  and the GUI shell checks GitHub for updates, installs them, and opens
+  project files through the opener plugin. `config` and `store` read and
+  write only their own files; `context` and `policy` do no I/O at all.
 
 ```mermaid
 flowchart TD
@@ -308,7 +309,9 @@ going, saves everything, and announces each change as an event.
 
 **For developers**
 - [`src/`](../../crates/z-engine-engine/src/): `engine/` (API, catalog,
-  export, `queries/`), `session/`, `run/`, `batch/`, `broker/`,
+  export, and [`queries/`](../../crates/z-engine-engine/src/engine/queries/):
+  diffs, git summary and worktrees, context breakdown, catalogs, file
+  search, MCP tests, trust), `session/`, `run/`, `batch/`, `broker/`,
   `orchestration/`, `ports/`, `hooks/`, `commands/`, `mcp/`, `lsp/`,
   `verify/`, `settings/`.
 - Uses every crate above (testkit only in tests); used by: gui. Contract:
@@ -342,8 +345,8 @@ the engine.
   bridge, the window (vibrancy or Mica), the log `<data dir>/z-engine-gui.log`
   and `#[tauri::command]` functions by domain.
 - Frontend (`ui`): Svelte 5, Bits UI and Vite; generated protocol types,
-  invoke wrappers, one event listener, pure reducers, stores, primitives
-  and screens.
+  invoke wrappers, one event listener, pure reducers, stores, primitives,
+  screens, and every stylesheet in `styles/`.
 - Must not: be imported by any crate. The shell uses only engine, protocol
   and config (settings files, credentials, trust, discovery); screens never
   call `invoke()` or import `bits-ui`; no terminal or headless replacement.
@@ -354,7 +357,7 @@ the engine.
   `layers.rs`, `guard.rs`, `ipc.rs`, `commands/`.
 - Frontend: [`ui/src/`](../../crates/z-engine-gui/ui/src/): `lib/protocol/`,
   `lib/commands/`, `lib/runtime/`, `lib/domain/`, `lib/stores/`, `lib/ui/`,
-  `components/`. How it works: [the desktop app](features-desktop-app.md);
+  `styles/`, `components/`. How it works: [the desktop app](features-desktop-app.md);
   rules: [GUI UI guide](../design/gui-ui-guide.md).
 
 ## Where do I change X?
@@ -372,7 +375,7 @@ listed in the [documentation contract](../AGENTS.md#3-what-to-update-for-each-ki
 | add a hook event | `HOOK_EVENTS` in [`z-engine-config/src/settings/hooks.rs`](../../crates/z-engine-config/src/settings/hooks.rs); fire it from `z-engine-engine/src/hooks/` |
 | add a protocol event | a variant of `Event` in [`z-engine-protocol/src/events.rs`](../../crates/z-engine-protocol/src/events.rs); emit it in the engine; a `case` in `z-engine-gui/ui/src/lib/domain/sessionView/reduce.ts`; run `cargo test -p z-engine-protocol` and commit the TypeScript |
 | add an IPC command | a `#[tauri::command]` fn in `z-engine-gui/src-tauri/src/commands/<domain>.rs`, listed in `generate_handler!` in `main.rs`; a wrapper in `ui/src/lib/commands/<domain>.ts`; engine data from [`engine/queries/<topic>.rs`](../../crates/z-engine-engine/src/engine/queries/) |
-| add a settings screen | `z-engine-gui/ui/src/components/settings/<Name>Tab.svelte`, an entry in `SettingsNav.svelte` and a branch in [`SettingsPage.svelte`](../../crates/z-engine-gui/ui/src/components/settings/SettingsPage.svelte); form logic in `ui/src/lib/domain/settings/` |
+| add a settings screen | `z-engine-gui/ui/src/components/settings/<Name>Tab.svelte`; its id in `SettingsTab` (`ui/src/lib/stores/ui.svelte.ts`), an entry in `SETTINGS_TABS` (`SettingsNav.svelte`), a `SETTINGS_SECTIONS` group and its `SETTING_ENTRIES` for search (`ui/src/lib/domain/settings/searchIndex.ts`), and a branch in [`SettingsPage.svelte`](../../crates/z-engine-gui/ui/src/components/settings/SettingsPage.svelte); form logic in `ui/src/lib/domain/settings/` |
 | change permission logic | rules and syntax in [`z-engine-policy/src/rules/`](../../crates/z-engine-policy/src/rules/), the decision pipeline in `src/decide/`, shell analysis in `src/shell/`; settings to policy in `z-engine-engine/src/settings/policy.rs` |
 | add a check parser | `z-engine-verify/src/parse/<runner>.rs` plus runner detection in [`parse/dispatch.rs`](../../crates/z-engine-verify/src/parse/dispatch.rs); discovery for a new ecosystem in `discovery/ecosystems/` |
 | add a provider adapter | a module like `anthropic/` or `openai/` in [`z-engine-llm/src/`](../../crates/z-engine-llm/src/) implementing `ModelClient`; construction in `provider/build.rs`, endpoint detection in `provider/detect.rs`; the settings-side `ProviderKind` in `z-engine-config/src/settings/provider.rs`, mapped in `z-engine-engine/src/settings/client.rs` |

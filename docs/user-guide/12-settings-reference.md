@@ -39,7 +39,8 @@ Problems never stop the app:
 - Out-of-range numbers are clamped and reported.
 - Unknown keys (typos) are reported and ignored.
 - A file with a wrong value type is **skipped entirely** until you fix it;
-  the Settings screen says "This file is not applied until it is fixed".
+  while that file is selected, the Settings page says "This settings file
+  is not applied until it is fixed" and why.
 - Files larger than 1 MiB are refused.
 - In an untrusted project, anything that runs programs or loosens
   permissions comes from your user settings only: `hooks`, `mcp`,
@@ -53,26 +54,48 @@ The first line of each file is `schema = 2`; the app manages it.
 
 ## Settings screens and files
 
-Most screens show **Save changes to** with **User**, **This project** and
-**Personal (local)**, and the path of the file they write. Changes apply to
-open chats immediately.
+Open Settings with ⌘, (Ctrl+, on Windows and Linux) or the gear at the
+bottom of the sidebar. It opens on the page you used last; links elsewhere
+in the app, such as the model name in the sidebar, open a given page.
+**Back** or Esc closes it. The navigation groups the pages, and each page
+starts with one line saying what it is for:
+
+| Group | Page | Keys |
+|---|---|---|
+| General | Models | `model.*` |
+| | Providers | `provider.*`, `model.main`; keys go to `auth.json` |
+| | Appearance | `ui.*` |
+| Agent | Permissions | `permissions.*` |
+| | Memory | `AGENTS.md` files |
+| | Verification | `verification.*` |
+| | Agents & Commands | files in `agents/`, `commands/`, `skills/`, `rules/`, `output-styles/` (user folder or project `.z-engine/`) |
+| Integrations | MCP | `mcp.servers.*` |
+| | Hooks | `hooks.*` |
+| System | Advanced | `context.*`, `agents.*`, `web.*`, `shell.*`, `lsp.*`, `compat.claude`, workspace trust |
+| | About & Updates | version, updates, file locations |
+
+- **Search settings** at the top of the navigation finds single settings
+  by name or by everyday words: "budget" finds **Session cost cap**, "api
+  key" finds **Providers and API keys**. Pick a result with ↑/↓ and Enter,
+  or click it: its page opens, its group unfolds, and the row is briefly
+  highlighted. The command palette finds the same settings.
+- Pages that edit settings files show **Saving to** at the top right. Its
+  menu offers **User**, **This project** and **Personal (local)**, each with
+  a short description, and shows the path of the file it writes. Changes
+  apply to open chats immediately. Without an open project only **User** is
+  available, and the page says "Open a project to edit its project and
+  personal settings."
+- Some groups fold to their title and one line until you open them: every
+  group on **Advanced** (Context, Agent limits, Web, Shell, Language
+  servers, Workspace), **Fallbacks** and **Requests** on **Models**, and
+  **Folders** on **Permissions**.
+- A setting shows a source badge (**User**, **Project**, **Personal** or
+  **Environment**) only when a settings file or environment variable sets
+  it; hover the badge for the file. **Reset** removes the value from the
+  selected file, and a note says when a higher file overrides it.
 
 > **Warning:** When the app saves a settings file it rewrites it, so
 > comments you added by hand are lost.
-
-| Screen | Keys |
-|---|---|
-| Models | `model.*` |
-| Providers | `provider.*`, `model.main`; keys go to `auth.json` |
-| Permissions | `permissions.*` |
-| Hooks | `hooks.*` |
-| Agents & Commands | files in `agents/`, `commands/`, `skills/`, `rules/`, `output-styles/` (user folder or project `.z-engine/`) |
-| MCP | `mcp.servers.*` |
-| Verification | `verification.*` |
-| Memory | `AGENTS.md` files |
-| Advanced | `context.*`, `agents.*`, `web.*`, `shell.*`, `lsp.*`, `compat.claude`, workspace trust |
-| Appearance | `ui.*` |
-| About & Updates | version, updates, file locations |
 
 ## Model
 
@@ -222,7 +245,7 @@ environment. They get `PATH`, `HOME`, `SHELL`, `TERM`, `LANG`, `LC_ALL`,
 |---|---|---|---|
 | `ui.companion` | `"lively"`, `"calm"`, `"off"` | `"lively"` | The title-bar companion: **Lively** reacts to the agent and to you (typing, scrolling, stepping away), **Calm** only to the agent, **Off** shows a small dot instead of the orb. Settings → Appearance. |
 | `ui.output_style` | string | unset | Name of an [output style](07-memory-and-context.md#output-styles). |
-| `ui.task_report_view` | `"quiet"`, `"compact"`, `"detailed"` | `"quiet"` | Report density choice under Settings → Appearance. The v2 transcript doesn't use it yet. |
+| `ui.task_report_view` | `"quiet"`, `"compact"`, `"detailed"` | `"quiet"` | How much the receipt under each turn shows: **Quiet** only a Verified, Unverified or Failed badge; **Compact** adds the changed files, duration and cost; **Detailed** adds tokens, the Not applicable badge and unfolded checks ([details](02-everyday-use.md#the-turn-receipt)). Settings → Appearance → Task report detail. |
 | `compat.claude` | bool | `true` | Also read `.claude/` folders (agents, commands, skills) and `CLAUDE.md` files. `.claude/settings.json` is never read. |
 
 ## Environment variables

@@ -1,0 +1,228 @@
+/* ── Settings: hook, check and server rows; inline editors ─────────────── */
+
+/* ── Hooks, checks and server rows ──────────────────────────────────────── */
+
+.hook-help {
+  padding: 14px 16px;
+  color: var(--label-2);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.hook-help p,
+.hook-help ul {
+  margin: 0 0 8px;
+}
+
+.hook-help p:last-child {
+  margin-bottom: 0;
+}
+
+.hook-help ul {
+  padding-left: 18px;
+}
+
+.hook-help code,
+.form-note code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.hook-events {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hook-event {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--raised);
+  border: 1px solid var(--separator);
+  border-radius: var(--r-m);
+}
+
+.hook-event-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hook-event-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hook-event-copy strong {
+  color: var(--label);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.hook-event-copy span {
+  color: var(--label-3);
+  font-size: 11.5px;
+}
+
+.hook-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hook-row,
+.entry-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px;
+  background: var(--fill-quiet);
+  border: 1px solid var(--separator);
+  border-radius: var(--r-s);
+}
+
+.entry-row {
+  margin: 8px 12px;
+}
+
+.hook-row.inherited {
+  background: transparent;
+}
+
+.hook-row.skipped,
+.entry-row.is-overridden,
+.mcp-server-item.is-overridden,
+.mcp-server-item.is-disabled {
+  opacity: 0.6;
+}
+
+.hook-row-main,
+.entry-row-copy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.entry-row-copy {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.entry-row-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--label);
+  font-size: 12.5px;
+}
+
+.hook-matcher,
+.entry-id {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border: 1px solid var(--separator);
+  border-radius: 4px;
+  color: var(--label-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.hook-command,
+.entry-command {
+  overflow: hidden;
+  color: var(--label);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entry-command {
+  max-width: 100%;
+  color: var(--label-3);
+}
+
+.hook-timeout,
+.hook-skipped {
+  flex-shrink: 0;
+  color: var(--label-3);
+  font-size: 11px;
+}
+
+.hook-skipped {
+  color: var(--tone-attention);
+}
+
+.hook-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.mcp-error {
+  padding: 0 16px 12px;
+}
+
+/* ── Inline editors ─────────────────────────────────────────────────────── */
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--fill-quiet);
+  border: 1px solid var(--separator-strong);
+  border-radius: var(--r-s);
+}
+
+.settings-card > .settings-form {
+  margin: 8px 12px;
+}
+
+.settings-form-field {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.settings-form-field.narrow {
+  flex: 0 0 150px;
+}
+
+.settings-form-field > span {
+  font-size: 11.5px;
+}
+
+.settings-form-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.settings-form-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--label-2);
+  font-size: 12px;
+}
+
+.settings-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

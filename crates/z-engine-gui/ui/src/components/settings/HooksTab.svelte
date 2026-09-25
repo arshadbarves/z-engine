@@ -27,7 +27,11 @@
           (<code>permissionDecision</code>, <code>updatedInput</code>, <code>additionalContext</code>).
         </li>
       </ul>
-      <p>The matcher of PreToolUse and PostToolUse is a regular expression over tool names, such as <code>Bash|Edit</code>.</p>
+      <p>
+        A matcher is a regular expression that picks when a hook runs: over tool names for PreToolUse and PostToolUse
+        (<code>Bash|Edit</code>), the start source for SessionStart (<code>startup</code> or <code>resume</code>) and the
+        trigger for PreCompact (<code>auto</code> or <code>manual</code>).
+      </p>
     </SettingsCard>
   </SettingsGroup>
 

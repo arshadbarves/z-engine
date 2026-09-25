@@ -216,11 +216,14 @@ mod tests {
     #[test]
     fn zen_clients_keep_a_stable_session() {
         let (endpoint, _) = openai(&config("https://opencode.ai/zen/v1"));
+        let id = endpoint.zen_session.as_deref().expect("zen session");
+        assert!(id.starts_with("ses_"), "{id}");
+        assert_eq!(id.len(), 30, "{id}");
         assert!(
-            endpoint
-                .zen_session
-                .as_deref()
-                .is_some_and(|id| id.starts_with("ses_"))
+            id.as_bytes()[4..16]
+                .iter()
+                .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()),
+            "{id}"
         );
     }
 

@@ -1,6 +1,8 @@
 # Z Engine documentation
 
-Start with the part that matches what you want to do.
+Start with the part that matches what you want to do. These pages are also
+published as a website, with search:
+[arshadbarves.github.io/z-engine](https://arshadbarves.github.io/z-engine/).
 
 | I want to… | Read |
 |---|---|
@@ -33,5 +35,3 @@ reading when you have what you need:
 ## Other documents
 
 - [status.md](status.md): how the v2 rewrite was delivered, and the release checks.
-- Documents marked "Historical (v1)" describe the previous implementation,
-  which has been removed. They are kept for reference only.

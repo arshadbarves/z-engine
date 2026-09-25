@@ -1,19 +1,19 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { DEFAULT_HOOK_TIMEOUT, hookError } from "$lib/domain/settings/hooks";
+  import { DEFAULT_HOOK_TIMEOUT, hookError, type HookEventMeta } from "$lib/domain/settings/hooks";
   import { LIMITS, parseNumber } from "$lib/domain/settings/limits";
   import type { HookConfig } from "$lib/protocol/config/HookConfig";
   import { cancelOnEscape } from "./escape";
 
   type Props = {
     hook: HookConfig;
-    toolEvent: boolean;
+    event: HookEventMeta;
     /** Resolves to true once saved. */
     onSave: (hook: HookConfig) => Promise<boolean>;
     onCancel: () => void;
   };
 
-  let { hook, toolEvent, onSave, onCancel }: Props = $props();
+  let { hook, event, onSave, onCancel }: Props = $props();
 
   const id = $props.id();
   const initial = untrack(() => hook);
@@ -29,7 +29,7 @@
     command,
     timeout_secs: parsedTimeout.ok ? (parsedTimeout.value ?? DEFAULT_HOOK_TIMEOUT) : DEFAULT_HOOK_TIMEOUT,
   });
-  const problem = $derived(parsedTimeout.ok ? hookError(candidate, toolEvent) : `Timeout: ${parsedTimeout.error}`);
+  const problem = $derived(parsedTimeout.ok ? hookError(candidate, event) : `Timeout: ${parsedTimeout.error}`);
 
   async function submit(event: SubmitEvent) {
     event.preventDefault();
@@ -43,10 +43,10 @@
 </script>
 
 <form class="settings-form" onsubmit={submit} {@attach cancelOnEscape(onCancel)}>
-  {#if toolEvent}
+  {#if event.matcher}
     <label class="settings-form-field" for={`${id}-matcher`}>
-      <span>Matcher</span>
-      <input id={`${id}-matcher`} class="setting-input mono" bind:value={matcher} placeholder="Bash|Edit — blank matches every tool" spellcheck={false} />
+      <span>{event.matcher.label} (matcher)</span>
+      <input id={`${id}-matcher`} class="setting-input mono" bind:value={matcher} placeholder={event.matcher.placeholder} spellcheck={false} />
     </label>
   {/if}
   <label class="settings-form-field" for={`${id}-command`}>
