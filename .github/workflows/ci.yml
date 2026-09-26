@@ -5,9 +5,16 @@ on:
     branches: [v2, release]
   pull_request:
 
+# Hosted runners OOM / lose heartbeat when cargo builds and runs the full
+# suite at default parallelism (debuginfo + many engine integration tests).
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_BUILD_JOBS: "2"
+
 jobs:
   rust:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -16,7 +23,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --exclude z-engine-gui --all-targets -- -D warnings
-      - run: cargo test --workspace --exclude z-engine-gui
+      # Cap build and test threads so the runner stays under memory pressure.
+      - run: cargo test --workspace --exclude z-engine-gui -j 2 -- --test-threads=2
       - name: Generated protocol TypeScript is committed
         run: git diff --exit-code -- crates/z-engine-gui/ui/src/lib/protocol
 

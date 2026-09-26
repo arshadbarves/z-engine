@@ -32,6 +32,9 @@ jobs:
         with:
           node-version: lts/*
       - uses: actions/configure-pages@v5
+        with:
+          # Create the Pages site if the repo has never enabled it.
+          enablement: true
       - run: npm ci --prefix website
       - run: npm run build --prefix website
       - uses: actions/upload-pages-artifact@v3
