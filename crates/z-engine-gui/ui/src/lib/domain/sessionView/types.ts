@@ -127,6 +127,8 @@ export interface SessionView {
   activeTurn: ActiveTurn | null;
   checkpoints: CheckpointInfo[];
   compactions: CompactionMarker[];
+  /** A summary compaction is running: from `compactionStarted` until its marker, a new main-agent reply, the turn's end or idle. */
+  compacting: boolean;
   usage: Usage;
   agentUsage: Record<string, Usage>;
   costUsd: number;
@@ -182,6 +184,7 @@ export function emptyView(sessionId: string): SessionView {
     activeTurn: null,
     checkpoints: [],
     compactions: [],
+    compacting: false,
     usage: emptyUsage(),
     agentUsage: {},
     costUsd: 0,

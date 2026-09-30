@@ -1,39 +1,132 @@
-/* App frame. The title zone and sidebar sit on the window material; the
-   content sheet is the one raised, solid surface. */
+/* App frame: floating cards on the window material, --shell-gap in from
+   its edges and from each other: the glass sidebar, the content sheet (the
+   stage) and the glass side panel. Every card's top band is --titlebar-h
+   tall, so the band centres line up with the macOS traffic lights, which
+   sit inside the sidebar card (window.rs). The stage's band is the
+   transparent title zone: content scrolls under it and the island sits in
+   its middle. Windows draws its caption buttons at the window's corner. */
 
 .app {
-  display: flex;
-  flex-direction: column;
+  /* the sidebar's slide, and when its slot resizes (once it has faded out) */
+  --sidebar-slide: var(--dur-spring-smooth);
+  --sidebar-resize-at: var(--dur-med);
+  position: relative;
   height: 100vh;
   overflow: hidden;
 }
+@media (prefers-reduced-motion: reduce) {
+  .app {
+    --sidebar-slide: 0ms;
+    --sidebar-resize-at: 0ms;
+  }
+}
 
-.app-titlebar {
-  /* Widest side cluster, so the centered status line never runs under it. */
-  --titlebar-side: 150px;
+.app-body {
+  height: 100%;
+  display: flex;
+  gap: var(--shell-gap);
+  padding: var(--shell-gap);
+  transition: gap 0s;
+}
+
+/* Collapsing: the sidebar slides out on transform, then its slot and gap
+   drop to zero in one layout change (a zero-length transition after a
+   delay). Expanding: the slot opens at once and the sidebar slides in.
+   Nothing resizes frame by frame. */
+.sidebar-slot {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  display: flex;
+  transition:
+    width 0s,
+    visibility 0s;
+}
+.sidebar-slot > .app-sidebar {
+  transition:
+    translate var(--sidebar-slide) var(--ease-spring-smooth),
+    opacity var(--sidebar-resize-at) var(--ease-out);
+}
+.app.no-sidebar .app-body {
+  gap: 0;
+  transition-delay: var(--sidebar-resize-at);
+}
+.app.no-sidebar .sidebar-slot {
+  width: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition-delay: var(--sidebar-resize-at);
+}
+.app.no-sidebar .sidebar-slot > .app-sidebar {
+  translate: calc(-100% - var(--shell-gap) * 2) 0;
+  opacity: 0;
+}
+
+/* The stage and the docked side panel; the expanded panel covers the
+   stage below the title zone, so the island stays in view. */
+.workstation-stage {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  gap: var(--shell-gap);
   position: relative;
+}
+.stage-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  position: relative;
+}
+.canvas-pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: var(--l1-bg);
+  border-radius: var(--l1-radius);
+  box-shadow: var(--l1-shadow);
+  overflow: hidden;
+}
+.app.panel-expanded .canvas-pane {
+  visibility: hidden;
+}
+
+/* The title zone over the top of the stage. */
+.app-titlebar {
+  /* Widest side cluster, so the centered island never runs under it. */
+  --titlebar-side: 120px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   z-index: 40;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   height: var(--titlebar-h);
-  flex-shrink: 0;
-  padding: 0 10px;
+  padding: 0 8px;
   user-select: none;
   -webkit-app-region: drag;
 }
-
-/* Clearance for the system-drawn traffic lights. */
-html.plat-mac .app-titlebar {
-  --titlebar-side: 130px;
-  padding-left: 84px;
+.app.no-sidebar .app-titlebar {
+  --titlebar-side: 150px;
 }
+/* Clearance for the traffic lights once the sidebar card is gone. */
 html.plat-mac .app.no-sidebar .app-titlebar {
-  --titlebar-side: 200px;
+  --titlebar-side: 180px;
+  padding-left: 76px;
 }
-html.plat-win .app-titlebar {
-  --titlebar-side: 220px;
+/* Clearance for the caption buttons unless the docked panel is under them. */
+html.plat-win .app:not(.has-panel) .app-titlebar {
+  --titlebar-side: 250px;
+  padding-right: 142px;
+}
+html.plat-win .app.no-sidebar:not(.has-panel) .app-titlebar {
+  --titlebar-side: 280px;
 }
 
 .titlebar-side {
@@ -43,9 +136,9 @@ html.plat-win .app-titlebar {
   min-width: 0;
 }
 
-/* A fixed box between the side clusters, so the island is centred in the
-   window and can never grow under them; it is click-through except for
-   the island itself, so the bar stays draggable around it. */
+/* A fixed box between the side clusters, so the island is centred over
+   the stage and can never grow under them; it is click-through except
+   for the island itself, so the zone stays draggable around it. */
 .titlebar-center {
   position: absolute;
   top: calc((var(--titlebar-h) - var(--island-h)) / 2);
@@ -81,6 +174,9 @@ html.plat-win .app-titlebar {
 .titlebar-btn.is-active {
   color: var(--label);
 }
+.titlebar-slot {
+  display: inline-flex;
+}
 .titlebar-dot {
   position: absolute;
   top: 6px;
@@ -91,69 +187,27 @@ html.plat-win .app-titlebar {
   background: var(--blue);
 }
 
-.app-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  gap: var(--shell-gap);
-  padding: 0 var(--shell-gap) var(--shell-gap);
-  overflow: hidden;
-  transition: gap var(--dur-med) var(--ease-out);
-}
-.app.no-sidebar .app-body {
-  gap: 0;
-}
-
-.sidebar-slot {
-  width: var(--sidebar-w);
-  flex-shrink: 0;
-  display: flex;
-  overflow: hidden;
-  transition:
-    width var(--dur-med) var(--spring-smooth),
-    opacity var(--dur-fast) var(--ease-out);
-}
-.app.no-sidebar .sidebar-slot {
-  width: 0;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.workstation-stage {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  gap: var(--shell-gap);
-  position: relative;
-  overflow: hidden;
-}
-
-.canvas-pane {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  background: var(--sheet);
-  border-radius: var(--r-l);
-  box-shadow: var(--sheet-shadow);
-  overflow: hidden;
-}
-
-/* First appearance after the splash: each surface sharpens into place. */
-.app.app-enter .app-titlebar {
-  animation: blur-in var(--dur-slow) var(--ease-out) both;
-}
+/* First appearance after the splash: each surface settles into place.
+   Fill `backwards`, never `both`: an opacity animation still filling makes
+   its element a backdrop root, and the glass inside it stops blurring. */
 .app.app-enter .sidebar-slot {
-  animation: blur-in var(--dur-slow) var(--ease-out) 60ms both;
+  animation: sheet-in var(--dur-spring-smooth) var(--ease-spring-smooth) backwards;
 }
-.app.app-enter .canvas-pane {
-  animation: blur-in var(--dur-slow) var(--ease-out) 120ms both;
+.app.app-enter .canvas-pane,
+.app.app-enter .app-titlebar {
+  animation: sheet-in var(--dur-spring-smooth) var(--ease-spring-smooth) 60ms backwards;
 }
 
-/* Windows caption buttons: minimize, maximize, close. */
+/* Windows caption buttons: minimize, maximize, close, in the window's
+   corner; a full page (z-index 45) brings its own. */
+.shell-caption {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 42;
+  display: flex;
+  height: var(--titlebar-h);
+}
 .win-controls {
   display: flex;
   align-self: stretch;
@@ -169,7 +223,7 @@ html.plat-win .app-titlebar {
   width: 46px;
   height: 100%;
   padding: 0;
-  color: #c8c8cc;
+  color: var(--caption-glyph);
   background: transparent;
   border: none;
   transition: background 0.12s ease, color 0.12s ease;
@@ -181,19 +235,19 @@ html.plat-win .app-titlebar {
 }
 
 .win-ctrl:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f0f0f2;
+  background: var(--fill-hover);
+  color: var(--caption-glyph-hover);
 }
 
 .win-ctrl.close:hover {
-  background: #e81123;
-  color: #fff;
+  background: var(--caption-close);
+  color: var(--on-color);
 }
 
 .win-ctrl:active {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--fill-quiet);
 }
 
 .win-ctrl.close:active {
-  background: #bf0f1d;
+  background: var(--caption-close-press);
 }

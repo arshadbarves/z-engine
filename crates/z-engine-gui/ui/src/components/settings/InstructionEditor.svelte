@@ -48,7 +48,7 @@
   ></textarea>
   {#if error}<p class="setting-error" role="alert">{error}</p>{/if}
   <div class="settings-form-actions">
-    <button type="button" class="btn-ghost" onclick={onCancel}>Cancel</button>
+    <button type="button" class="btn-secondary" onclick={onCancel}>Cancel</button>
     <button type="submit" class="btn-accent" disabled={saving || truncated}>{saving ? "Saving…" : "Save file"}</button>
   </div>
 </form>

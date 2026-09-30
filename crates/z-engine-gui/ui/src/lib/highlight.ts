@@ -48,15 +48,7 @@ export function highlightLine(text: string, language: string | null): string | n
   }
 }
 
-/** Highlight fenced code blocks inside a markdown root. Safe to call repeatedly. */
-export function highlightRoot(root: HTMLElement | null | undefined) {
-  if (!root) return;
-  root.querySelectorAll<HTMLElement>("pre code").forEach((el) => {
-    if (el.dataset.highlighted === "yes") return;
-    try {
-      hljs.highlightElement(el);
-    } catch {
-      /* unknown language — leave plain */
-    }
-  });
+/** A fenced code block as escaped, syntax-colored HTML; null when the language is unknown. */
+export function highlightCode(text: string, language: string | null): string | null {
+  return highlightLine(text, language);
 }

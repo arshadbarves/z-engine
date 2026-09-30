@@ -1,37 +1,5 @@
-/* ── Settings: permission rules ─────────────────────────────────────────── */
-
-/* ── Permissions Tab ───────────────────────────────────────────────────── */
-
-.permissions-tab {
-  gap: 20px;
-}
-
-.permission-empty-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 24px 20px;
-  color: var(--label-3);
-}
-
-.permission-empty-icon {
-  opacity: 0.5;
-  flex-shrink: 0;
-}
-
-.permission-empty-text strong {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--label-2);
-  margin-bottom: 2px;
-}
-
-.permission-empty-text p {
-  margin: 0;
-  font-size: 12px;
-  color: var(--label-3);
-}
+/* ── Settings: permission rules. Tags are kit pills; the field is a
+   setting input (settings-rows.css); suggestions are chips (settings-chips). */
 
 .permission-rules-list {
   display: flex;
@@ -42,8 +10,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: var(--space-2) var(--space-4);
   border-bottom: 1px solid var(--separator);
 }
 
@@ -56,143 +25,34 @@
 }
 
 .permission-rule-code {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 550;
-  color: var(--label);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--text-s);
+  color: var(--label);
 }
 
-.permission-rule-tag {
-  font-size: 10.5px;
-  font-weight: 550;
-  color: #00d68f;
-  background: rgba(0, 214, 143, 0.1);
-  border: 1px solid rgba(0, 214, 143, 0.2);
-  padding: 1px 7px;
-  border-radius: 999px;
-  flex-shrink: 0;
-}
-
-.permission-delete-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: var(--label-3);
-  cursor: pointer;
-  transition: all 0.14s ease;
-  flex-shrink: 0;
-}
-
-.permission-delete-btn:hover {
-  background: rgba(217, 101, 104, 0.14);
-  color: var(--red);
+.permission-rule-row.inherited .permission-rule-code {
+  color: var(--label-2);
 }
 
 .permission-add-form {
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.015);
+  padding: var(--space-3) var(--space-4);
 }
 
 .permission-input-wrap {
   display: flex;
-  gap: 8px;
   align-items: center;
+  gap: var(--space-2);
 }
 
-.permission-input-wrap input {
+.permission-input-wrap .setting-input {
   flex: 1;
-  padding: 9px 12px;
-  background: var(--raised-2);
-  border: 1px solid var(--separator);
-  border-radius: var(--r-s);
-  color: var(--label);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  outline: none;
-  transition: border-color 0.16s ease;
-}
-
-.permission-input-wrap input:focus {
-  border-color: var(--separator-strong);
-}
-
-.permission-add-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 16px;
-  background: #ffffff;
-  border: none;
-  border-radius: 9999px;
-  color: #000000;
-  font-size: 12px;
-  font-weight: 550;
-  cursor: pointer;
-  white-space: nowrap;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
-  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.permission-add-btn:hover:not(:disabled) {
-  background: #e8e8ed;
-  transform: scale(1.02);
-}
-
-.permission-add-btn:disabled {
-  opacity: 0.35;
-  background: rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.4);
-  cursor: not-allowed;
 }
 
 .permission-presets-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-}
-
-.preset-chip-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: var(--raised);
-  border: 1px solid var(--separator);
-  border-radius: 9999px;
-  color: var(--label-2);
-  font-size: 11.5px;
-  cursor: pointer;
-  transition: all 0.14s ease;
-}
-
-.preset-chip-btn code {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-}
-
-.preset-chip-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: var(--separator-strong);
-  color: var(--label);
-}
-
-.preset-chip-btn.is-added {
-  opacity: 0.6;
-  border-color: rgba(0, 214, 143, 0.25);
-  background: rgba(0, 214, 143, 0.05);
-  color: var(--green);
-  cursor: default;
-}
-
-.chip-icon-added {
-  color: var(--green);
+  gap: var(--space-2);
 }

@@ -1,15 +1,14 @@
 <script lang="ts">
   import type { TimelineItem } from "$lib/domain/timeline/turns";
   import { visibleText } from "$lib/domain/timeline/blocks";
-  import Icon, { ChevronDown, ChevronRight, CornerDownLeft, Layers, Terminal } from "$lib/ui/icons";
+  import { Disclosure } from "$lib/ui";
+  import Icon, { ChevronRight, CornerDownLeft, Terminal } from "$lib/ui/icons";
   import { fmtTokens } from "$lib/util";
   import Markdown from "./Markdown.svelte";
 
   /** Transcript cards that are not model output: steering, command output, errors, compaction. */
   type Props = { item: Extract<TimelineItem, { kind: "steer" | "output" | "error" | "compaction" }> };
   let { item }: Props = $props();
-
-  let open = $state(false);
 </script>
 
 {#if item.kind === "steer"}
@@ -29,16 +28,19 @@
 {:else if item.kind === "error"}
   <div class="msg error" role="alert">{item.error.message}</div>
 {:else}
-  <div class="compaction-divider">
-    <button type="button" class="compaction-head" aria-expanded={open} onclick={() => (open = !open)}>
-      <Icon icon={Layers} size={11} />
-      <span>
-        Context compacted · {fmtTokens(item.marker.tokensBefore)} → {fmtTokens(item.marker.tokensAfter)} tokens
+  <Disclosure class="compaction-divider" summaryClass="compaction-head" chevron={false}>
+    {#snippet summary()}
+      <span class="compaction-rule" aria-hidden="true"></span>
+      <span class="compaction-label">
+        Context compacted · {fmtTokens(item.marker.tokensBefore)} → {fmtTokens(item.marker.tokensAfter)}
       </span>
-      <Icon icon={open ? ChevronDown : ChevronRight} size={10} />
-    </button>
-    {#if open}
-      <div class="compaction-summary"><Markdown text={item.marker.summary} /></div>
-    {/if}
-  </div>
+      <span aria-hidden="true">·</span>
+      <span class="compaction-toggle">
+        Summary
+        <span class="disclosure-chevron" aria-hidden="true"><Icon icon={ChevronRight} size={10} strokeWidth={2} /></span>
+      </span>
+      <span class="compaction-rule" aria-hidden="true"></span>
+    {/snippet}
+    <div class="compaction-summary"><Markdown text={item.marker.summary} /></div>
+  </Disclosure>
 {/if}

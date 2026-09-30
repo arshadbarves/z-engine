@@ -42,7 +42,7 @@
       <strong>{event.name}</strong>
       <span>{event.description}</span>
     </div>
-    <button type="button" class="setting-add-btn" disabled={busy || editing !== null} onclick={() => (editing = "new")}>
+    <button type="button" class="btn-secondary size-s" disabled={busy || editing !== null} onclick={() => (editing = "new")}>
       <Icon icon={Plus} size={12} />
       <span>Add</span>
     </button>
@@ -86,7 +86,7 @@
                   <button type="button" class="icon-btn-mini" disabled={busy || editing !== null} aria-label="Edit hook" onclick={() => (editing = index)}>
                     <Icon icon={Pencil} size={11} />
                   </button>
-                  <button type="button" class="permission-delete-btn" disabled={busy} aria-label="Remove hook" onclick={() => void save(removeItem(own, index))}>
+                  <button type="button" class="icon-btn-mini setting-remove" disabled={busy} aria-label="Remove hook" onclick={() => void save(removeItem(own, index))}>
                     <Icon icon={Trash2} size={12} />
                   </button>
                 {/if}

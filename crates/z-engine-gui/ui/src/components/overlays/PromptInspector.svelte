@@ -4,21 +4,23 @@
   import { parseInspectRequest, type PromptInspect } from "$lib/domain/requestInspect";
   import { categorizeRow, inspectCopyText, inspectRows, type ContextCategory } from "$lib/promptInspectView";
   import { errorText, sessions } from "$lib/runtime";
-  import { EmptyState } from "$lib/ui";
+  import { ui } from "$lib/stores/ui.svelte";
+  import { Button, EmptyState } from "$lib/ui";
   import { copyFeedback } from "$lib/ui/copyFeedback.svelte";
-  import Icon, { Brain, Check, ChevronLeft, Copy } from "$lib/ui/icons";
-  import WindowControlsMaybe from "../chrome/WindowControlsMaybe.svelte";
+  import Icon, { Brain, Check, Copy } from "$lib/ui/icons";
   import InspectorInsights from "./InspectorInsights.svelte";
   import InspectorMap from "./InspectorMap.svelte";
   import InspectorOutline from "./InspectorOutline.svelte";
   import InspectorReader from "./InspectorReader.svelte";
 
   /**
-   * The last request sent to the model, part by part: a map of what fills
-   * the window, an outline to move through, and each part to read.
+   * The side panel's Context tab: the last request sent to the model, part
+   * by part. A ring of what fills the context window and an outline to move
+   * through; with the panel expanded, the selected part reads beside them,
+   * and picking a part while docked expands the panel to read it.
    */
-  type Props = { isClosing?: boolean; onClose: () => void };
-  let { isClosing = false, onClose }: Props = $props();
+  type Props = { expanded: boolean };
+  let { expanded }: Props = $props();
 
   let snap = $state<PromptInspect | null>(null);
   let err = $state<string | null>(null);
@@ -59,15 +61,10 @@
     if (visible.length && !visible.includes(selected)) selected = visible[0] ?? 0;
   });
 
-  $effect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key !== "Escape" || e.defaultPrevented) return;
-      e.preventDefault();
-      onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
+  function pick(index: number) {
+    selected = index;
+    if (!expanded) ui.setPanelExpanded(true);
+  }
 
   function step(dir: -1 | 1) {
     const next = stepSelection(visible, selected, dir);
@@ -75,40 +72,32 @@
   }
 </script>
 
-<div class="inspector-overlay" class:is-closing={isClosing} role="presentation">
-  <div class="inspector-page" class:is-closing={isClosing} role="dialog" tabindex="-1" aria-label="Prompt inspector">
-    <header class="app-titlebar inspector-head" data-tauri-drag-region>
-      <div class="titlebar-side" data-tauri-drag-region>
-        <button type="button" class="icon-btn" aria-label="Back" title="Back (Esc)" onclick={onClose}>
-          <Icon icon={ChevronLeft} size={15} />
-        </button>
-        <h1 class="inspector-title">Prompt</h1>
-        {#if snap}<span class="inspector-model" title={snap.model}>{snap.model}</span>{/if}
-      </div>
-      <div class="titlebar-side" data-tauri-drag-region>
-        <button type="button" class="btn-ghost inspector-copy" disabled={!snap} onclick={() => snap && void copied.copy(inspectCopyText(snap))}>
-          <Icon icon={copied.copied ? Check : Copy} size={13} />
-          {copied.copied ? "Copied" : "Copy all"}
-        </button>
-        <WindowControlsMaybe />
-      </div>
-    </header>
+<div class="inspector-panel" class:is-expanded={expanded}>
+  <header class="inspector-bar">
+    {#if snap}<span class="inspector-model" title={snap.model}>{snap.model}</span>{/if}
+    <span class="inspector-bar-space"></span>
+    <Button size="s" disabled={!snap} onclick={() => snap && void copied.copy(inspectCopyText(snap))}>
+      <Icon icon={copied.copied ? Check : Copy} size={13} />
+      {copied.copied ? "Copied" : "Copy all"}
+    </Button>
+  </header>
 
-    {#if err}
-      <div class="inspector-state"><EmptyState icon={Brain} title="Nothing to inspect yet" description={err} /></div>
-    {:else if !snap}
-      <p class="inspector-state inspector-loading">Reading the last request…</p>
-    {:else}
-      <div class="inspector-body">
-        <aside class="inspector-side">
-          <InspectorMap {totals} used={snap.totalTokens} {limit} active={only} onPick={(c) => (only = c)} />
-          <InspectorOutline {groups} {selected} {query} total={rows.length} onQuery={(q) => (query = q)} onSelect={(i) => (selected = i)} onStep={step} />
-          <InspectorInsights {snap} />
-        </aside>
+  {#if err}
+    <div class="inspector-state"><EmptyState icon={Brain} title="Nothing to inspect yet" description={err} /></div>
+  {:else if !snap}
+    <p class="inspector-state inspector-loading">Reading the last request…</p>
+  {:else}
+    <div class="inspector-body">
+      <aside class="inspector-side">
+        <InspectorMap {totals} used={snap.totalTokens} {limit} active={only} onPick={(c) => (only = c)} />
+        <InspectorOutline {groups} {selected} {query} total={rows.length} onQuery={(q) => (query = q)} onSelect={pick} onStep={step} />
+        <InspectorInsights {snap} />
+      </aside>
+      {#if expanded}
         <section class="inspector-main">
           <InspectorReader row={rows[selected]} totalTokens={snap.totalTokens} />
         </section>
-      </div>
-    {/if}
-  </div>
+      {/if}
+    </div>
+  {/if}
 </div>

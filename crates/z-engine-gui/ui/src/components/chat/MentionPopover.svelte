@@ -50,7 +50,7 @@
   }
 </script>
 
-<div class="composer-pop file-pop" role="listbox" aria-label="Files and agents">
+<div class="composer-pop file-pop glass-strong" role="listbox" aria-label="Files and agents">
   <div class="file-pop-header">
     <div class="file-pop-header-title">
       <Icon icon={FolderGit2} size={13} class="file-header-icon" />

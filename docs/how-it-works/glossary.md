@@ -22,9 +22,9 @@ See [Providers and models](features-integrations-and-safety.md#providers-and-mod
 ### Approval
 
 A card that asks you before an action runs, with **Allow once**, **Always
-allow…** (in this chat or in this project) and **Deny…**. It appears when
-the permission check answers *ask*. See
-[Permissions](features-core.md#permissions-modes-rules-and-approvals).
+allow…** (in this chat or in this project) and **Deny…**. It appears in
+the composer, in place of the text box, when the permission check answers
+*ask*. See [Permissions](features-core.md#permissions-modes-rules-and-approvals).
 
 ## B
 
@@ -32,8 +32,7 @@ the permission check answers *ask*. See
 
 A [subagent](#subagent) started with `run_in_background: true`. It runs as
 a background job while the main agent keeps working, survives **Esc**, and
-sends a reminder when it finishes. See
-[Background jobs](features-agents-and-context.md#background-jobs).
+sends a reminder when it finishes. See [Background jobs](features-agents-and-context.md#background-jobs).
 
 ## C
 
@@ -41,15 +40,13 @@ sends a reminder when it finishes. See
 
 A project command that proves something about the code: a test, build,
 typecheck, lint or format run. Checks are found by reading build files or
-set in settings, and every run is recorded as evidence. See
-[Verification](features-integrations-and-safety.md#verification).
+set in settings, and every run is recorded as evidence. See [Verification](features-integrations-and-safety.md#verification).
 
 ### Checkpoint
 
 A snapshot of your project's files, taken before each of your messages and
 stored in a hidden git repository outside the project. [Rewind](#rewind)
-uses it to put files back. See
-[Checkpoints and rewind](features-integrations-and-safety.md#checkpoints-and-rewind).
+uses it to put files back. See [Checkpoints and rewind](features-integrations-and-safety.md#checkpoints-and-rewind).
 
 ### Command (protocol)
 
@@ -61,8 +58,7 @@ message), `steer`, `resolveApproval` or `cancel`. Commands go in and
 
 Replacing the older part of a long conversation with a summary so it fits
 the [context window](#context-window) again. It happens automatically near
-the limit, or when you run `/compact`. See
-[Compaction](features-agents-and-context.md#compaction).
+the limit, or when you run `/compact`. See [Compaction](features-agents-and-context.md#compaction).
 
 ### Context window
 
@@ -113,8 +109,7 @@ See [Verification](features-integrations-and-safety.md#verification).
 
 Your own script that Z Engine runs at a fixed moment, such as before a tool
 runs (`PreToolUse`) or when the agent wants to stop (`Stop`). A hook can add
-context, block an action or send the agent back to work. See
-[Hooks](features-interaction.md#hooks).
+context, block an action or send the agent back to work. See [Hooks](features-interaction.md#hooks).
 
 ## I
 
@@ -133,10 +128,11 @@ folder. See [Instruction files](features-agents-and-context.md#instruction-files
 
 ### Island
 
-The pill in the middle of the title bar: the companion orb and one line
-about what the agent is doing, which opens into a sheet with the details.
-A ring beside it shows how full the context is. See
-[The island and the companion](features-desktop-screens.md#the-island-and-the-companion).
+The pill in the middle of the title bar: the [pet](#pet) and one line
+about what the agent is doing, which opens into a card with the details.
+While a chat needs you it offers **Approve**, **Answer** or **Review**. A
+ring beside it shows how full the context is. See
+[The island and the pet](features-desktop-screens.md#the-island-and-the-pet).
 
 ## L
 
@@ -159,8 +155,7 @@ agent uses to ask them questions. See
 ### MCP
 
 Model Context Protocol, an open standard for plugging extra tools, data and
-prompts into AI apps. See
-[MCP servers](features-integrations-and-safety.md#mcp-servers).
+prompts into AI apps. See [MCP servers](features-integrations-and-safety.md#mcp-servers).
 
 ### MCP server
 
@@ -189,6 +184,14 @@ it. See [What an AI coding agent is](README.md#what-an-ai-coding-agent-is).
 The chat-wide setting for how much runs without asking: **Ask**,
 **Auto-accept edits**, **Plan** (read-only) or **Bypass**. See
 [Permissions](features-core.md#permissions-modes-rules-and-approvals).
+
+### Pet
+
+The small creature in the title bar's [island](#island) (named Zen unless
+you rename it; it replaced the older "companion" orb). It shows the agent's
+state as body language, may roam onto the composer, the sidebar and the
+[side panel](#side-panel) while nothing needs you, and levels up as turns
+finish. See [The pet](features-desktop-screens.md#the-pet).
 
 ### Prompt
 
@@ -227,7 +230,7 @@ knows where to look. See
 ### Rewind
 
 Going back to the moment before one of your messages: the code, the
-conversation, or both. See
+conversation, or both, from **Rewind** at the end of that turn. See
 [Checkpoints and rewind](features-integrations-and-safety.md#checkpoints-and-rewind).
 
 ### Round
@@ -240,8 +243,7 @@ asks for and their results. A turn has one or more rounds. See
 
 A pattern that allows, asks for or denies an action, such as
 `Bash(npm test:*)` or `Read(./.env)`. Rules come from settings or from an
-approval's **Always allow…**. See
-[Permissions](features-core.md#permissions-modes-rules-and-approvals).
+approval's **Always allow…**. See [Permissions](features-core.md#permissions-modes-rules-and-approvals).
 
 ### Rule file
 
@@ -260,8 +262,14 @@ by default. See [The sandbox](features-integrations-and-safety.md#the-sandbox).
 ### Session
 
 One chat: its messages, turns, approvals and checks, stored in its own
-folder so it can be reopened and resumed. See
-[Sessions and persistence](features-integrations-and-safety.md#sessions-and-persistence).
+folder so it can be reopened and resumed. See [Sessions and persistence](features-integrations-and-safety.md#sessions-and-persistence).
+
+### Side panel
+
+The panel beside the chat with four tabs: **Changes** (what changed in your
+files), **Plan**, **Agents** (helpers and background jobs) and **Context**
+(the last prompt sent to the model). It can be resized or cover the whole
+stage. See [The side panel](features-desktop-screens.md#the-side-panel).
 
 ### Skill
 
@@ -359,8 +367,7 @@ from recorded [checks](#check), never from what the model claims. See
 
 Your decision that a project folder may use its own settings, hooks, MCP
 servers and extensions in full. Until you trust it, the project can only
-make things stricter. See
-[Settings layers and workspace trust](features-integrations-and-safety.md#settings-layers-and-workspace-trust).
+make things stricter. See [Settings layers and workspace trust](features-integrations-and-safety.md#settings-layers-and-workspace-trust).
 
 ### Worktree
 

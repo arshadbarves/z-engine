@@ -52,24 +52,26 @@ also ask in plain words ("use a review agent to check my changes").
 ## Watching agents
 
 Every subagent appears in the transcript as a one-line **Agent** card with
-its type, task, status and time. **Open** shows its transcript; click the
-line for its model, tokens, cost, tool calls and result.
+a tiny sprite of the pet (it bobs while the helper works, smiles when it is
+done), its type, task, status and time. **Open** shows its transcript;
+click the line for its model, tokens, cost, tool calls and result.
 
-While subagents or background jobs run, small dots orbit the companion in
-the title bar. Click the island to see what runs (for example "2 agents
-working · 1 job running · 1 ready to apply") and **Open** the agents panel.
-`/agents`, `/jobs` and the command palette's **Agents** and **Background
-jobs** open it too.
+While subagents or background jobs run, small dots orbit the pet in
+the title bar. Click the island to see what runs (for example "2 working ·
+1 job running · 1 ready to apply"); that **Agents** row opens the side
+panel's **Agents** tab, and a dot on the tab marks a helper that started
+while another tab was showing. `/agents`, `/jobs` and the command palette's
+**Agents** and **Background jobs** open it too.
 
-The panel has two tabs, **Agents** and **Jobs**, each with a count and a
-green dot while something runs. Esc closes it, or goes back from a
-transcript.
+The tab has two parts, **Agents** and **Jobs**, each with a count and a
+green dot while something runs. Esc goes back from a transcript, then
+closes the panel.
 
-- **Agents** tab, top to bottom:
+- **Agents**, top to bottom:
   - **Ready to apply**: worktree agents whose changes wait for you
     ([below](#apply-or-discard)).
-  - **Working**: running subagents (nested ones indented) with status,
-    type, task and elapsed time, plus a live line saying what each is doing
+  - **Working**: running subagents (nested ones indented), each with the
+    same pet sprite, type, task, status and elapsed time, plus a live line saying what each is doing
     now, such as "Searching for set_path". The arrow opens its transcript
     and todo list; click the row for model, tokens, cost and tool calls.
   - **Finished**, folded: the same rows; click one for its result or
@@ -78,19 +80,20 @@ transcript.
     the main agent and each subagent.
 
   Before the first subagent it says **No helpers yet**.
-- **Jobs** tab: background shells and background agents. A running job
+- **Jobs**: background shells and background agents. A running job
   shows its last six lines of output and a **Stop** button; a finished
   job's output folds under **Output**. **Transcript** opens a background
   agent's transcript.
 
-Approval cards from a subagent show up in the main transcript, labelled
-with the agent's type and task.
+Approval cards from a subagent wait in the main chat's composer like the
+main agent's, labelled with the agent's type and task.
 
 ## Background agents and resuming
 
 The main agent can start a subagent in the background: it continues its own
 work and is notified when the subagent finishes. Background agents appear
-in the **Jobs** tab; **Stop** stops one, **Transcript** opens it.
+under **Jobs** in the Agents tab; **Stop** stops one, **Transcript** opens
+it.
 
 The agent can also *resume* a finished subagent, continuing it with its
 full earlier context instead of starting over. Each report ends with the
@@ -98,7 +101,7 @@ agent's id; you can ask for this in plain words ("ask the explore agent
 from before to also check the tests").
 
 **Esc** cancels the current turn and the foreground subagents it started.
-Background agents and shells keep running; stop them from the Jobs tab.
+Background agents and shells keep running; stop them from **Jobs**.
 Closing the app stops everything.
 
 ## Worktree isolation
@@ -119,9 +122,9 @@ Use it by asking for it ("do this in an isolated worktree") or by setting
 
 ### Apply or discard
 
-A finished worktree agent is pinned at the top of the **Agents** tab under
-**Ready to apply**, as a card with its type and task, branch, file count
-and diffstat, and two buttons:
+A finished worktree agent is pinned at the top of the side panel's
+**Agents** tab under **Ready to apply**, as a card with its type and task,
+branch, file count and diffstat, and two buttons:
 
 - **Apply** merges the agent's changes into your working folder with a
   three-way merge, so your own uncommitted changes are kept. If the changes

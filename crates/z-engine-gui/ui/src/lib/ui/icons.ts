@@ -34,6 +34,7 @@ import {
   EnergyIcon,
   ExternalLinkIcon,
   EyeIcon,
+  FavouriteIcon,
   File01Icon,
   FileAddIcon,
   FileCodeIcon,
@@ -62,6 +63,7 @@ import {
   MoreHorizontalIcon,
   OctagonAlertIcon,
   PanelLeftIcon,
+  PanelRightIcon,
   PencilEdit02Icon,
   PlayIcon,
   Plug01Icon,
@@ -73,8 +75,10 @@ import {
   Shield02Icon,
   ShieldAlertIcon,
   SlidersHorizontalIcon,
+  SmileIcon,
   SourceCodeIcon,
   SparklesIcon,
+  StarIcon,
   SquareTerminalIcon,
   StopIcon,
   Target01Icon,
@@ -95,6 +99,7 @@ export const Plus = Add01Icon;
 export const Settings = Settings03Icon;
 export const Search = Search02Icon;
 export const PanelLeft = PanelLeftIcon;
+export const PanelRight = PanelRightIcon;
 export const FolderGit2 = FolderGitTwoIcon;
 export const GitCompare = GitCompareIcon;
 export const GitBranch = GitBranchIcon;
@@ -177,4 +182,7 @@ export const Lock = LockIcon;
 export const Lightbulb = Idea01Icon;
 export const Chat = BubbleChatIcon;
 export const Columns = LayoutTwoColumnIcon;
+export const Smile = SmileIcon;
+export const Heart = FavouriteIcon;
+export const Star = StarIcon;
 

@@ -12,6 +12,7 @@ mod guard;
 mod ipc;
 mod layers;
 mod logging;
+mod pet;
 mod state;
 mod window;
 mod workspaces;
@@ -100,6 +101,8 @@ fn main() -> anyhow::Result<()> {
             update::check_for_update,
             update::open_release_url,
             update::install_update,
+            commands::pet::pet_load,
+            commands::pet::pet_save,
         ])
         .setup(move |app| {
             let _guard = handle.enter();
@@ -112,7 +115,8 @@ fn main() -> anyhow::Result<()> {
             let workspaces = Workspaces::new(&paths.data_dir);
             let active = workspaces.initial_root(paths.home_dir.as_deref());
             tracing::info!(project = %active.display(), "engine initialized");
-            app.manage(AppState::new(engine, workspaces, active));
+            let pet = pet::PetStore::new(&paths.data_dir);
+            app.manage(AppState::new(engine, workspaces, pet, active));
             app.manage(window::Material::default());
             window::create_main(app)?;
             Ok(())

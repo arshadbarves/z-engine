@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { Dialog, DialogPanel } from "$lib/ui";
-  import Icon, { GitBranch } from "$lib/ui/icons";
+  import { Button, Dialog, DialogPanel } from "$lib/ui";
+  import { GitBranch } from "$lib/ui/icons";
   import { wsBasename } from "$lib/workspaces";
 
   /**
@@ -45,30 +45,25 @@
     if (!open) onClose();
   }}
 >
-  <DialogPanel contentClass="worktree-dialog">
-    <header class="worktree-dialog-head">
-      <span class="worktree-dialog-icon"><Icon icon={GitBranch} size={16} /></span>
-      <div>
-        <p class="worktree-dialog-title">New chat in a worktree</p>
-        <p class="worktree-dialog-desc">
-          A second copy of the project on its own branch. The chat's changes stay apart from your working tree until you merge them.
-        </p>
-      </div>
-    </header>
-
-    <form class="worktree-dialog-form" onsubmit={submit}>
+  <DialogPanel
+    title="New chat in a worktree"
+    description="A second copy of the project on its own branch. The chat's changes stay apart from your working tree until you merge them."
+    icon={GitBranch}
+    contentClass="worktree-dialog"
+  >
+    <form class="modal-body" onsubmit={submit}>
       {#if projects.length > 1}
-        <label class="worktree-field">
-          <span>Project</span>
-          <select class="setting-input" value={source} onchange={(e) => (from = e.currentTarget.value)}>
+        <label class="modal-field">
+          <span class="modal-field-label">Project</span>
+          <select class="text-field" value={source} onchange={(e) => (from = e.currentTarget.value)}>
             {#each projects as root (root)}<option value={root}>{wsBasename(root)}</option>{/each}
           </select>
         </label>
       {/if}
-      <label class="worktree-field">
-        <span>What is it for?</span>
+      <label class="modal-field">
+        <span class="modal-field-label">What is it for?</span>
         <!-- svelte-ignore a11y_autofocus -->
-        <input class="setting-input" bind:value={name} placeholder="fix auth redirect" spellcheck={false} autofocus />
+        <input class="text-field" bind:value={name} placeholder="fix auth redirect" spellcheck={false} autofocus />
       </label>
       <p class="worktree-preview" aria-live="polite">
         {#if slug}
@@ -77,12 +72,12 @@
           A short name becomes the branch and folder name.
         {/if}
       </p>
-      <div class="worktree-actions">
-        <button type="button" class="btn-ghost" onclick={onClose}>Cancel</button>
-        <button type="submit" class="btn-primary" disabled={!slug || !source || creating}>
+      <footer class="modal-footer">
+        <Button variant="secondary" onclick={onClose}>Cancel</Button>
+        <Button type="submit" variant="accent" disabled={!slug || !source || creating}>
           {creating ? "Creating…" : "Create and start"}
-        </button>
-      </div>
+        </Button>
+      </footer>
     </form>
   </DialogPanel>
 </Dialog.Root>

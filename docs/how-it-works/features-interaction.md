@@ -73,8 +73,8 @@ visible checklist.
      read-only; use ExitPlanMode to propose the plan"). Reading, searching,
      read-only commands, the language server, the web and `explore` or
      `plan` subagents still work.
-  2. The model calls `ExitPlanMode`; a **Plan ready for review** card
-     appears and the agent waits.
+  2. The model calls `ExitPlanMode`; a **Plan ready · Review** row appears
+     in the chat, the side panel opens on its Plan tab, and the agent waits.
   3. **Approve** switches to Auto-accept edits or Ask (your choice) and the
      agent implements the plan, or your edited version. **Keep planning**
      sends your feedback, and the agent revises in plan mode.
@@ -88,9 +88,10 @@ visible checklist.
   pending, in progress or completed, one in progress at a time. The list
   survives compaction, and an agent working on a multi-step task for a
   while without one is reminded to create it.
-- While a card waits you can still queue messages, change mode or cancel.
-  Another chat waiting on a card is counted beside the island, and the
-  Inbox lists its card.
+- An approval or question waits in the composer, in place of the draft:
+  you can still change mode or cancel. While a plan waits you can also
+  queue messages. Another chat waiting on a card is counted beside the
+  island, and the Inbox lists its card.
 
 **For developers**
 

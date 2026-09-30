@@ -9,7 +9,7 @@ import { MAIN_AGENT, type SessionView } from "./types";
 
 export function withStatus(view: SessionView, status: SessionStatus): SessionView {
   if (status !== "idle") return { ...view, status };
-  return { ...view, status, activeTurn: null, retrying: null };
+  return { ...view, status, activeTurn: null, retrying: null, compacting: false };
 }
 
 export function onUserMessage(
@@ -52,5 +52,6 @@ export function onTurnFinished(view: SessionView, turn: TurnRecord): SessionView
     activeTurn: view.activeTurn?.turnId === turn.turnId ? null : view.activeTurn,
     verification: null,
     retrying: null,
+    compacting: false,
   };
 }

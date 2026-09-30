@@ -2,8 +2,8 @@
   import { modLabel } from "$lib/platform";
   import { chatChanges, sessions } from "$lib/runtime";
   import { ui } from "$lib/stores/ui.svelte";
-  import { Tooltip } from "$lib/ui";
-  import Icon, { GitCompare } from "$lib/ui/icons";
+  import { GitCompare } from "$lib/ui/icons";
+  import TitlebarButton from "./TitlebarButton.svelte";
 
   /** Opens the diff review; the count is how many files this chat has changed. */
   const mod = modLabel();
@@ -19,15 +19,15 @@
   });
 </script>
 
-<Tooltip text={label} shortcut={`${mod}D`}>
-  <button
-    type="button"
-    class={`titlebar-btn changes-btn${ui.diffOpen ? " is-active" : ""}${count ? " has-count" : ""}`}
-    aria-label={label}
-    aria-pressed={ui.diffOpen}
-    onclick={() => ui.toggleDiff()}
-  >
-    <Icon icon={GitCompare} size={15} strokeWidth={1.8} />
-    {#if count}<span class="changes-count">{count}</span>{/if}
-  </button>
-</Tooltip>
+{#snippet counted()}
+  {#key count}<span class="changes-count">{count}</span>{/key}
+{/snippet}
+
+<TitlebarButton
+  {label}
+  shortcut={`${mod}D`}
+  icon={GitCompare}
+  pressed={ui.panelTab === "changes"}
+  extra={count ? counted : undefined}
+  onclick={() => ui.togglePanel("changes")}
+/>

@@ -5,7 +5,7 @@
 
 use std::sync::Mutex;
 
-use z_engine_protocol::{AgentId, CompactionMarker, Message};
+use z_engine_protocol::{AgentId, CompactionMarker, CompactionTrigger, Message};
 use z_engine_store::AgentLog;
 
 use crate::error::EngineError;
@@ -57,6 +57,8 @@ impl TranscriptSink for AgentSink {
     fn set_working(&self, working: Vec<Message>) {
         *lock(&self.working) = working;
     }
+
+    fn compacting(&self, _trigger: CompactionTrigger) {}
 
     fn compacted(
         &self,

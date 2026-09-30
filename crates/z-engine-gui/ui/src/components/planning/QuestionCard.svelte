@@ -12,6 +12,7 @@
   } from "$lib/domain/questions";
   import type { PendingQuestion } from "$lib/protocol/PendingQuestion";
   import { answerQuestion } from "$lib/runtime";
+  import { Button, Pill } from "$lib/ui";
   import Icon, { Check, HelpCircle } from "$lib/ui/icons";
 
   type Props = { pending: PendingQuestion; agentLabel: string | null };
@@ -43,11 +44,11 @@
 </script>
 
 {#if question && draft}
-  <div class="msg interaction-card question-card" data-pending-card>
+  <div class="question-card" role="group" aria-label="Question from the agent" tabindex="-1" data-pending-card>
     <div class="interaction-kicker">
       <Icon icon={HelpCircle} size={13} />
       <span>{questions.length > 1 ? `${questions.length} questions` : "Question"}</span>
-      {#if agentLabel}<span class="interaction-agent">{agentLabel}</span>{/if}
+      {#if agentLabel}<Pill tone="info">{agentLabel}</Pill>{/if}
     </div>
 
     {#if questions.length > 1}
@@ -111,17 +112,10 @@
     </div>
 
     <div class="interaction-actions">
-      <button
-        type="button"
-        class="btn-accent"
-        disabled={!ready || sending}
-        onclick={() => void respond(buildAnswers(questions, drafts))}
-      >
+      <Button variant="accent" disabled={!ready || sending} onclick={() => void respond(buildAnswers(questions, drafts))}>
         Submit
-      </button>
-      <button type="button" class="btn-ghost" disabled={sending} onclick={() => void respond(null)}>
-        Dismiss
-      </button>
+      </Button>
+      <Button disabled={sending} onclick={() => void respond(null)}>Dismiss</Button>
       <span class="hint">{question.multiSelect ? "Pick any that apply" : "Pick one"}</span>
     </div>
   </div>

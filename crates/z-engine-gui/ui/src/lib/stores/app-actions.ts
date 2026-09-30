@@ -1,4 +1,5 @@
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
+import { tick } from "svelte";
 import { createWorktree } from "../commands";
 import {
   deleteChat,
@@ -13,7 +14,12 @@ import { resetShell } from "../shellStore";
 import { sameWorkspacePath, workspaceStore, wsBasename } from "../workspaces";
 import { composer } from "./composer.svelte";
 import { confirmStore } from "./confirm.svelte";
-import { ui } from "./ui.svelte";
+import { ui, type SettingsTab } from "./ui.svelte";
+
+/** Settings opens as a sheet over the app; without a page, it opens where it was left. */
+export function openSettings(tab: SettingsTab | null = null, focus: string | null = null): void {
+  ui.openSettings(tab, focus);
+}
 
 /** Pick a folder and register it as a workspace; returns the new root. */
 export async function addWorkspace(): Promise<string | null> {
@@ -51,7 +57,7 @@ export function goHome(root: string | null = null): void {
   resetShell();
   sessions.activate(null);
   ui.view = "home";
-  composer.focus();
+  void tick().then(() => composer.focus());
 }
 
 export function showInbox(): void {

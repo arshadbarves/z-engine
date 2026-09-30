@@ -43,7 +43,7 @@ Task report detail** (`ui.task_report_view`):
 While checks run at the end of a turn, the island in the title bar says
 **Checking the changes**. When the turn ends, it briefly shows the result,
 such as **Verified**, **Checks failed** or **Done · not verified** (the
-companion cheers or droops), and the receipt keeps the badge.
+pet cheers or droops), and the receipt keeps the badge.
 
 ## Where checks come from
 

@@ -257,7 +257,10 @@ are listed by `Engine::slash_commands` with kind `ui` and never resolved.
 - **Compaction:** above half the context window, old tool results are cleared
   (originals spilled to artifacts); above `context.compact_at_percent`,
   older history is summarized by the `fast` model. A split never separates a
-  tool call from its result and may land inside a long single turn.
+  tool call from its result and may land inside a long single turn. For the
+  main agent the summary job emits `compactionStarted { trigger: auto |
+  manual }` once a split is planned, then `compacted { marker }`, or a
+  warning notice if summarizing fails.
 
 ## MCP and language servers
 

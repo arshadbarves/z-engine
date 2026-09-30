@@ -37,12 +37,12 @@
     {#if showFiles}
       <span class="receipt-files" aria-label="Files changed in this turn">
         {#each files.slice(0, FILES_SHOWN) as file (file)}
-          <button type="button" class="receipt-file" title={`Review ${file}`} onclick={() => ui.openDiff(file, "session")}>
+          <button type="button" class="receipt-file" title={`Review ${file}`} onclick={() => ui.openPanel("changes", file, "session")}>
             {baseName(file)}
           </button>
         {/each}
         {#if files.length > FILES_SHOWN}
-          <button type="button" class="receipt-file is-more" onclick={() => ui.openDiff(null, "session")}>
+          <button type="button" class="receipt-file is-more" onclick={() => ui.openPanel("changes", null, "session")}>
             +{files.length - FILES_SHOWN}
           </button>
         {/if}

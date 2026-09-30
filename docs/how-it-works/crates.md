@@ -1,10 +1,9 @@
 # The crates
 
 Z Engine's Rust code is split into *crates* (Rust packages), each with one
-job. This page explains each one in plain words, what it owns, what it must
-not do, where its main modules are, and who uses it. The binding rules are
-in the [structure contract](../../AGENTS.md#crates); terms are in the
-[glossary](glossary.md). Part of [How Z Engine works](README.md).
+job. This page explains each in plain words: what it owns, what it must not
+do, its main modules and who uses it. Binding rules: the [structure contract](../../AGENTS.md#crates);
+terms: the [glossary](glossary.md). Part of [How Z Engine works](README.md).
 
 ## How the crates fit together
 
@@ -86,8 +85,7 @@ own.
 - Owns: all prompt prose under `prompts/<area>/*.md`: system prompts, tool
   descriptions, built-in agents, built-in prompt commands, reminders, and
   auxiliary prompts (compaction summary, titles, web extraction).
-- Each file becomes one `pub const` through `include_str!`, compiled into
-  the app.
+- Each file becomes one `pub const` (`include_str!`), compiled into the app.
 - Must not: contain logic or depend on anything; no other crate inlines
   prompt text.
 
@@ -119,8 +117,7 @@ line is busy.
 - [`src/`](../../crates/z-engine-llm/src/): `client.rs` (`ModelClient`),
   `anthropic/`, `openai/`, `provider/` (configuration, endpoint detection,
   construction), `transport.rs`, `retry.rs`, `fallback.rs`, `accumulate.rs`,
-  `catalog/`, `cost.rs`.
-- Used by: engine, testkit.
+  `catalog/`, `cost.rs`. Used by: engine, testkit.
 
 ## z-engine-config
 
@@ -263,8 +260,7 @@ by line as it happens, and can be read back to resume it.
 **For developers**
 - [`src/`](../../crates/z-engine-store/src/): `store.rs` (`SessionStore`),
   `log.rs`, `append.rs`, `record.rs`, `replay.rs`, `meta.rs`, `heal.rs`,
-  `listing.rs`, `artifacts.rs`, `legacy/`.
-- Used by: engine.
+  `listing.rs`, `artifacts.rs`, `legacy/`. Used by: engine.
 
 ## z-engine-tools
 
@@ -314,8 +310,7 @@ going, saves everything, and announces each change as an event.
   search, MCP tests, trust), `session/`, `run/`, `batch/`, `broker/`,
   `orchestration/`, `ports/`, `hooks/`, `commands/`, `mcp/`, `lsp/`,
   `verify/`, `settings/`.
-- Uses every crate above (testkit only in tests); used by: gui. Contract:
-  [v2 engine architecture](../architecture/v2-engine.md).
+- Uses every crate above (testkit only in tests); used by: gui. Contract: [v2 engine architecture](../architecture/v2-engine.md).
 
 ## z-engine-testkit
 
@@ -341,9 +336,10 @@ the engine.
 
 **How it works**
 - Shell (`src-tauri`): builder wiring (one tokio runtime, plugins, handler
-  list), `AppState` (engine, workspaces, active project), the `engineEvent`
-  bridge, the window (vibrancy or Mica), the log `<data dir>/z-engine-gui.log`
-  and `#[tauri::command]` functions by domain.
+  list), `AppState` (engine, workspaces, pet store, active project), the
+  `engineEvent` bridge, the window (dark vibrancy on macOS, dark Mica on
+  Windows 11, else solid), the log and the pet's growth
+  (`<data dir>/z-engine-gui.log`, `pet.json`), `#[tauri::command]`s.
 - Frontend (`ui`): Svelte 5, Bits UI and Vite; generated protocol types,
   invoke wrappers, one event listener, pure reducers, stores, primitives,
   screens, and every stylesheet in `styles/`.
@@ -354,7 +350,7 @@ the engine.
 **For developers**
 - Shell: [`src-tauri/src/`](../../crates/z-engine-gui/src-tauri/src/):
   `main.rs`, `state.rs`, `events.rs`, `window.rs`, `workspaces.rs`,
-  `layers.rs`, `guard.rs`, `ipc.rs`, `commands/`.
+  `pet.rs`, `layers.rs`, `guard.rs`, `ipc.rs`, `commands/`.
 - Frontend: [`ui/src/`](../../crates/z-engine-gui/ui/src/): `lib/protocol/`,
   `lib/commands/`, `lib/runtime/`, `lib/domain/`, `lib/stores/`, `lib/ui/`,
   `styles/`, `components/`. How it works: [the desktop app](features-desktop-app.md);

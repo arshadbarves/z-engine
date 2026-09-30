@@ -1,6 +1,7 @@
-/** Keep an overlay mounted until its exit animation finishes. */
+import { EXIT_MS, motionMs } from "./motion";
 
-export function presence(open: () => boolean, exitMs = 280) {
+/** Keep an overlay mounted until its exit animation (`--dur-exit` by default) finishes. */
+export function presence(open: () => boolean, exitMs = motionMs("--dur-exit", EXIT_MS)) {
   let mounted = $state(open());
   let closing = $state(false);
 

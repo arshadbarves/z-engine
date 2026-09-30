@@ -1,9 +1,9 @@
 <script lang="ts">
   import { agentActivity, agentSections, agentTree, agentUsageRows, workCounts } from "$lib/domain/agentTree";
   import { sessions } from "$lib/runtime";
-  import { ui, type WorkTab } from "$lib/stores/ui.svelte";
-  import { Badge, Disclosure, EmptyState } from "$lib/ui";
-  import Icon, { Bot, ChevronLeft, SquareTerminal, X } from "$lib/ui/icons";
+  import { ui } from "$lib/stores/ui.svelte";
+  import { Badge, Button, Disclosure, EmptyState } from "$lib/ui";
+  import Icon, { Bot, ChevronLeft, SquareTerminal } from "$lib/ui/icons";
   import { ticker } from "$lib/ui/ticker.svelte";
   import AgentRow from "./AgentRow.svelte";
   import AgentTranscript from "./AgentTranscript.svelte";
@@ -12,13 +12,10 @@
   import JobRow from "./JobRow.svelte";
 
   /**
-   * The agents panel: work waiting for Apply first, then running helpers
-   * with what each does now; finished ones and usage fold away. Jobs have
-   * their own tab.
+   * The side panel's Agents tab: work waiting for Apply first, then running
+   * helpers with what each does now; finished ones and usage fold away.
+   * Background jobs have their own view beside the helpers.
    */
-  type Props = { isClosing?: boolean; onClose: () => void };
-  let { isClosing = false, onClose }: Props = $props();
-
   const view = $derived(sessions.active);
   const agents = $derived(view?.agents ?? {});
   const jobs = $derived(view?.jobs ?? {});
@@ -28,43 +25,32 @@
   const counts = $derived(workCounts(agents, jobs));
   const usageRows = $derived(view ? agentUsageRows(agents, view.agentUsage, view.costUsd) : []);
   const focused = $derived(ui.agentTranscript ? (agents[ui.agentTranscript] ?? null) : null);
-  const tab: WorkTab = $derived(ui.workPanel ?? "agents");
+  const tab = $derived(ui.workTab);
   const clock = ticker(() => counts.runningAgents + counts.runningJobs > 0);
   let finishedOpen = $state(false);
   let usageOpen = $state(false);
 
   function openAgent(agentId: string) {
-    ui.openWork("agents", agentId);
+    ui.openPanel("agents", agentId);
   }
-
-  $effect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key !== "Escape" || e.defaultPrevented || ui.settingsOpen || ui.inspectOpen || ui.paletteOpen) return;
-      if ((e.target as HTMLElement | null)?.closest("textarea, input, [role='dialog'], [role='menu']")) return;
-      if (focused) ui.agentTranscript = null;
-      else onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
 </script>
 
-<aside class={`work-panel${isClosing ? " is-closing" : ""}`} aria-label="Agents and jobs">
+<div class="work-panel">
   <header class="work-head">
     {#if focused}
-      <button type="button" class="icon-btn" aria-label="Back to agents" onclick={() => (ui.agentTranscript = null)}>
+      <Button variant="icon" aria-label="Back to agents" onclick={() => (ui.agentTranscript = null)}>
         <Icon icon={ChevronLeft} size={15} />
-      </button>
+      </Button>
       <span class="work-title" title={focused.description}>{focused.agentType} · {focused.description}</span>
     {:else}
       <div class="work-tabs" role="tablist" aria-label="Background work">
-        <button type="button" role="tab" class="work-tab" class:is-on={tab === "agents"} aria-selected={tab === "agents"} onclick={() => ui.openWork("agents")}>
+        <button type="button" role="tab" class="work-tab" class:is-on={tab === "agents"} aria-selected={tab === "agents"} onclick={() => (ui.workTab = "agents")}>
           <Icon icon={Bot} size={13} />
           Agents
           {#if counts.runningAgents}<span class="work-live" aria-label="running"></span>{/if}
           <Badge count={tree.length} />
         </button>
-        <button type="button" role="tab" class="work-tab" class:is-on={tab === "jobs"} aria-selected={tab === "jobs"} onclick={() => ui.openWork("jobs")}>
+        <button type="button" role="tab" class="work-tab" class:is-on={tab === "jobs"} aria-selected={tab === "jobs"} onclick={() => (ui.workTab = "jobs")}>
           <Icon icon={SquareTerminal} size={13} />
           Jobs
           {#if counts.runningJobs}<span class="work-live" aria-label="running"></span>{/if}
@@ -72,9 +58,6 @@
         </button>
       </div>
     {/if}
-    <button type="button" class="icon-btn work-close" aria-label="Close panel" title="Close (Esc)" onclick={onClose}>
-      <Icon icon={X} size={14} />
-    </button>
   </header>
 
   <div class="work-body">
@@ -127,4 +110,4 @@
       </div>
     {/if}
   </div>
-</aside>
+</div>

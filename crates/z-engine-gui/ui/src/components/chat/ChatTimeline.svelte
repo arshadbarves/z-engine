@@ -1,21 +1,9 @@
 <script lang="ts">
-  type Props = { prompts: Array<{ id: string; text: string }> };
-  let { prompts }: Props = $props();
+  /** The prompt rail at the column's edge: one dot per prompt (evenly sampled in a long chat). */
+  type Props = { prompts: Array<{ id: string; text: string }>; onJump: (messageId: string) => void };
+  let { prompts, onJump }: Props = $props();
 
   let hoveredId = $state<string | null>(null);
-
-  function jumpTo(id: string) {
-    const el = document.getElementById(`msg-${id}`);
-    const transcript = el?.closest(".transcript");
-    if (el && transcript) {
-      const tRect = transcript.getBoundingClientRect();
-      const elRect = el.getBoundingClientRect();
-      const offset = elRect.top - tRect.top + transcript.scrollTop - 24;
-      transcript.scrollTo({ top: Math.max(0, offset), behavior: "smooth" });
-    } else {
-      el?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }
 
   function getSnippet(text: string): string {
     const clean = text.replace(/[\n\r]+/g, " ").trim();
@@ -32,7 +20,7 @@
             type="button"
             class="chat-timeline-pill"
             aria-label={`Jump to: ${getSnippet(prompt.text)}`}
-            onclick={() => jumpTo(prompt.id)}
+            onclick={() => onJump(prompt.id)}
             onmouseenter={() => (hoveredId = prompt.id)}
             onmouseleave={() => {
               if (hoveredId === prompt.id) hoveredId = null;

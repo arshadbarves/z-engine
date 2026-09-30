@@ -65,10 +65,10 @@
             autocomplete="off"
             spellcheck={false}
           />
-          <button type="submit" class="setting-add-btn" disabled={busy || !key.trim()}>Save key</button>
           {#if stored.hasKey}
             <button type="button" class="btn-ghost" disabled={busy} onclick={() => void storeKey(null)}>Remove</button>
           {/if}
+          <button type="submit" class="btn-secondary" disabled={busy || !key.trim()}>Save key</button>
         </form>
       </SettingRow>
     {/if}

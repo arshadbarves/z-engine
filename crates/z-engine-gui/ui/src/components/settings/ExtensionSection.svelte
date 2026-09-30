@@ -1,5 +1,6 @@
 <script lang="ts">
   import { EXTENSION_SCOPE_LABELS, isNativeScope, type ExtensionEntry, type ExtensionKindMeta } from "$lib/domain/settings/extensions";
+  import { Pill } from "$lib/ui";
   import Icon, { Copy, Pencil, Plus, Trash2 } from "$lib/ui/icons";
   import SettingsCard from "./SettingsCard.svelte";
   import SettingsGroup from "./SettingsGroup.svelte";
@@ -29,15 +30,15 @@
         <div class="extension-row-copy">
           <div class="extension-row-title">
             <strong>{meta.kind === "commands" ? `/${entry.name}` : entry.name}</strong>
-            <span class={`extension-scope scope-${entry.source.scope}`}>{EXTENSION_SCOPE_LABELS[entry.source.scope]}</span>
+            <Pill>{EXTENSION_SCOPE_LABELS[entry.source.scope]}</Pill>
           </div>
           {#if entry.description}<span class="extension-row-desc">{entry.description}</span>{/if}
           <code class="extension-row-path" title={entry.source.path}>{entry.source.path}</code>
         </div>
         <div class="extension-row-actions">
           {#if confirming === entry.source.path}
-            <button type="button" class="btn-danger" disabled={busy} onclick={() => onDelete(entry)}>Delete file</button>
-            <button type="button" class="btn-ghost" onclick={() => (confirming = null)}>Keep</button>
+            <button type="button" class="btn-secondary size-s" onclick={() => (confirming = null)}>Keep</button>
+            <button type="button" class="btn-danger size-s" disabled={busy} onclick={() => onDelete(entry)}>Delete file</button>
           {:else}
             <button
               type="button"
@@ -52,7 +53,7 @@
             {#if native}
               <button
                 type="button"
-                class="permission-delete-btn"
+                class="icon-btn-mini setting-remove"
                 disabled={busy}
                 aria-label={`Delete ${entry.name}`}
                 onclick={() => (confirming = entry.source.path)}
@@ -65,7 +66,7 @@
       </div>
     {/each}
     <div class="extension-foot">
-      <button type="button" class="setting-add-btn" disabled={busy} onclick={onCreate}>
+      <button type="button" class="btn-secondary" disabled={busy} onclick={onCreate}>
         <Icon icon={Plus} size={12} />
         <span>New {meta.singular}</span>
       </button>

@@ -98,8 +98,8 @@
             A trusted project can use its own settings, hooks and tool servers. Only trust code you know.
           </p>
           <div class="trust-actions">
-            <button type="button" class="btn-secondary" onclick={() => void answer(true)}>Trust it</button>
             <button type="button" class="btn-ghost" onclick={() => void answer(false)}>Not now</button>
+            <button type="button" class="btn-secondary" onclick={() => void answer(true)}>Trust it</button>
           </div>
         {/if}
       </div>
@@ -108,6 +108,6 @@
 
   {#snippet footer()}
     <button type="button" class="btn-ghost" onclick={onBack}>Back</button>
-    <button type="button" class="btn-accent onboarding-primary" onclick={onNext}>{root ? "Continue" : "Skip for now"}</button>
+    <button type="button" class="btn-accent size-l" onclick={onNext}>{root ? "Continue" : "Skip for now"}</button>
   {/snippet}
 </StepLayout>

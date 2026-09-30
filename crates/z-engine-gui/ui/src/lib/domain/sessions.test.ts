@@ -90,4 +90,16 @@ describe("eventEffects", () => {
     expect(eventEffects({ type: "titleChanged", title: "x" }, false)).toEqual([{ kind: "refreshSessions" }]);
     expect(eventEffects({ type: "hookRan", hookEvent: "Stop", command: "x", blocked: false, message: null }, true)).toEqual([]);
   });
+
+  it("grows the pet from finished turns in any chat", () => {
+    const turn = turnRecord({ verification: { status: "verified", checks: ["r1"] } });
+    expect(eventEffects({ type: "turnFinished", turn }, false)).toEqual([
+      { kind: "refreshSessions" },
+      { kind: "petGrowth", signal: { kind: "turn", turnId: turn.turnId, completed: true, verified: true } },
+    ]);
+    const cancelled = turnRecord({ outcome: { type: "cancelled" } });
+    expect(eventEffects({ type: "turnFinished", turn: cancelled }, true)[1]).toMatchObject({
+      signal: { completed: false, verified: false },
+    });
+  });
 });

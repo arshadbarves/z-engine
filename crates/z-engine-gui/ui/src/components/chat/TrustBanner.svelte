@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { TrustRequestView } from "$lib/domain/sessionView/types";
   import { answerTrust } from "$lib/runtime";
+  import { Button } from "$lib/ui";
   import Icon, { ShieldAlert } from "$lib/ui/icons";
 
   type Props = { request: TrustRequestView };
@@ -15,7 +16,7 @@
   }
 </script>
 
-<div class="msg interaction-card trust-banner" role="region" aria-label="Workspace trust" data-pending-card>
+<div class="interaction-card trust-banner" role="region" aria-label="Workspace trust" data-pending-card>
   <div class="interaction-kicker">
     <Icon icon={ShieldAlert} size={13} />
     <span>Trust this workspace?</span>
@@ -25,19 +26,7 @@
     because they run commands on your machine.
   </p>
   <div class="interaction-actions">
-    <button type="button" class="btn-accent" disabled={sending} onclick={() => void answer(true)}>
-      Trust this workspace
-    </button>
-    <button type="button" class="btn-ghost" disabled={sending} onclick={() => void answer(false)}>Not now</button>
+    <Button variant="accent" disabled={sending} onclick={() => void answer(true)}>Trust this workspace</Button>
+    <Button disabled={sending} onclick={() => void answer(false)}>Not now</Button>
   </div>
 </div>
-
-<style>
-  .trust-banner-text {
-    margin: 0;
-    font-size: 12.5px;
-    line-height: 1.5;
-    color: var(--label-2);
-    overflow-wrap: anywhere;
-  }
-</style>

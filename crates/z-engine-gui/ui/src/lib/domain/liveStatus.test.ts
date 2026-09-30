@@ -85,6 +85,21 @@ describe("liveStatus", () => {
     expect(liveStatus(input({ view: checking })).text).toBe("Checking the changes");
   });
 
+  it("says the context is being compacted, over any leftover step", () => {
+    const compacting = busy({ compacting: true, tools: { c1: tool() } });
+    expect(liveStatus(input({ view: compacting }))).toMatchObject({
+      kind: "working",
+      activity: "compact",
+      text: "Compacting context",
+      elapsed: "8s",
+    });
+    const manual = view({ status: "busy", compacting: true });
+    expect(liveStatus(input({ view: manual }))).toMatchObject({ activity: "compact", elapsed: null });
+    expect(liveStatus(input({ view: busy({ compacting: true, approvals: { r1: approval() } }) })).kind).toBe(
+      "attention",
+    );
+  });
+
   it("shows plan progress only while working", () => {
     const todos = {
       main: [

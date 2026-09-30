@@ -214,14 +214,17 @@ agent is instructed never to push unless you ask; add
 `ask = ["Bash(git push:*)"]` to be sure.
 
 **How do I stop everything?** Esc cancels the turn and its foreground
-subagents. Background jobs and agents are stopped with **Stop** in the
-agents panel's **Jobs** tab. Quitting the app stops all of them.
+subagents. Background jobs and agents are stopped with **Stop** under
+**Jobs** in the side panel's **Agents** tab. Quitting the app stops all of
+them.
 
 **Where did the Review panel, the Terminal and Context & Memory go?** They
-were renamed. The Review panel is the **Changes** panel (⌘D / Ctrl+D), the
-Terminal panel is the **Shell** drawer above the composer, Context & Memory
-is the **Prompt** inspector (**Inspect prompt** in the context card), and
-the Now card is the open island (click the island in the title bar).
+were renamed. The Review panel is the side panel's **Changes** tab (⌘D /
+Ctrl+D), the Terminal panel is the **Shell** drawer above the composer,
+Context & Memory is its **Context** tab, the prompt inspector (**Inspect
+prompt** in the context card), and the Now card is the island's card
+(click the island in the title bar). The agents panel is the **Agents**
+tab, and a plan is reviewed in the **Plan** tab.
 
 **Is there a command-line version?** No. Z Engine 2.0 is a desktop app.
 

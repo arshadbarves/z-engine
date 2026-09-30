@@ -1,7 +1,7 @@
 <script lang="ts">
   import { readerSource } from "$lib/domain/inspectOutline";
   import { categorizeRow, categoryMeta, inspectBody, type InspectRow } from "$lib/promptInspectView";
-  import { SegmentedChoice } from "$lib/ui";
+  import { Button, SegmentedChoice } from "$lib/ui";
   import { copyFeedback } from "$lib/ui/copyFeedback.svelte";
   import Icon, { Check, Copy } from "$lib/ui/icons";
   import { fmtTokens } from "$lib/util";
@@ -38,12 +38,12 @@
       </div>
       <div class="inspector-reader-actions">
         {#if mode === "raw"}
-          <button type="button" class="btn-ghost inspector-wrap" aria-pressed={wrap} onclick={() => (wrap = !wrap)}>Wrap lines</button>
+          <Button size="s" class="inspector-wrap" aria-pressed={wrap} onclick={() => (wrap = !wrap)}>Wrap lines</Button>
         {/if}
         <SegmentedChoice compact label="View" options={MODES} value={mode} onSelect={(m) => (mode = m)} />
-        <button type="button" class="icon-btn" aria-label="Copy this part" title="Copy this part" disabled={!body} onclick={() => void copied.copy(body)}>
+        <Button variant="icon" aria-label="Copy this part" title="Copy this part" disabled={!body} onclick={() => void copied.copy(body)}>
           <Icon icon={copied.copied ? Check : Copy} size={14} />
-        </button>
+        </Button>
       </div>
     </header>
     <p class="inspector-reader-desc">{meta.desc}</p>

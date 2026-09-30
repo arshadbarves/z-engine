@@ -20,7 +20,7 @@ mod tally;
 mod usage;
 
 pub(crate) use agent::AgentRun;
-pub(crate) use compact::{CompactJob, Trigger, summarize};
+pub(crate) use compact::{CompactJob, summarize};
 pub(crate) use meter::ContextMeter;
 pub(crate) use reminders::collect as collect_reminders;
 pub(crate) use repo_map::{RepoMapCache, prebuild_repo_map};

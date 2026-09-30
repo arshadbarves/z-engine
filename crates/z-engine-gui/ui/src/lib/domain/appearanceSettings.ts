@@ -4,8 +4,8 @@ import type { ChoiceOption } from "./settings/options";
 
 export const COMPANION_OPTIONS: readonly ChoiceOption<CompanionLevel>[] = [
   { value: "lively", label: "Lively", description: "Reacts to the agent and to what you do: typing, scrolling, stepping away." },
-  { value: "calm", label: "Calm", description: "Reacts only to the agent's work." },
-  { value: "off", label: "Off", description: "No companion; the status line keeps a small dot." },
+  { value: "calm", label: "Calm", description: "Reacts only to the agent's work, and stays in the title bar." },
+  { value: "off", label: "Off", description: "No pet; the status line keeps a small dot." },
 ];
 
 export interface AppearanceOption {

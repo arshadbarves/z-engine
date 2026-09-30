@@ -53,27 +53,32 @@
         <button type="button" class="composer-hint-btn" onclick={onInterrupt}>{mod}Enter interrupts</button>
       </span>
     {/if}
-    {#if !shellMode}<ModelPicker />{/if}
-    {#if busy}
-      <button type="button" class="composer-send is-stop" title="Stop the turn (Esc)" aria-label="Stop the turn" onclick={onCancel}>
-        <Icon icon={Square} size={11} />
-      </button>
-    {/if}
     {#if shellMode}
       <button type="button" class="composer-send is-run" title="Run (Enter)" onclick={onSend} disabled={!canSend}>
         <Icon icon={CornerDownLeft} size={12} />
         <span>Run</span>
       </button>
-    {:else if !busy || hasText}
+    {:else}
+      <ModelPicker />
+      {#if busy && hasText}
+        <button type="button" class="composer-icon-btn" title="Stop the turn (Esc)" aria-label="Stop the turn" onclick={onCancel}>
+          <Icon icon={Square} size={10} />
+        </button>
+      {/if}
+      {@const stop = busy && !hasText}
       <button
         type="button"
-        class="composer-send"
-        title={busy ? "Queue for the agent (Enter)" : "Send (Enter)"}
-        aria-label={busy ? "Queue message" : "Send"}
-        onclick={onSend}
-        disabled={!canSend}
+        class={`composer-send${stop ? " is-stop" : ""}`}
+        title={stop ? "Stop the turn (Esc)" : busy ? "Queue for the agent (Enter)" : "Send (Enter)"}
+        aria-label={stop ? "Stop the turn" : busy ? "Queue message" : "Send"}
+        onclick={stop ? onCancel : onSend}
+        disabled={!stop && !canSend}
       >
-        <Icon icon={ArrowUp} size={15} strokeWidth={2.4} />
+        {#key stop}
+          <span class="composer-send-glyph">
+            {#if stop}<Icon icon={Square} size={11} />{:else}<Icon icon={ArrowUp} size={15} strokeWidth={2.4} />{/if}
+          </span>
+        {/key}
       </button>
     {/if}
   </div>

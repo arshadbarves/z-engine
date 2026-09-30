@@ -1,5 +1,7 @@
 /* The Activity inbox: one reading column, sections by urgency. Notices
-   wrap in full; long ones fold after four lines. */
+   wrap in full; long ones fold after four lines. Items are the settings
+   cards' treatment (raised, hairline, r-m); it settles in on the smooth
+   spring. */
 
 .inbox-wrap {
   flex: 1;
@@ -9,12 +11,12 @@
 .inbox {
   display: flex;
   flex-direction: column;
-  gap: 26px;
+  gap: var(--space-6);
   width: 100%;
   max-width: var(--column-chat);
   margin: 0 auto;
-  padding: 36px var(--gutter-chat) 48px;
-  animation: blur-in var(--dur-slow) var(--ease-out) both;
+  padding: var(--space-8) var(--gutter-chat) 48px;
+  animation: sheet-in var(--dur-spring-smooth) var(--ease-spring-smooth) backwards;
 }
 .inbox-title {
   margin: 0;
@@ -23,7 +25,7 @@
   letter-spacing: -0.02em;
 }
 .inbox-sub {
-  margin: 6px 0 0;
+  margin: var(--space-1) 0 0;
   color: var(--label-3);
 }
 .inbox-section {
@@ -35,26 +37,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .inbox-heading {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   margin: 0;
   color: var(--label-2);
   font-size: var(--text-s);
   font-weight: var(--weight-semibold);
-}
-.inbox-count {
-  padding: 0 7px;
-  border-radius: var(--r-full);
-  font-size: var(--text-xs);
-  line-height: 18px;
-}
-.inbox-count.tone-attention {
-  background: var(--amber-soft);
-  color: var(--amber);
 }
 .inbox-list {
   display: flex;
@@ -67,8 +59,8 @@
 .inbox-item {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 12px 12px 12px 14px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
   border: 1px solid var(--separator);
   border-radius: var(--r-m);
   background: var(--raised);
@@ -136,7 +128,7 @@
 .inbox-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   flex: none;
 }
 .inbox-notice-text {
@@ -169,8 +161,6 @@
   text-decoration: underline;
 }
 .inbox-copy {
-  width: 24px;
-  height: 24px;
   opacity: 0;
 }
 .inbox-item:hover .inbox-copy,
@@ -178,6 +168,7 @@
   opacity: 1;
 }
 .inbox-none {
-  padding: 12px 14px;
+  padding: var(--space-3) var(--space-4);
   color: var(--label-3);
+  font-size: var(--text-s);
 }

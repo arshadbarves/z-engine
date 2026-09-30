@@ -28,9 +28,9 @@ pub use interaction::{
 pub use jobs::{JobInfo, JobKind, JobStatus};
 pub use permission::{ApprovalDecision, ApprovalRequest, PermissionMode, Preview};
 pub use session::{
-    CheckpointInfo, CompactionMarker, ContextBreakdown, Effort, PendingPlan, PendingQuestion,
-    RewindScope, SessionInfo, SessionSnapshot, SessionStatus, SessionSummary, TurnOutcome,
-    TurnRecord,
+    CheckpointInfo, CompactionMarker, CompactionTrigger, ContextBreakdown, Effort, PendingPlan,
+    PendingQuestion, RewindScope, SessionInfo, SessionSnapshot, SessionStatus, SessionSummary,
+    TurnOutcome, TurnRecord,
 };
 pub use time::now_ms;
 pub use usage::Usage;

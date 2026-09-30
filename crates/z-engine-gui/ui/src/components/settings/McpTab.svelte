@@ -109,7 +109,7 @@
               <McpServerForm form={editing.form} taken={ownNames} onSave={save} onCancel={() => (editing = null)} />
             {:else}
               <div class="extension-foot">
-                <button type="button" class="setting-add-btn" disabled={busy || editing !== null} onclick={() => (editing = { original: null, form: emptyMcpForm() })}>
+                <button type="button" class="btn-secondary" disabled={busy || editing !== null} onclick={() => (editing = { original: null, form: emptyMcpForm() })}>
                   <Icon icon={Plus} size={12} />
                   <span>Add server</span>
                 </button>

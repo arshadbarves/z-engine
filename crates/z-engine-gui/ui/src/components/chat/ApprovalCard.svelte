@@ -6,14 +6,15 @@
   import type { ApprovalDecision } from "$lib/protocol/ApprovalDecision";
   import type { ApprovalRequest } from "$lib/protocol/ApprovalRequest";
   import { resolveApproval } from "$lib/runtime";
-  import { Kbd, Menu } from "$lib/ui";
+  import { Button, buttonClass, Kbd, Menu, Pill } from "$lib/ui";
   import Icon, { ChevronDown, ShieldAlert } from "$lib/ui/icons";
   import DiffRows from "../overlays/DiffRows.svelte";
 
   /**
-   * An approval as a question with the few words that decide it: a short
-   * preview (unfold for all of it), Allow once, "Always allow…" for rules,
-   * and Deny with optional feedback. y / s / p / n answer while it has focus.
+   * An approval, docked in the composer: a question with the few words that
+   * decide it, a short preview (unfold for all of it), Allow once, "Always
+   * allow…" for rules, and Deny with optional feedback. y / s / p / n answer
+   * while it has focus.
    */
   type Props = { request: ApprovalRequest; agentLabel: string | null; autoFocus?: boolean };
   let { request, agentLabel, autoFocus = false }: Props = $props();
@@ -34,11 +35,12 @@
   );
   const long = $derived(previewLines(previewText) > PREVIEW_LINES);
 
+  // The card replaces the composer's draft, so it takes focus unless you are typing in another field.
   $effect(() => {
     if (!autoFocus || !root) return;
     const active = document.activeElement;
-    const idle = !active || active === document.body || (active instanceof HTMLTextAreaElement && active.value.trim() === "");
-    if (idle) root.focus({ preventScroll: true });
+    const typingElsewhere = active instanceof HTMLElement && active.matches("input, textarea, [contenteditable]") && !root.closest(".composer")?.contains(active);
+    if (!typingElsewhere) root.focus({ preventScroll: true });
   });
 
   async function decide(decision: ApprovalDecision) {
@@ -72,7 +74,7 @@
 <!-- The card takes focus so y/s/p/n answer it without a pointer. -->
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div
-  class="msg approval-card"
+  class="approval-card"
   role="group"
   aria-label={approvalQuestion(request)}
   tabindex="0"
@@ -86,7 +88,7 @@
       <p class="approval-question">{approvalQuestion(request)}</p>
       {#if request.reason || agentLabel}
         <p class="approval-why">
-          {#if agentLabel}<span class="interaction-agent">{agentLabel}</span>{/if}
+          {#if agentLabel}<Pill tone="info">{agentLabel}</Pill>{/if}
           {#if request.reason}<span>{request.reason}</span>{/if}
         </p>
       {/if}
@@ -123,17 +125,15 @@
           }
         }}
       />
-      <button type="button" class="btn-danger" disabled={sending} onclick={deny}>Deny</button>
-      <button type="button" class="btn-ghost" onclick={() => (denying = false)}>Cancel</button>
+      <Button variant="danger" disabled={sending} onclick={deny}>Deny</Button>
+      <Button onclick={() => (denying = false)}>Cancel</Button>
     </div>
   {:else}
     <div class="approval-actions">
-      <button type="button" class="btn-accent" disabled={sending} onclick={() => void decide({ type: "allowOnce" })}>
-        Allow once
-      </button>
+      <Button variant="accent" disabled={sending} onclick={() => void decide({ type: "allowOnce" })}>Allow once</Button>
       {#if rule}
         <Menu.Root>
-          <Menu.Trigger class="btn-secondary" disabled={sending}>
+          <Menu.Trigger class={buttonClass("secondary")} disabled={sending}>
             <span>Always allow…</span>
             <Icon icon={ChevronDown} size={11} />
           </Menu.Trigger>
@@ -153,7 +153,7 @@
           </Menu.Portal>
         </Menu.Root>
       {/if}
-      <button type="button" class="btn-ghost approval-deny" disabled={sending} onclick={() => void startDeny()}>Deny…</button>
+      <Button class="approval-deny" disabled={sending} onclick={() => void startDeny()}>Deny…</Button>
       <span class="approval-keys" aria-hidden="true">
         <Kbd keys="y" /> once
         {#if rule}<Kbd keys="s" /> chat{/if}

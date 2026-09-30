@@ -13,7 +13,7 @@ export interface SettingsSection {
 }
 
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
-  { label: "General", tabs: ["models", "providers", "appearance"] },
+  { label: "General", tabs: ["models", "providers", "appearance", "pet"] },
   { label: "Agent", tabs: ["permissions", "memory", "verification", "extensions"] },
   { label: "Integrations", tabs: ["mcp", "hooks"] },
   { label: "System", tabs: ["advanced", "about"] },
@@ -46,7 +46,10 @@ export const SETTING_ENTRIES: readonly SettingEntry[] = [
   e("models", "model.max_output_tokens", "Max output tokens", "Requests", "reply length limit"),
   e("models", "model.context_window", "Context window", "Requests", "tokens size limit"),
   e("providers", "@Providers", "Providers and API keys", null, "api key credentials anthropic openai openrouter zen base url login connect"),
-  e("appearance", "ui.companion", "Companion", null, "pet mascot island orb liveliness animation"),
+  e("pet", "ui.pet.name", "Pet name", null, "companion mascot call rename"),
+  e("pet", "ui.pet.look", "Pet look", null, "companion color skin pearl mint sky lilac peach graphite"),
+  e("pet", "ui.companion", "Pet liveliness", null, "companion mascot island orb lively calm off animation"),
+  e("pet", "ui.pet.roam", "Let the pet roam", null, "companion walk wander composer panels stay put"),
   e("appearance", "ui.task_report_view", "Task report detail", null, "receipt summary verification turn end density"),
   e("appearance", "ui.output_style", "Output style", null, "response style tone answers explanatory"),
   e("permissions", "permissions.mode", "Permission mode", null, "approvals ask bypass accept edits plan yolo"),

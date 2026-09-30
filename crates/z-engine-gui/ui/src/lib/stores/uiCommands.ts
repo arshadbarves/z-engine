@@ -8,9 +8,9 @@ import {
   runCommand,
   sessions,
 } from "../runtime";
-import { startNewChat } from "./app-actions";
+import { openSettings, startNewChat } from "./app-actions";
 import { composer } from "./composer.svelte";
-import { companion } from "./companion.svelte";
+import { island } from "./island.svelte";
 import { ui } from "./ui.svelte";
 
 function hookReport(): string {
@@ -35,13 +35,13 @@ export async function runUiCommand(name: string, args: string): Promise<void> {
     case "help":
       return showLocal("help", helpMarkdown(catalogs.commandsFor(activeProjectRoot()), modLabel()));
     case "agents":
-      return ui.openWork("agents");
+      return ui.openPanel("agents");
     case "jobs":
-      return ui.openWork("jobs");
+      return ui.openJobs();
     case "permissions":
-      return ui.openSettings("permissions");
+      return openSettings("permissions");
     case "config":
-      return ui.openSettings("models");
+      return openSettings("models");
     case "hooks":
       return showLocal("hooks", hookReport());
     case "memory":
@@ -53,7 +53,7 @@ export async function runUiCommand(name: string, args: string): Promise<void> {
     case "clear":
       return startNewChat();
     case "context":
-      if (sessions.active?.info) companion.contextOpen = true;
+      if (sessions.active?.info) island.contextOpen = true;
       else await runCommand("context", args);
       return;
     default:

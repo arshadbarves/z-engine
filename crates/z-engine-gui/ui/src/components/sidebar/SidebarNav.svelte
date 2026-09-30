@@ -3,7 +3,7 @@
   import { goHome, showInbox, startNewChat } from "$lib/stores/app-actions";
   import { currentStage } from "$lib/stores/stage.svelte";
   import { ui } from "$lib/stores/ui.svelte";
-  import { Badge, Kbd } from "$lib/ui";
+  import { Badge, Kbd, SelectionCapsule } from "$lib/ui";
   import Icon, { Home, Inbox, Plus, Search } from "$lib/ui/icons";
 
   /** The sidebar's fixed top: start something, find something, and the two places. */
@@ -21,6 +21,7 @@
     <Kbd keys={`${mod}N`} />
   </button>
   <nav class="sidebar-nav" aria-label="Places">
+    <SelectionCapsule selector=".sidebar-row.is-current" />
     <button type="button" class="sidebar-row" onclick={() => ui.openPalette()}>
       <Icon icon={Search} size={14} strokeWidth={1.8} />
       <span class="sidebar-row-label">Search</span>

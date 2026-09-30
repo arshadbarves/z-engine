@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { OutlineGroup } from "$lib/domain/inspectOutline";
   import { categoryMeta } from "$lib/promptInspectView";
-  import Icon, { Search, X } from "$lib/ui/icons";
+  import { SearchField } from "$lib/ui";
   import { fmtTokens } from "$lib/util";
 
   /** The request's parts, grouped; ↑ and ↓ move through them, also from the search field. */
@@ -33,15 +33,14 @@
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <nav class="inspector-outline" aria-label="Parts of the request" onkeydown={onKey}>
-  <label class="inspector-search">
-    <Icon icon={Search} size={13} />
-    <input type="text" value={query} oninput={(e) => onQuery(e.currentTarget.value)} placeholder="Search the request" spellcheck={false} aria-label="Search the request" />
-    {#if query}
-      <button type="button" class="inspector-search-clear" aria-label="Clear the search" onclick={() => onQuery("")}>
-        <Icon icon={X} size={11} />
-      </button>
-    {/if}
-  </label>
+  <SearchField
+    value={query}
+    label="Search the request"
+    placeholder="Search the request"
+    size="s"
+    oninput={(e) => onQuery(e.currentTarget.value)}
+    onclear={() => onQuery("")}
+  />
   {#if shown < total}<p class="inspector-outline-count">{shown} of {total} parts</p>{/if}
 
   <div class="inspector-outline-list" bind:this={list}>

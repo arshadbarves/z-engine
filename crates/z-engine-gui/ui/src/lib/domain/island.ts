@@ -19,6 +19,73 @@ export function islandLine(status: LiveStatus, chatTitle: string | null): Island
   return { text: status.text ?? chatTitle, metric };
 }
 
+/**
+ * The island's four shapes: `rest` (the pet and the chat's title), `live`
+ * (a step, retry, notice or result, with its clock and progress), `alert`
+ * (this chat needs you) and `expanded` (the card).
+ */
+export type IslandMode = "rest" | "live" | "alert" | "expanded";
+
+export function islandMode(status: Pick<LiveStatus, "kind">, expanded: boolean): IslandMode {
+  if (expanded) return "expanded";
+  if (status.kind === "attention") return "alert";
+  return status.kind === "idle" ? "rest" : "live";
+}
+
+export interface IslandAction {
+  label: string;
+  /** The accessible name: the button goes to the waiting card, it never answers for you. */
+  hint: string;
+}
+
+/** The alert's one inline button. */
+export function islandAction(status: Pick<LiveStatus, "kind" | "activity">): IslandAction | null {
+  if (status.kind !== "attention") return null;
+  if (status.activity === "question") return { label: "Answer", hint: "Go to the question" };
+  if (status.activity === "plan") return { label: "Review", hint: "Go to the plan" };
+  return { label: "Approve", hint: "Go to the approval request" };
+}
+
+/** Capsule height in pixels; `--island-h` in tokens.css must match. */
+export const ISLAND_H = 30;
+/** The expanded card's header: the capsule row, inset so the corners clear the pet. */
+export const ISLAND_HEAD_H = 44;
+const CARD_W = 400;
+const CARD_MAX_H = 560;
+const CARD_RADIUS = 22;
+/** Room kept free beside the card and below it. */
+const EDGE_GAP = 12;
+const BELOW_GAP = 80;
+
+export interface IslandRoom {
+  /** The capsule's width: its words' natural width, clamped to the title bar's room. */
+  capsule: number;
+  /** The card body's natural height. */
+  card: number;
+  viewportW: number;
+  viewportH: number;
+}
+
+export interface IslandShape {
+  width: number;
+  height: number;
+  radius: number;
+}
+
+/** The card's fixed width and how tall its body may grow before it scrolls. */
+export function islandCard(room: Pick<IslandRoom, "viewportW" | "viewportH">): { width: number; bodyMax: number } {
+  const width = Math.max(ISLAND_H, Math.min(CARD_W, room.viewportW - EDGE_GAP * 2));
+  const maxHeight = Math.max(ISLAND_HEAD_H, Math.min(CARD_MAX_H, room.viewportH - BELOW_GAP));
+  return { width, bodyMax: maxHeight - ISLAND_HEAD_H };
+}
+
+/** The surface's size and corner radius for a mode; the stylesheet springs between them. */
+export function islandShape(mode: IslandMode, room: IslandRoom): IslandShape {
+  if (mode !== "expanded") return { width: Math.max(ISLAND_H, room.capsule), height: ISLAND_H, radius: ISLAND_H / 2 };
+  const card = islandCard(room);
+  return { width: card.width, height: ISLAND_HEAD_H + Math.min(card.bodyMax, room.card), radius: CARD_RADIUS };
+}
+
 /** A notice opens the island by itself when the line cannot hold it, it is an error, or it offers actions. */
 export function noticeOpensIsland(notice: { tone: string; actions?: unknown[] } | null, truncated: boolean): boolean {
   if (!notice) return false;

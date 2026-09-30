@@ -2,7 +2,7 @@
   import { elapsed } from "$lib/domain/format";
   import type { JobInfo } from "$lib/protocol/JobInfo";
   import { killJob } from "$lib/runtime";
-  import { Disclosure } from "$lib/ui";
+  import { Button, Disclosure } from "$lib/ui";
   import Icon, { Bot, SquareTerminal } from "$lib/ui/icons";
   import StatusChip from "./StatusChip.svelte";
 
@@ -37,9 +37,9 @@
       <button type="button" class="job-link" onclick={() => job.agentId && onOpenAgent(job.agentId)}>Transcript</button>
     {/if}
     {#if running}
-      <button type="button" class="btn-danger job-kill" disabled={killing} onclick={() => void kill()}>
+      <Button variant="danger" size="s" disabled={killing} onclick={() => void kill()}>
         {killing ? "Stopping…" : "Stop"}
-      </button>
+      </Button>
     {/if}
   </div>
   {#if job.outputTail}

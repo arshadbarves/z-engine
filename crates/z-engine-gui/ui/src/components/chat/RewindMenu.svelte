@@ -14,12 +14,11 @@
 </script>
 
 <Menu.Root>
-  <Menu.Trigger class="bubble-action-icon-btn" {disabled} aria-label="Rewind to here" title="Rewind to here">
-    <Icon icon={Rewind} size={11} strokeWidth={1.8} />
-    <span class="bubble-action-label">Rewind</span>
+  <Menu.Trigger class="turn-action" {disabled} aria-label="Rewind to before this prompt" title="Rewind">
+    <Icon icon={Rewind} size={13} />
   </Menu.Trigger>
   <Menu.Portal>
-    <Menu.Content class="menu" side="bottom" align="end" sideOffset={6}>
+    <Menu.Content class="menu" side="bottom" align="start" sideOffset={6}>
       <div class="menu-head">Rewind to before this prompt</div>
       {#each OPTIONS as option (option.scope)}
         <Menu.Item

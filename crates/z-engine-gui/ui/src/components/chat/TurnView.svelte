@@ -1,21 +1,29 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { turnFiles } from "$lib/domain/receipt";
   import type { StreamingMessage, ToolCallView } from "$lib/domain/sessionView";
   import type { ToolResultInfo } from "$lib/domain/timeline/blocks";
-  import { groupTurnItems } from "$lib/domain/timeline/groups";
+  import { answerText, groupTurnItems, splitTrailingCompactions, workSection } from "$lib/domain/timeline/groups";
   import type { TimelineTurn } from "$lib/domain/timeline/turns";
   import type { AgentInfo } from "$lib/protocol/AgentInfo";
   import type { CheckRecord } from "$lib/protocol/CheckRecord";
   import type { Message } from "$lib/protocol/Message";
   import type { RewindScope } from "$lib/protocol/RewindScope";
+  import { whenVisible } from "$lib/ui/whenVisible";
   import AssistantText from "./AssistantText.svelte";
-  import LocalCards from "./LocalCards.svelte";
   import ThinkingDisclosure from "./ThinkingDisclosure.svelte";
+  import TurnActions from "./TurnActions.svelte";
+  import TurnBlocks from "./TurnBlocks.svelte";
   import TurnFooter from "./TurnFooter.svelte";
   import UserCard from "./UserCard.svelte";
-  import ToolCall from "./tools/ToolCall.svelte";
-  import ToolGroup from "./tools/ToolGroup.svelte";
+  import WorkSummary from "./WorkSummary.svelte";
 
+  /**
+   * One turn: your prompt, the agent's work and its answer. Once the turn is
+   * done and made two or more tool calls, the work folds into one line above
+   * the answer, and the turn's actions and receipt follow the answer.
+   * A `lazy` turn is an empty placeholder until it nears the screen.
+   */
   type Props = {
     turn: TimelineTurn;
     results: Record<string, ToolResultInfo>;
@@ -25,26 +33,29 @@
     checks: CheckRecord[];
     projectRoot: string | null;
     live?: StreamingMessage[];
+    lazy?: boolean;
     canRestoreCode?: (messageId: string) => boolean;
     onRewind?: (message: Message, scope: RewindScope) => void;
     onOpenAgent: (agentId: string) => void;
   };
+  let { turn, results, tools, agents, agentLinks, checks, projectRoot, live = [], lazy = false, canRestoreCode, onRewind, onOpenAgent }: Props =
+    $props();
 
-  let {
-    turn,
-    results,
-    tools,
-    agents,
-    agentLinks,
-    checks,
-    projectRoot,
-    live = [],
-    canRestoreCode,
-    onRewind,
-    onOpenAgent,
-  }: Props = $props();
+  let root: HTMLElement | undefined = $state();
+  let near = $state(untrack(() => !lazy));
+  let open = $state(false);
 
-  const blocks = $derived(groupTurnItems(turn.items));
+  $effect(() => {
+    if (near || !root) return;
+    return whenVisible(root, () => (near = true));
+  });
+
+  const split = $derived(splitTrailingCompactions(turn.items));
+  const section = $derived(workSection(split.body, !turn.active, (callId) => results[callId]?.isError === true));
+  const done = $derived(!turn.active && live.length === 0);
+  const answer = $derived(done ? answerText(section) : "");
+  const durationMs = $derived(turn.record ? turn.record.finishedAt - turn.record.startedAt : null);
+  const shared = $derived({ results, tools, agents, agentLinks, projectRoot, busy: turn.active, onOpenAgent });
   const files = $derived(
     turn.record
       ? turnFiles(
@@ -59,57 +70,53 @@
   );
 </script>
 
-<section class="turn" data-turn={turn.key}>
-  {#if turn.user}
-    <UserCard message={turn.user} canRestoreCode={canRestoreCode?.(turn.user.id) ?? false} {onRewind} />
-  {/if}
+<section class="turn" class:is-live={turn.active} class:is-pending={!near} data-turn={turn.key} bind:this={root}>
+  {#if near}
+    {#if turn.user}
+      <UserCard message={turn.user} />
+    {/if}
 
-  {#if turn.items.length > 0 || live.length > 0}
-    <div class="assistant-turn">
-      {#each blocks as block (block.key)}
-        {#if block.kind === "run"}
-          <ToolGroup
-            uses={block.uses}
-            {results}
-            {tools}
-            busy={turn.active}
-            {projectRoot}
-            {agents}
-            {agentLinks}
-            {onOpenAgent}
-          />
-        {:else if block.item.kind === "text"}
-          <AssistantText text={block.item.text} />
-        {:else if block.item.kind === "thinking"}
-          <ThinkingDisclosure text={block.item.text} redacted={block.item.redacted} />
-        {:else if block.item.kind === "tool"}
-          {@const use = block.item.use}
-          {@const agentId = agentLinks[use.callId]}
-          <ToolCall
-            toolUse={use}
-            result={results[use.callId]}
-            live={tools[use.callId]}
-            busy={turn.active}
-            {projectRoot}
-            agent={agentId ? (agents[agentId] ?? null) : null}
-            {onOpenAgent}
-          />
+    {#if split.body.length > 0 || live.length > 0}
+      <div class="assistant-turn">
+        {#if section.fold}
+          <div class="work">
+            <WorkSummary uses={section.uses} {results} {tools} {durationMs} bind:open />
+            {#if open || section.pinned.length > 0}
+              <div class="work-body" class:is-open={open}>
+                <TurnBlocks blocks={groupTurnItems(open ? section.work : section.pinned)} {...shared} />
+              </div>
+            {/if}
+          </div>
+          <TurnBlocks blocks={groupTurnItems(section.answer)} {...shared} />
         {:else}
-          <LocalCards item={block.item} />
+          <TurnBlocks blocks={groupTurnItems(split.body)} {...shared} />
         {/if}
-      {/each}
-      {#each live as stream (stream.messageId)}
-        {#if stream.thinking}
-          <ThinkingDisclosure text={stream.thinking} streaming={!stream.text} />
-        {/if}
-        {#if stream.text}
-          <AssistantText text={stream.text} streaming />
-        {/if}
-      {/each}
-    </div>
-  {/if}
+        {#each live as stream (stream.messageId)}
+          {#if stream.thinking}
+            <ThinkingDisclosure text={stream.thinking} streaming={!stream.text} />
+          {/if}
+          {#if stream.text}
+            <AssistantText text={stream.text} streaming />
+          {/if}
+        {/each}
+      </div>
+    {/if}
 
-  {#if turn.record}
-    <TurnFooter record={turn.record} {checks} {files} />
+    {#if done}
+      <div class="turn-end">
+        <TurnActions
+          {answer}
+          changed={files.length > 0}
+          prompt={turn.user}
+          canRestoreCode={turn.user ? (canRestoreCode?.(turn.user.id) ?? false) : false}
+          {onRewind}
+        />
+        {#if turn.record}<TurnFooter record={turn.record} {checks} {files} />{/if}
+      </div>
+    {/if}
+
+    {#if split.after.length > 0}
+      <TurnBlocks blocks={groupTurnItems(split.after)} {...shared} />
+    {/if}
   {/if}
 </section>

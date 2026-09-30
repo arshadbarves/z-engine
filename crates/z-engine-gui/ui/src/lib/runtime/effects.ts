@@ -1,5 +1,6 @@
 import type { RuntimeEffect } from "../domain/sessions";
 import { appendShellOutput } from "../shellStore";
+import { pet } from "./pet.svelte";
 import { sessionList } from "./sessionList.svelte";
 import { pushToast } from "./toasts";
 
@@ -14,6 +15,9 @@ export function runEffects(effects: RuntimeEffect[]) {
         break;
       case "refreshSessions":
         sessionList.refreshSoon();
+        break;
+      case "petGrowth":
+        pet.record(effect.signal);
         break;
     }
   }

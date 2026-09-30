@@ -290,8 +290,8 @@ stale and the badge would say so.
 | [Interaction features](features-interaction.md) | Steering, interrupt and cancel; plan mode, questions and todos; hooks; slash commands, custom commands and skills |
 | [Agents and context](features-agents-and-context.md) | Subagents and background agents; what the model sees and how instruction files, memory, compaction and caching shape it |
 | [Integrations and safety](features-integrations-and-safety.md) | MCP and language servers, verification, checkpoints and rewind, sessions, providers, models and cost, settings layers and workspace trust, the sandbox |
-| [The desktop app](features-desktop-app.md) | How the window follows the engine: events, many chats at once, self-updates |
-| [The desktop app's screens](features-desktop-screens.md) | Each screen and panel: home, Inbox, transcript, island, agents, Changes, prompt inspector, settings, composer and palette |
+| [The desktop app](features-desktop-app.md) | How the window follows the engine: events, many chats at once, the window's glass and title bar, self-updates |
+| [The desktop app's screens](features-desktop-screens.md) | Each screen and panel: home, Inbox, transcript, approvals in the composer, island, the pet, the side panel (Changes, Plan, Agents, Context), settings, composer and palette |
 | [Crates](crates.md) | What each crate does, its main modules, and how the crates depend on each other |
 | [Glossary](glossary.md) | Short definitions of every term used on these pages |
 

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { sidebarModel } from "$lib/domain/sidebarModel";
+  import { modLabel } from "$lib/platform";
   import { projects, sessionList, sessions } from "$lib/runtime";
   import {
     addWorkspace,
@@ -10,19 +11,25 @@
   } from "$lib/stores/app-actions";
   import { ui } from "$lib/stores/ui.svelte";
   import { bindStore } from "$lib/svelte/bind.svelte";
-  import { EmptyState } from "$lib/ui";
-  import Icon, { ChevronDown, ChevronRight, FolderPlus, Plus } from "$lib/ui/icons";
+  import { Button, EmptyState, SelectionCapsule } from "$lib/ui";
+  import Icon, { ChevronDown, ChevronRight, FolderPlus, PanelLeft, Plus } from "$lib/ui/icons";
   import { ticker } from "$lib/ui/ticker.svelte";
   import { sameWorkspacePath, workspaceStore } from "$lib/workspaces";
+  import TitlebarButton from "../chrome/TitlebarButton.svelte";
   import ChatRow from "./ChatRow.svelte";
   import ProjectGroup from "./ProjectGroup.svelte";
   import SidebarFooter from "./SidebarFooter.svelte";
   import SidebarNav from "./SidebarNav.svelte";
 
-  /** Projects with their chats between the fixed top and the footer. */
-  type Props = { inboxCount: number };
-  let { inboxCount }: Props = $props();
+  /**
+   * The floating sidebar card: a head row (the macOS traffic lights sit in
+   * it, and the hide button), the fixed top, projects with their chats, and
+   * the footer. One highlight marks the open chat and slides between rows.
+   */
+  type Props = { inboxCount: number; onHide: () => void };
+  let { inboxCount, onHide }: Props = $props();
 
+  const mod = modLabel();
   const workspaces = bindStore(workspaceStore);
   const clock = ticker(() => true, 30_000);
   let expanded = $state<Record<string, boolean>>({});
@@ -58,10 +65,14 @@
 </script>
 
 <div class="sidebar-slot">
-  <aside class="app-sidebar" aria-label="Projects and chats">
+  <aside class="app-sidebar glass" aria-label="Projects and chats">
+    <div class="sidebar-head" data-tauri-drag-region>
+      <TitlebarButton label="Hide sidebar" shortcut={`${mod}B`} icon={PanelLeft} pressed onclick={onHide} />
+    </div>
     <SidebarNav {inboxCount} />
 
     <div class="sidebar-scroll">
+      <SelectionCapsule selector=".chat-row.is-active" />
       <section class="sidebar-section" aria-label="Projects">
         <div class="sidebar-section-head">
           <span>Projects</span>
@@ -84,7 +95,7 @@
           />
         {:else}
           <EmptyState icon={FolderPlus} title="No projects yet" description="Add a folder and Z Engine works inside it." class="sidebar-empty">
-            <button type="button" class="btn-secondary" onclick={() => void addWorkspace()}>Add a project</button>
+            <Button variant="secondary" onclick={() => void addWorkspace()}>Add a project</Button>
           </EmptyState>
         {/each}
       </section>

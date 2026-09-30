@@ -1,12 +1,13 @@
 //! Above `compact_at_percent`, older history is summarized by the fast
-//! model: `Compacted` is emitted and persisted, the working set becomes
-//! summary + recent tail (still valid), and the display keeps everything.
+//! model: `CompactionStarted` then `Compacted` are emitted, the marker is
+//! persisted, the working set becomes summary + recent tail (still valid),
+//! and the display keeps everything.
 
 mod support;
 
 use serde_json::json;
 use support::{Harness, all_text, assert_valid_transcript};
-use z_engine_protocol::Event;
+use z_engine_protocol::{CompactionTrigger, Event};
 use z_engine_testkit::{FixtureRepo, Script};
 
 const SETTINGS: &str = "schema = 2\n\n[model]\nmain = \"test-model\"\ncontext_window = 10000\n\n\
@@ -34,6 +35,22 @@ async fn older_history_is_summarized() {
     };
     assert_eq!(marker.summary, "Summary of the earlier work.");
     assert!(marker.keep_from.is_some());
+    let seen = h.events.seen();
+    let started = seen.iter().position(|e| {
+        matches!(
+            e,
+            Event::CompactionStarted {
+                trigger: CompactionTrigger::Auto
+            }
+        )
+    });
+    let compacted = seen
+        .iter()
+        .position(|e| matches!(e, Event::Compacted { .. }));
+    assert!(
+        started.is_some() && started < compacted,
+        "CompactionStarted precedes Compacted: {seen:#?}"
+    );
 
     let requests = h.main_requests();
     let last = requests.last().unwrap();

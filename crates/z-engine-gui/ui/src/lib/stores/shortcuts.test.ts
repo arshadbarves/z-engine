@@ -10,7 +10,7 @@ describe("shortcutFor", () => {
     expect(shortcutFor(key("k", { metaKey: true }))).toBe("palette");
     expect(shortcutFor(key("n", { ctrlKey: true }))).toBe("newChat");
     expect(shortcutFor(key("b", { metaKey: true }))).toBe("toggleSidebar");
-    expect(shortcutFor(key("d", { metaKey: true }))).toBe("toggleDiff");
+    expect(shortcutFor(key("d", { metaKey: true }))).toBe("toggleChanges");
     expect(shortcutFor(key(",", { metaKey: true }))).toBe("settings");
   });
 

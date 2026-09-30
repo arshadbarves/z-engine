@@ -1,5 +1,5 @@
 /** App-wide ⌘/Ctrl shortcuts (the keyboard map in docs/design/gui-ui-guide.md). */
-export type ShortcutAction = "palette" | "newChat" | "toggleSidebar" | "toggleDiff" | "settings";
+export type ShortcutAction = "palette" | "newChat" | "toggleSidebar" | "toggleChanges" | "settings";
 
 export interface KeyInput {
   key: string;
@@ -13,7 +13,7 @@ const KEYS: Record<string, ShortcutAction> = {
   k: "palette",
   n: "newChat",
   b: "toggleSidebar",
-  d: "toggleDiff",
+  d: "toggleChanges",
   ",": "settings",
 };
 

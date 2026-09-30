@@ -162,52 +162,6 @@
   gap: 14px;
 }
 
-.agent-transcript-body .user-message-wrapper {
+.agent-transcript-body .user-message {
   max-width: 92%;
-}
-
-/* ── status chip ──────────────────────────────────────────────────────── */
-
-.status-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  flex-shrink: 0;
-  font-size: 10.5px;
-  font-weight: 600;
-  color: var(--label-3);
-}
-
-.status-chip-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--label-3);
-}
-
-.status-chip.status-running {
-  color: var(--green);
-}
-
-.status-chip.status-running .status-chip-dot {
-  background: var(--green);
-  animation: pulse-dot 1.4s ease-in-out infinite;
-}
-
-.status-chip.status-waiting {
-  color: var(--amber);
-}
-
-.status-chip.status-waiting .status-chip-dot {
-  background: var(--amber);
-}
-
-.status-chip.status-failed,
-.status-chip.status-killed {
-  color: var(--tone-danger-text);
-}
-
-.status-chip.status-failed .status-chip-dot,
-.status-chip.status-killed .status-chip-dot {
-  background: var(--red);
 }

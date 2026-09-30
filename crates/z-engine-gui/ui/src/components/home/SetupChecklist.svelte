@@ -5,8 +5,8 @@
   import { errorText, pushToast } from "$lib/runtime";
   import { composer } from "$lib/stores/composer.svelte";
   import { settingsStore } from "$lib/stores/settings.svelte";
-  import { ui } from "$lib/stores/ui.svelte";
-  import { ProgressRing } from "$lib/ui";
+  import { openSettings } from "$lib/stores/app-actions";
+  import { Button, ProgressRing } from "$lib/ui";
   import Icon, { Check } from "$lib/ui/icons";
 
   /** What this project still needs, with a one-click fix each; hidden once everything is done. */
@@ -16,7 +16,7 @@
   const ACTION: Record<SetupItemId, string> = { model: "Connect", trust: "Trust", instructions: "Write it for me" };
 
   async function fix(id: SetupItemId) {
-    if (id === "model") return ui.openSettings("providers");
+    if (id === "model") return openSettings("providers");
     if (id === "instructions") {
       const prompt = startersFor({ changed: 0, hasInstructions: false }).top[0].prompt;
       return composer.setDraft(prompt);
@@ -47,7 +47,7 @@
           {#if !item.done}<span class="setup-hint">{item.hint}</span>{/if}
         </span>
         {#if !item.done}
-          <button type="button" class="btn-secondary" onclick={() => void fix(item.id)}>{ACTION[item.id]}</button>
+          <Button variant="secondary" size="s" onclick={() => void fix(item.id)}>{ACTION[item.id]}</Button>
         {/if}
       </li>
     {/each}

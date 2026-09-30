@@ -28,24 +28,28 @@ Then describe the task:
 Add rate limiting to the public API. Plan it first.
 ```
 
-### The plan card
+### Review the plan
 
-When the plan is ready, a **Plan ready for review** card appears with the
-plan in markdown: the goal, the approach, the files to change, the ordered
-steps, how it will be verified, and risks or open questions.
+When the plan is ready, a **Plan ready · Review** row appears in the chat
+and the side panel opens on its **Plan** tab (**Review** opens it again),
+marked **Ready for review**. It shows the plan in markdown: the goal, the
+approach, the files to change, the ordered steps, how it will be verified,
+and risks or open questions; when the agent keeps a todo list, its
+**Checklist** and **N of M done** follow.
 
 | Control | Effect |
 |---|---|
-| **Edit** / **Preview** | Switch to a text editor to change the plan yourself. An **edited** tag appears when your version differs. |
+| **Edit** / **Preview** | Switch to a text editor to change the plan yourself (Esc goes back to the preview). An **Edited** tag appears when your version differs. |
 | **Approve & auto-accept edits** | Leave plan mode in **Auto-accept edits** mode and start implementing. |
 | **Approve & ask before edits** | Leave plan mode in **Ask** mode and start implementing. |
 | **Keep planning** | Opens a feedback box. Type what should change and click **Send feedback** (or press ⌘Enter / Ctrl+Enter). The agent stays in plan mode, revises, and proposes again. Esc closes the box. |
 
 If you edited the plan, the agent is told to implement *your* version. While
-the card waits, the island in the title bar says **Plan ready for review**
-in amber (click it to scroll to the card), and the plan is listed in the
-[Inbox](02-everyday-use.md#the-inbox). You can still send messages, which
-are queued.
+the plan waits, the island in the title bar says **Plan ready for review**
+in amber (its **Review** button goes to the plan), and the plan is listed
+in the [Inbox](02-everyday-use.md#the-inbox). You can still send messages,
+which are queued. With no plan waiting, the Plan tab shows the chat's
+**Last plan** and its checklist, or **No plan yet**.
 
 > **Tip:** Plans are only proposed for work that changes files. If you ask
 > a question in plan mode, the agent simply answers it.
@@ -57,7 +61,9 @@ a report to the main agent instead.
 
 When a decision materially changes the result (two sound designs, a
 destructive step, a product choice), the agent can ask you one to four
-multiple-choice questions at once. A **Question** card appears:
+multiple-choice questions at once. A **Question** card takes the
+composer's place (your draft is kept for later; an approval waiting at the
+same time comes first):
 
 - With several questions, tabs at the top switch between them; a check mark
   shows which are answered.
@@ -71,8 +77,9 @@ multiple-choice questions at once. A **Question** card appears:
 - **Dismiss** declines to answer. The agent is told not to ask again and to
   continue on its best judgment or explain what is blocked.
 
-While a question waits, the island says **Question for you**. Only the main
-agent can ask questions; subagents can't.
+While a question waits, the island says **Question for you**, with an
+**Answer** button that goes to it. Only the main agent can ask questions;
+subagents can't.
 
 ## Todos
 
@@ -81,13 +88,14 @@ For tasks with several steps, the agent keeps a todo list with the
 keeps exactly one item in progress at a time.
 
 - **The island** in the title bar shows the current step, such as "Running
-  the parser tests", and a ring around the companion fills as items are
+  the parser tests", and a ring around the pet fills as items are
   done.
-- **Click the island** to open it: its **Plan** section says how many items
-  are done (for example **2 of 5 done**) and unfolds to the full checklist.
+- **Click the island** to open it: its **Plan** row says how many items are
+  done and which one is current (for example **2 of 5 · Run the tests**);
+  click it for the full checklist in the side panel's **Plan** tab.
 - **`/todos`** prints the list in the transcript as a checklist.
-- A subagent's own todo list is shown in its transcript in the **Agents**
-  panel.
+- A subagent's own todo list is shown in its transcript in the side
+  panel's **Agents** tab.
 
 The todo list survives [compaction](07-memory-and-context.md#automatic-compaction),
 so it also serves as the agent's working memory in long sessions. If the

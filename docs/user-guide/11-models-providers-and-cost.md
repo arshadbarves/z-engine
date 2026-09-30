@@ -34,9 +34,10 @@ headers = { "X-Team" = "platform" } # extra HTTP headers on every request
 # cache_control = true             # unset: on for Anthropic and OpenRouter
 ```
 
-The bottom of the sidebar always shows the default model and its provider.
-When the provider needs a key and has none, it reads **Connect a model** in
-amber. Click it to open **Settings → Providers**.
+**Settings → Providers** shows the default model and its endpoint under
+**In use**, with whether a key is stored. When the provider needs a key and
+has none, the project home's setup card lists **Connect a model**; click it
+to open **Settings → Providers**.
 
 ### Where keys are stored
 
@@ -189,7 +190,7 @@ adds it up:
 - the project home's **Continue** card shows each recent chat's cost;
 - `/cost` shows the chat's cost and its input, output, cache-read and
   cache-write tokens, plus tokens per agent;
-- **Usage by agent**, folded at the bottom of the agents panel's **Agents**
+- **Usage by agent**, folded at the bottom of the side panel's **Agents**
   tab, shows input tokens, output tokens and cost for the main agent and
   each subagent.
 

@@ -1,4 +1,5 @@
 import type { JsonValue } from "../../protocol/serde_json/JsonValue";
+import { fmtDuration } from "../format";
 import type { ToolCallStatus } from "../sessionView/types";
 import { activityLabel } from "../tools/activityLabel";
 import { str } from "../tools/toolInput";
@@ -119,4 +120,62 @@ export function summarizeRun(calls: RunCall[]): RunSummary {
 export function runLine(summary: RunSummary): string {
   const line = summary.parts.join(" · ");
   return line.charAt(0).toUpperCase() + line.slice(1);
+}
+
+/** A turn split for display: the work that led to the answer, and the answer. */
+export interface WorkSection {
+  /** Thinking, tool calls and the narration between them, in order. */
+  work: TimelineItem[];
+  /** Everything after the last thinking or tool call: the answer and any cards after it. */
+  answer: TimelineItem[];
+  /** Work that stays in view under the folded line: agents, questions, plans, failures, steering, errors, output, compaction. */
+  pinned: TimelineItem[];
+  /** The calls the folded line counts (agents, questions and plans stand on their own). */
+  uses: ToolUseRef[];
+  /** Fold the work into one line: the turn is done and made two or more tool calls. */
+  fold: boolean;
+}
+
+function staysInView(item: TimelineItem, failed: (callId: string) => boolean): boolean {
+  if (item.kind === "tool") return !foldable(item) || failed(item.use.callId);
+  return item.kind !== "thinking" && item.kind !== "text";
+}
+
+/**
+ * Gathers a turn's thinking and tool calls (with the narration between them)
+ * into one Work block ahead of its answer. `failed` names the calls that
+ * failed; they, and anything that stands on its own, stay visible when the
+ * block folds.
+ */
+export function workSection(items: TimelineItem[], done: boolean, failed: (callId: string) => boolean = () => false): WorkSection {
+  const last = items.findLastIndex((item) => item.kind === "thinking" || item.kind === "tool");
+  const work = items.slice(0, last + 1);
+  const calls = work.filter((item): item is Extract<TimelineItem, { kind: "tool" }> => item.kind === "tool");
+  return {
+    work,
+    answer: items.slice(last + 1),
+    pinned: work.filter((item) => staysInView(item, failed)),
+    uses: calls.filter(foldable).map((item) => item.use),
+    fold: done && calls.length >= 2,
+  };
+}
+
+/** A turn's items and the compaction dividers after its last item, which belong after the turn's actions. */
+export function splitTrailingCompactions(items: TimelineItem[]): { body: TimelineItem[]; after: TimelineItem[] } {
+  let end = items.length;
+  while (end > 0 && items[end - 1].kind === "compaction") end--;
+  return { body: items.slice(0, end), after: items.slice(end) };
+}
+
+/** The folded Work block in one line: "Worked for 1m 12s · read 6 files · ran 2 commands". */
+export function workLine(summary: RunSummary, durationMs: number | null): string {
+  const time = durationMs !== null && durationMs > 0 ? fmtDuration(durationMs) : "";
+  return [time ? `Worked for ${time}` : "Worked", ...summary.parts].join(" · ");
+}
+
+/** What "Copy" takes from a turn: its answer, or every reply when the turn ended on work. */
+export function answerText(section: WorkSection): string {
+  const texts = (items: TimelineItem[]) => items.flatMap((item) => (item.kind === "text" ? [item.text] : []));
+  const answer = texts(section.answer);
+  return (answer.length > 0 ? answer : texts(section.work)).join("\n\n");
 }

@@ -1,5 +1,5 @@
 /* The composer's chip pickers: the permission mode and the model (with
-   the reasoning-effort row), on the kit popover. */
+   the reasoning-effort row), on L3 glass (.glass-strong). */
 
 .chip-pop {
   z-index: 90;
@@ -8,14 +8,9 @@
   gap: 2px;
   width: 300px;
   padding: 6px;
-  border: 1px solid var(--glass-edge);
-  border-radius: var(--r-m);
-  background: var(--glass-strong);
-  -webkit-backdrop-filter: var(--glass-filter);
-  backdrop-filter: var(--glass-filter);
-  box-shadow: var(--glass-sheen), var(--elev-3);
   outline: none;
-  animation: blur-in var(--dur-fast) var(--ease-out) both;
+  transform-origin: var(--bits-floating-transform-origin, bottom center);
+  animation: pop-in var(--dur-spring-snappy) var(--ease-spring-snappy) both;
 }
 .chip-pop-head {
   margin: 0;

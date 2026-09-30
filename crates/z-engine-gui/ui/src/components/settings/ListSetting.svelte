@@ -82,7 +82,7 @@
     }}
   >
     <input {id} class="setting-input" class:mono bind:value={draft} {placeholder} spellcheck={false} autocomplete="off" oninput={() => (error = null)} />
-    <button type="submit" class="setting-add-btn" disabled={!draft.trim() || saving}>
+    <button type="submit" class="btn-secondary" disabled={!draft.trim() || saving}>
       <Icon icon={Plus} size={12} />
       <span>Add</span>
     </button>

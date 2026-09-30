@@ -43,7 +43,7 @@
   {/if}
   {#if draft !== ownText}
     <div class="settings-form-actions">
-      <button type="button" class="btn-ghost" onclick={() => (draft = ownText)}>Revert</button>
+      <button type="button" class="btn-secondary" onclick={() => (draft = ownText)}>Revert</button>
       <button type="button" class="btn-accent" disabled={saving} onclick={() => void save()}>{saving ? "Saving…" : "Save"}</button>
     </div>
   {/if}

@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { contextBubble, islandLine, noticeOpensIsland, recentSteps } from "./island";
+import {
+  ISLAND_H,
+  ISLAND_HEAD_H,
+  contextBubble,
+  islandAction,
+  islandCard,
+  islandLine,
+  islandMode,
+  islandShape,
+  noticeOpensIsland,
+  recentSteps,
+} from "./island";
 import type { LiveStatus } from "./liveStatus";
 import type { ToolCallView } from "./sessionView/types";
 
@@ -59,6 +70,55 @@ describe("islandLine", () => {
       text: "Saved",
       metric: null,
     });
+  });
+});
+
+describe("islandMode", () => {
+  it("rests while idle and goes live for anything it is saying", () => {
+    expect(islandMode(status(), false)).toBe("rest");
+    for (const kind of ["working", "retrying", "notice", "done", "recap"] as const) {
+      expect(islandMode(status({ kind }), false)).toBe("live");
+    }
+  });
+
+  it("alerts when this chat needs you, and the card wins while open", () => {
+    expect(islandMode(status({ kind: "attention" }), false)).toBe("alert");
+    expect(islandMode(status({ kind: "attention" }), true)).toBe("expanded");
+    expect(islandMode(status(), true)).toBe("expanded");
+  });
+});
+
+describe("islandAction", () => {
+  it("names the step waiting for you", () => {
+    expect(islandAction(status({ kind: "attention", activity: "question" }))?.label).toBe("Answer");
+    expect(islandAction(status({ kind: "attention", activity: "approval" }))?.label).toBe("Approve");
+    expect(islandAction(status({ kind: "attention", activity: "plan" }))?.label).toBe("Review");
+  });
+
+  it("says where it goes and shows nothing unless this chat needs you", () => {
+    expect(islandAction(status({ kind: "attention", activity: "approval" }))?.hint).toBe("Go to the approval request");
+    expect(islandAction(status({ kind: "working", activity: "question" }))).toBeNull();
+    expect(islandAction(status())).toBeNull();
+  });
+});
+
+describe("islandShape", () => {
+  const room = { capsule: 220, card: 180, viewportW: 1280, viewportH: 800 };
+
+  it("is a capsule as wide as its words, never narrower than the pet", () => {
+    expect(islandShape("live", room)).toEqual({ width: 220, height: ISLAND_H, radius: ISLAND_H / 2 });
+    expect(islandShape("rest", { ...room, capsule: 0 }).width).toBe(ISLAND_H);
+  });
+
+  it("grows into a card as tall as its body", () => {
+    expect(islandShape("expanded", room)).toEqual({ width: 400, height: ISLAND_HEAD_H + 180, radius: 22 });
+  });
+
+  it("keeps the card inside the window, where its body scrolls", () => {
+    const small = { ...room, card: 900, viewportW: 360, viewportH: 400 };
+    expect(islandCard(small)).toEqual({ width: 336, bodyMax: 320 - ISLAND_HEAD_H });
+    expect(islandShape("expanded", small)).toMatchObject({ width: 336, height: 320 });
+    expect(islandCard({ viewportW: 1600, viewportH: 1200 }).bodyMax).toBe(560 - ISLAND_HEAD_H);
   });
 });
 

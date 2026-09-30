@@ -1,5 +1,4 @@
-/* Sidebar footer: which model answers and whether it is ready, a waiting
-   update, and Settings. */
+/* Sidebar footer: Settings and a waiting update. */
 
 .sidebar-footer {
   display: flex;
@@ -8,57 +7,9 @@
   padding: 8px 0 0;
   border-top: 1px solid var(--separator);
 }
-.model-chip {
+.sidebar-footer > .sidebar-row {
   flex: 1;
   min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 4px 8px;
-  border: 0;
-  border-radius: var(--r-s);
-  background: transparent;
-  color: var(--label);
-  font: inherit;
-  text-align: left;
-  transition: background var(--dur-fast) var(--ease-out);
-}
-.model-chip:hover {
-  background: var(--fill-hover);
-}
-.model-chip-dot {
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: var(--r-full);
-  background: var(--green);
-  box-shadow: 0 0 0 3px var(--green-soft);
-}
-.model-chip.needs-setup .model-chip-dot {
-  background: var(--amber);
-  box-shadow: 0 0 0 3px var(--amber-soft);
-}
-.model-chip-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.model-chip-name,
-.model-chip-provider {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.model-chip-name {
-  font-size: var(--text-s);
-  font-weight: var(--weight-medium);
-}
-.model-chip.needs-setup .model-chip-name {
-  color: var(--amber);
-}
-.model-chip-provider {
-  color: var(--label-3);
-  font-size: var(--text-xs);
 }
 .update-pill {
   flex: none;

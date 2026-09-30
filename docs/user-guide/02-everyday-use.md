@@ -1,9 +1,9 @@
 # Everyday use
 
-This page covers the things you'll do most days: starting from the project
-home, asking questions, fixing bugs, adding features, reviewing and
-committing changes, attaching files, steering the agent while it works,
-following its progress, and undoing work.
+This page covers what you'll do most days: starting from the project home,
+asking questions, fixing bugs, adding features, reviewing and committing,
+attaching files, steering the agent, following its progress (with your
+pet), the side panel, and undoing work.
 
 ## The project home
 
@@ -18,7 +18,7 @@ in the middle. Below the composer:
 - **Continue** lists your three latest chats in the project with where each
   stands, its age and its cost.
 - **Uncommitted changes** lists the first changed files; click one, or
-  **Review all N**, to open them in the [Changes panel](#review-changes-in-the-changes-panel).
+  **Review all N**, to open them in the [Changes tab](#review-changes-in-the-changes-tab).
 - **Set up this project** lists what is still missing (**Connect a model**,
   **Trust this project**, **Add an AGENTS.md**), each with a button, and
   disappears once everything is done.
@@ -55,10 +55,9 @@ than its last edit ([Verification](10-verification.md)).
 
 ## Add a feature
 
-For anything larger than a few lines, consider plan mode first
-(Shift+Tab until the mode chip reads **Plan**): the agent researches,
-proposes a plan, and changes nothing until you approve it. See
-[Plan mode, questions and todos](05-plan-mode-questions-and-todos.md).
+For anything larger than a few lines, consider [plan mode](05-plan-mode-questions-and-todos.md)
+first (Shift+Tab until the mode chip reads **Plan**): the agent researches,
+proposes a plan, and changes nothing until you approve it.
 
 ## Review and commit
 
@@ -71,9 +70,8 @@ proposes a plan, and changes nothing until you approve it. See
   for that turn, and it never pushes. Add a hint: `/commit only the parser
   changes`.
 
-To read the changes yourself, open the
-[Changes panel](#review-changes-in-the-changes-panel). All built-in commands
-are listed in [Commands and skills](06-commands-and-skills.md).
+Read the changes yourself in the [Changes tab](#review-changes-in-the-changes-tab);
+every built-in command is in [Commands and skills](06-commands-and-skills.md).
 
 ## The composer
 
@@ -84,7 +82,11 @@ each item types its character for you), the mode chip
 ([permission modes](03-permissions-and-safety.md#permission-modes)), the
 model chip with the reasoning effort
 ([choosing a model](11-models-providers-and-cost.md#choosing-a-model-for-a-chat)),
-and Send. While the agent works, a square **Stop** button appears.
+and Send. While the agent works and the draft is empty, Send turns into a
+square **Stop** button; once you type, it queues your message instead and a
+small **Stop** button sits beside it. An approval or a question that waits
+for you takes the text box's place, keeping your draft, until you
+[answer it](03-permissions-and-safety.md#answering-approval-cards).
 
 | You type | What happens |
 |---|---|
@@ -97,8 +99,7 @@ and Send. While the agent works, a square **Stop** button appears.
 | **Shift+Tab** | Cycle the permission mode: Ask → Auto-accept edits → Plan. |
 | **Esc** | Cancel the running turn, or clear the draft when idle. |
 
-In the pop-up lists, use ↑/↓ to move, Enter or Tab to pick, and Esc to
-close the list.
+In the pop-up lists, ↑/↓ move, Enter or Tab picks, and Esc closes the list.
 
 ### Attach files with @
 
@@ -111,16 +112,14 @@ inserted into your text. When you send:
 - PDFs are sent as documents (up to 32 MiB);
 - images are sent as images.
 
-Remove an attachment with the × on its chip. Typing an `@path` by hand
-without picking it from the list does not attach the file; the agent only
-sees the text.
+Remove an attachment with the × on its chip. An `@path` typed by hand,
+without picking it from the list, attaches nothing: the agent sees the text.
 
 ### Attach images
 
 Paste an image, drag it onto the composer (it shows **Drop images to attach
-them**), or choose **Attach images** in the **+** menu. Images are scaled
-down to at most 1568 pixels on the long side before sending. You can attach
-up to six images per message.
+them**), or choose **Attach images** in the **+** menu: up to six per
+message, scaled down to at most 1568 pixels on the long side before sending.
 
 > **Note:** Attachments are only sent with a new prompt. If you send while
 > the agent is working, the attachments stay in the composer for your next
@@ -130,10 +129,9 @@ up to six images per message.
 
 Start a message with `!` to run a command in the project without involving
 the model, for example `!git status`; the composer shows a **Shell** tag
-and a **Run** button. The output appears in the **Shell** drawer that rises
-from the top of the composer, with buttons to copy it, make the drawer
-taller, clear it and hide it (Esc). **Show the terminal** in the **+** menu
-brings it back.
+and a **Run** button. The output appears in the **Shell** drawer above the
+composer, with buttons to copy it, make it taller, clear it and hide it
+(Esc); **Show the terminal** in the **+** menu brings it back.
 
 These commands run directly on your machine, without approval prompts and
 outside the sandbox, with a 10-minute limit. A command that isn't read-only
@@ -142,18 +140,16 @@ counts as a change for the next turn's badge.
 ## Steer, interrupt, cancel
 
 You don't have to wait for the agent to finish. While it works, the
-placeholder reads "Add to what the agent is doing…", and once you type, the
-composer shows **Enter queues · ⌘Enter interrupts** (Ctrl+Enter on Windows
-and Linux).
+placeholder reads "Add to what the agent is doing…"; once you type, the
+composer shows **Enter queues · ⌘Enter interrupts** (Ctrl+Enter elsewhere).
 
 - **Steer:** type and press **Enter**. The message is queued (shown as
   pills labelled *queued* above the input) and delivered at the next step,
   between tool calls. Click a pill to edit it, or × to remove it. In the
   transcript it appears as a **Steered** note.
-- **Interrupt:** press **⌘Enter** (macOS) or **Ctrl+Enter** (Windows,
-  Linux), or click that part of the hint. The current step stops and your
-  message is sent right away as a new turn. The agent is told it was
-  interrupted.
+- **Interrupt:** press **⌘Enter** / **Ctrl+Enter**, or click that part of
+  the hint: the current step stops and your message is sent right away as a
+  new turn (the agent is told it was interrupted).
 - **Cancel:** press **Esc** or the square **Stop** button. The turn ends;
   unfinished tool calls are cancelled. Background jobs keep running.
   Messages still queued are kept and sent with your next prompt.
@@ -163,35 +159,77 @@ until the agent is idle.
 
 ## The title bar
 
-The middle of the title bar is the **island**: the companion (a small glass
-orb) and one line with at most one number. While the agent works, the line
-says what it is doing right now ("Reading auth.rs", "Running the parser
-tests"), the number is the elapsed time, and a ring around the orb fills as
-the todo list gets done. When a turn ends, the line briefly shows the
-result, such as **Verified** or **Checks failed**, and the turn's duration.
-It says **Provider busy** with a countdown while a request is retried,
-turns amber when this chat needs you (an approval, a question or a plan;
-clicking the island then scrolls to the card), and shows the chat's title
-when idle.
+The middle of the title bar is the **island**: your [pet](#your-pet) and
+one line with at most one number. While the agent works, the line says what
+it is doing ("Reading auth.rs"), the number is the elapsed time, and a ring
+around the pet fills as the todo list gets done. When a turn ends, it
+briefly shows the result (**Verified**, **Checks failed**) and the turn's
+duration. It says **Provider busy** with a countdown while a request is
+retried, turns amber when this chat needs you (with **Approve**,
+**Answer** or **Review** to go to it), and shows the chat's title when idle.
 
-Click the island to open it: the whole message, the latest steps (**Now**),
-the plan with how many items are done, running helpers (**Open** shows the
-agents panel), this turn's and the chat's cost, and recent warnings (a small
-dot on the island means some are new). Long
-notices, errors and notices with buttons open it by themselves; it closes
-when the notice ends, unless the pointer is over it. **Open in Inbox** shows
-a notice in the [Inbox](#the-inbox).
+Click the island to open its card: the whole message, the plan (done of
+total, current item), the latest steps (**Now**), **Agents**, **Context**
+and **Waiting** rows that open what they sum up, the cost of this turn and
+the chat, and recent warnings (a dot on the island means some are new).
+Long notices, errors and notices with buttons open it by themselves, and it
+closes when the notice ends unless the pointer is over it; a click
+elsewhere or Esc closes it. **Open in Inbox** shows a notice in the
+[Inbox](#the-inbox).
 
 Left of the island, an amber number counts other chats that need you:
 click it to open that chat, or the Inbox when there are several. Right of
-it, a ring shows how full the context is, with the percentage from 65%
-(amber, red from 85%); click it for the
-[context card](07-memory-and-context.md#the-context-window). At the right
-of the title bar, the changes button (**Review changes**, ⌘D / Ctrl+D)
-shows how many files this chat has changed and opens the
-[Changes panel](#review-changes-in-the-changes-panel). While the sidebar is
-hidden (⌘B / Ctrl+B), **New chat**, search and **Settings** move to the
-title bar.
+it, a ring shows how full the context is (a percentage from 65%, amber, red
+from 85%); click it for the [context card](07-memory-and-context.md#the-context-window).
+At the right, the changes button (**Review changes**, ⌘D / Ctrl+D) counts
+the files this chat changed and opens the [Changes tab](#review-changes-in-the-changes-tab);
+the next button shows or hides the [side panel](#the-side-panel). While
+the sidebar is hidden (⌘B / Ctrl+B), **New chat**, search and **Settings**
+move to the title bar. Double-click an empty part of the title bar to
+maximize or restore the window.
+
+## Your pet
+
+The pet is a small creature, named **Zen** until you rename it, that lives
+in the island. Its face echoes the status line: busy while the agent works,
+amber and looking at you when something needs you, cheering when a turn is
+verified, drooping when one fails, sleepy after quiet minutes, and greeting
+you when the app opens. It never tells you anything the line doesn't.
+
+At the default **Lively** level with **Let it roam** on, the pet leaves the
+island while nothing needs you. It sits above **What should we work on?** on
+the project home, stands on the composer's top edge in a chat (and now and
+then walks to the sidebar's bottom edge or sits in the side panel's tab
+bar), sits in an empty Inbox, watches the composer while you type, and naps
+after 3 minutes without activity. It rides back into the island while the
+agent works, hops in when something needs you, and tucks itself away while
+a menu or the palette is open. Drag it to the nearest spot, click to boop
+it, and double-click or right-click it for its card. Under Reduce Motion it
+appears in its new spot instead of walking there and does no idle strolls
+or tricks.
+
+The **pet card** shows its name, level, stage, XP to the next level, day
+streak and counts of **Turns**, **Verified** and **Applied**. **Wears**
+puts on an unlocked accessory; **Customize…**, **Stop roaming** (or **Let
+it roam**) and **Call back** are there too.
+
+It grows from finished work in any chat: 10 XP per completed turn, 15 more
+when its checks pass, 20 per applied helper worktree, and 5 more for the
+first of these each day; nothing is ever taken away. Levels need 50, 150,
+300, 500… XP in total (up to 99). Its shape changes at levels 3, 6 and 10;
+a sprout, scarf, headphones and star unlock at 2, 4, 6 and 9, and tricks
+(stretch, hop, spin, sparkle) at 1, 3, 5 and 7. At **Lively** a new level
+brings confetti once nothing needs you. Growth is saved in `pet.json` in
+the [data folder](13-sessions-and-data.md#where-things-live).
+
+To change the pet, open **Settings → Pet**: **Name** (up to 24 characters),
+**Look** (Pearl, Mint, Sky, Lilac, Peach or Graphite), **Liveliness** and
+**Let it roam** ([settings](12-settings-reference.md#ui-and-compatibility)).
+**Calm** reacts only to the agent and stays in the title bar; **Off** shows
+a small dot instead. With roaming off, the pet stays in the island except
+for its spot on the project home. The palette has **Rename**, **Change
+look**, **Show card**, **Stop roaming** and **Call back**, named after your
+pet (**Rename Zen**).
 
 ## The Inbox
 
@@ -208,30 +246,37 @@ title bar.
 
 The Inbox badge counts what needs you, finished chats you haven't opened,
 and problems since you last looked; opening the Inbox marks them as read.
-With nothing waiting it says **You're all caught up**. The Inbox is kept
-only while the app runs ([Sessions and data](13-sessions-and-data.md#where-things-live)).
+With nothing waiting it says **You're all caught up**. It is kept only
+while the app runs ([Sessions and data](13-sessions-and-data.md#where-things-live)).
 
 ## Reading tool runs and cards
 
-Two or more tool calls in a row fold into one line that says what they did,
-for example "Read 2 files · searched 1× · edited 1 file · ran 1 command",
-with the step in progress while it runs, flags such as **1 failed** or **1
-denied**, and the number of steps. Under the line, a running command shows
-its last three lines, and a failure the last three lines of its output.
-Click the line to see each call's own card; agent, question and plan calls
-always keep their own.
+When a turn with two or more tool calls is done, its work folds into one
+line above the answer, such as "Worked for 1m 12s · read 6 files · ran 2
+commands" (plus **1 failed** or **1 denied**); failed calls, helpers,
+questions and plans stay visible under it, and a click shows every step.
+Inside, tool calls in a row fold the same way ("Read 2 files · searched 1×
+· edited 1 file"), with the step in progress and the number of steps; a
+running command shows its last three lines, a failure the last three lines
+of its output. Click such a line for each call's own card; agent, question
+and plan calls always keep their own.
+
+At the end of each turn, small buttons copy the answer, open its changes
+and [rewind](#rewind). Once a chat has two prompts or more, a rail of dots
+at its right edge marks them (up to 40): hover one to read the prompt,
+click it to jump there.
 
 Every call is a one-line card: an icon, the tool name, its subject (a file
 path, command or URL) and the time it took. The dot and tag show the
 status: running, done, failed, **denied** (by you, a rule or a hook) or
 **cancelled**. Click a card to expand it:
 
-- **Edit/Write** cards show the diff with added and removed line counts;
-  they open by themselves only when the edit failed.
-- **Bash** cards show the command, its live output and the exit code; they
-  open by themselves only on an error. While a command runs, its last three
-  lines show under the card.
-- **Agent** cards show the subagent's type, task, status and time, with
+- **Edit/Write** cards show the diff with added and removed line counts,
+  **Bash** cards the command, its live output (the last three lines under
+  the card while it runs) and the exit code; both open by themselves only
+  on a failure.
+- **Agent** cards show a tiny sprite of the pet (it bobs while the helper
+  works), the subagent's type, task, status and time, with
   **Open** for its transcript. Click the line for its model, tokens, cost,
   tool calls, worktree state and result.
 - Other cards show the tool's output.
@@ -245,44 +290,51 @@ shows is set in **Settings → Appearance → Task report detail**
 | Detail | The receipt shows |
 |---|---|
 | **Quiet** (default) | The verification badge, only when it is **Verified**, **Unverified** or **Failed** ([Verification](10-verification.md)). |
-| **Compact** | Also the files the turn changed (four chips, then **+N**; click one to see it in the Changes panel), the duration and the cost. |
+| **Compact** | Also the files the turn changed (four chips, then **+N**; click one to see it in the Changes tab), the duration and the cost. |
 | **Detailed** | Also the tokens, the **Not applicable** badge of turns that changed nothing, and the checks unfolded. |
 
 Notes such as **Cancelled**, **Failed**, **Stopped** or **Interrupted**
 always show. Hover a receipt for the turn's time, tokens and cost.
 
-## Review changes in the Changes panel
+## The side panel
 
-Click the changes button in the title bar (⌘D / Ctrl+D) to open the
-**Changes** panel beside the chat; its header counts the files and the
+The side panel opens beside the chat with four tabs: **Changes** (below),
+**Plan** ([the plan](05-plan-mode-questions-and-todos.md#review-the-plan)),
+**Agents** ([helpers and jobs](04-agents.md#watching-agents)) and
+**Context** ([what the model was sent](07-memory-and-context.md#inspect-the-prompt)).
+Drag its left edge to resize it (the width is remembered); **Use the whole
+stage** covers the chat, **Dock beside the chat** brings it back. A dot on
+a tab means news there; a plan waiting for review opens Plan by itself.
+← / → switch focused tabs; **Esc** steps back (out of a helper's
+transcript, out of the whole stage, then closed).
+
+## Review changes in the Changes tab
+
+The changes button in the title bar (⌘D / Ctrl+D; again to close) opens
+the side panel on **Changes**; its header counts the files and the
 lines added and removed. Choose **This chat** (every file that changed in
 the project since this chat's first code checkpoint) or **Uncommitted**
 (all uncommitted changes compared with your last commit), and **Unified**
 or **Split** (one column, or old and new side by side; remembered on this
-computer). **Use the whole window** and **Dock beside the chat** switch its
-size; drag its left edge to resize it.
+computer). In a narrow panel the layout switch hides, and at its narrowest
+the file list sits above the diff.
 
 With several files, a list on the left groups them by folder, marks each
 **A**, **M**, **D** or **R** (added, modified, deleted, renamed) with its
-line counts, and offers a filter when there are more than six. Each file's
-bar has **Open** (in its default app), a button that copies the diff, and a
-**…** menu: **Reveal in Finder** (**Show in Explorer** on Windows, **Show
-in file manager** on Linux), **Copy path**, **Copy relative path** and
-**Copy diff**. Long unchanged stretches fold into **Show N unchanged
-lines**; very long diffs stop after 400 lines with **Show the remaining N
-lines**.
+line counts, and offers a filter past six files. Each file's bar has
+**Open** (in its default app), a copy-diff button and a **…** menu:
+**Reveal in Finder** (**Show in Explorer** on Windows, **Show in file
+manager** on Linux), **Copy path**, **Copy relative path** and **Copy
+diff**. Long unchanged stretches fold into **Show N unchanged lines**; very
+long diffs stop after 400 lines with **Show the remaining N lines**.
 
-| Key (while you're not typing) | Effect |
-|---|---|
-| `]` or `j` / `[` or `k` | Next file / previous file |
-| **Esc** | Leave the whole-window view, then close the panel |
-
-A finished turn refreshes the panel, and a file chip in a receipt or on the
-project home opens it at that file.
+While you're not typing, `]` or `j` and `[` or `k` go to the next and
+previous file. A finished turn refreshes the tab, and a file chip in a
+receipt or on the project home opens it at that file.
 
 ## Rewind
 
-Hover over one of your messages and click **Rewind**. Choose:
+Click **Rewind** at the end of a turn (Rewind to before this prompt):
 
 | Option | Effect |
 |---|---|
@@ -291,43 +343,38 @@ Hover over one of your messages and click **Rewind**. Choose:
 | **Code only** | Restore the files; keep the conversation. |
 
 When you rewind the conversation, your message goes back into the composer
-so you can edit and resend it. A running turn is cancelled first. A
-notification lists which files were restored, deleted, or left alone.
+to edit and resend. A running turn is cancelled first; a notification lists
+the files restored, deleted or left alone.
 
 > **Warning:** Rewind restores files, not the outside world. Installed
 > packages, database changes, pushes and other side effects of commands are
 > not undone. Files ignored by git and files larger than 8 MiB are not part
 > of checkpoints. Details: [Sessions and data](13-sessions-and-data.md#checkpoints-and-rewind).
 
-## Resume and manage chats
+## Resume, manage and export chats
 
-- Every chat is saved automatically. Click it in the sidebar to reopen it,
-  also after restarting the app.
+- Every chat is saved automatically; reopen it from the sidebar, also
+  after restarting the app.
 - The sidebar lists chats under their project, with their age (`5m`, `3h`,
   `2d`). A dot before a chat means it is working, needs you (amber),
   finished while you were away, or its last response didn't complete; hover
-  the chat for the exact state. The open chat shows no dot, because the title bar
-  reports it. A project lists eight chats, then **Show N more**; chats whose
-  folder isn't a project are under **Other chats**.
+  it for the exact state (the open chat shows none: the title bar reports
+  it). A project lists eight chats, then **Show N more**; chats whose folder
+  isn't a project are under **Other chats**.
 - Click a project to fold or unfold it. Hover it for **+** (a new chat
   there), or right-click it for **New chat here**, **New chat in a
   worktree…**, **Reveal in Finder**, **Copy path** and **Remove project…**.
-- ⌘K / Ctrl+K, or **Search** in the sidebar, opens the
-  [command palette](06-commands-and-skills.md#the-command-palette): actions,
-  recent chats, projects and settings in one search. `/resume` opens it with
-  chats only.
+- ⌘K / Ctrl+K or **Search** in the sidebar opens the
+  [command palette](06-commands-and-skills.md#the-command-palette) (actions,
+  recent chats, projects and settings); `/resume` opens it with chats only.
 - `/clear` or **New chat** starts a fresh chat; the old one stays.
+- `/export` copies the chat to your clipboard as Markdown (tool calls
+  summarized, internal reminders hidden), `/export json` every recorded
+  event as JSON (palette: **Copy the chat as Markdown** / **as JSON**).
 
 > **Warning:** Deleting a chat (the trash icon next to it) asks you to
 > confirm, then removes it for good. Removing a project from the sidebar
 > also deletes all of its chats once you confirm. Your project files are
 > not touched.
-
-## Export a transcript
-
-`/export` copies the chat to your clipboard as Markdown (tool calls
-summarized, internal reminders hidden). `/export json` copies every
-recorded event as JSON. Both are also in the command palette (**Copy the
-chat as Markdown**, **Copy the chat as JSON**).
 
 See also: [Permissions and safety](03-permissions-and-safety.md) · [Commands and skills](06-commands-and-skills.md) · [Sessions and data](13-sessions-and-data.md)

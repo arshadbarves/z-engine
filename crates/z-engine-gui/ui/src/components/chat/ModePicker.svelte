@@ -37,7 +37,7 @@
     <Icon icon={ChevronDown} size={10} strokeWidth={2.2} />
   </Popover.Trigger>
   <Popover.Portal>
-    <Popover.Content class="chip-pop" side="top" align="start" sideOffset={8}>
+    <Popover.Content class="chip-pop glass-strong" side="top" align="start" sideOffset={8}>
       <p class="chip-pop-head">Permission mode</p>
       {#if confirming}
         <div class="mode-warning" role="alert">

@@ -18,10 +18,16 @@ export interface SessionsState {
   unread: Record<string, UnreadMark>;
 }
 
+/** Something the pet grows from; the runtime adds the day it happened. */
+export type PetGrowthSignal =
+  | { kind: "turn"; turnId: string; completed: boolean; verified: boolean }
+  | { kind: "applied"; agentId: string };
+
 export type RuntimeEffect =
   | { kind: "toast"; tone: "info" | "warn" | "error"; text: string }
   | { kind: "shellOutput"; text: string }
-  | { kind: "refreshSessions" };
+  | { kind: "refreshSessions" }
+  | { kind: "petGrowth"; signal: PetGrowthSignal };
 
 export function emptySessionsState(): SessionsState {
   return { views: {}, unread: {} };
@@ -104,9 +110,27 @@ export function activityMap(views: Record<string, SessionView>): Record<string, 
 
 const NOTICE_TONE = { info: "info", warn: "warn", error: "error" } as const;
 
-/** Side effects an event asks of the shell (toasts, list refresh, terminal output). */
+/**
+ * Side effects an event asks of the shell (toasts, list refresh, terminal
+ * output, the pet's growth). Growth counts every chat, open or not; only
+ * live events arrive here, so reopening a chat awards nothing.
+ */
 export function eventEffects(event: Event, active: boolean): RuntimeEffect[] {
   switch (event.type) {
+    case "turnFinished": {
+      const { turnId, outcome, verification } = event.turn;
+      const signal: PetGrowthSignal = {
+        kind: "turn",
+        turnId,
+        completed: outcome.type === "completed",
+        verified: verification.status === "verified",
+      };
+      return [{ kind: "refreshSessions" }, { kind: "petGrowth", signal }];
+    }
+    case "agentUpdated":
+      return event.info.worktree?.state === "applied"
+        ? [{ kind: "petGrowth", signal: { kind: "applied", agentId: event.info.agentId } }]
+        : [];
     case "notice":
       return active ? [{ kind: "toast", tone: NOTICE_TONE[event.level], text: event.text }] : [];
     case "hookRan":
@@ -122,7 +146,6 @@ export function eventEffects(event: Event, active: boolean): RuntimeEffect[] {
       return active && event.name === "shell" ? [{ kind: "shellOutput", text: event.markdown }] : [];
     case "titleChanged":
     case "turnStarted":
-    case "turnFinished":
       return [{ kind: "refreshSessions" }];
     default:
       return [];

@@ -5,6 +5,7 @@
   import type { InstructionFile } from "$lib/protocol/config/InstructionFile";
   import { errorText, pushToast } from "$lib/runtime";
   import { settingsStore } from "$lib/stores/settings.svelte";
+  import { Pill } from "$lib/ui";
   import Icon, { AlertTriangle, FileText, Pencil, Plus } from "$lib/ui/icons";
   import InstructionEditor from "./InstructionEditor.svelte";
   import SettingsCard from "./SettingsCard.svelte";
@@ -64,7 +65,7 @@
                 {slot.file ? `${lines(slot.file.content)} lines` : "Not created yet, or empty"}
               </span>
             </div>
-            <button type="button" class="setting-add-btn" disabled={editing !== null || files === null} onclick={() => (editing = slot.path)}>
+            <button type="button" class="btn-secondary size-s" disabled={editing !== null || files === null} onclick={() => (editing = slot.path)}>
               <Icon icon={slot.file ? Pencil : Plus} size={12} />
               <span>{slot.file ? "Edit" : "Create"}</span>
             </button>
@@ -86,7 +87,7 @@
               <div class="extension-row-title">
                 <Icon icon={FileText} size={12} />
                 <code class="extension-row-path" title={file.path}>{file.path}</code>
-                <span class="extension-scope">{SCOPE_LABELS[file.scope]}</span>
+                <Pill>{SCOPE_LABELS[file.scope]}</Pill>
               </div>
             </div>
           </div>

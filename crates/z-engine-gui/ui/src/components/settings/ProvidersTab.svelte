@@ -7,8 +7,11 @@
   import { errorText, pushToast } from "$lib/runtime";
   import { connectProvider } from "$lib/stores/providerConnect";
   import { settingsStore } from "$lib/stores/settings.svelte";
-  import Icon, { Check, KeyRound, Sparkles } from "$lib/ui/icons";
+  import { Button, Pill } from "$lib/ui";
+  import Icon, { KeyRound, Sparkles } from "$lib/ui/icons";
   import ProviderConnectModal from "./ProviderConnectModal.svelte";
+  import SettingsCard from "./SettingsCard.svelte";
+  import SettingsGroup from "./SettingsGroup.svelte";
   import SourceBadge from "./SourceBadge.svelte";
 
   type Props = { settings: Settings };
@@ -46,28 +49,23 @@
 </script>
 
 <div class="tab-body providers-tab">
-  <section class="settings-group">
-    <div class="settings-group-header">
-      <h3>Providers</h3>
-      <span class="settings-group-sub">Keys are stored once per API host in auth.json, never in settings files</span>
-    </div>
-
-    <div class="settings-card providers-table-card">
+  <SettingsGroup title="Providers" description="Keys are stored once per API host in auth.json, never in settings files.">
+    <SettingsCard>
       {#each PROVIDERS as p (p.id)}
         {@const isCurrent = p.id === activeId}
         {@const key = keyStatus(settingsStore.credentials, bucketOf(p))}
         {@const isConnected = isProviderConnected(p, isCurrent, key.hasKey)}
-        <div class={`provider-table-row${isConnected ? " is-connected" : ""}`}>
+        <div class="provider-table-row">
           <div class="provider-row-left">
-            <span class="provider-row-icon" style={`color: ${p.color}`}>
+            <span class="provider-row-icon" style:color={p.color}>
               <Icon icon={Sparkles} size={15} />
             </span>
             <span class="provider-row-name">{p.name}</span>
-            <span class="provider-tag-badge">{p.tag}</span>
+            <Pill>{p.tag}</Pill>
             {#if isConnected}
-              <span class="provider-active-pill"><Icon icon={Check} size={11} /><span>Active</span></span>
+              <Pill tone="ok" dot>Active</Pill>
             {:else if isCurrent}
-              <span class="provider-tag-badge provider-warn-badge">Active · needs a key</span>
+              <Pill tone="attention">Active · needs a key</Pill>
             {/if}
             {#if key.hasKey}
               <span class="provider-key-badge" title="A key is stored for this API host">
@@ -76,41 +74,37 @@
             {/if}
           </div>
           <div class="provider-row-right">
-            <button
-              type="button"
-              class={`provider-action-btn ${isCurrent ? "configure" : "connect"}`}
-              onclick={() => (modalProvider = p)}
-            >
-              {isCurrent ? "Configure" : "Connect"}
-            </button>
             {#if key.hasKey}
-              <button type="button" class="provider-action-btn disconnect" onclick={() => void removeKey(p)}>
-                Remove key
-              </button>
+              <Button size="s" class="provider-remove-key" onclick={() => void removeKey(p)}>Remove key</Button>
             {/if}
+            <Button variant="secondary" size="s" onclick={() => (modalProvider = p)}>
+              {isCurrent ? "Configure" : "Connect"}
+            </Button>
           </div>
         </div>
       {/each}
-    </div>
-  </section>
+    </SettingsCard>
+  </SettingsGroup>
 
-  <section class="settings-group">
-    <div class="settings-card active-model-summary">
-      <div class="active-model-info">
-        <span class="active-model-label">{activePreset?.name ?? "Custom endpoint"}</span>
-        <code class="active-model-val">{settings.model.main}</code>
-        <SourceBadge source={settingsStore.sourceOf(["provider", "base_url"])} />
+  <SettingsGroup title="In use" description="The endpoint and model new sessions start with.">
+    <SettingsCard>
+      <div class="active-model-summary">
+        <div class="active-model-info">
+          <span class="active-model-label">{activePreset?.name ?? "Custom endpoint"}</span>
+          <code class="active-model-val">{settings.model.main}</code>
+          <SourceBadge source={settingsStore.sourceOf(["provider", "base_url"])} />
+        </div>
+        <span class="active-model-hint">
+          {settings.provider.base_url} · {kindLabel} ·
+          {activeKey.hasKey
+            ? keyHintText(activeKey)
+            : activePreset && !requiresApiKey(activePreset)
+              ? "no key needed"
+              : "no key stored"}
+        </span>
       </div>
-      <span class="active-model-hint">
-        {settings.provider.base_url} · {kindLabel} ·
-        {activeKey.hasKey
-          ? keyHintText(activeKey)
-          : activePreset && !requiresApiKey(activePreset)
-            ? "no key needed"
-            : "no key stored"}
-      </span>
-    </div>
-  </section>
+    </SettingsCard>
+  </SettingsGroup>
 
   {#if modalProvider}
     {@const p = modalProvider}

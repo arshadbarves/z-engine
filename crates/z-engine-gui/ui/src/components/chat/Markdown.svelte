@@ -1,75 +1,26 @@
 <script lang="ts">
-  import Markdown from "svelte-exmarkdown";
-  import { gfmPlugin } from "svelte-exmarkdown/gfm";
-  import type { Snippet } from "svelte";
-  import type { HTMLAttributes } from "svelte/elements";
-  import { highlightRoot } from "$lib/highlight";
-  import Icon, { Check, Copy } from "$lib/ui/icons";
+  import { setContext } from "svelte";
+  import { Renderer } from "svelte-exmarkdown";
+  import { markdownChunks } from "$lib/domain/timeline/markdownChunks";
+  import { parseMarkdown } from "$lib/markdown";
+  import CodeBlock, { STREAMING } from "./CodeBlock.svelte";
 
-  type Props = { text: string };
-  let { text }: Props = $props();
+  /**
+   * Markdown rendered block by block. Finished blocks come from the parse
+   * cache; while a reply streams, only its last block is parsed again.
+   */
+  type Props = { text: string; streaming?: boolean };
+  let { text, streaming = false }: Props = $props();
 
-  const plugins = [gfmPlugin()];
-  let copiedEl: HTMLElement | null = $state(null);
-  let root: HTMLDivElement | undefined = $state();
-
-  async function copyFrom(btn: HTMLButtonElement) {
-    const pre = btn.closest(".code-block")?.querySelector("pre");
-    const code = pre?.textContent ?? "";
-    try {
-      await navigator.clipboard.writeText(code);
-      copiedEl = btn;
-      setTimeout(() => {
-        if (copiedEl === btn) copiedEl = null;
-      }, 1400);
-    } catch (e) {
-      console.error("Failed to copy code", e);
-    }
-  }
-
-  $effect(() => {
-    void text;
-    if (!root) return;
-    queueMicrotask(() => {
-      root?.querySelectorAll(".code-block").forEach((block) => {
-        const langEl = block.querySelector("[data-lang-slot]");
-        const cls = block.querySelector("code")?.className ?? "";
-        const lang = cls.match(/language-([\w+-]+)/)?.[1];
-        if (langEl && lang) langEl.textContent = lang;
-      });
-      highlightRoot(root);
-    });
-  });
+  // svelte-exmarkdown's Renderer looks its tag overrides up in this context.
+  setContext("components", { current: { pre: CodeBlock } });
+  setContext(STREAMING, () => streaming);
+  const chunks = $derived(markdownChunks(text));
 </script>
 
-<div class="md" bind:this={root}>
-  <Markdown md={text} {plugins}>
-    {#snippet pre({ children }: { children?: Snippet })}
-      <div class="code-block">
-        <div class="code-block-head">
-          <div class="code-meta-left">
-            <span class="code-lang" data-lang-slot>code</span>
-          </div>
-          <button
-            type="button"
-            class="code-copy-btn"
-            onclick={(e) => void copyFrom(e.currentTarget)}
-            title="Copy code to clipboard"
-          >
-            {#if copiedEl}
-              <Icon icon={Check} size={11} class="copy-ok" />
-              <span>Copied</span>
-            {:else}
-              <Icon icon={Copy} size={11} />
-              <span>Copy</span>
-            {/if}
-          </button>
-        </div>
-        <pre>{#if children}{@render children()}{/if}</pre>
-      </div>
-    {/snippet}
-    {#snippet code({ children, class: className }: HTMLAttributes<HTMLElement>)}
-      <code class={className}>{#if children}{@render children()}{/if}</code>
-    {/snippet}
-  </Markdown>
+<!-- Streaming blocks update in place; a finished block that changes starts over, so no stale colors stay. -->
+<div class="md">
+  {#each chunks as chunk, i (streaming ? i : `${i}:${chunk}`)}
+    <Renderer astNode={parseMarkdown(chunk, !streaming || i < chunks.length - 1)} />
+  {/each}
 </div>

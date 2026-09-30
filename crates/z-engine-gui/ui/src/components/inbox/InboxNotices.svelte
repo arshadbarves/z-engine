@@ -55,7 +55,7 @@
             {/if}
           </p>
         </div>
-        <button type="button" class="icon-btn inbox-copy" aria-label="Copy notice" title="Copy" onclick={() => copy(notice)}>
+        <button type="button" class="icon-btn-mini inbox-copy" aria-label="Copy notice" title="Copy" onclick={() => copy(notice)}>
           <Icon icon={copier.copied && copiedKey === notice.key ? Check : Copy} size={13} />
         </button>
       </li>

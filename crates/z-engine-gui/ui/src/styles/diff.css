@@ -1,53 +1,13 @@
-/* ── Changes panel: docks beside the chat or takes the whole stage ───────
- * A content surface (solid sheet). The file list sits on the left, the
- * reviewed file on the right; color only marks added and removed lines. */
+/* ── Changes tab: fills the side panel's body ────────────────────────────
+ * The file list sits on the left, the reviewed file on the right; color
+ * only marks added and removed lines. */
 
 .diff-panel {
-  position: relative;
-  height: 100%;
-  min-width: min(380px, 100%);
+  flex: 1;
+  min-height: 0;
   container-type: inline-size;
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
-  background: var(--sheet);
-  border-radius: var(--r-l);
-  box-shadow: var(--sheet-shadow);
-  z-index: 20;
-  overflow: hidden;
-  animation: glide-in-right var(--dur-med) var(--ease-out) both;
-}
-
-.diff-panel.is-closing {
-  animation: glide-out-right var(--dur-fast) var(--ease-in) forwards;
-}
-
-.diff-panel.is-expanded {
-  position: absolute;
-  inset: 0;
-  max-width: none;
-  z-index: 25;
-}
-
-.diff-panel.is-resizing {
-  user-select: none;
-  animation: none;
-}
-
-.diff-resize {
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: 6px;
-  cursor: col-resize;
-  z-index: 3;
-  transition: background var(--dur-fast) var(--ease-out);
-}
-
-.diff-resize:hover,
-.diff-panel.is-resizing .diff-resize {
-  background: var(--separator-strong, var(--separator-strong));
 }
 
 .diff-head {
@@ -55,8 +15,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  height: 46px;
-  padding: 0 8px 0 12px;
+  height: 40px;
+  padding: 0 8px 0 10px;
   border-bottom: 1px solid var(--separator);
   flex-shrink: 0;
 }
@@ -66,13 +26,6 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-}
-
-.diff-head-title h2 {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--label);
 }
 
 .diff-head-sub {
@@ -94,14 +47,11 @@
   margin-right: 4px;
 }
 
-/* A narrow dock keeps the essentials: which changes, refresh, expand, close. */
+/* A narrow dock keeps the essentials: which changes and refresh. */
 @container (max-width: 640px) {
   .diff-head-actions .diff-layout-choice,
   .diff-head-sub {
     display: none;
-  }
-  .diff-body.has-files {
-    grid-template-columns: minmax(150px, 190px) minmax(0, 1fr);
   }
 }
 
@@ -146,6 +96,25 @@
   flex-direction: column;
   min-height: 0;
   border-right: 1px solid var(--separator);
+}
+
+/* After the base rules, which would otherwise win. A narrow list first;
+   the default dock is too narrow for two columns, so the list goes on top. */
+@container (max-width: 640px) {
+  .diff-body.has-files {
+    grid-template-columns: minmax(150px, 190px) minmax(0, 1fr);
+  }
+}
+@container (max-width: 560px) {
+  .diff-body.has-files {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .diff-files {
+    max-height: 168px;
+    border-right: none;
+    border-bottom: 1px solid var(--separator);
+  }
 }
 
 .diff-files-filter {

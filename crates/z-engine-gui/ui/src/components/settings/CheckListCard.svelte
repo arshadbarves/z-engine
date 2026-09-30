@@ -5,6 +5,7 @@
   import { LAYER_LABELS, layerOf } from "$lib/domain/settings/scopes";
   import type { CheckConfig } from "$lib/protocol/config/CheckConfig";
   import { settingsStore } from "$lib/stores/settings.svelte";
+  import { Pill } from "$lib/ui";
   import Icon, { Copy, Pencil, Plus, Trash2 } from "$lib/ui/icons";
   import CheckForm from "./CheckForm.svelte";
   import SettingsCard from "./SettingsCard.svelte";
@@ -60,7 +61,7 @@
             <div class="entry-row-copy">
               <div class="entry-row-title">
                 <strong>{entry.check.label || entry.check.id}</strong>
-                <span class="provider-tag-badge">{entry.check.kind}</span>
+                <Pill>{entry.check.kind}</Pill>
                 {#if entry.check.label}<code class="entry-id">{entry.check.id}</code>{/if}
                 {#if entry.overriddenBy}<span class="hook-skipped">replaced by {LAYER_LABELS[layerOf(entry.overriddenBy)]}</span>{/if}
               </div>
@@ -74,7 +75,7 @@
                 <button type="button" class="icon-btn-mini" disabled={busy || editing !== null} aria-label={`Edit ${entry.check.id}`} onclick={() => (editing = { index, check: entry.check })}>
                   <Icon icon={Pencil} size={11} />
                 </button>
-                <button type="button" class="permission-delete-btn" disabled={busy} aria-label={`Remove ${entry.check.id}`} onclick={() => void save(removeItem(own, index))}>
+                <button type="button" class="icon-btn-mini setting-remove" disabled={busy} aria-label={`Remove ${entry.check.id}`} onclick={() => void save(removeItem(own, index))}>
                   <Icon icon={Trash2} size={12} />
                 </button>
               {:else}
@@ -91,7 +92,7 @@
       <CheckForm check={editing.check} siblings={own} onSave={(next) => save(appendItem(own, next))} onCancel={() => (editing = null)} />
     {:else}
       <div class="extension-foot">
-        <button type="button" class="setting-add-btn" disabled={busy || editing !== null} onclick={() => (editing = { index: null, check: emptyCheck() })}>
+        <button type="button" class="btn-secondary" disabled={busy || editing !== null} onclick={() => (editing = { index: null, check: emptyCheck() })}>
           <Icon icon={Plus} size={12} />
           <span>Add check</span>
         </button>

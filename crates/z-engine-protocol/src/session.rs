@@ -136,6 +136,27 @@ pub struct TurnRecord {
     pub finished_at: u64,
 }
 
+/// What started a summary compaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum CompactionTrigger {
+    /// Context pressure: past `context.compact_at_percent`, or a context
+    /// overflow from the provider.
+    Auto,
+    /// The user asked (`Compact`, `/compact`).
+    Manual,
+}
+
+impl CompactionTrigger {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Manual => "manual",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]

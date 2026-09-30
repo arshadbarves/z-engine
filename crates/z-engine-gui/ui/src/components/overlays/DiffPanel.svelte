@@ -5,7 +5,7 @@
   import { buildDiffTree, filterDiffTree, flattenDiffTree } from "$lib/domain/diffTree";
   import { relPath } from "$lib/domain/tools/toolInput";
   import { errorText, sessions } from "$lib/runtime";
-  import { ui } from "$lib/stores/ui.svelte";
+  import { ui, type DiffScope } from "$lib/stores/ui.svelte";
   import { bindStore } from "$lib/svelte/bind.svelte";
   import { EmptyState } from "$lib/ui";
   import { GitCompare } from "$lib/ui/icons";
@@ -15,19 +15,16 @@
   import DiffView from "./DiffView.svelte";
 
   /**
-   * Review what changed: this chat's edits or every uncommitted change.
-   * Docks beside the chat (drag the edge to resize) or takes the whole
-   * stage. `[` / `]` (or `k` / `j`) step through files; Esc closes.
+   * The side panel's Changes tab: this chat's edits or every uncommitted
+   * change, a file list and the reviewed file. `[` / `]` (or `k` / `j`)
+   * step through files.
    */
-  type Scope = "session" | "git";
-  type Props = { isClosing?: boolean; onClose: () => void };
-  let { isClosing = false, onClose }: Props = $props();
 
   const workspaces = bindStore(workspaceStore);
   const sessionId = $derived(sessions.activeId);
   const root = $derived(sessions.active?.info?.projectRoot ?? workspaces.current.active ?? null);
   const status = $derived(sessions.active?.status ?? "idle");
-  let scope = $state<Scope>(ui.diffScope ?? (sessions.activeId ? "session" : "git"));
+  let scope = $state<DiffScope>(ui.diffScope ?? (sessions.activeId ? "session" : "git"));
   let files = $state<ChangedFile[] | null>(null);
   let error = $state<string | null>(null);
   let selected = $state<string | null>(null);
@@ -36,8 +33,6 @@
   let refreshing = $state(false);
   let query = $state("");
   let filesOpen = $state(true);
-  let width = $state(760);
-  let resizing = $state(false);
   let gen = 0;
 
   async function loadFiles(): Promise<ChangedFile[]> {
@@ -84,7 +79,7 @@
     }
   }
 
-  function setScope(next: Scope) {
+  function setScope(next: DiffScope) {
     if (scope === next) return;
     scope = next;
     query = "";
@@ -128,36 +123,16 @@
   $effect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (ui.settingsOpen || ui.inspectOpen || ui.paletteOpen) return;
+      if (ui.settingsOpen || ui.paletteOpen) return;
       if ((e.target as HTMLElement | null)?.closest("textarea, input, [contenteditable='true'], [role='dialog'], [role='menu']")) return;
       if (e.key === "[" || e.key === "k") step(-1);
       else if (e.key === "]" || e.key === "j") step(1);
-      else if (e.key === "Escape") {
-        if (ui.diffExpanded) ui.diffExpanded = false;
-        else onClose();
-      } else return;
+      else return;
       e.preventDefault();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
-
-  function startResize(e: PointerEvent) {
-    e.preventDefault();
-    resizing = true;
-    const startX = e.clientX;
-    const startWidth = width;
-    const move = (ev: PointerEvent) => {
-      width = Math.max(420, Math.min(window.innerWidth - 360, startWidth + (startX - ev.clientX)));
-    };
-    const up = () => {
-      resizing = false;
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-  }
 
   const summary = $derived(summarizeFiles(files ?? []));
   const current = $derived(files?.find((f) => f.path === selected) ?? null);
@@ -172,19 +147,7 @@
   );
 </script>
 
-<aside
-  class="diff-panel"
-  class:is-closing={isClosing}
-  class:is-resizing={resizing}
-  class:is-expanded={ui.diffExpanded}
-  style={ui.diffExpanded ? undefined : `width: min(${width}px, calc(100% - 360px))`}
-  aria-label="Changes"
->
-  {#if !ui.diffExpanded}
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="diff-resize" onpointerdown={startResize} role="separator" aria-orientation="vertical" title="Drag to resize"></div>
-  {/if}
-
+<div class="diff-panel">
   <DiffHeader
     {scope}
     {summary}
@@ -193,7 +156,6 @@
     onScope={setScope}
     onRefresh={() => void refresh()}
     onToggleFiles={() => (filesOpen = !filesOpen)}
-    {onClose}
   />
 
   {#if error}
@@ -218,4 +180,4 @@
       </div>
     </div>
   {/if}
-</aside>
+</div>

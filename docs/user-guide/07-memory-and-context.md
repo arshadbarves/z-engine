@@ -134,16 +134,16 @@ Z Engine takes the window size from the model catalog; set
 ### Inspect the prompt
 
 **Inspect prompt** (in the context card) or **Inspect the prompt** (in the
-command palette) opens the prompt inspector: the last request sent to the
-model, part by part. Its title bar shows the model and **Copy all**.
+command palette) opens the side panel's **Context** tab, the prompt
+inspector: the last request sent to the model, part by part. Its header
+shows the model and **Copy all**.
 
-- **The map** at the top left says how much of the context window the
-  request fills (for example "42% of the context window · 84k of 200k
-  tokens") and splits it into four kinds: **Instructions** (the system
-  prompt), **Project** (`AGENTS.md`, the repository map, saved notes),
-  **Conversation** (messages and tool results) and **Tools** (tool
-  definitions). Click a kind to show only its parts; click it again to show
-  all.
+- **The map** at the top is a ring of the context window: how much the
+  request fills (for example "42% of the window", "84k of 200k tokens"),
+  split into four kinds: **Instructions** (the system prompt), **Project**
+  (`AGENTS.md`, the repository map, saved notes), **Conversation**
+  (messages and tool results) and **Tools** (tool definitions). Click a
+  kind to show only its parts; click it again to show all.
 - **The outline** below lists the parts by kind with their token counts;
   conversation parts show their first line. **Search the request** also
   searches the text inside the parts, and ↑/↓ move through them.
@@ -151,12 +151,13 @@ model, part by part. Its title bar shows the model and **Copy all**.
   tokens are reusable across turns (system prompt and tools, which the
   provider can cache) and how many change every turn, with hints to shrink
   the request.
-- **The selected part** fills the right side, with its kind, tokens and
-  share of the request. **Reader** shows it formatted (a tool as its
-  description and input schema); **Raw** shows the exact text with line
+- **The selected part** reads on the right while the panel uses the whole
+  stage (picking a part in the docked panel expands it), with its kind,
+  tokens and share of the request. **Reader** shows it formatted (a tool as
+  its description and input schema); **Raw** shows the exact text with line
   numbers and a **Wrap lines** switch. A button copies the part.
 
-Esc closes the inspector.
+Esc docks the panel beside the chat again, then closes it.
 
 ## Automatic compaction
 
@@ -172,8 +173,9 @@ Long sessions are trimmed automatically, in two stages:
    last few messages are kept word for word where possible, and a tool call
    is never separated from its result.
 
-A **Context compacted · 180k → 24k tokens** divider marks the spot in the
-transcript; click it to read the summary. Your transcript itself keeps
+While the summary is written, **Compacting context…** shows at the end of
+the transcript. A **Context compacted · 180k → 24k** divider then marks
+the spot; click its **Summary** to read the summary. Your transcript keeps
 everything; compaction only affects what is sent to the model. The todo
 list survives compaction. If the provider reports that a request is too
 long, Z Engine compacts and retries once.

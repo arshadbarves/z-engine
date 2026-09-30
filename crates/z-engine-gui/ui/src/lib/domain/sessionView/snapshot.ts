@@ -5,8 +5,9 @@ import { emptyView, MAIN_AGENT, type SessionView } from "./types";
 
 /**
  * A snapshot replaces the view. Live-only state the snapshot cannot carry
- * (tool durations and progress, in-flight streams, local cards) survives
- * when it still refers to something in the new transcript.
+ * (tool durations and progress, in-flight streams, a running compaction,
+ * local cards) survives when it still refers to something in the new
+ * transcript or the session is still busy.
  */
 export function fromSnapshot(prev: SessionView, snap: SessionSnapshot): SessionView {
   const busy = snap.status !== "idle";
@@ -45,6 +46,7 @@ export function fromSnapshot(prev: SessionView, snap: SessionSnapshot): SessionV
     activeTurn: busy && prev.activeTurn && messageIds.has(prev.activeTurn.messageId) ? prev.activeTurn : null,
     checkpoints: snap.checkpoints,
     compactions: snap.compactions,
+    compacting: busy && prev.compacting,
     usage: snap.usage,
     agentUsage: prev.agentUsage,
     costUsd: snap.costUsd,

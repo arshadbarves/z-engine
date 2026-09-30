@@ -20,7 +20,7 @@ Download the installer for your system from
 
 Two free tools make Z Engine better if they are installed:
 
-- **git** – needed for code checkpoints (undo), the **Changes** panel and
+- **git** – needed for code checkpoints (undo), the **Changes** tab and
   agent worktrees. Without git, those features are off.
 - **ripgrep** (`rg`) – faster code search. Without it, search uses a
   built-in engine.
@@ -32,12 +32,19 @@ choose **Update & Restart**.
 
 ## First launch
 
-While Z Engine loads, a short animated splash shows. On a fresh install (no
-projects and no chats yet), a setup guide follows. The dots at the top show
-which of its five steps you are on, and **Back** returns to the previous one.
+While Z Engine loads, a short splash shows your
+[pet](02-everyday-use.md#your-pet) dropping in and waking up. When the app
+is ready, the pet flies into its place in the title bar. (With your
+system's Reduce Motion setting on, the splash simply fades.) On a fresh
+install (no projects and no chats yet), a setup guide opens instead and the
+pet lands above the setup card. It stays there on every step and reacts to
+each one. The dots at the top show which of its five steps you are on, and
+**Back** returns to the previous one.
 
-1. **Meet Z Engine**: click **Get started**, or **Skip setup** to go
-   straight to the app.
+1. **Meet your pet**: it says **Hi, I'm Zen**. Type another name under
+   **Call me** (up to 24 characters) and pick a **Look** if you like, then
+   click **Get started**, or **Skip setup** to go straight to the app. Both
+   save the name and look to your user settings.
 2. **Choose how Z Engine thinks**: pick where the AI model runs.
    - **Start free**: OpenCode Zen's free models, with no account or key.
    - **Use my API key**: pick Anthropic, OpenAI, OpenRouter, Google AI
@@ -54,9 +61,9 @@ which of its five steps you are on, and **Back** returns to the previous one.
    **Skip for now** continues without a project.
 4. **Decide how it works with you**: how much the agent may do on its own
    (**Ask before changes**, **Edit on its own** or **Plan first**, the
-   permission modes Ask, Auto-accept edits and Plan) and how lively the
-   companion in the title bar is (**Lively**, **Calm** or **Off**). Both are
-   saved to your user settings.
+   permission modes Ask, Auto-accept edits and Plan), how lively the pet
+   is (**Lively**, **Calm** or **Off**) and, at **Lively**, whether it
+   **Roams** or **Stays put**. These are saved to your user settings.
 5. **You're all set**: click a suggested first prompt to open the project
    home with it in the composer, or click **Open Z Engine**.
 
@@ -69,8 +76,8 @@ A *model provider* is the service that runs the AI model. Z Engine needs one
 before it can do anything. The setup guide connects one on a fresh install;
 to connect another or change it later:
 
-1. Open **Settings** (⌘, on macOS, Ctrl+, on Windows and Linux, or click
-   the model name at the bottom of the sidebar) and choose **Providers**.
+1. Open **Settings** (⌘, on macOS, Ctrl+, on Windows and Linux, or the
+   gear at the bottom of the sidebar) and choose **Providers**.
 2. Click **Connect** next to a provider (**Configure** for the active one).
 3. Paste an API key if the provider needs one (see below). An *API key* is a
    secret string the provider gives you so it can bill your account.
@@ -140,7 +147,7 @@ composer to start a chat there. With no project yet, **New chat** asks you
 for a folder first.
 
 > **Tip:** Z Engine works best in a git repository. Run `git init` in a new
-> project so checkpoints and the Changes panel work.
+> project so checkpoints and the Changes tab work.
 
 If the project's own settings would run programs or loosen yours (hooks,
 MCP servers, checks, permission rules and a few more; see
@@ -160,8 +167,9 @@ card has a **Trust** button for later.
 2. Press **Enter** to send. (Shift+Enter adds a new line.)
 3. Watch the transcript. Each tool the agent uses (Read, Grep, Bash, ...)
    appears as a one-line card with a status and duration; several in a row
-   fold into one line such as "Read 3 files · searched 2×". Click a line to
-   see the details.
+   fold into one line such as "Read 3 files · searched 2×", and once the
+   turn is done its work folds into one line such as "Worked for 12s · read
+   3 files". Click a line to see the details.
 4. While the agent works, the island in the middle of the title bar says
    what it is doing and for how long. When it finishes, the island briefly
    shows the result; click it to see what the chat has cost so far.
@@ -180,8 +188,9 @@ This time the agent needs to edit files and run commands, so it asks first.
 
 ## The approval card
 
-An *approval card* appears in the transcript whenever the agent wants to do
-something your permission settings don't already allow. It asks a question,
+An *approval card* takes the place of the composer's text box whenever the
+agent wants to do something your permission settings don't already allow
+(your draft is kept for later). It asks a question,
 such as **Allow Edit to change src/cli.rs?** or **Allow Bash to run cargo
 test?**, and shows:
 
@@ -191,7 +200,8 @@ test?**, and shows:
   than six lines fold; **Show all N lines** unfolds them.
 
 Answer with a button, or with a key while the card has keyboard focus (it
-takes focus when the composer is empty, and the key hints appear on it):
+takes focus unless you are typing in another field, and the key hints
+appear on it):
 
 | Button | Key | Effect |
 |---|---|---|
@@ -201,9 +211,10 @@ takes focus when the composer is empty, and the key hints appear on it):
 | **Deny…** | `n` | Refuse. You can type what the agent should do instead; press Enter or **Deny** to send. |
 
 While a card waits, the agent is paused and the island turns amber and says
-**Needs your approval**; clicking it scrolls to the card. You can still type
-messages; they are queued until the agent continues. Details and rule
-syntax: [Permissions and safety](03-permissions-and-safety.md).
+**Needs your approval**, with **Approve** to go to the card. To tell the
+agent something else, use **Deny…** with your feedback; your draft comes
+back once every card is answered. Details and rule syntax:
+[Permissions and safety](03-permissions-and-safety.md).
 
 > **Tip:** If you trust the agent with edits in this project, switch the
 > permission mode to **Auto-accept edits** with Shift+Tab. Commands still

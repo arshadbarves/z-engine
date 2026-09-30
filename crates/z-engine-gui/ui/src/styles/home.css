@@ -1,34 +1,7 @@
 /* The project home: a question, the composer in the middle of the sheet,
    then starting points and the project's state below. Centred while it
-   fits, scrolling when it does not. */
-
-.canvas-pane[data-stage="home"] {
-  overflow-y: auto;
-  padding: 28px 0 20px;
-}
-.home-top,
-.home-bottom {
-  width: 100%;
-  max-width: var(--column-chat);
-  margin-inline: auto;
-  padding: 0 var(--gutter-chat);
-}
-.home-top {
-  margin-top: auto;
-}
-.home-bottom {
-  margin-bottom: auto;
-}
-.composer-dock {
-  position: relative;
-  z-index: 4;
-  flex: none;
-}
-.composer-dock.is-hero {
-  width: 100%;
-  max-width: var(--column-chat);
-  margin: 18px auto 14px;
-}
+   fits, scrolling when it does not. It settles in on the smooth spring;
+   its cards are the settings cards' treatment (raised, hairline, r-m). */
 
 .home-head {
   display: flex;
@@ -36,7 +9,12 @@
   align-items: center;
   gap: 10px;
   text-align: center;
-  animation: blur-in var(--dur-slow) var(--ease-out) both;
+  animation: sheet-in var(--dur-spring-smooth) var(--ease-spring-smooth) backwards;
+}
+/* The pet's hero spot while you are home; the roaming layer fills it. */
+.home-pet {
+  width: 72px;
+  height: 72px;
 }
 .home-eyebrow {
   display: inline-flex;
@@ -68,14 +46,14 @@
 .home-below {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  animation: blur-in var(--dur-slow) var(--ease-out) 80ms both;
+  gap: var(--space-5);
+  animation: sheet-in var(--dur-spring-smooth) var(--ease-spring-smooth) 80ms backwards;
 }
 .starter-chips {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .starter-chip,
 .starter-more {
@@ -89,6 +67,7 @@
   background: var(--fill-quiet);
   color: var(--label-2);
   font: inherit;
+  font-size: var(--text-m);
   transition:
     background var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out),
@@ -114,13 +93,13 @@
 .home-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 12px;
+  gap: var(--space-3);
 }
 .home-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 14px 10px;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--separator);
   border-radius: var(--r-m);
   background: var(--raised);
@@ -169,7 +148,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin: 0 -6px;
+  margin: 0 calc(-1 * var(--space-2));
   padding: 0;
   list-style: none;
 }
@@ -177,7 +156,7 @@
 .changes-row {
   display: flex;
   width: 100%;
-  padding: 7px 6px;
+  padding: 7px var(--space-2);
   border: 0;
   border-radius: var(--r-s);
   background: transparent;
@@ -259,7 +238,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px;
+  padding: 6px var(--space-2);
 }
 .setup-check {
   display: inline-flex;

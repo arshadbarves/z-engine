@@ -4,9 +4,9 @@
 //! context-overflow error both run regardless of the estimate.
 
 use z_engine_context::{CLEARED_PREFIX, apply_microcompact, plan_microcompact};
-use z_engine_protocol::{Message, NoticeLevel};
+use z_engine_protocol::{CompactionTrigger, Message, NoticeLevel};
 
-use super::compact::{CompactJob, Trigger, summarize};
+use super::compact::{CompactJob, summarize};
 use super::meter::ContextMeter;
 use super::sink::TranscriptSink;
 use super::spec::RunContext;
@@ -43,7 +43,7 @@ pub(crate) async fn relieve(
         core: &ctx.core,
         sink,
         agent: &ctx.spec.agent_id,
-        trigger: Trigger::Auto,
+        trigger: CompactionTrigger::Auto,
         instructions: None,
         cancel: &ctx.cancel,
     };

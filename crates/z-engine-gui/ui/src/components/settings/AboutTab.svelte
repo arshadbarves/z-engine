@@ -4,8 +4,25 @@
   import { settingsStore } from "$lib/stores/settings.svelte";
   import { bindStore } from "$lib/svelte/bind.svelte";
   import { updateStore } from "$lib/updateStore";
-  import Icon, { ArrowRight, Check, CheckCircle2, Copy, Download, ExternalLink, FileText, Folder, KeyRound, LoaderCircle, RefreshCw, Shield, Sparkles } from "$lib/ui/icons";
-  import LogoMark from "../chrome/LogoMark.svelte";
+  import { Button, Pill } from "$lib/ui";
+  import Icon, {
+    ArrowRight,
+    Check,
+    CheckCircle2,
+    Copy,
+    Download,
+    ExternalLink,
+    FileText,
+    Folder,
+    KeyRound,
+    LoaderCircle,
+    RefreshCw,
+    Shield,
+    Sparkles,
+  } from "$lib/ui/icons";
+  import LogoMark from "./LogoMark.svelte";
+  import SettingsCard from "./SettingsCard.svelte";
+  import SettingsGroup from "./SettingsGroup.svelte";
 
   const CHANGELOG_URL = "https://github.com/arshadbarves/z-engine/blob/release/CHANGELOG.md";
 
@@ -45,40 +62,32 @@
       { id: "project", label: "Project settings", path: layerPath("project") ?? ".z-engine/settings.toml", desc: "Shared with the team", icon: FileText },
       { id: "local", label: "Personal project settings", path: layerPath("projectLocal") ?? ".z-engine/settings.local.toml", desc: "Git-ignored overrides", icon: FileText },
       { id: "data", label: "Sessions & checkpoints", path: app ? joinPath(app.dataDir, "sessions") : "sessions", desc: "Chat history and shadow checkpoints", icon: Folder },
+      { id: "pet", label: "Your pet", path: app ? joinPath(app.dataDir, "pet.json") : "pet.json", desc: "Its level, streak and what it wears", icon: Sparkles },
     ];
   });
 </script>
 
 <div class="tab-body about-tab">
   <div class="about-hero">
-    <div class="about-hero-logo"><LogoMark size={48} /></div>
+    <div class="about-hero-logo"><LogoMark size={52} /></div>
     <div class="about-hero-text">
       <div class="about-hero-title-row">
         <h3>Z Engine</h3>
-        {#if displayVersion}<span class="about-hero-badge">v{displayVersion}</span>{/if}
+        {#if displayVersion}<Pill>v{displayVersion}</Pill>{/if}
       </div>
-      <p class="about-hero-sub">Autonomous AI Coding Engine</p>
+      <p class="about-hero-sub">An AI engineer that works inside your projects</p>
     </div>
   </div>
 
-  <section class="settings-group">
-    <div class="settings-group-header">
-      <h3>Software Updates</h3>
-      <span class="settings-group-sub">Z Engine checks for new releases on launch</span>
-    </div>
-
+  <SettingsGroup title="Software updates" description="Z Engine checks for new releases on launch.">
     {#if info?.available}
-      <div class="about-update-card has-update" role="status">
+      <div class="settings-card about-update-card has-update" role="status">
         <div class="about-update-row">
-          <div class="about-update-icon-wrap pulse"><Icon icon={Sparkles} size={16} /></div>
+          <div class="about-update-icon-wrap"><Icon icon={Sparkles} size={16} /></div>
           <div class="about-update-detail">
             <div class="about-update-headline">
-              <span class="about-update-label">Update Available</span>
-              <span class="about-update-ver-badge">
-                <span class="ver-from">v{info.current}</span>
-                <Icon icon={ArrowRight} size={9} class="ver-arrow-sm" />
-                <span class="ver-to">v{info.latest}</span>
-              </span>
+              <span class="about-update-label">Update available</span>
+              <Pill tone="info">v{info.current} <Icon icon={ArrowRight} size={9} /> v{info.latest}</Pill>
             </div>
             {#if info.releaseNotes}<p class="about-update-summary">{info.releaseNotes}</p>{/if}
           </div>
@@ -86,15 +95,15 @@
 
         {#if installing && pct != null}
           <div class="about-update-progress">
-            <div class="about-progress-track">
-              <div class="about-progress-fill" style="width: {pct}%" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} role="progressbar"></div>
+            <div class="about-progress-track" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} role="progressbar">
+              <div class="about-progress-fill" style:scale={`${pct / 100} 1`}></div>
             </div>
             <span class="about-progress-pct">{pct}%</span>
           </div>
         {/if}
 
         <div class="about-update-actions">
-          <button type="button" class="about-btn-primary" disabled={installing} onclick={() => void updateStore.install()}>
+          <Button variant="accent" disabled={installing} onclick={() => void updateStore.install()}>
             {#if isInstalling}
               <Icon icon={LoaderCircle} size={13} class="spin" /><span>Installing…</span>
             {:else if isDownloading}
@@ -102,41 +111,43 @@
             {:else}
               <Icon icon={Download} size={13} /><span>Update & Restart</span>
             {/if}
-          </button>
-          <button type="button" class="about-btn-ghost" title="Recheck latest release" disabled={checking || installing} onclick={() => void updateStore.check(true)}>
-            <Icon icon={RefreshCw} size={12} class={checking ? "spin" : undefined} />
-          </button>
+          </Button>
+          <Button
+            variant="icon"
+            title="Recheck latest release"
+            aria-label="Recheck latest release"
+            spinning={checking}
+            disabled={checking || installing}
+            onclick={() => void updateStore.check(true)}
+          >
+            <Icon icon={RefreshCw} size={13} />
+          </Button>
           {#if info.url}
-            <button type="button" class="about-btn-ghost" title="View release on GitHub" onclick={() => updateStore.openRelease()}>
-              <Icon icon={ExternalLink} size={12} />
-            </button>
+            <Button variant="icon" title="View release on GitHub" aria-label="View release on GitHub" onclick={() => updateStore.openRelease()}>
+              <Icon icon={ExternalLink} size={13} />
+            </Button>
           {/if}
         </div>
       </div>
     {:else}
-      <div class="about-update-card is-current" role="status">
+      <div class="settings-card about-update-card" role="status">
         <div class="about-update-row">
-          <div class="about-update-icon-wrap ok"><Icon icon={CheckCircle2} size={16} /></div>
+          <div class="about-update-icon-wrap is-ok"><Icon icon={CheckCircle2} size={16} /></div>
           <div class="about-update-detail">
-            <span class="about-update-label">Up to Date</span>
+            <span class="about-update-label">Up to date</span>
             <span class="about-uptodate-sub">{displayVersion ? `Version ${displayVersion} is the latest release` : "No newer release found"}</span>
           </div>
+          <Button variant="secondary" disabled={checking} onclick={() => void updateStore.check(true)}>
+            <Icon icon={RefreshCw} size={12} class={checking ? "spin" : undefined} />
+            <span>{checking ? "Checking…" : "Check for updates"}</span>
+          </Button>
         </div>
-        <button type="button" class="about-btn-outline" disabled={checking} onclick={() => void updateStore.check(true)}>
-          <Icon icon={RefreshCw} size={12} class={checking ? "spin" : undefined} />
-          <span>{checking ? "Checking…" : "Check for Updates"}</span>
-        </button>
       </div>
     {/if}
-  </section>
+  </SettingsGroup>
 
-  <section class="settings-group">
-    <div class="settings-group-header">
-      <h3>Files & Storage</h3>
-      <span class="settings-group-sub">Where Z Engine keeps settings, keys and history</span>
-    </div>
-
-    <div class="settings-card paths-card">
+  <SettingsGroup title="Files & storage" description="Where Z Engine keeps settings, keys, history and your pet.">
+    <SettingsCard>
       {#each paths as p (p.id)}
         <div class="path-item-row">
           <div class="path-item-icon"><Icon icon={p.icon} size={14} /></div>
@@ -147,35 +158,30 @@
             </div>
             <code class="path-item-code">{p.path}</code>
           </div>
-          <button
-            type="button"
-            class={`path-copy-btn${copiedPath === p.id ? " is-copied" : ""}`}
-            title={`Copy ${p.path}`}
-            onclick={() => void copyToClipboard(p.path, p.id)}
-          >
+          <Button size="s" variant="secondary" title={`Copy ${p.path}`} onclick={() => void copyToClipboard(p.path, p.id)}>
             {#if copiedPath === p.id}
               <Icon icon={Check} size={12} /><span>Copied</span>
             {:else}
               <Icon icon={Copy} size={12} /><span>Copy</span>
             {/if}
-          </button>
+          </Button>
         </div>
       {/each}
-    </div>
-  </section>
+    </SettingsCard>
+  </SettingsGroup>
 
   <div class="about-links-row">
-    <button type="button" class="about-link-btn" onclick={() => void openReleaseUrl(CHANGELOG_URL)}>
+    <Button variant="secondary" onclick={() => void openReleaseUrl(CHANGELOG_URL)}>
       <Icon icon={FileText} size={13} />
-      <span>View Release Notes</span>
+      <span>View release notes</span>
       <Icon icon={ExternalLink} size={10} class="about-link-ext" />
-    </button>
+    </Button>
     {#if info?.url}
-      <button type="button" class="about-link-btn" onclick={() => updateStore.openRelease()}>
+      <Button variant="secondary" onclick={() => updateStore.openRelease()}>
         <Icon icon={Sparkles} size={13} />
-        <span>GitHub Release</span>
+        <span>GitHub release</span>
         <Icon icon={ExternalLink} size={10} class="about-link-ext" />
-      </button>
+      </Button>
     {/if}
   </div>
 </div>

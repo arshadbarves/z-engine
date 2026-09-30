@@ -6,6 +6,11 @@ function entry(agentId: string, messageId: string, now: number): StreamingMessag
   return { messageId, agentId, text: "", thinking: "", startedAt: now };
 }
 
+/** The main agent streams only once a compaction is over, including one that failed with just a notice. */
+function stillCompacting(view: SessionView, agentId: string): boolean {
+  return view.compacting && agentId !== MAIN_AGENT;
+}
+
 export function startStreaming(
   view: SessionView,
   agentId: string,
@@ -14,7 +19,12 @@ export function startStreaming(
 ): SessionView {
   const prev = view.streaming[messageId];
   const next = prev ?? entry(agentId, messageId, now);
-  return { ...view, streaming: put(view.streaming, messageId, next), retrying: null };
+  return {
+    ...view,
+    streaming: put(view.streaming, messageId, next),
+    retrying: null,
+    compacting: stillCompacting(view, agentId),
+  };
 }
 
 export function appendDelta(
@@ -27,7 +37,12 @@ export function appendDelta(
 ): SessionView {
   const prev = view.streaming[messageId] ?? entry(agentId, messageId, now);
   const next: StreamingMessage = { ...prev, [field]: prev[field] + delta };
-  return { ...view, streaming: put(view.streaming, messageId, next), retrying: null };
+  return {
+    ...view,
+    streaming: put(view.streaming, messageId, next),
+    retrying: null,
+    compacting: stillCompacting(view, agentId),
+  };
 }
 
 /** The authoritative message replaces the live entry; only main-agent messages join the transcript. */

@@ -3,10 +3,9 @@
 Part of [How Z Engine works](README.md). How the agent hands work to
 subagents and background jobs, and how Z Engine decides what goes into each
 request to the model: instruction files, rules, compaction, prompt caching
-and the repository map. Terms are explained in the [glossary](glossary.md);
-the round loop these features plug into is in [Core features](features-core.md).
-To *use* them, see [Agents](../user-guide/04-agents.md) and
-[Memory and context](../user-guide/07-memory-and-context.md).
+and the repository map. Terms: [glossary](glossary.md); the round loop they
+plug into: [Core features](features-core.md). To *use* them, see
+[Agents](../user-guide/04-agents.md) and [Memory and context](../user-guide/07-memory-and-context.md).
 
 ## Subagents
 
@@ -21,14 +20,14 @@ sees only its task, and brings back a short report instead of every page.
 2. The engine turns that definition into a child *agent run* with its own
    system prompt, tools, model, permission mode and turn budget.
 3. The child runs the same round loop as the main agent, with its own
-   transcript and the same permission gate (its approval cards appear in
-   the main transcript, labelled with its agent id). Its final message goes
-   back to the caller.
+   transcript and the same permission gate (its approval cards wait in the
+   main chat's composer, labelled with its type and task). Its final
+   message goes back to the caller.
 
 | Kind | What the caller gets | Stopped by |
 |---|---|---|
 | **Foreground** (default) | The report plus a footer: duration, tool calls, tokens, cost, changed files | **Esc**, with the turn that started it |
-| **Background** (`run_in_background: true`) | A job id at once; a reminder when the agent finishes | `JobKill` or **Stop** in the Jobs tab; it survives **Esc** |
+| **Background** (`run_in_background: true`) | A job id at once; a reminder when the agent finishes | `JobKill` or **Stop** under Jobs in the side panel's Agents tab; it survives **Esc** |
 | **Resume** (`resume: "<agent_id>"`) | A finished agent continues with its full earlier transcript; `prompt` is the follow-up | As foreground or background |
 
 Each run has a *depth*: the main agent is 0, its subagents 1, theirs 2. A
@@ -47,16 +46,13 @@ past the limit is refused with "subagents may nest at most N level(s) deep".
 a child (depth check, then an awaited task or a background job);
 [`launch.rs`](../../crates/z-engine-engine/src/orchestration/launch.rs)
 prepares it (resumed transcript, worktree, cancellation, `needs_slot`);
-[`blueprint.rs`](../../crates/z-engine-engine/src/orchestration/blueprint.rs)
-builds its `AgentSpec`;
+[`blueprint.rs`](../../crates/z-engine-engine/src/orchestration/blueprint.rs) builds its `AgentSpec`;
 [`child.rs`](../../crates/z-engine-engine/src/orchestration/child.rs) takes a
 slot and runs the shared loop;
-[`sink.rs`](../../crates/z-engine-engine/src/orchestration/sink.rs) writes
-`agents/<id>.jsonl`;
+[`sink.rs`](../../crates/z-engine-engine/src/orchestration/sink.rs) writes `agents/<id>.jsonl`;
 [`tracker.rs`](../../crates/z-engine-engine/src/orchestration/tracker.rs)
 persists `LogRecord::AgentUpdated` and emits `AgentUpdated`, whose
-`AgentStatus` is in
-[`protocol/src/agents.rs`](../../crates/z-engine-protocol/src/agents.rs).
+`AgentStatus` is in [`protocol/src/agents.rs`](../../crates/z-engine-protocol/src/agents.rs).
 The [`Agent` tool](../../crates/z-engine-tools/src/builtin/agent.rs) reaches
 the engine only through the `AgentPort` trait.
 
@@ -163,8 +159,8 @@ it's done.
   the job to finish first. For an agent, the output is its latest message.
   `JobKill` stops a shell with its whole process tree, or cancels an agent.
 - When a job exits, a "job finished" reminder is queued for the agent that
-  started it. The agents panel's Jobs tab follows `JobUpdated` events
-  (throttled per job; an exit always emits); **Stop** sends `KillJob`.
+  started it. **Jobs** in the side panel's Agents tab follows `JobUpdated`
+  events (throttled per job; an exit always emits); **Stop** sends `KillJob`.
 - Jobs belong to the chat, not the turn: **Esc** leaves them running. When
   the session shuts down (for example when you close the app), every job
   still running is killed.
@@ -287,7 +283,8 @@ messages sent to the model); the transcript you see is never shortened.
    estimate says, and the request is retried once. If summarizing fails, a
    warning appears and the run continues with what it has.
 
-A **Context compacted** divider shows the sizes before and after.
+**Compacting context…** shows while the summary is written, then a
+**Context compacted** divider with the sizes before and after.
 `/compact [focus]` and **Compact now** take the same path. The todo list
 survives. Subagents compact the same way, but their stored transcript keeps
 every message, so a resumed agent starts from its full history.
@@ -312,8 +309,9 @@ and [`compaction/summary.rs`](../../crates/z-engine-context/src/compaction/summa
 (`plan_summary` holds the split rules). The engine does the I/O: `relieve`
 in [`run/pressure.rs`](../../crates/z-engine-engine/src/run/pressure.rs),
 and the summary job shared with `/compact` in
-[`run/compact.rs`](../../crates/z-engine-engine/src/run/compact.rs), which
-uses the prompt [`auxiliary/compact.md`](../../crates/z-engine-prompts/prompts/auxiliary/compact.md).
+[`run/compact.rs`](../../crates/z-engine-engine/src/run/compact.rs) (prompt:
+[`auxiliary/compact.md`](../../crates/z-engine-prompts/prompts/auxiliary/compact.md)),
+which emits `compactionStarted { trigger }` and then `compacted { marker }`.
 
 ## Prompt caching
 

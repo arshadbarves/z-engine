@@ -7,6 +7,130 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **The pet**: a small creature, **Zen** by default, replaces the
+  title-bar companion orb. Its face and posture show what the agent is
+  doing (working, needs you, done, failed) across 34 moods, it gets sleepy after quiet
+  minutes and greets you when the app opens (it wakes up on the splash,
+  then flies into the title bar). At the **Lively** level it roams while
+  nothing needs you: above **What should we work on?** on the project
+  home, onto the composer's top edge, the sidebar footer and the open side
+  panel's tab bar, and into the empty Inbox; it watches the composer while
+  you type, naps after 3 minutes, rides back into the island while the
+  agent works and hops in when something needs you. It walks along edges
+  and hops between spots on springs. Drag it anywhere (it swings from your
+  grip), throw it (a hard throw leaves it dizzy), click to boop it,
+  double-click or right-click for its card.
+- **Pet growth**, saved in `<data dir>/pet.json`: XP for completed turns
+  (10), verified turns (15 more), applied helper worktrees (20) and the
+  first of these each day (5 more, with a day streak). Levels change its
+  shape (Seed, Sprout, Bloom, Star), unlock things to wear (sprout, scarf,
+  headphones, star) and idle tricks (stretch, hop, spin, sparkle). At
+  Lively a new level plays a short confetti celebration once nothing needs
+  you.
+- **Pet card**: level ring, name, level and stage, XP to the next level,
+  streak, turns, verified and applied counts, what it wears, its tricks,
+  and **Customize…**, **Stop roaming** / **Let it roam** and **Call back**.
+- **Settings → Pet**: a preview with **Show its card**, **Name**, **Look**
+  (Pearl, Mint, Sky, Lilac, Peach, Graphite), **Liveliness** and **Let it
+  roam**; Settings search finds each one. **About & Updates** lists
+  `pet.json`.
+- New settings `[ui.pet]`: `name` (default `"Zen"`, up to 24 characters),
+  `look` (default `"pearl"`) and `roam` (default `true`).
+- First-run setup starts by meeting the pet (**Hi, I'm Zen**, a name and a
+  look), keeps it above the setup card on every step, and asks in the work
+  style step whether it roams.
+- Command palette **Pet** actions: **Rename Zen**, **Change Zen's look**,
+  **Show Zen's card**, **Stop Zen roaming** / **Let Zen roam** and **Call
+  Zen back** (with your pet's name).
+- **Side panel**: one panel beside the chat with **Changes**, **Plan**,
+  **Agents** and **Context** tabs, shown or hidden from the title bar.
+  Drag its edge to resize it (the width is kept), let it use the whole
+  stage, and press Esc to step back; ← and → switch tabs. A plan waiting
+  for review opens the Plan tab, and a new helper marks Agents with a dot.
+- **Plan tab**: the plan waiting for review, with **Edit** / **Preview**,
+  **Approve & auto-accept edits**, **Approve & ask before edits** and
+  **Keep planning**, else the chat's last plan; the todo checklist shows
+  **N of M done**.
+- **Turn actions** under each answer: copy the answer, **Open changes** and
+  **Rewind** (to before this prompt: code and conversation, conversation
+  only, or code only).
+- A finished turn's work folds into one line such as **Worked for 1m 12s ·
+  read 6 files · ran 2 commands**, with failed and denied counts.
+- **Compacting context…** shows while a summary is being written, before
+  the **Context compacted** divider; new protocol event
+  `compactionStarted { trigger }`.
+- Double-clicking an empty part of the title bar, the sidebar's head, the
+  side panel's head or the Settings bar maximizes or restores the window.
+
+### Changed
+- **Dark frosted redesign**: the app is always dark, over the dark HUD
+  vibrancy on macOS (active even when the window is in the background) and
+  dark Mica on Windows 11, solid on Windows 10 and Linux. Four layers (the
+  window, the content sheet, glass for the sidebar card, side panel,
+  composer and island, stronger glass for popovers, menus and dialogs) use
+  one glass recipe with no gradients and a blue accent. Motion runs on
+  springs and moves only position and opacity: the home, a chat and the
+  Inbox fade up as you switch, and panels slide rather than resize. The
+  sidebar is a floating card that slides away, with the macOS window
+  buttons inside its head; its footer no longer has the model chip (pick
+  the model in the composer, set the default in **Settings → Providers**).
+- **Approvals and questions wait in the composer**, in place of the text
+  box: the oldest approval first (it takes the focus unless you are typing
+  elsewhere), else the oldest question, with **N more waiting after
+  this**; your draft comes back once they are answered. A plan shows as a
+  **Plan ready · Review** row in the transcript and opens the Plan tab.
+- **Island**: it rests, shows live steps and notices, and while the chat
+  needs you offers one **Approve**, **Answer** or **Review** button that
+  goes to the waiting card. Clicking the island itself, amber or not,
+  grows it into a card (the notice
+  and its actions, the plan, the latest steps, rows for helpers, context
+  and waiting chats, cost, recent warnings) instead of a sheet.
+- The Changes and Agents panels and the full-window prompt inspector are
+  the side panel's **Changes**, **Agents** and **Context** tabs. The
+  Context tab keeps the ring map, outline and **Insights** docked and adds
+  the reader when it uses the whole stage.
+- **Rewind** moved from your message to the turn's actions, and copying the
+  answer moved there too; your message keeps **Copy** on hover.
+- Long chats draw the newest 30 turns and 20 more each time you scroll near
+  the top (a click on the prompt rail draws the turns back to that prompt);
+  older turns and code colors fill in only as they near the screen, so a
+  1,000-turn chat scrolls smoothly and an idle window does almost no work.
+- Dialogs share one layout (an optional icon, the title and a line under
+  it, then the body, the actions last), and **Settings → Providers** groups
+  the endpoint and model new chats start with under **In use**.
+- `ui.companion` (**Lively**, **Calm**, **Off**) moved from **Settings →
+  Appearance** to **Settings → Pet** as **Liveliness**; **Calm** now keeps
+  the pet in the title bar, and **Off** still shows a small dot.
+- Send and Stop in the composer are one button: while the agent works and
+  the draft is empty, Send turns into Stop.
+- Helper calls use one summary line with a tiny sprite of the pet, in the
+  transcript's Agent card and in the Agents tab's rows.
+- The prompt inspector's map is a ring chart of the context window; its
+  legend filters the outline.
+- The sidebar's selection highlight slides between rows; Settings opens as
+  a sheet over the window; the project home without a project centres its
+  empty state.
+- The splash shows the pet instead of the Z mark and the name: it drops
+  in, wakes up, breathes and blinks while the app loads, then flies into
+  its place in the title bar (or above the setup card on a fresh install).
+  With Reduce Motion it simply fades.
+- The app icon, the favicon and the logo in **Settings → About & Updates**
+  show the pearl pet glowing on a midnight squircle instead of the Z mark.
+
+### Removed
+- The title-bar companion orb and its **Companion** group in **Settings →
+  Appearance** (the pet and **Settings → Pet** replace them).
+
+### Fixed
+- Glass stays blurred after the first-launch entrance animations.
+- The idle pet no longer redraws every frame, for lower CPU and battery use
+  while nothing happens.
+- The Changes tab stacks the file list above the diff when the side panel
+  is narrow.
+- Esc closes the island's card before the side panel.
+- A compaction divider at the end of a turn sits after the turn's actions.
+
 ## [2.1.0] - 2026-09-25
 
 ### Added

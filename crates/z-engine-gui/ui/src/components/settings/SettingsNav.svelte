@@ -10,6 +10,7 @@
     Server,
     Shield,
     Sliders,
+    Smile,
     Sparkles,
     Workflow,
     type IconSvgElement,
@@ -27,7 +28,8 @@
   export const SETTINGS_TABS: readonly TabMeta[] = [
     { id: "models", label: "Models", hint: "Which models answer, and how hard they think.", icon: Brain, scoped: true },
     { id: "providers", label: "Providers", hint: "The model services you use and their API keys.", icon: Sparkles, scoped: true },
-    { id: "appearance", label: "Appearance", hint: "The companion, how much detail turns show, and the response style.", icon: Eye, scoped: true },
+    { id: "appearance", label: "Appearance", hint: "How much detail finished turns show, and the response style.", icon: Eye, scoped: true },
+    { id: "pet", label: "Pet", hint: "Its name and look, how lively it is, and whether it roams.", icon: Smile, scoped: true },
     { id: "permissions", label: "Permissions", hint: "What the agent may do without asking.", icon: Shield, scoped: true },
     { id: "memory", label: "Memory", hint: "AGENTS.md and the other instructions every prompt includes.", icon: Book, scoped: false },
     { id: "verification", label: "Verification", hint: "The checks that show a change works.", icon: ListChecks, scoped: true },
@@ -41,7 +43,8 @@
 
 <script lang="ts">
   import { searchSettings, SETTINGS_SECTIONS, type SettingEntry } from "$lib/domain/settings/searchIndex";
-  import Icon, { Search, X } from "$lib/ui/icons";
+  import { SearchField, SelectionCapsule } from "$lib/ui";
+  import Icon from "$lib/ui/icons";
 
   /** Pages grouped by what they are about; searching finds single settings. */
   type Props = {
@@ -77,24 +80,14 @@
   }
 </script>
 
-<aside class="settings-nav" aria-label="Settings pages">
-  <label class="settings-search">
-    <Icon icon={Search} size={13} />
-    <input
-      type="text"
-      bind:value={query}
-      oninput={() => (highlighted = 0)}
-      onkeydown={onKey}
-      placeholder="Search settings"
-      spellcheck={false}
-      aria-label="Search settings"
-    />
-    {#if query}
-      <button type="button" class="settings-search-clear" aria-label="Clear the search" onclick={() => (query = "")}>
-        <Icon icon={X} size={11} />
-      </button>
-    {/if}
-  </label>
+<aside class="settings-nav glass" aria-label="Settings pages">
+  <SearchField
+    bind:value={query}
+    label="Search settings"
+    placeholder="Search settings"
+    oninput={() => (highlighted = 0)}
+    onkeydown={onKey}
+  />
 
   <nav class="settings-nav-list">
     {#if query.trim()}
@@ -107,6 +100,7 @@
         <p class="settings-results-empty">No setting matches “{query.trim()}”.</p>
       {/each}
     {:else}
+      <SelectionCapsule selector={`.settings-nav-item[aria-current="page"]`} />
       {#each SETTINGS_SECTIONS as section (section.label)}
         <section class="settings-nav-section">
           <h3>{section.label}</h3>

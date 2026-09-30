@@ -4,7 +4,9 @@
 
 use std::sync::Arc;
 
-use z_engine_protocol::{CompactionMarker, Event, Message, Role, TurnId, now_ms};
+use z_engine_protocol::{
+    CompactionMarker, CompactionTrigger, Event, Message, Role, TurnId, now_ms,
+};
 use z_engine_store::LogRecord;
 
 use super::meter::ContextMeter;
@@ -21,6 +23,9 @@ pub(crate) trait TranscriptSink: Send + Sync {
 
     /// Replaces the working set in memory only (microcompaction).
     fn set_working(&self, working: Vec<Message>);
+
+    /// A summary compaction is about to ask the model for a summary.
+    fn compacting(&self, trigger: CompactionTrigger);
 
     /// Persists a summary compaction and installs the new working set.
     fn compacted(
@@ -75,6 +80,10 @@ impl TranscriptSink for MainSink {
 
     fn set_working(&self, working: Vec<Message>) {
         self.core.with_state(|state| state.working = working);
+    }
+
+    fn compacting(&self, trigger: CompactionTrigger) {
+        self.core.events.emit(Event::CompactionStarted { trigger });
     }
 
     fn compacted(

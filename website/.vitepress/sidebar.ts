@@ -49,6 +49,7 @@ const SECTIONS: Section[] = [
       "docs/architecture/v2-engine.md",
       "docs/engineering/style-guide.md",
       "docs/design/gui-ui-guide.md",
+      "docs/design/gui-surfaces.md",
       "docs/status.md",
     ],
   },

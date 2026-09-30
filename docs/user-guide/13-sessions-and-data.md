@@ -16,7 +16,7 @@ own extensions, and a **data folder** for chats, checkpoints and logs.
 | Windows | `%APPDATA%\z-engine` | `%APPDATA%\z-engine` |
 
 `ZENGINE_CONFIG_DIR` and `ZENGINE_DATA_DIR` move them. **Settings → About &
-Updates → Files & Storage** shows the actual paths with copy buttons.
+Updates → Files & storage** shows the actual paths with copy buttons.
 
 **Config folder:**
 
@@ -39,6 +39,7 @@ Updates → Files & Storage** shows the actual paths with copy buttons.
 | `checkpoints/` | Shadow git repositories for code checkpoints, one per project. |
 | `cache/models-dev.json` | The cached model catalog. |
 | `workspaces.json` | The project folders listed under **Projects** in the sidebar. |
+| `pet.json` | Your [pet](02-everyday-use.md#your-pet)'s growth: XP, day streak, counts of turns, verified turns and applied changes, what it wears, and the last 200 turns and applies it counted (so none counts twice). If it is missing or unreadable, the pet starts fresh. |
 | `z-engine-gui.log` | The app log. |
 
 **In each project:**
@@ -90,7 +91,7 @@ Checkpoints need git installed. For projects with more than 50,000 files
 (after ignores), checkpoints are turned off and a notice says so;
 `/status` shows whether they're on.
 
-**Rewinding** (hover a message → **Rewind**) offers *Code and
+**Rewinding** (**Rewind** at the end of a turn) offers *Code and
 conversation*, *Conversation only* or *Code only*
 ([Everyday use](02-everyday-use.md#rewind)). Restoring code:
 
@@ -104,7 +105,7 @@ Rewinding the conversation records the rewind in the log and drops later
 messages from what you and the model see. The agent forgets which files it
 had read, so it reads them again before editing.
 
-The Changes panel's **This chat** scope compares the project with the
+The Changes tab's **This chat** scope compares the project with the
 chat's first checkpoint.
 
 > **Warning:** Rewind can't undo effects outside your project files:

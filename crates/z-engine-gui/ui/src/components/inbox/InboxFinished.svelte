@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { FinishedItem } from "$lib/domain/inbox";
   import { openChatById } from "$lib/stores/app-actions";
+  import { Button } from "$lib/ui";
   import { relTime } from "$lib/util";
 
   /** Background chats whose turn ended since you last looked at them. */
@@ -19,7 +20,7 @@
           <p class="inbox-item-meta"><span>{item.label}</span><time>{relTime(item.at)}</time></p>
         </div>
         <div class="inbox-actions">
-          <button type="button" class="btn-ghost" onclick={() => void openChatById(item.sessionId)}>Open</button>
+          <Button variant="secondary" onclick={() => void openChatById(item.sessionId)}>Open</Button>
         </div>
       </li>
     {/each}

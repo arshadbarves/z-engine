@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { needsOnboarding, nextStep, prevStep, setupChecklist, stepIndex } from "./onboarding";
+import { needsOnboarding, nextStep, onboardingPose, ONBOARDING_STEPS, prevStep, setupChecklist, stepIndex } from "./onboarding";
+
+describe("onboardingPose", () => {
+  it("greets, thinks, reads, wonders and cheers through the steps", () => {
+    expect(ONBOARDING_STEPS.map((s) => onboardingPose(s, false).mood)).toEqual([
+      "greeting",
+      "thinking",
+      "reading",
+      "curious",
+      "happy",
+    ]);
+  });
+
+  it("listens while you type its name", () => {
+    expect(onboardingPose("welcome", true)).toMatchObject({ mood: "listening", gaze: "down" });
+  });
+});
 
 describe("needsOnboarding", () => {
   it("welcomes a brand-new install only", () => {

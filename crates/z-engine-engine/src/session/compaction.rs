@@ -5,9 +5,9 @@ use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;
 use z_engine_context::estimate_messages;
-use z_engine_protocol::{AgentId, NoticeLevel};
+use z_engine_protocol::{AgentId, CompactionTrigger, NoticeLevel};
 
-use crate::run::{CompactJob, MainSink, TranscriptSink, Trigger, summarize};
+use crate::run::{CompactJob, MainSink, TranscriptSink, summarize};
 use crate::session::SessionCore;
 
 pub(crate) async fn compact_now(
@@ -26,7 +26,7 @@ pub(crate) async fn compact_now(
         core,
         sink: &sink,
         agent: &agent,
-        trigger: Trigger::Manual,
+        trigger: CompactionTrigger::Manual,
         instructions: instructions.as_deref(),
         cancel,
     };

@@ -10,7 +10,7 @@ use z_engine_context::{
 };
 use z_engine_llm::{ModelRequest, SystemBlock};
 use z_engine_prompts::auxiliary::COMPACT;
-use z_engine_protocol::{AgentId, CompactionMarker, Message, now_ms};
+use z_engine_protocol::{AgentId, CompactionMarker, CompactionTrigger, Message, now_ms};
 
 use super::side::side_request;
 use super::sink::TranscriptSink;
@@ -25,33 +25,19 @@ const KEEP_RECENT_MESSAGES: usize = 4;
 const MAX_CHARS_PER_RESULT: usize = 2_000;
 const SUMMARY_MAX_TOKENS: u32 = 8_192;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Trigger {
-    Auto,
-    Manual,
-}
-
-impl Trigger {
-    fn label(self) -> &'static str {
-        match self {
-            Self::Auto => "auto",
-            Self::Manual => "manual",
-        }
-    }
-}
-
 /// Everything one compaction needs.
 pub(crate) struct CompactJob<'a> {
     pub core: &'a SessionCore,
     pub sink: &'a dyn TranscriptSink,
     pub agent: &'a AgentId,
-    pub trigger: Trigger,
+    pub trigger: CompactionTrigger,
     pub instructions: Option<&'a str>,
     pub cancel: &'a CancellationToken,
 }
 
 /// The new working set, or `None` when the history is too short to
-/// summarize.
+/// summarize. The sink hears `compacting` once there is something to
+/// summarize, before the summary request.
 pub(crate) async fn summarize(
     job: &CompactJob<'_>,
     working: &[Message],
@@ -80,6 +66,7 @@ pub(crate) async fn summarize(
     let Some(plan) = plan_summary(working, KEEP_RECENT_MESSAGES) else {
         return Ok(None);
     };
+    job.sink.compacting(job.trigger);
     let mut prompt = render_for_summary(&working[..plan.split], MAX_CHARS_PER_RESULT);
     if let Some(focus) = instructions {
         prompt.push_str("\n\nFocus instructions from the user:\n");

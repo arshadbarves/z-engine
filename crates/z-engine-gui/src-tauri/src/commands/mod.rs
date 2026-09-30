@@ -5,6 +5,7 @@ pub(crate) mod access;
 pub(crate) mod app;
 pub(crate) mod catalog;
 pub(crate) mod extensions;
+pub(crate) mod pet;
 pub(crate) mod session;
 pub(crate) mod settings;
 pub(crate) mod update;

@@ -13,7 +13,7 @@
     body {
       margin: 0;
       height: 100%;
-      background: #08080a;
+      background: #0e0e10;
       color: #ededf0;
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
         "Segoe UI", Roboto, sans-serif;
@@ -60,19 +60,43 @@
 </head>
 
 <body>
-  <div id="boot-splash" class="splash" role="status" aria-label="Z Engine is starting">
+  <div id="boot-splash" class="splash" role="status" aria-label="Starting">
     <div class="splash-stage">
-      <div class="splash-glow" aria-hidden="true"></div>
-      <svg class="splash-mark" width="76" height="76" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <rect class="splash-frame" x="1.5" y="1.5" width="21" height="21" rx="5.5" stroke="currentColor"
-          stroke-width="1.2" pathLength="100" />
-        <g fill="currentColor">
-          <rect class="splash-bar splash-bar-top" x="5.53" y="5.53" width="12.94" height="3" rx="0.47" />
-          <path class="splash-bar splash-bar-fold" d="M15.384 9.281h3.085L8.625 14.719H5.531z" />
-          <rect class="splash-bar splash-bar-bot" x="5.53" y="15.47" width="12.94" height="3" rx="0.47" />
-        </g>
-      </svg>
-      <div class="splash-word">Z Engine</div>
+      <div class="splash-pet" aria-hidden="true">
+        <div class="splash-shadow"></div>
+        <svg class="splash-pet-art" width="112" height="112" viewBox="0 0 32 32">
+          <defs>
+            <radialGradient id="splash-pet-fill" cx="36%" cy="28%" r="82%">
+              <stop offset="0%" stop-color="#ffffff" />
+              <stop offset="52%" stop-color="#eff1f6" />
+              <stop offset="100%" stop-color="#c1c5cf" />
+            </radialGradient>
+            <filter id="splash-pet-aura" x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="2.6" />
+            </filter>
+          </defs>
+          <g class="splash-pet-body">
+            <path
+              d="M16 8.6C22.4 8.6 26.6 13.2 26.6 19C26.6 24.2 22.2 27.2 16 27.2C9.8 27.2 5.4 24.2 5.4 19C5.4 13.2 9.6 8.6 16 8.6Z"
+              fill="#eceef4" opacity="0.3" filter="url(#splash-pet-aura)" />
+            <ellipse cx="11.8" cy="27.2" rx="2.6" ry="1.5" fill="#cacdd7" />
+            <ellipse cx="20.2" cy="27.2" rx="2.6" ry="1.5" fill="#cacdd7" />
+            <path
+              d="M16 8.6C22.4 8.6 26.6 13.2 26.6 19C26.6 24.2 22.2 27.2 16 27.2C9.8 27.2 5.4 24.2 5.4 19C5.4 13.2 9.6 8.6 16 8.6Z"
+              fill="url(#splash-pet-fill)" stroke="#ffffff" stroke-opacity="0.42" stroke-width="0.6" />
+            <ellipse cx="11.8" cy="12.9" rx="3.4" ry="1.9" transform="rotate(-28 11.8 12.9)" fill="#ffffff"
+              opacity="0.78" />
+            <ellipse cx="9.3" cy="21.7" rx="1.9" ry="1.1" fill="#ff8fa3" opacity="0.22" />
+            <ellipse cx="22.7" cy="21.7" rx="1.9" ry="1.1" fill="#ff8fa3" opacity="0.22" />
+            <g class="splash-pet-eyes" fill="#14151a">
+              <ellipse class="splash-pet-eye" cx="12.4" cy="18.4" rx="1.35" ry="2" />
+              <ellipse class="splash-pet-eye" cx="19.6" cy="18.4" rx="1.35" ry="2" />
+            </g>
+            <path class="splash-pet-mouth" d="M14.6 22.5q1.4 1.3 2.8 0" fill="none" stroke="#14151a"
+              stroke-width="0.9" stroke-linecap="round" />
+          </g>
+        </svg>
+      </div>
       <div class="splash-progress" aria-hidden="true"></div>
     </div>
   </div>

@@ -10,7 +10,7 @@
   let { selected, onPick, onHover }: Props = $props();
 </script>
 
-<div class="composer-pop command-pop remember-pop" role="listbox" aria-label="Remember in">
+<div class="composer-pop command-pop remember-pop glass-strong" role="listbox" aria-label="Remember in">
   <div class="cmd-pop-header">
     <div class="cmd-pop-header-title">
       <Icon icon={Bookmark} size={13} class="cmd-glow-icon" />

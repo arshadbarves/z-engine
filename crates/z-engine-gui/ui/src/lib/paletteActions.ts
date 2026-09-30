@@ -1,9 +1,12 @@
 import { MODES } from "./domain/modes";
 import { SETTING_ENTRIES } from "./domain/settings/searchIndex";
+import { settingWrite } from "./domain/settings/tomlValue";
 import type { PaletteItem } from "./paletteTypes";
 import { modLabel } from "./platform";
 import { compact, exportTranscript, sessions, setMode } from "./runtime";
-import { goHome, showInbox } from "./stores/app-actions";
+import { goHome, openSettings, showInbox } from "./stores/app-actions";
+import { petUi } from "./stores/pet.svelte";
+import { settingsStore } from "./stores/settings.svelte";
 import { ui } from "./stores/ui.svelte";
 import { runUiCommand } from "./stores/uiCommands";
 import {
@@ -17,21 +20,54 @@ import {
   HelpCircle,
   Home,
   Inbox,
+  ListChecks,
   PanelLeft,
   Plus,
   Settings,
   Shield,
+  Smile,
   SquareTerminal,
 } from "./ui/icons";
+
+/** What you can ask of the pet, while there is one. */
+function petActions(): PaletteItem[] {
+  const level = settingsStore.settings?.ui.companion ?? "lively";
+  if (level === "off") return [];
+  const name = petUi.name;
+  const pet = (item: Omit<PaletteItem, "group" | "icon">): PaletteItem => ({ ...item, group: "Pet", icon: Smile });
+  const roam = petUi.roam;
+  const setRoam = (next: boolean) => {
+    settingsStore.scope = "user";
+    void settingsStore.apply([settingWrite(["ui", "pet", "roam"], next)]);
+  };
+  return [
+    pet({ label: `Rename ${name}`, keywords: "pet companion name call", run: () => openSettings("pet", "ui.pet.name") }),
+    pet({ label: `Change ${name}'s look`, keywords: "pet companion color skin look", run: () => openSettings("pet", "ui.pet.look") }),
+    pet({
+      label: `Show ${name}'s card`,
+      hint: "Level, streak and what it wears",
+      keywords: "pet companion level xp card unlocks",
+      run: () => petUi.openCard(),
+    }),
+    ...(level === "lively"
+      ? [
+          pet({
+            label: roam ? `Stop ${name} roaming` : `Let ${name} roam`,
+            keywords: "pet companion walk wander roam stay",
+            run: () => setRoam(!roam),
+          }),
+          pet({ label: `Call ${name} back`, hint: "To the title bar", keywords: "pet companion home island return", run: () => petUi.callBack() }),
+        ]
+      : []),
+  ];
+}
 
 /** Everything the palette can do, in plain words; settings appear once you type. */
 export function paletteActions(opts: {
   newTask: () => void;
   addWorkspace: () => void;
   openWorktree: () => void;
-  openDiff: () => void;
   openSettings: () => void;
-  openInspector: () => void;
   toggleSidebar: () => void;
 }): PaletteItem[] {
   const mode = sessions.active?.mode ?? "default";
@@ -47,14 +83,16 @@ export function paletteActions(opts: {
     go({ label: "Inbox", hint: "Approvals, finished chats, notices", keywords: "inbox activity notifications approvals", icon: Inbox, run: () => showInbox() }),
     go({ label: "Settings", keywords: "settings preferences config", icon: Settings, shortcut: `${mod},`, run: opts.openSettings }),
     go({ label: "Show or hide the sidebar", keywords: "toggle sidebar", icon: PanelLeft, shortcut: `${mod}B`, run: opts.toggleSidebar }),
-    chat({ label: "Review changes", hint: "What this chat changed", keywords: "diff review changes files git", icon: GitCompare, shortcut: `${mod}D`, run: opts.openDiff }),
-    chat({ label: "Agents", hint: "Helpers and work to apply", keywords: "agents subagents helpers worktree usage cost", icon: Bot, run: () => ui.openWork("agents") }),
-    chat({ label: "Background jobs", keywords: "jobs background shell stop output", icon: SquareTerminal, run: () => ui.openWork("jobs") }),
-    chat({ label: "Inspect the prompt", hint: "The last request, part by part", keywords: "inspect prompt request context tokens system tools", icon: Eye, run: opts.openInspector }),
+    chat({ label: "Review changes", hint: "What this chat changed", keywords: "diff review changes files git", icon: GitCompare, shortcut: `${mod}D`, run: () => ui.openPanel("changes") }),
+    chat({ label: "Plan", hint: "The plan and its checklist", keywords: "plan todo checklist review approve", icon: ListChecks, run: () => ui.openPanel("plan") }),
+    chat({ label: "Agents", hint: "Helpers and work to apply", keywords: "agents subagents helpers worktree usage cost", icon: Bot, run: () => ui.openPanel("agents") }),
+    chat({ label: "Background jobs", keywords: "jobs background shell stop output", icon: SquareTerminal, run: () => ui.openJobs() }),
+    chat({ label: "Inspect the prompt", hint: "The last request, part by part", keywords: "inspect prompt request context tokens system tools", icon: Eye, run: () => ui.openPanel("context") }),
     chat({ label: "Context usage", keywords: "context tokens window breakdown /context", icon: Brain, run: () => void runUiCommand("context", "") }),
     chat({ label: "Compact the conversation", hint: "Summarize older messages", keywords: "compact summarize free tokens /compact", icon: Brain, run: () => void compact() }),
     chat({ label: "Copy the chat as Markdown", keywords: "export transcript markdown share", icon: Copy, run: () => void exportTranscript("markdown") }),
     chat({ label: "Copy the chat as JSON", keywords: "export transcript json", icon: Copy, run: () => void exportTranscript("json") }),
+    ...petActions(),
     ...MODES.filter((m) => m.id !== mode && !m.warning).map((m) => ({
       label: `Switch to ${m.label}`,
       hint: m.description,
@@ -80,6 +118,6 @@ export function paletteSettings(): PaletteItem[] {
     keywords: `setting ${entry.words}`,
     group: "Settings",
     icon: Settings,
-    run: () => ui.openSettings(entry.tab, entry.key),
+    run: () => openSettings(entry.tab, entry.key),
   }));
 }

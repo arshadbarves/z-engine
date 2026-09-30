@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Procedural icon and logo generator for Z-Engine.
+"""Icon generator for Z-Engine.
 
-Generates pixel-perfect Apple-grade desktop app icons (.icns, .ico, PNGs)
-and in-app vector assets from pure mathematical geometry and shaders.
+Renders the desktop app icons (.icns, .ico, PNGs) and the favicon from one
+master SVG: the pearl pet glowing on a midnight squircle. The pet uses the
+same 32x32 geometry as `ui/src/components/pet/Pet.svelte`, scaled into the
+512 canvas.
 """
 
 import os
@@ -16,124 +18,143 @@ ICONS_DIR = REPO_ROOT / "crates/z-engine-gui/src-tauri/icons"
 UI_PUBLIC_DIR = REPO_ROOT / "crates/z-engine-gui/ui/public"
 
 # Master SVG Definition (512x512 canvas)
-# Continuous Apple squircle, liquid titanium kinetic Z, radiant solar core
+# Full-bleed midnight squircle (#202024 to #0C0C0E) with soft blue and lilac
+# glows, and the pearl pet glowing at its centre. Keep LogoMark.svelte (the
+# About page logo) drawing the same art.
 MASTER_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <!-- Deep Obsidian Studio Canvas -->
-    <linearGradient id="apple-bg" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#26262A" />
-      <stop offset="50%" stop-color="#1B1B1E" />
-      <stop offset="100%" stop-color="#101012" />
+    <!-- Midnight Canvas -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#202024" />
+      <stop offset="50%" stop-color="#151518" />
+      <stop offset="100%" stop-color="#0C0C0E" />
     </linearGradient>
 
-    <!-- Squircle Specular Chamfer Highlight (Continuous Edge Reflection) -->
-    <linearGradient id="squircle-bevel" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.25" />
-      <stop offset="12%" stop-color="#FFFFFF" stop-opacity="0.08" />
-      <stop offset="85%" stop-color="#FFFFFF" stop-opacity="0.02" />
-      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.07" />
-    </linearGradient>
-
-    <!-- Liquid Titanium Z Mark Gradient (Directional studio light) -->
-    <linearGradient id="ti-body" x1="15%" y1="10%" x2="85%" y2="90%">
-      <stop offset="0%" stop-color="#FFFFFF" />
-      <stop offset="22%" stop-color="#ECECF2" />
-      <stop offset="55%" stop-color="#C5C5D0" />
-      <stop offset="85%" stop-color="#A5A5B2" />
-      <stop offset="100%" stop-color="#8E8E9B" />
-    </linearGradient>
-
-    <!-- Specular Hairline Bevel for Z Mark -->
-    <linearGradient id="ti-edge" x1="20%" y1="0%" x2="80%" y2="100%">
-      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.80" />
-      <stop offset="35%" stop-color="#FFFFFF" stop-opacity="0.20" />
-      <stop offset="70%" stop-color="#FFFFFF" stop-opacity="0.05" />
-      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.35" />
-    </linearGradient>
-
-    <!-- Radiant Solar Core Orb Gradient -->
-    <radialGradient id="solar-sphere" cx="34%" cy="30%" r="70%">
-      <stop offset="0%" stop-color="#FFB366" />
-      <stop offset="30%" stop-color="#FF7322" />
-      <stop offset="70%" stop-color="#EA4400" />
-      <stop offset="95%" stop-color="#BE2800" />
-      <stop offset="100%" stop-color="#9C1E00" />
+    <!-- Blue and Lilac Glows Behind the Pet -->
+    <radialGradient id="glow-sky" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#4F86FF" stop-opacity="0.5" />
+      <stop offset="45%" stop-color="#4F86FF" stop-opacity="0.18" />
+      <stop offset="100%" stop-color="#4F86FF" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="glow-lilac" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7F5CFF" stop-opacity="0.5" />
+      <stop offset="45%" stop-color="#7F5CFF" stop-opacity="0.18" />
+      <stop offset="100%" stop-color="#7F5CFF" stop-opacity="0" />
     </radialGradient>
 
-    <!-- Ambient Solar Backlight Bloom -->
-    <filter id="solar-bloom" x="-60%" y="-60%" width="220%" height="220%">
-      <feGaussianBlur stdDeviation="24" result="glow" />
+    <!-- Lilac Light Pooled Under the Pet -->
+    <radialGradient id="pool" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#9A84FF" stop-opacity="0.32" />
+      <stop offset="60%" stop-color="#9A84FF" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#9A84FF" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Contact Shadow Under the Feet -->
+    <radialGradient id="contact" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0.6" />
+      <stop offset="60%" stop-color="#000000" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Top Gloss and Bottom Falloff -->
+    <linearGradient id="gloss" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.08" />
+      <stop offset="38%" stop-color="#FFFFFF" stop-opacity="0" />
+      <stop offset="70%" stop-color="#000000" stop-opacity="0" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.4" />
+    </linearGradient>
+
+    <!-- Squircle Specular Bevel (faint lit top edge, dark bottom edge) -->
+    <linearGradient id="bevel" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.32" />
+      <stop offset="14%" stop-color="#FFFFFF" stop-opacity="0.08" />
+      <stop offset="60%" stop-color="#FFFFFF" stop-opacity="0" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.5" />
+    </linearGradient>
+
+    <!-- Keeps the Glows Inside the Squircle -->
+    <clipPath id="squircle"><rect width="512" height="512" rx="116" /></clipPath>
+
+    <!-- Pearl Body -->
+    <radialGradient id="body" cx="36%" cy="28%" r="82%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="42%" stop-color="#F2F4F9" />
+      <stop offset="74%" stop-color="#D9DDE7" />
+      <stop offset="100%" stop-color="#B3B8C8" />
+    </radialGradient>
+
+    <!-- Pearlescent Sheen (picks up the sky and lilac glows) -->
+    <linearGradient id="sheen" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#bcd9ff" stop-opacity="0.5" />
+      <stop offset="45%" stop-color="#bcd9ff" stop-opacity="0" />
+      <stop offset="60%" stop-color="#d9c8ff" stop-opacity="0" />
+      <stop offset="100%" stop-color="#d9c8ff" stop-opacity="0.65" />
+    </linearGradient>
+
+    <!-- Inner Bloom (soft light pooled low in the body) -->
+    <radialGradient id="bloom" cx="50%" cy="64%" r="46%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Feet: lit from above, shaded below -->
+    <linearGradient id="foot" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#E1E4EC" />
+      <stop offset="100%" stop-color="#B2B7C7" />
+    </linearGradient>
+
+    <!-- Blue Aura Around the Pet -->
+    <filter id="aura" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="3.0" />
     </filter>
 
-    <!-- Multi-stage Depth Drop Shadows -->
-    <filter id="z-shadow" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#000000" flood-opacity="0.55" />
-      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.35" />
-      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000000" flood-opacity="0.25" />
-    </filter>
-
-    <filter id="orb-shadow" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#000000" flood-opacity="0.50" />
-      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.30" />
+    <!-- Drop Shadow for the Pet -->
+    <filter id="pet-shadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000000" flood-opacity="0.55" />
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000000" flood-opacity="0.35" />
     </filter>
   </defs>
 
-  <!-- Apple Standard Continuous Squircle Base -->
-  <rect width="512" height="512" rx="116" fill="url(#apple-bg)" />
-  <rect x="1" y="1" width="510" height="510" rx="115" fill="none" stroke="url(#squircle-bevel)" stroke-width="2" />
-
-  <!-- Ambient Solar Flare Reflection onto Dark Titanium Bed -->
-  <circle cx="356" cy="148" r="76" fill="#FF5500" opacity="0.20" filter="url(#solar-bloom)" />
-
-  <!-- Sculptural Liquid Titanium Z Mark -->
-  <g filter="url(#z-shadow)">
-    <path d="
-      M 144 110
-      C 185 110, 225 110, 248 110
-      C 266 110, 278 120, 280 136
-      C 282 152, 275 168, 260 192
-      C 236 228, 206 278, 184 318
-      C 176 330, 184 338, 200 338
-      L 364 338
-      C 386 338, 404 354, 404 372
-      C 404 391, 386 406, 364 406
-      L 144 406
-      C 122 406, 104 391, 104 372
-      C 104 354, 114 340, 128 322
-      C 152 290, 182 240, 204 200
-      C 212 188, 204 180, 188 180
-      L 144 180
-      C 122 180, 104 165, 104 145
-      C 104 125, 122 110, 144 110 Z
-    " fill="url(#ti-body)" />
-
-    <path d="
-      M 144 110
-      C 185 110, 225 110, 248 110
-      C 266 110, 278 120, 280 136
-      C 282 152, 275 168, 260 192
-      C 236 228, 206 278, 184 318
-      C 176 330, 184 338, 200 338
-      L 364 338
-      C 386 338, 404 354, 404 372
-      C 404 391, 386 406, 364 406
-      L 144 406
-      C 122 406, 104 391, 104 372
-      C 104 354, 114 340, 128 322
-      C 152 290, 182 240, 204 200
-      C 212 188, 204 180, 188 180
-      L 144 180
-      C 122 180, 104 165, 104 145
-      C 104 125, 122 110, 144 110 Z
-    " fill="none" stroke="url(#ti-edge)" stroke-width="1.5" />
+  <!-- Midnight Squircle Base -->
+  <rect width="512" height="512" rx="116" fill="url(#bg)" />
+  <g clip-path="url(#squircle)">
+    <circle cx="200" cy="200" r="220" fill="url(#glow-sky)" />
+    <circle cx="318" cy="318" r="220" fill="url(#glow-lilac)" />
+    <ellipse cx="256" cy="404" rx="180" ry="36" fill="url(#pool)" />
   </g>
 
-  <!-- Radiant Solar Energy Core (The Engine Combustion Core) -->
-  <g filter="url(#orb-shadow)">
-    <circle cx="356" cy="148" r="60" fill="url(#solar-sphere)" />
-    <circle cx="356" cy="148" r="59.5" fill="none" stroke="#FFB366" stroke-opacity="0.45" stroke-width="1" />
-    <ellipse cx="340" cy="128" rx="19" ry="10" transform="rotate(-26 340 128)" fill="#FFFFFF" opacity="0.38" />
+  <!-- Contact Shadow -->
+  <ellipse cx="256" cy="402" rx="120" ry="16" fill="url(#contact)" />
+
+  <!-- Pet Aura -->
+  <g transform="translate(16 -28) scale(15)">
+    <path d="M16 8.6C22.4 8.6 26.6 13.2 26.6 19C26.6 24.2 22.2 27.2 16 27.2C9.8 27.2 5.4 24.2 5.4 19C5.4 13.2 9.6 8.6 16 8.6Z" fill="#9DB8FF" opacity="0.55" filter="url(#aura)" />
   </g>
+
+  <!-- Pearl Pet (Pet.svelte 32x32 geometry, scaled 15x) -->
+  <g filter="url(#pet-shadow)">
+    <g transform="translate(16 -28) scale(15)">
+      <ellipse cx="11.8" cy="27.2" rx="2.6" ry="1.5" fill="url(#foot)" />
+      <ellipse cx="20.2" cy="27.2" rx="2.6" ry="1.5" fill="url(#foot)" />
+      <path d="M16 8.6C22.4 8.6 26.6 13.2 26.6 19C26.6 24.2 22.2 27.2 16 27.2C9.8 27.2 5.4 24.2 5.4 19C5.4 13.2 9.6 8.6 16 8.6Z" fill="url(#body)" />
+      <path d="M16 8.6C22.4 8.6 26.6 13.2 26.6 19C26.6 24.2 22.2 27.2 16 27.2C9.8 27.2 5.4 24.2 5.4 19C5.4 13.2 9.6 8.6 16 8.6Z" fill="url(#bloom)" />
+      <path d="M16 8.6C22.4 8.6 26.6 13.2 26.6 19C26.6 24.2 22.2 27.2 16 27.2C9.8 27.2 5.4 24.2 5.4 19C5.4 13.2 9.6 8.6 16 8.6Z" fill="url(#sheen)" />
+      <path d="M16 8.6C22.4 8.6 26.6 13.2 26.6 19C26.6 24.2 22.2 27.2 16 27.2C9.8 27.2 5.4 24.2 5.4 19C5.4 13.2 9.6 8.6 16 8.6Z" fill="none" stroke="#FFFFFF" stroke-opacity="0.6" stroke-width="0.4" />
+      <ellipse cx="11.8" cy="12.9" rx="3.4" ry="1.9" transform="rotate(-28 11.8 12.9)" fill="#FFFFFF" opacity="0.92" />
+      <ellipse cx="9.3" cy="21.7" rx="1.9" ry="1.1" fill="#ff8fa3" opacity="0.45" />
+      <ellipse cx="22.7" cy="21.7" rx="1.9" ry="1.1" fill="#ff8fa3" opacity="0.45" />
+      <ellipse cx="12.4" cy="18.4" rx="1.35" ry="2" fill="#14151a" />
+      <ellipse cx="19.6" cy="18.4" rx="1.35" ry="2" fill="#14151a" />
+      <path d="M14.6 22.5q1.4 1.3 2.8 0" fill="none" stroke="#14151a" stroke-width="0.9" stroke-linecap="round" />
+    </g>
+  </g>
+
+  <!-- Top Gloss and Bottom Falloff -->
+  <rect width="512" height="512" rx="116" fill="url(#gloss)" />
+
+  <!-- Specular Bevel -->
+  <rect x="1.5" y="1.5" width="509" height="509" rx="114.5" fill="none" stroke="url(#bevel)" stroke-width="3" />
+  <rect x="0.5" y="0.5" width="511" height="511" rx="115.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="1" />
 </svg>
 """
 

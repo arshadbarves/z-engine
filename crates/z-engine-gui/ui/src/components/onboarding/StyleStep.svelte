@@ -1,15 +1,16 @@
 <script lang="ts">
-  import type { CompanionPose } from "$lib/domain/companion";
+  import type { PetPose } from "$lib/domain/pet/pose";
   import { settingWrite } from "$lib/domain/settings/tomlValue";
   import type { CompanionLevel } from "$lib/protocol/config/CompanionLevel";
   import type { PermissionMode } from "$lib/protocol/PermissionMode";
+  import { onboarding } from "$lib/stores/onboarding.svelte";
   import { settingsStore } from "$lib/stores/settings.svelte";
-  import { SegmentedChoice } from "$lib/ui";
+  import { Button, SegmentedChoice } from "$lib/ui";
   import Icon, { Eye, LoaderCircle, Pencil, Shield } from "$lib/ui/icons";
-  import Companion from "../chrome/Companion.svelte";
+  import Pet from "../pet/Pet.svelte";
   import StepLayout from "./StepLayout.svelte";
 
-  /** How much the agent may do on its own, and how lively the companion is. */
+  /** How much the agent may do on its own, how lively the pet is, and whether it roams. */
   type Props = { onNext: () => void; onBack: () => void };
   let { onNext, onBack }: Props = $props();
 
@@ -20,29 +21,38 @@
   ];
   const LEVELS = [
     { value: "lively" as const, label: "Lively", description: "Reacts to the agent and to you" },
-    { value: "calm" as const, label: "Calm", description: "Reacts only to the agent" },
+    { value: "calm" as const, label: "Calm", description: "Reacts only to the agent, stays in the title bar" },
     { value: "off" as const, label: "Off", description: "A small dot instead" },
   ];
-  const PREVIEW: Record<Exclude<CompanionLevel, "off">, CompanionPose> = {
+  const ROAM = [
+    { value: "roam" as const, label: "Roams", description: "Walks onto the composer and panels while nothing needs it" },
+    { value: "stay" as const, label: "Stays put", description: "Stays in the title bar and on Home" },
+  ];
+  const PREVIEW: Record<Exclude<CompanionLevel, "off">, PetPose> = {
     lively: { mood: "happy", gaze: "center", particles: "sparkles", tone: "ok" },
     calm: { mood: "idle", gaze: "center", particles: "none", tone: "quiet" },
   };
 
   let mode = $state<PermissionMode>(settingsStore.settings?.permissions.mode ?? "default");
   let level = $state<CompanionLevel>(settingsStore.settings?.ui.companion ?? "lively");
+  let roam = $state<boolean>(settingsStore.settings?.ui.pet.roam ?? true);
   let saving = $state(false);
   let error = $state<string | null>(null);
 
   async function save() {
     saving = true;
     settingsStore.scope = "user";
-    error = await settingsStore.apply([settingWrite(["permissions", "mode"], mode), settingWrite(["ui", "companion"], level)]);
+    error = await settingsStore.apply([
+      settingWrite(["permissions", "mode"], mode),
+      settingWrite(["ui", "companion"], level),
+      settingWrite(["ui", "pet", "roam"], roam),
+    ]);
     saving = false;
     if (!error) onNext();
   }
 </script>
 
-<StepLayout title="Decide how it works with you" lead="Both can change any time: the mode from the composer, the rest in Settings.">
+<StepLayout title="Decide how it works with you" lead="All of this can change any time: the mode from the composer, the rest in Settings.">
   <div class="choice-list" role="radiogroup" aria-label="Permission mode">
     {#each MODES as item (item.id)}
       <button type="button" role="radio" aria-checked={mode === item.id} class="choice-card" class:is-selected={mode === item.id} onclick={() => (mode = item.id)}>
@@ -55,23 +65,28 @@
     {/each}
   </div>
 
-  <div class="companion-pick">
-    <div class="companion-preview" aria-hidden="true">
+  <div class="pet-pick">
+    <div class="pet-pick-preview" aria-hidden="true">
       {#if level === "off"}
-        <span class="companion-preview-dot"></span>
+        <span class="pet-pick-dot"></span>
       {:else}
-        <Companion pose={PREVIEW[level]} progress={null} helpers={0} size={44} />
+        <Pet pose={PREVIEW[level]} look={onboarding.petLook} size={48} />
       {/if}
     </div>
-    <SegmentedChoice label="Companion" options={LEVELS} value={level} onSelect={(next) => (level = next)} />
+    <div class="pet-pick-choices">
+      <SegmentedChoice label="How lively the pet is" options={LEVELS} value={level} onSelect={(next) => (level = next)} />
+      {#if level === "lively"}
+        <SegmentedChoice label="Whether the pet roams" options={ROAM} value={roam ? "roam" : "stay"} onSelect={(next) => (roam = next === "roam")} />
+      {/if}
+    </div>
   </div>
 
   {#snippet footer()}
-    <button type="button" class="btn-ghost" onclick={onBack}>Back</button>
+    <Button onclick={onBack}>Back</Button>
     {#if error}<p class="setting-error step-error" role="alert">{error}</p>{/if}
-    <button type="button" class="btn-accent onboarding-primary" disabled={saving} onclick={() => void save()}>
+    <Button variant="accent" size="l" disabled={saving} onclick={() => void save()}>
       {#if saving}<Icon icon={LoaderCircle} size={13} class="spin" />{/if}
       <span>Continue</span>
-    </button>
+    </Button>
   {/snippet}
 </StepLayout>

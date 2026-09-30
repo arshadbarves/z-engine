@@ -1,3 +1,5 @@
+import { pose, type PetPose } from "./pet/pose";
+
 /**
  * First run and the setup checklist. The welcome flow shows only on a fresh
  * install (no projects, no chats), so nothing new has to be stored: once a
@@ -9,6 +11,23 @@ export function needsOnboarding(input: { projects: number; chats: number }): boo
 
 export const ONBOARDING_STEPS = ["welcome", "model", "project", "style", "ready"] as const;
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
+
+/** The pet stays on screen through setup and reacts to each step. */
+export function onboardingPose(step: OnboardingStep, typing: boolean): PetPose {
+  if (typing) return pose("listening", "down", "quiet");
+  switch (step) {
+    case "welcome":
+      return pose("greeting", "center", "quiet", "sparkles");
+    case "model":
+      return pose("thinking", "up", "quiet", "thought");
+    case "project":
+      return pose("reading", "scan", "quiet");
+    case "style":
+      return pose("curious", "up", "quiet");
+    case "ready":
+      return pose("happy", "center", "ok", "sparkles");
+  }
+}
 
 export function stepIndex(step: OnboardingStep): number {
   return ONBOARDING_STEPS.indexOf(step);

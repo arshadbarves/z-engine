@@ -19,6 +19,7 @@ export type LiveActivity =
   | ToolFamily
   | "think"
   | "reply"
+  | "compact"
   | "verify"
   | "approval"
   | "warn"
@@ -141,6 +142,7 @@ function working(view: SessionView | null, now: number): Main | null {
     elapsed: turn ? clock(now - turn.startedAt) : null,
     cost: turn ? money(view.costUsd - turn.costAtStart) : null,
   };
+  if (view.compacting) return main("working", "working", "compact", "Compacting context", extra);
   const running = Object.values(view.tools)
     .filter((t) => t.status === "running" && t.agentId === MAIN_AGENT)
     .sort((a, b) => b.startedAt - a.startedAt);

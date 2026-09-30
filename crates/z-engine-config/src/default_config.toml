@@ -88,7 +88,14 @@ schema = 2
 
 # [ui]
 # task_report_view = "quiet"    # quiet | compact | detailed
-# companion = "lively"          # lively | calm | off  (the title-bar companion)
+# companion = "lively"          # lively | calm | off  (how much the pet reacts)
+
+# The pet that lives in the title bar. It levels up as tasks finish; its
+# growth is kept in <data dir>/pet.json, not here.
+# [ui.pet]
+# name = "Zen"                  # up to 24 characters
+# look = "pearl"                # pearl | mint | sky | lilac | peach | graphite
+# roam = true                   # at the lively level, walk onto the composer and panels
 
 # [compat]
 # claude = true                 # also read .claude/ folders and CLAUDE.md

@@ -4,8 +4,10 @@
   import { composer } from "$lib/stores/composer.svelte";
   import { currentStage } from "$lib/stores/stage.svelte";
   import { bindStore } from "$lib/svelte/bind.svelte";
+  import { perch } from "$lib/ui/perch.svelte";
   import { workspaceStore } from "$lib/workspaces";
   import ShellOverlay from "../overlays/ShellOverlay.svelte";
+  import PendingInteractions from "../planning/PendingInteractions.svelte";
   import ComposerAttachments from "./ComposerAttachments.svelte";
   import ComposerBar from "./ComposerBar.svelte";
   import ComposerDropZone from "./ComposerDropZone.svelte";
@@ -15,6 +17,8 @@
   /**
    * The floating composer: queued steering, attachments, the draft and its
    * bar. Larger on the project home; images can be pasted, picked or dropped.
+   * While an approval or a question waits, it takes the draft's place (the
+   * draft is kept) and Send turns into Stop.
    */
   const shell = bindStore(shellStore);
   const workspaces = bindStore(workspaceStore);
@@ -25,9 +29,10 @@
 
   const view = $derived(sessions.active);
   const busy = $derived((view?.status ?? "idle") !== "idle");
+  const docked = $derived(view !== null && Object.keys(view.approvals).length + Object.keys(view.questions).length > 0);
   const root = $derived(view?.info?.projectRoot ?? workspaces.current.active ?? workspaces.current.roots[0] ?? null);
   const text = $derived(composer.draft);
-  const shellMode = $derived(text.startsWith("!"));
+  const shellMode = $derived(!docked && text.startsWith("!"));
   const hero = $derived(currentStage() === "home");
   const canSend = $derived(shellMode ? Boolean(text.slice(1).trim()) : Boolean(text.trim() || composer.attachments.length > 0));
 
@@ -56,7 +61,8 @@
 <div class="composer-wrap" class:is-hero={hero}>
   <ShellOverlay />
   <div
-    class={`composer${shellMode ? " shell" : ""}${dragging ? " is-dropping" : ""}`}
+    class={`composer glass${shellMode ? " shell" : ""}${dragging ? " is-dropping" : ""}${docked ? " is-docked" : ""}`}
+    use:perch={{ id: "composer", kind: "edge" }}
     role="group"
     aria-label="Message composer"
     ondragenter={onDragEnter}
@@ -65,16 +71,21 @@
     ondrop={onDrop}
   >
     <ComposerDropZone active={dragging > 0} />
-    <ComposerQueue items={view?.queue ?? []} onChange={(queued) => void editQueue(queued)} />
-    <ComposerAttachments attachments={composer.attachments} onRemove={(i) => composer.removeAttachment(i)} />
-    <ComposerInput
-      bind:this={input}
-      {root}
-      {busy}
-      {hero}
-      shellVisible={shell.current.visible}
-      onPasteFiles={(e) => takeFiles(e, e.clipboardData?.files)}
-    />
+    {#if docked && view}
+      <div class="composer-waiting"><PendingInteractions {view} /></div>
+    {/if}
+    <div class="composer-draft" hidden={docked}>
+      <ComposerQueue items={view?.queue ?? []} onChange={(queued) => void editQueue(queued)} />
+      <ComposerAttachments attachments={composer.attachments} onRemove={(i) => composer.removeAttachment(i)} />
+      <ComposerInput
+        bind:this={input}
+        {root}
+        {busy}
+        {hero}
+        shellVisible={shell.current.visible}
+        onPasteFiles={(e) => takeFiles(e, e.clipboardData?.files)}
+      />
+    </div>
     <input
       type="file"
       accept="image/*"
@@ -89,8 +100,8 @@
     <ComposerBar
       {shellMode}
       {busy}
-      {canSend}
-      hasText={Boolean(text.trim())}
+      canSend={!docked && canSend}
+      hasText={!docked && Boolean(text.trim())}
       showTerminal={!shell.current.visible && shell.current.entries.length > 0}
       onAttach={() => imageInput?.click()}
       onInsert={(prefix) => input?.insert(prefix)}

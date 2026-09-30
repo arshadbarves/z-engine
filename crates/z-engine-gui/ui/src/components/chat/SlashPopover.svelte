@@ -28,7 +28,7 @@
   }
 </script>
 
-<div class="composer-pop command-pop" role="listbox" aria-label="Slash commands">
+<div class="composer-pop command-pop glass-strong" role="listbox" aria-label="Slash commands">
   <div class="cmd-pop-header">
     <div class="cmd-pop-header-title">
       <Icon icon={Sparkles} size={13} class="cmd-glow-icon" />

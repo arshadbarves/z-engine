@@ -2,8 +2,9 @@
 //! run, and describe every adjustment as a warning for the settings screen.
 
 use super::{
-    DEFAULT_BASE_URL, DEFAULT_MODEL, MAX_COMPACT_AT_PERCENT, MAX_CONTINUATIONS, MAX_OUTPUT_TOKENS,
-    MIN_COMPACT_AT_PERCENT, MIN_OUTPUT_TOKENS, SearchBackend, Settings, is_hook_event,
+    DEFAULT_BASE_URL, DEFAULT_MODEL, DEFAULT_PET_NAME, MAX_COMPACT_AT_PERCENT, MAX_CONTINUATIONS,
+    MAX_OUTPUT_TOKENS, MAX_PET_NAME_CHARS, MIN_COMPACT_AT_PERCENT, MIN_OUTPUT_TOKENS,
+    SearchBackend, Settings, is_hook_event,
 };
 
 pub(crate) fn normalize(settings: &mut Settings) -> Vec<String> {
@@ -71,7 +72,26 @@ pub(crate) fn normalize(settings: &mut Settings) -> Vec<String> {
     normalize_checks(settings, w);
     normalize_servers(settings, w);
     normalize_sandbox(settings, w);
+    normalize_pet_name(settings, w);
     warnings
+}
+
+fn normalize_pet_name(settings: &mut Settings, w: &mut Vec<String>) {
+    let name = &mut settings.ui.pet.name;
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        *name = DEFAULT_PET_NAME.to_string();
+        return;
+    }
+    if trimmed.chars().count() > MAX_PET_NAME_CHARS {
+        let short: String = trimmed.chars().take(MAX_PET_NAME_CHARS).collect();
+        w.push(format!(
+            "ui.pet.name is longer than {MAX_PET_NAME_CHARS} characters; using \"{short}\""
+        ));
+        *name = short;
+    } else if trimmed.len() != name.len() {
+        *name = trimmed.to_string();
+    }
 }
 
 fn normalize_sandbox(settings: &mut Settings, w: &mut Vec<String>) {
@@ -247,6 +267,23 @@ mod tests {
         let warnings = normalize(&mut settings);
         assert!(settings.lsp.servers.contains_key("clangd"));
         assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    #[test]
+    fn the_pet_name_is_trimmed_clamped_and_never_empty() {
+        let mut settings = Settings::default();
+        settings.ui.pet.name = "  Pip  ".into();
+        assert!(normalize(&mut settings).is_empty());
+        assert_eq!(settings.ui.pet.name, "Pip");
+
+        settings.ui.pet.name = "   ".into();
+        assert!(normalize(&mut settings).is_empty());
+        assert_eq!(settings.ui.pet.name, "Zen");
+
+        settings.ui.pet.name = "Ω".repeat(30);
+        let warnings = normalize(&mut settings);
+        assert_eq!(settings.ui.pet.name.chars().count(), 24);
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
     }
 
     #[test]

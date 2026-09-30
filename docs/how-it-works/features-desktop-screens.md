@@ -20,8 +20,10 @@ while you looked elsewhere waits.
 - The **Inbox** lists what **needs you** in every chat (approvals can be
   answered there), chats that **finished while you were away**, and every
   **notice** in full while the app runs; its badge counts all three.
-- A fresh install (no projects, no chats) first sets up a model, a project
-  and its trust, the permission mode and the companion.
+- A fresh install (no projects, no chats) first meets the [pet](#the-pet)
+  (its name and look), then sets up a model, a project and its trust, the
+  permission mode and how lively the pet is. The pet stays above the setup
+  card and reacts to each step.
 
 **For developers**
 - `stageFor()` in [`lib/domain/stage.ts`](../../crates/z-engine-gui/ui/src/lib/domain/stage.ts)
@@ -30,7 +32,8 @@ while you looked elsewhere waits.
   [`inbox/`](../../crates/z-engine-gui/ui/src/components/inbox/) (over
   `inboxSnapshot()`; `pushToast` records the last 200 notices) and
   [`onboarding/`](../../crates/z-engine-gui/ui/src/components/onboarding/)
-  (when `needsOnboarding()`) draw the rest.
+  (when `needsOnboarding()`; the pet's pose per step is `onboardingPose()`
+  in `lib/domain/onboarding.ts`) draw the rest.
 
 ## The transcript and tool cards
 
@@ -44,7 +47,10 @@ the details; failures stay in view.
   tool calls in a row fold into one line ("Read 2 files · ran 1 command")
   with the step in progress and how many failed or were denied; `Agent`,
   `AskUserQuestion` and `ExitPlanMode` stand alone. A failure shows its
-  last three lines, a running command three live lines.
+  last three lines, a running command three live lines. Once a turn with
+  two or more calls is done, all its work folds into one line ahead of the
+  answer ("Worked for 1m 12s · read 6 files · ran 2 commands"); failures,
+  helpers, questions and plans stay in view.
 - A card follows `toolStarted`, `toolProgress` and `toolFinished` (ok,
   error, denied or cancelled) and depends on the tool's *family*: a diff
   for edits, command and output for Bash (both open by themselves only on
@@ -52,53 +58,70 @@ the details; failures stay in view.
   a generic card for the rest, MCP tools included.
 - The receipt follows `ui.task_report_view`: **quiet** (default) shows only
   a verdict that says something; **compact** adds the changed files (each
-  opens the Changes panel there), duration and cost; **detailed** adds
+  opens the Changes tab there), duration and cost; **detailed** adds
   tokens, Not applicable and the checks. A turn that did not complete
-  always says so.
+  always says so. Beside it, the turn's actions: copy the answer, open the
+  changes, rewind to before the prompt.
+- A long chat draws only a window of turns: the newest 30, twenty more as
+  you scroll up, and the newest six in full while the others fill in as
+  they near the screen. A rail of dots marks your prompts (at most 40) and
+  jumps to one. While a summary compaction runs (`compactionStarted`), a
+  "Compacting context…" row ends the transcript; the marker then becomes a
+  "Context compacted · 180k → 24k" divider with the summary.
 
 **For developers**
 - [`components/chat/`](../../crates/z-engine-gui/ui/src/components/chat/):
-  runs from `lib/domain/timeline/groups.ts`, receipts from
-  `lib/domain/receipt.ts`; [`chat/tools/ToolCall.svelte`](../../crates/z-engine-gui/ui/src/components/chat/tools/ToolCall.svelte)
+  `TurnView` with `WorkSummary`, `TurnBlocks`, `TurnActions` and
+  `TurnFooter`; folds and the work line from `lib/domain/timeline/groups.ts`
+  (`workSection()`, `workLine()`), receipts from `lib/domain/receipt.ts`,
+  the turn window from `lib/domain/timeline/window.ts`, the rail in
+  `ChatTimeline`; placeholders and code colors wait for `whenVisible()`;
+  [`chat/tools/ToolCall.svelte`](../../crates/z-engine-gui/ui/src/components/chat/tools/ToolCall.svelte)
   picks the card from the family in [`lib/domain/tools/toolMeta.ts`](../../crates/z-engine-gui/ui/src/lib/domain/tools/toolMeta.ts)
   (a new card: a `FAMILIES` entry, a component, a branch in `ToolCall`).
 
 ## Approval, question and plan cards
 
 **In plain words.** When the agent needs your say (permission, an answer, or
-approval of a plan), it pauses and puts a card in the chat, like a builder
+approval of a plan), it pauses and asks where you type, like a builder
 who knocks before taking down a wall.
 
 **How it works**
 1. The engine's *gate* decides a tool call must ask (see
    [core features](features-core.md)) and emits `approvalRequested` with a
    title and a preview, such as the diff of an edit.
-2. The card asks a question ("Allow Bash to run cargo test?") with the
-   reason and a preview folded after six lines: **Allow once**, **Always
-   allow…** (**In this chat**, a session rule, or **In this project**, also
-   saved to `.z-engine/settings.local.toml`), or **Deny…** with feedback for
-   the model; y, s, p and n answer a focused card (`resolveApproval`).
-3. `AskUserQuestion` and `ExitPlanMode` show a question card
-   (`answerQuestion`) and a plan card (`resolvePlan`); see
+2. The card takes the composer's text box's place (the draft is kept) and
+   asks a question ("Allow Bash to run cargo test?") with the reason and a
+   preview folded after six lines: **Allow once**, **Always allow…** (**In
+   this chat**, a session rule, or **In this project**, also saved to
+   `.z-engine/settings.local.toml`), or **Deny…** with feedback for the
+   model; y, s, p and n answer a focused card (`resolveApproval`).
+3. `AskUserQuestion` shows a question card there too (`answerQuestion`);
+   the oldest approval comes first, then the oldest question, and "N more
+   waiting after this" counts the rest. `ExitPlanMode` puts a "Plan ready ·
+   Review" row in the transcript and opens the side panel's Plan tab
+   (`resolvePlan`); see
    [plan mode, questions and todos](features-interaction.md#plan-mode-structured-questions-and-todos).
    An untrusted project that sets anything trust withholds gets a trust
-   banner (`trustRequired`, answered with `trustWorkspace`).
-4. While a card waits you can still steer, change mode or cancel. Cards from
-   a subagent carry that agent's label.
+   banner in the transcript (`trustRequired`, answered with `trustWorkspace`).
+4. While a card waits you can still change mode or cancel; while a plan
+   waits you can also steer. Cards from a subagent carry that agent's label.
 
 **For developers**
-- [`components/planning/PendingInteractions.svelte`](../../crates/z-engine-gui/ui/src/components/planning/PendingInteractions.svelte)
-  renders `chat/ApprovalCard` (worded by `lib/domain/approvals.ts`),
-  `planning/QuestionCard`, `planning/PlanCard` and `chat/TrustBanner`, each
-  marked `data-pending-card`. Types: `ApprovalRequest`, `ApprovalDecision`,
+- [`components/planning/PendingInteractions.svelte`](../../crates/z-engine-gui/ui/src/components/planning/PendingInteractions.svelte),
+  inside `chat/Composer.svelte`, renders `chat/ApprovalCard` (worded by
+  `lib/domain/approvals.ts`) or `planning/QuestionCard`; plans are
+  `planning/PlanReady` and `planning/PlanView` (`panelPlan()` in
+  `lib/domain/plans.ts`). Those, and `chat/TrustBanner`, carry
+  `data-pending-card`. Types: `ApprovalRequest`, `ApprovalDecision`,
   `PlanDecision`, `Question`, `QuestionAnswer`; the engine's
   [`broker/`](../../crates/z-engine-engine/src/broker/) holds pending
   requests so the session actor keeps accepting commands.
 
-## The island and the companion
+## The island and the pet
 
 **In plain words.** The middle of the title bar is a small pill, the
-*island*: a glass orb with eyes and one line about what the agent is doing,
+*island*: the [pet](#the-pet) and one line about what the agent is doing,
 like a colleague you can see across the desk. A ring beside it shows how
 full the context is; an amber count, how many other chats need you.
 
@@ -107,99 +130,184 @@ full the context is; an amber count, how many other chats need you.
   passing notice, a provider retry, work in progress (the step in plain
   words), a turn that just ended, a recap of turns that ended while you
   were away, or idle (the chat's title), with at most one number.
-- Clicking it opens the island sheet: the full message and its actions, the
-  latest steps, the plan, running helpers, cost, and recent warnings; a
-  long, failing or actionable notice opens it by itself. While the chat
-  needs you, clicking scrolls to the waiting card instead.
+- It takes one of four shapes: at rest (the pet and the chat's title),
+  live (a step, retry, notice or result with its clock), alert (this chat
+  needs you, with one **Approve**, **Answer** or **Review** button that
+  goes to the waiting card) and expanded. Clicking it grows it into a
+  card: the full message and its actions, the plan, the latest steps, rows
+  for helpers, context and waiting chats that open what they sum up, cost,
+  and recent warnings. A long, failing or actionable notice opens it by
+  itself; a click elsewhere or Esc closes it, before Esc reaches the side
+  panel.
 - The ring shows a percentage from 65% (amber; red from 85%); it and
   `/context` open the context card: use by prompt layer, **Compact now** and
   **Inspect prompt**. The amber count opens the waiting chat, or the Inbox.
-- The orb's pose follows the same state: its eyes scan while the agent
+- The pet's pose follows the same state: its eyes scan while the agent
   reads, it bobs while commands run, looks at you in amber when it needs
-  you, hops when a turn is verified and droops when one fails. Running
+  you, cheers when a turn is verified and droops when one fails. Running
   agents orbit it; a ring shows the `TodoWrite` plan's progress.
 - At the default **Lively** level (`ui.companion`) it also reacts to you
-  (typing, scrolling back, quiet minutes, coming back); **Calm** reacts only
-  to the agent; **Off** shows a dot. Under Reduce Motion it holds still.
+  (typing, scrolling back, quiet minutes, coming back) and may roam;
+  **Calm** reacts only to the agent and stays in the island; **Off** shows
+  a dot.
 
 **For developers**
 - [`chrome/TitleStatus.svelte`](../../crates/z-engine-gui/ui/src/components/chrome/TitleStatus.svelte)
-  holds `WaitingBubble`, `Island` (with `IslandSheet`) and `ContextBubble`
-  (with `ContextCard`); `liveStatus()` in [`lib/domain/liveStatus.ts`](../../crates/z-engine-gui/ui/src/lib/domain/liveStatus.ts)
-  picks the state, `lib/domain/island.ts` shapes the pill, and
-  `companionPose()` in `lib/domain/companion.ts` the orb (`Companion.svelte`).
+  holds `WaitingBubble`, `Island` (`IslandCapsule` and `IslandCard` in one
+  surface) and `ContextBubble` (with `ContextCard`); `liveStatus()` in
+  [`lib/domain/liveStatus.ts`](../../crates/z-engine-gui/ui/src/lib/domain/liveStatus.ts)
+  picks the state and `lib/domain/island.ts` shapes the pill
+  (`islandMode()`, `islandAction()`, `islandLine()`).
+- `createLive()` in [`lib/stores/live.svelte.ts`](../../crates/z-engine-gui/ui/src/lib/stores/live.svelte.ts)
+  computes the status, the pet's pose (`petPose()` in `lib/domain/pet/pose.ts`)
+  and the clock once, for the title bar and the roaming pet;
+  `pet/IslandPet.svelte` draws the pet in the island's slot, and
+  `lib/stores/island.svelte.ts` holds whether the island card and the
+  context card are open.
 - The card calls `context_breakdown` ([`Engine::context_breakdown`](../../crates/z-engine-engine/src/engine/queries/context.rs)),
   the estimate `/context` prints, which also arrives as `contextReport`.
 
-## The agents and jobs panel
+## The pet
 
-**In plain words.** Helpers the agent sends off (*subagents*) and commands
-left running in the background (*jobs*) are listed in one panel, like a
-board showing who is out on an errand.
-
-**How it works**
-- A subagent emits `agentStarted`, then `agentUpdated`; a background shell
-  or agent emits `jobUpdated`. Open the panel from the island sheet,
-  `/agents`, `/jobs` or the palette.
-- Agents come in the order they need you: **Ready to apply** (a worktree
-  agent's branch and diffstat, with **Apply** and **Discard**), **Working**
-  with a live line of what each does, then **Finished** and usage, folded.
-  Opening one loads its transcript (`agent_transcript`). A running job
-  shows its last six lines and **Stop**.
-
-**For developers**
-- [`components/agents/`](../../crates/z-engine-gui/ui/src/components/agents/)
-  (`WorkPanel`, `ApplyCard`, `AgentRow`, `JobRow`, `AgentTranscript`),
-  `agentSections` and `agentActivity` in `lib/domain/agentTree.ts`;
-  commands `applyAgentChanges`, `discardAgentChanges`, `killJob`. How
-  agents run: [agents and context](features-agents-and-context.md).
-
-## The Changes panel
-
-**In plain words.** The Changes panel shows what changed in your files, like
-"track changes" in a word processor: either what this chat changed, or
-everything not yet committed.
+**In plain words.** The pet keeps you company like a cat that follows you
+from room to room: it sits where you work while nothing is going on, runs
+back to the title bar when the agent gets busy or needs you, and slowly
+grows as work gets done. It only echoes the status line, never adds to it.
 
 **How it works**
-- **This chat** compares the project with the chat's first *checkpoint*, a
-  copy of your files kept in a hidden git repository, without taking a new
-  one. **Uncommitted** compares the working tree with your last commit
-  (`HEAD`), with line counts. Both need git.
-- It docks beside the chat or fills the window, Unified or Split, with
-  syntax colors and long unchanged stretches folded; a file can be opened
-  in its default app, shown in its folder, or copied. Open it with
-  the title bar's Changes button (a count of this chat's files), ⌘D /
-  Ctrl+D or a receipt's file; `[` and `]` step through files.
+1. Where it goes follows rules, most important first: being dragged;
+   something needs you (it hops into the island); the agent works (it
+   rides in the island); you type (it watches from the composer's edge); a
+   turn was just verified (it celebrates where it is); a menu, the palette
+   or the island card is open (it tucks itself away); 3 minutes without
+   activity (it naps); otherwise it rests or now and then wanders.
+2. The places it can be are *perches*: slots it sits in (the island, the
+   spot above the home page's question, the empty Inbox, the side panel's
+   tab band) and edges it stands on (the top of the composer, the sidebar
+   footer). It rests on the home spot, in the empty Inbox, else on the
+   composer, and wanders between the composer, the sidebar and the panel;
+   while the panel covers the stage, the stage's perches are out of reach.
+   Dropped after a drag, or thrown, it lands on the nearest perch (dizzy
+   after a hard throw or a shake).
+3. It moves on springs: it hops, walks, turns and swings from your grip,
+   and a frame loop runs only while it moves. Its breathing is a CSS loop;
+   perches are measured on resize and scroll and on the status clock's
+   half-second tick (only while a turn runs or the pet is lively), so an
+   idle pet costs almost nothing.
+4. **Calm** keeps it in the island, `ui.pet.roam = false` leaves only the
+   home spot, and **Off** removes it. Under Reduce Motion it appears at its
+   new spot instead of walking, with no idle strolls or tricks.
+5. It grows from live events of any chat: `turnFinished` (10 XP for a
+   completed turn, 15 more if verified) and `agentUpdated` with a worktree
+   applied (20 XP), plus 5 for the first of the day, which also extends the
+   day streak. Each turn or apply counts once (the last 200 ids are kept),
+   and reopening a chat awards nothing. Level *L* needs 25·*L*·(*L*−1) XP
+   (up to 99); stages change at levels 3, 6 and 10, accessories unlock at
+   2, 4, 6 and 9, idle tricks at 1, 3, 5 and 7. A new level waits in
+   `pet.levelUp` until the island is not asking for you, then plays the
+   `levelUp` reaction (confetti, 1.6 s) at Lively and clears; Calm and
+   Off clear it silently.
+6. Growth is written to `<data dir>/pet.json` shortly after each change,
+   through a temporary file and a rename so a crash cannot cut it short;
+   saves over 64 KB are refused. Its name, look and roaming are settings
+   (`[ui.pet]`). Its card (double-click or right-click it, the palette, or
+   **Settings → Pet**) shows the level ring, XP, streak, counts, what it
+   wears and its tricks.
 
 **For developers**
-- [`components/overlays/DiffPanel.svelte`](../../crates/z-engine-gui/ui/src/components/overlays/DiffPanel.svelte)
+- Pure rules, each with vitest tests, in [`lib/domain/pet/`](../../crates/z-engine-gui/ui/src/lib/domain/pet/):
+  `behavior.ts` (`petBehavior()`, `NAP_MS`, `WANDER_PERCHES`), `perches.ts`
+  (`PerchId`, `PERCH_SIZE`, `nearestPerch()`, `STAGE_PERCHES`), `pose.ts`
+  (`petPose()`, the moods), `emotions.ts` (how each mood looks),
+  `motion.ts` (walks, hops, flings and drops), `physics.ts` and `drag.ts`
+  (springs, the swing from your grip), `growth.ts` (`applyGrowth()`,
+  `xpForLevel()`) and `looks.ts` (looks, stages, accessories, tricks).
+- [`components/pet/`](../../crates/z-engine-gui/ui/src/components/pet/):
+  `Pet` (the SVG body inside the HTML `.pet-breath` wrapper), `PetFace`,
+  `PetProps`, `PetBubble`, `IslandPet`, `PetLayer` (the roaming pet above
+  the app: drag, throw, boop), `petMotion.svelte.ts` (plays moves frame by
+  frame), `petEyes` and `petGaze`, `petIdle.svelte.ts` (strolls, wanders,
+  tricks), `PetCard` with `PetCardPopover`, `PetSprite` (helpers) and
+  `PetLookPicker`. An element becomes a perch with the `perch` action in
+  `lib/ui/perch.svelte.ts`; UI-only state (card, perch, reactions) is
+  `petUi` in `lib/stores/pet.svelte.ts`.
+- Growth: `eventEffects()` in `lib/domain/sessions.ts` returns a
+  `petGrowth` effect, `lib/runtime/effects.ts` hands it to `pet` in
+  [`lib/runtime/pet.svelte.ts`](../../crates/z-engine-gui/ui/src/lib/runtime/pet.svelte.ts),
+  which loads and saves through `pet_load` and `pet_save`
+  ([`commands/pet.rs`](../../crates/z-engine-gui/src-tauri/src/commands/pet.rs),
+  stored by `PetStore` in [`src-tauri/src/pet.rs`](../../crates/z-engine-gui/src-tauri/src/pet.rs)).
+  Settings types: `PetSettings`, `PetLook` in
+  [`settings/ui.rs`](../../crates/z-engine-config/src/settings/ui.rs).
+
+## The side panel
+
+**In plain words.** Beside the chat sits one panel with four tabs, like the
+drawers of a desk: what changed, the plan, the helpers out on errands, and
+exactly what was last sent to the model.
+
+**How it works**
+- The panel toggle in the title bar shows or hides it; each tab also opens
+  from where its fact is summed up (the Changes button or ⌘D / Ctrl+D, a
+  receipt's file, the island card's rows, the context card, `/agents`,
+  `/jobs`, the palette). Its left edge resizes it (340 to 1100 px, always
+  leaving the chat 400 px; the width is kept on this machine), and it can
+  use the whole stage instead. A plan that starts waiting opens the Plan
+  tab; a helper that starts marks Agents with a dot. Esc steps back: out
+  of an agent's transcript, out of the whole stage, then closed.
+- **Changes**: **This chat** compares the project with the chat's first
+  *checkpoint*, a copy of your files kept in a hidden git repository,
+  without taking a new one; **Uncommitted** compares the working tree with
+  your last commit (`HEAD`), with line counts. Both need git. Unified or
+  Split, with syntax colors and long unchanged stretches folded; a file
+  can be opened in its default app, shown in its folder, or copied; `[`
+  and `]` step through files. In a narrow panel the file list sits above
+  the diff.
+- **Plan**: the plan waiting for review (edit, approve, keep planning), else
+  the chat's last plan, with the todo checklist.
+- **Agents**: subagents (`agentStarted`, then `agentUpdated`) in the order
+  they need you: **Ready to apply** (a worktree agent's branch and
+  diffstat, with **Apply** and **Discard**), **Working** with a live line
+  of what each does, then **Finished** and usage, folded; opening one loads
+  its transcript (`agent_transcript`). **Jobs** lists background shells and
+  agents (`jobUpdated`); a running job shows its last six lines and
+  **Stop**.
+- **Context**, the prompt inspector: it fetches the last request sent to the
+  provider (`inspect_request`) and lays it out as a ring chart of the
+  context window with one arc per kind of part (instructions, project,
+  conversation, tools), whose legend filters an outline to search, and
+  **Insights** (the largest part, what repeats across turns); **Copy all**
+  copies it all. With the whole stage, a reader shows one part, rendered
+  or raw; picking a part in the docked panel expands it.
+
+**For developers**
+- [`components/sidepanel/`](../../crates/z-engine-gui/ui/src/components/sidepanel/)
+  (`SidePanel`, `SidePanelTabs`); state `ui.panel` and `openPanel()` in
+  `lib/stores/ui.svelte.ts`; tabs, widths and nudges in
+  [`lib/domain/sidePanel.ts`](../../crates/z-engine-gui/ui/src/lib/domain/sidePanel.ts)
+  (`panelTabs()`, `clampPanelWidth()`, `panelNudge()`), followed by
+  `followPanelNudges()` in `lib/stores/panelNudges.svelte.ts`.
+- Changes: [`overlays/DiffPanel.svelte`](../../crates/z-engine-gui/ui/src/components/overlays/DiffPanel.svelte)
   and its `Diff*` parts, rows from `lib/domain/diffRows.ts`. This chat:
   `session_changed_files`, `session_diff_for_file` ([`engine/queries/changes.rs`](../../crates/z-engine-engine/src/engine/queries/changes.rs)).
   Uncommitted: `list_changed_files`, `diff_for_file` ([`engine/queries/git.rs`](../../crates/z-engine-engine/src/engine/queries/git.rs),
   which also creates the worktree for **New chat in a worktree…**); they
   take a project root, else the active project, and refuse other folders.
-- `open_path` and `reveal_path` ([`commands/workspace.rs`](../../crates/z-engine-gui/src-tauri/src/commands/workspace.rs))
+  `open_path` and `reveal_path` ([`commands/workspace.rs`](../../crates/z-engine-gui/src-tauri/src/commands/workspace.rs))
   use the opener plugin once `guard::project_path` finds the path inside a
   known project, symlinks resolved.
-
-## The prompt inspector
-
-**In plain words.** The prompt inspector lets you look over the agent's
-shoulder at exactly what was last sent to the model, like reading a letter
-before it goes in the post.
-
-**How it works**
-- It fetches the last request sent to the provider (`inspect_request`) and
-  lays it out: a map of how much of the context window each kind of part
-  fills (instructions, project, conversation, tools), an outline to search,
-  and a reader for one part, rendered or raw. **Insights** names the
-  largest part and what repeats across turns; **Copy all** copies it all.
-  Open it with **Inspect prompt** in the context card or the palette.
-
-**For developers**
-- [`overlays/PromptInspector.svelte`](../../crates/z-engine-gui/ui/src/components/overlays/PromptInspector.svelte)
-  with its `Inspector*` parts; parsing in `lib/domain/requestInspect.ts`,
-  the outline in `lib/domain/inspectOutline.ts`; data from `Engine::last_request`.
+- Plan: `planning/PlanView.svelte` over `panelPlan()` in `lib/domain/plans.ts`.
+- Agents: [`components/agents/`](../../crates/z-engine-gui/ui/src/components/agents/)
+  (`WorkPanel`, `ApplyCard`, `AgentRow`, `JobRow`, `AgentTranscript`;
+  `AgentSummary` is the one helper layout, with a `PetSprite`, for both
+  its rows and the transcript's Agent card), `agentSections` and
+  `agentActivity` in `lib/domain/agentTree.ts`; commands
+  `applyAgentChanges`, `discardAgentChanges`, `killJob`. How agents run:
+  [agents and context](features-agents-and-context.md).
+- Context: [`overlays/PromptInspector.svelte`](../../crates/z-engine-gui/ui/src/components/overlays/PromptInspector.svelte)
+  with its `Inspector*` parts (the ring is `InspectorMap`); parsing in
+  `lib/domain/requestInspect.ts`, the outline in `lib/domain/inspectOutline.ts`;
+  data from `Engine::last_request`.
 
 ## Settings and scopes
 
@@ -210,10 +318,11 @@ comes from.
 
 **How it works**
 - Pages (⌘, or Ctrl+,) are grouped: **General** (Models, Providers,
-  Appearance), **Agent** (Permissions, Memory, Verification, Agents &
+  Appearance, Pet), **Agent** (Permissions, Memory, Verification, Agents &
   Commands), **Integrations** (MCP, Hooks) and **System** (Advanced, About
-  & Updates). Settings reopens where you left it; search finds single
-  settings by everyday words and scrolls to them.
+  & Updates). Settings covers the window as a sheet that settles into place
+  and reopens where you left it; search finds single settings by everyday
+  words and scrolls to them.
 - A layered page names the file it saves to (**Saving to**): **User** (every
   project), **This project** (`.z-engine/settings.toml`, shared) or
   **Personal (local)** (`.z-engine/settings.local.toml`, kept out of git).
@@ -227,7 +336,10 @@ comes from.
 - [`components/settings/`](../../crates/z-engine-gui/ui/src/components/settings/):
   `SettingsPage.svelte` switches on the page ids of `SettingsNav.svelte`,
   grouped and searched through `lib/domain/settings/searchIndex.ts`; one
-  `*Tab.svelte` per page; form logic in `lib/domain/settings/`.
+  `*Tab.svelte` per page; form logic in `lib/domain/settings/`. The page
+  sits in `chrome/FullPage.svelte` (the `sheet` transition of
+  `lib/ui/motion.ts`, a fade under Reduce Motion); `openSettings()` in
+  `lib/stores/app-actions.ts` opens it at a page and a setting.
 - Shell: [`commands/settings.rs`](../../crates/z-engine-gui/src-tauri/src/commands/settings.rs)
   (`set_setting`, `add_permission_rule`, `set_hooks`, ...), `layers.rs`,
   `commands/access.rs` (keys, trust), `commands/extensions.rs` and `guard.rs`.
@@ -241,15 +353,19 @@ chat, a project, a setting or an action.
 **How it works**
 - The composer sends `submit`. While a turn runs, a new message is queued as
   steering (pills you can edit, sent as `editQueue`); ⌘Enter / Ctrl+Enter
-  sends `interrupt`, and Esc or the stop button `cancel`. Its **+** menu
+  sends `interrupt`, and Esc or the stop button `cancel` (with an empty
+  draft, Send itself turns into Stop). Its **+** menu
   attaches images and inserts `@` (mentions), `/` (commands), `#` (a memory
   note) and `!` (your own `shell` command, output in a drawer above it).
+  A waiting approval or question takes the draft's place until answered.
 - The palette (⌘K / Ctrl+K, or **Search** in the sidebar) lists actions,
-  places, recent chats, this chat's tools, modes and projects; typing also
-  finds single settings.
+  places, recent chats, this chat's tools, the pet's actions, modes and
+  projects; typing also finds single settings.
 - Global shortcuts (⌘ on macOS, Ctrl elsewhere): K palette, N new chat,
-  B sidebar, D Changes panel, comma settings. In the composer, Shift+Enter
-  adds a line, Shift+Tab cycles the permission mode, ↑ and ↓ walk your history.
+  B sidebar, D the Changes tab, comma settings. In the composer, Shift+Enter
+  adds a line, Shift+Tab cycles the permission mode, ↑ and ↓ walk your
+  history. Outside it, Esc closes the island card first, then steps the
+  side panel back; on Settings it goes back.
 
 **For developers**
 - [`chat/Composer.svelte`](../../crates/z-engine-gui/ui/src/components/chat/Composer.svelte)

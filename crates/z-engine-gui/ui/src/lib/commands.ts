@@ -4,3 +4,4 @@ export * from "./commands/engine";
 export * from "./commands/workspace";
 export * from "./commands/app";
 export * from "./commands/settings";
+export * from "./commands/pet";

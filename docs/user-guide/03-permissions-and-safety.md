@@ -58,9 +58,12 @@ shell commands without asking** (`permissions.auto_allow_read_only_bash`).
 
 ## Answering approval cards
 
-An approval card asks a question, such as **Allow Bash to run cargo
-test?**, says why approval is needed, and previews the diff or command
-(longer than six lines, it folds behind **Show all N lines**).
+An approval card takes the place of the composer's text box (your draft
+comes back once you answer, and Send turns into Stop meanwhile) and the
+keyboard focus, unless you are typing in another field. It asks a
+question, such as **Allow Bash to run cargo test?**, says why approval is
+needed, and previews the diff or command (longer than six lines, it folds
+behind **Show all N lines**).
 
 | Button | Key | Effect |
 |---|---|---|
@@ -79,11 +82,12 @@ the rule it offers, for example `Bash(npm run test:*)`, `Edit`,
   example reading `/etc/hosts`): those can be allowed for this chat only.
 - Protected paths never offer a rule.
 
-When the agent makes several calls at once, all their cards appear together
-and you can answer them in any order. Cards from subagents are labelled
-with the agent's type and task. Approvals waiting in other chats are listed
-in the [Inbox](02-everyday-use.md#the-inbox), where **Allow once** and
-**Deny** answer them without opening the chat.
+When several requests wait (the agent made several calls at once, or also
+asked a question), the oldest approval shows first, then the others one by
+one; **N more waiting after this** counts them. Cards from subagents are
+labelled with the agent's type and task. Approvals waiting in other chats
+are listed in the [Inbox](02-everyday-use.md#the-inbox), where **Allow
+once** and **Deny** answer them without opening the chat.
 
 ## Writing rules
 

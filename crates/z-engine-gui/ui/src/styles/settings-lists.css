@@ -1,17 +1,15 @@
 /* ── Settings: hook, check and server rows; inline editors ─────────────── */
 
-/* ── Hooks, checks and server rows ──────────────────────────────────────── */
-
 .hook-help {
-  padding: 14px 16px;
+  padding: var(--space-3) var(--space-4);
   color: var(--label-2);
-  font-size: 12px;
+  font-size: var(--text-s);
   line-height: 1.55;
 }
 
 .hook-help p,
 .hook-help ul {
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-2);
 }
 
 .hook-help p:last-child {
@@ -22,23 +20,23 @@
   padding-left: 18px;
 }
 
-.hook-help code,
-.form-note code {
+.hook-help code {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .hook-events {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
+/* One hook event: a settings card with its hooks listed inside. */
 .hook-event {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px 14px;
+  padding: var(--space-3) var(--space-4);
   background: var(--raised);
   border: 1px solid var(--separator);
   border-radius: var(--r-m);
@@ -48,7 +46,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .hook-event-copy {
@@ -61,18 +59,19 @@
 .hook-event-copy strong {
   color: var(--label);
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: var(--text-s);
+  font-weight: var(--weight-semibold);
 }
 
 .hook-event-copy span {
   color: var(--label-3);
-  font-size: 11.5px;
+  font-size: var(--text-s);
 }
 
 .hook-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -84,14 +83,14 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 7px 10px;
+  padding: 6px 6px 6px 10px;
   background: var(--fill-quiet);
   border: 1px solid var(--separator);
   border-radius: var(--r-s);
 }
 
 .entry-row {
-  margin: 8px 12px;
+  margin: var(--space-2) var(--space-3);
 }
 
 .hook-row.inherited {
@@ -109,33 +108,34 @@
 .entry-row-copy {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
 .entry-row-copy {
   flex-direction: column;
   align-items: flex-start;
-  gap: 3px;
+  gap: 2px;
 }
 
 .entry-row-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   color: var(--label);
-  font-size: 12.5px;
+  font-size: var(--text-m);
 }
 
 .hook-matcher,
 .entry-id {
   flex-shrink: 0;
-  padding: 1px 6px;
+  padding: 0 6px;
   border: 1px solid var(--separator);
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   color: var(--label-2);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-xs);
+  line-height: 16px;
 }
 
 .hook-command,
@@ -143,7 +143,7 @@
   overflow: hidden;
   color: var(--label);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -157,7 +157,7 @@
 .hook-skipped {
   flex-shrink: 0;
   color: var(--label-3);
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .hook-skipped {
@@ -167,12 +167,12 @@
 .hook-row-meta {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   flex-shrink: 0;
 }
 
 .mcp-error {
-  padding: 0 16px 12px;
+  padding: 0 var(--space-4) var(--space-3);
 }
 
 /* ── Inline editors ─────────────────────────────────────────────────────── */
@@ -180,22 +180,22 @@
 .settings-form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px 14px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   background: var(--fill-quiet);
   border: 1px solid var(--separator-strong);
   border-radius: var(--r-s);
 }
 
 .settings-card > .settings-form {
-  margin: 8px 12px;
+  margin: var(--space-2) var(--space-3);
 }
 
 .settings-form-field {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -204,7 +204,7 @@
 }
 
 .settings-form-field > span {
-  font-size: 11.5px;
+  font-size: var(--text-s);
 }
 
 .settings-form-row {
@@ -218,11 +218,11 @@
   align-items: center;
   gap: 6px;
   color: var(--label-2);
-  font-size: 12px;
+  font-size: var(--text-s);
 }
 
 .settings-form-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--space-2);
 }

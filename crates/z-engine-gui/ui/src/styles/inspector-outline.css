@@ -8,41 +8,6 @@
   gap: 6px;
 }
 
-.inspector-search {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  height: 30px;
-  padding: 0 9px;
-  color: var(--label-3);
-  background: var(--fill-hover);
-  border: 1px solid var(--separator);
-  border-radius: var(--r-s);
-}
-
-.inspector-search input {
-  flex: 1;
-  min-width: 0;
-  font: inherit;
-  font-size: 12.5px;
-  color: var(--label);
-  background: none;
-  border: none;
-  outline: none;
-}
-
-.inspector-search-clear {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  color: var(--label-3);
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-
 .inspector-outline-count,
 .inspector-outline-empty {
   margin: 0;

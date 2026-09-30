@@ -110,7 +110,7 @@
         aria-controls="palette-list"
       />
       {#if query}
-        <button type="button" class="palette-clear" aria-label="Clear the search" onclick={() => ((query = ""), (sel = 0))}>
+        <button type="button" class="icon-btn-mini" aria-label="Clear the search" onclick={() => ((query = ""), (sel = 0))}>
           <Icon icon={X} size={13} />
         </button>
       {/if}

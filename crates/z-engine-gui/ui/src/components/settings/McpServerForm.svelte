@@ -92,7 +92,7 @@
   </div>
   {#if touched && problem}<p class="setting-error" role="alert">{problem}</p>{/if}
   <div class="settings-form-actions">
-    <button type="button" class="btn-ghost" onclick={onCancel}>Cancel</button>
+    <button type="button" class="btn-secondary" onclick={onCancel}>Cancel</button>
     <button type="submit" class="btn-accent" disabled={saving || (touched && problem !== null)}>
       {saving ? "Saving…" : "Save server"}
     </button>

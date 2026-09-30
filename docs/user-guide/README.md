@@ -34,10 +34,10 @@ permission rules, records everything, and lets you undo changes.
 | Area | What it is |
 |---|---|
 | **Sidebar** (left) | At the top: **New chat** (⌘N / Ctrl+N), **Search** (⌘K / Ctrl+K, the command palette), **Home** and **Inbox**, whose badge counts what is waiting for you. Below: **Projects** (your project folders) with their git branch, number of uncommitted changes, and chats. A dot before a chat means it is working, needs you (amber), finished while you were away, or its last response didn't complete. At the bottom: the model in use, an **Update** button when a new version is ready, and **Settings** (⌘, / Ctrl+,). |
-| **Title bar** | In the middle, the **island**: a small glass orb (the **companion**) and one line saying what the agent is doing, with at most one number (the elapsed time, the finished turn's duration, or a retry countdown). Click it for the live steps, plan, helpers, cost and recent warnings. Left of it, an amber count of other chats that need you; right of it, a ring showing how full the context is. At the right, the changes button (**Review changes**, ⌘D / Ctrl+D) with the number of files this chat changed. |
-| **Main area** (center) | The project home when no chat is open, the chat's transcript (your messages, the agent's replies, its tool calls, approval cards and a receipt under each turn), or the Inbox. |
-| **Composer** (bottom) | Where you type. Above it: queued messages and attachments. In its bar: the **+** menu, the permission mode, the model with its reasoning effort, and Send (**Stop** while the agent works). |
-| **Side panels** (right) | The agents panel (**Agents** and **Jobs**) and the **Changes** panel open here. |
+| **Title bar** | In the middle, the **island**: your **pet** (a small creature whose face shows the agent's state; at the default level it also walks onto the composer, the sidebar and the side panel while nothing needs you) and one line saying what the agent is doing, with at most one number (the elapsed time, the finished turn's duration, or a retry countdown). Click it for a card with the live steps, plan, helpers, context, cost and recent warnings. Left of it, an amber count of other chats that need you; right of it, a ring showing how full the context is. At the right, the changes button (**Review changes**, ⌘D / Ctrl+D) with the number of files this chat changed, and the side panel button. Double-click an empty part of it to maximize or restore the window. |
+| **Main area** (center) | The project home when no chat is open, the chat's transcript (your messages, the agent's replies with their work folded into one line, its tool calls and a receipt under each turn), or the Inbox. |
+| **Composer** (bottom) | Where you type. Above it: queued messages and attachments. In its bar: the **+** menu, the permission mode, the model with its reasoning effort, and Send (it turns into **Stop** while the agent works). An approval card or a question takes its place until you answer. |
+| **Side panel** (right) | One panel with four tabs: **Changes**, **Plan**, **Agents** (helpers and jobs) and **Context** (the prompt inspector). Resize it from its left edge or let it use the whole stage. |
 
 The project home shows starter prompts that fit the project and cards for
 recent chats, uncommitted changes and project setup. The composer's **+**
@@ -47,8 +47,8 @@ menu lists what `@`, `/`, `#` and `!` do.
 
 1. [Getting started](01-getting-started.md) – install, first-run setup,
    connect a model provider, open a project, and run your first task.
-2. [Everyday use](02-everyday-use.md) – the project home, title bar and
-   Inbox; asking, fixing, reviewing changes, committing, attaching files,
+2. [Everyday use](02-everyday-use.md) – the project home, title bar, your
+   pet and the Inbox; asking, fixing, reviewing changes, committing, attaching files,
    steering, rewinding and exporting.
 3. [Permissions and safety](03-permissions-and-safety.md) – permission
    modes, approval cards, allow/ask/deny rules, workspace trust and the

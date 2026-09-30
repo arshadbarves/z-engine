@@ -5,7 +5,7 @@
   import { settingsStore } from "$lib/stores/settings.svelte";
   import { bindStore } from "$lib/svelte/bind.svelte";
   import { Popover } from "$lib/ui";
-  import Icon, { Brain, Check, ChevronDown, Search, Sparkles, X } from "$lib/ui/icons";
+  import Icon, { Brain, Check, ChevronDown, Search, X } from "$lib/ui/icons";
   import { shortModel } from "$lib/util";
   import EffortRow from "./EffortRow.svelte";
 
@@ -40,13 +40,12 @@
 
 <Popover.Root bind:open>
   <Popover.Trigger class="composer-chip is-model" title="Switch model">
-    <Icon icon={Sparkles} size={12} />
     <span>{shortModel(current) || "model"}</span>
-    {#if effort}<span class="composer-chip-sub">{effort}</span>{/if}
+    {#if effort}<span class="composer-chip-sub">· {effort}</span>{/if}
     <Icon icon={ChevronDown} size={10} strokeWidth={2.2} />
   </Popover.Trigger>
   <Popover.Portal>
-    <Popover.Content class="chip-pop model-pop" side="top" align="end" sideOffset={8} collisionPadding={12}>
+    <Popover.Content class="chip-pop model-pop glass-strong" side="top" align="end" sideOffset={8} collisionPadding={12}>
       {#if reasons}<EffortRow {effort} />{/if}
       <div class="model-search">
         <Icon icon={Search} size={12} />

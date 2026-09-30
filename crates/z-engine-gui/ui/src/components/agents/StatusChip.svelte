@@ -1,21 +1,21 @@
 <script lang="ts">
   import type { AgentStatus } from "$lib/protocol/AgentStatus";
   import type { JobStatus } from "$lib/protocol/JobStatus";
+  import { Pill, type PillTone } from "$lib/ui";
 
+  /** A helper's or job's status: a dot and one word; running pulses. */
   type Props = { status: AgentStatus | JobStatus };
   let { status }: Props = $props();
 
-  const LABELS: Record<AgentStatus | JobStatus, string> = {
-    running: "Running",
-    waiting: "Waiting",
-    completed: "Done",
-    failed: "Failed",
-    cancelled: "Cancelled",
-    killed: "Killed",
+  const LOOK: Record<AgentStatus | JobStatus, [string, PillTone]> = {
+    running: ["Running", "working"],
+    waiting: ["Waiting", "attention"],
+    completed: ["Done", "neutral"],
+    failed: ["Failed", "danger"],
+    cancelled: ["Cancelled", "neutral"],
+    killed: ["Killed", "danger"],
   };
+  const look = $derived(LOOK[status]);
 </script>
 
-<span class={`status-chip status-${status}`}>
-  <span class="status-chip-dot" aria-hidden="true"></span>
-  {LABELS[status]}
-</span>
+<Pill tone={look[1]} dot plain live={status === "running"}>{look[0]}</Pill>

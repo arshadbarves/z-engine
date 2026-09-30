@@ -1,5 +1,6 @@
 <script lang="ts" module>
   import { AlertDialog } from "bits-ui";
+  import { buttonClass } from "./button";
 </script>
 
 <script lang="ts">
@@ -35,17 +36,24 @@
 >
   <AlertDialog.Portal>
     <AlertDialog.Overlay class="modal-overlay" />
-    <AlertDialog.Content class="modal confirm-dialog">
-      <AlertDialog.Title class="confirm-title">{title}</AlertDialog.Title>
-      {#if description}
-        <AlertDialog.Description class="confirm-desc">{description}</AlertDialog.Description>
-      {/if}
-      <div class="confirm-actions">
-        <AlertDialog.Cancel class="btn-secondary">{cancelLabel}</AlertDialog.Cancel>
-        <AlertDialog.Action class={tone === "danger" ? "btn-danger is-solid" : "btn-accent"} onclick={onConfirm}>
+    <AlertDialog.Content class="modal is-alert">
+      <header class="modal-header">
+        <div class="modal-heading">
+          <AlertDialog.Title class="modal-title">{title}</AlertDialog.Title>
+          {#if description}
+            <AlertDialog.Description class="modal-desc">{description}</AlertDialog.Description>
+          {/if}
+        </div>
+      </header>
+      <footer class="modal-footer">
+        <AlertDialog.Cancel class={buttonClass("secondary")}>{cancelLabel}</AlertDialog.Cancel>
+        <AlertDialog.Action
+          class={tone === "danger" ? buttonClass("danger", { solid: true }) : buttonClass("accent")}
+          onclick={onConfirm}
+        >
           {confirmLabel}
         </AlertDialog.Action>
-      </div>
+      </footer>
     </AlertDialog.Content>
   </AlertDialog.Portal>
 </AlertDialog.Root>

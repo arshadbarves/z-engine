@@ -2,22 +2,17 @@
   import { mediaSrc, messageDocuments, messageImages, visibleText } from "$lib/domain/timeline/blocks";
   import { commandChip } from "$lib/domain/timeline/commandChip";
   import type { Message } from "$lib/protocol/Message";
-  import type { RewindScope } from "$lib/protocol/RewindScope";
   import { pushToast } from "$lib/runtime";
   import { copyFeedback } from "$lib/ui/copyFeedback.svelte";
   import Icon, { Check, Copy, FileText } from "$lib/ui/icons";
   import CommandChip from "./CommandChip.svelte";
-  import RewindMenu from "./RewindMenu.svelte";
+
+  /** Your message: a quiet bubble on the right. Copy appears beside it on hover. */
+  type Props = { message: Message };
+  let { message }: Props = $props();
 
   const COLLAPSE_CHARS = 380;
   const COLLAPSE_LINES = 6;
-
-  type Props = {
-    message: Message;
-    canRestoreCode?: boolean;
-    onRewind?: (message: Message, scope: RewindScope) => void;
-  };
-  let { message, canRestoreCode = false, onRewind }: Props = $props();
 
   const feedback = copyFeedback();
   const chip = $derived(commandChip(message));
@@ -33,7 +28,21 @@
 </script>
 
 <div class="user-message-row" id={`msg-${message.id}`} data-msg-id={message.id}>
-  <div class="user-message-wrapper">
+  <div class="user-message">
+    {#if text}
+      <div class="user-message-actions">
+        <button
+          type="button"
+          class="turn-action"
+          class:is-copied={feedback.copied}
+          title={feedback.copied ? "Copied" : "Copy"}
+          aria-label="Copy your message"
+          onclick={() => void copy()}
+        >
+          <Icon icon={feedback.copied ? Check : Copy} size={13} />
+        </button>
+      </div>
+    {/if}
     <div class="user-message-bubble">
       {#if chip}
         <CommandChip {chip} />
@@ -58,22 +67,6 @@
         <button type="button" class="user-expand-btn" onclick={() => (expanded = !expanded)}>
           {expanded ? "Show less" : "Show more"}
         </button>
-      {/if}
-    </div>
-
-    <div class="user-bubble-actions">
-      <button
-        type="button"
-        class={`bubble-action-icon-btn${feedback.copied ? " ok" : ""}`}
-        title={feedback.copied ? "Copied" : "Copy prompt"}
-        aria-label="Copy prompt"
-        onclick={() => void copy()}
-      >
-        <Icon icon={feedback.copied ? Check : Copy} size={11} strokeWidth={1.8} />
-        <span class="bubble-action-label">{feedback.copied ? "Copied" : "Copy"}</span>
-      </button>
-      {#if onRewind}
-        <RewindMenu {canRestoreCode} onRewind={(scope) => onRewind(message, scope)} />
       {/if}
     </div>
   </div>

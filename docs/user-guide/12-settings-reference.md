@@ -56,7 +56,8 @@ The first line of each file is `schema = 2`; the app manages it.
 
 Open Settings with ⌘, (Ctrl+, on Windows and Linux) or the gear at the
 bottom of the sidebar. It opens on the page you used last; links elsewhere
-in the app, such as the model name in the sidebar, open a given page.
+in the app, such as **Connect a model** on the project home, open a given
+page.
 **Back** or Esc closes it. The navigation groups the pages, and each page
 starts with one line saying what it is for:
 
@@ -64,7 +65,8 @@ starts with one line saying what it is for:
 |---|---|---|
 | General | Models | `model.*` |
 | | Providers | `provider.*`, `model.main`; keys go to `auth.json` |
-| | Appearance | `ui.*` |
+| | Appearance | `ui.task_report_view`, `ui.output_style` |
+| | Pet | `ui.companion`, `ui.pet.*` |
 | Agent | Permissions | `permissions.*` |
 | | Memory | `AGENTS.md` files |
 | | Verification | `verification.*` |
@@ -243,10 +245,26 @@ environment. They get `PATH`, `HOME`, `SHELL`, `TERM`, `LANG`, `LC_ALL`,
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `ui.companion` | `"lively"`, `"calm"`, `"off"` | `"lively"` | The title-bar companion: **Lively** reacts to the agent and to you (typing, scrolling, stepping away), **Calm** only to the agent, **Off** shows a small dot instead of the orb. Settings → Appearance. |
+| `ui.companion` | `"lively"`, `"calm"`, `"off"` | `"lively"` | How lively the [pet](02-everyday-use.md#your-pet) is: **Lively** reacts to the agent and to you (typing, scrolling, stepping away) and roams if `ui.pet.roam` is on, **Calm** reacts only to the agent and stays in the title bar, **Off** shows a small dot instead of the pet. Settings → Pet → Liveliness. |
+| `ui.pet.name` | string | `"Zen"` | The pet's name. Trimmed; empty means `"Zen"`; longer than 24 characters is cut with a warning. Settings → Pet → Name. |
+| `ui.pet.look` | `"pearl"`, `"mint"`, `"sky"`, `"lilac"`, `"peach"`, `"graphite"` | `"pearl"` | The pet's body color. Settings → Pet → Look. |
+| `ui.pet.roam` | bool | `true` | At the **Lively** level, let the pet leave the title bar for the composer, the sidebar and the side panel's tab bar while nothing needs you. Settings → Pet → Let it roam. |
 | `ui.output_style` | string | unset | Name of an [output style](07-memory-and-context.md#output-styles). |
 | `ui.task_report_view` | `"quiet"`, `"compact"`, `"detailed"` | `"quiet"` | How much the receipt under each turn shows: **Quiet** only a Verified, Unverified or Failed badge; **Compact** adds the changed files, duration and cost; **Detailed** adds tokens, the Not applicable badge and unfolded checks ([details](02-everyday-use.md#the-turn-receipt)). Settings → Appearance → Task report detail. |
 | `compat.claude` | bool | `true` | Also read `.claude/` folders (agents, commands, skills) and `CLAUDE.md` files. `.claude/settings.json` is never read. |
+
+```toml
+[ui]
+companion = "lively"
+
+[ui.pet]
+name = "Pip"
+look = "lilac"
+roam = false      # stay in the title bar (and on the project home)
+```
+
+The pet's level, streak and accessory are not settings: they are kept in
+`pet.json` in the data folder ([Sessions and data](13-sessions-and-data.md#where-things-live)).
 
 ## Environment variables
 

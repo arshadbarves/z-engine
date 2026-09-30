@@ -44,7 +44,7 @@ flowchart LR
 **For developers**
 - [`src-tauri/src/commands/`](../../crates/z-engine-gui/src-tauri/src/commands/)
   has one file per domain (session, catalog, workspace, settings, access,
-  extensions, app, update), all in `generate_handler!` in `main.rs`; the
+  extensions, app, update, pet), all in `generate_handler!` in `main.rs`; the
   webview reaches them only through `ui/src/lib/commands/*.ts`, screens
   through [`lib/runtime/actions.ts`](../../crates/z-engine-gui/ui/src/lib/runtime/actions.ts).
 - `Engine::send` ([`engine/api.rs`](../../crates/z-engine-engine/src/engine/api.rs))
@@ -101,8 +101,10 @@ news, like a scorekeeper who updates the board after every play.
    on `assistantFinished`), `toolFinished` completes a tool card, and
    `approvalRequested` adds a pending approval.
 4. Some events also ask for a side effect: a passing notice (only for the
-   chat on screen), `!cmd` output for the shell drawer, or a chat-list
-   refresh when a title changes or a turn starts or ends.
+   chat on screen), `!cmd` output for the shell drawer, a chat-list
+   refresh when a title changes or a turn starts or ends, or XP for the
+   [pet](features-desktop-screens.md#the-pet) when a turn finishes or a
+   helper's worktree changes are applied (in any chat).
 
 **For developers**
 - Pure reducers, tested with vitest without a browser: `applyEnvelope`,
@@ -114,7 +116,8 @@ news, like a scorekeeper who updates the board after every play.
 - Live state: `SessionsStore` in
   [`lib/runtime/sessions.svelte.ts`](../../crates/z-engine-gui/ui/src/lib/runtime/sessions.svelte.ts)
   (`views`, `active`, `activity`, `unread`, `apply`); `effects.ts` runs the
-  side effects; `applyLocal` reduces window-made events (such as `/help`).
+  side effects (`petGrowth` goes to `lib/runtime/pet.svelte.ts`);
+  `applyLocal` reduces window-made events (such as `/help`).
 
 ## Many chats at once
 
@@ -141,6 +144,37 @@ one, and the others keep cooking.
 - Branch and count: `git_summary` ([`Engine::git_summary`](../../crates/z-engine-engine/src/engine/queries/git.rs))
   through `lib/runtime/projects.svelte.ts`, refreshed at start, on window
   focus, when a project is added and when a turn ends.
+
+## The window's glass and title bar
+
+**In plain words.** The window is dark and frosted: where the system allows,
+the desktop shows softly through it, and the sidebar, side panel, composer
+and island float over the chat like panes of frosted glass.
+
+**How it works**
+- macOS: an overlay title bar with the traffic lights inside the sidebar
+  card's head, over dark HUD vibrancy. Windows 11: a frameless window over
+  dark Mica, with the app's own minimize, maximize and close buttons.
+  Windows 10 and Linux have no native material, so the window is solid
+  dark. The window starts solid and lets the material through once the
+  shell confirms it applied.
+- On the window sit the content sheet (the chat and pages), glass for the
+  floating controls, and stronger glass for popovers, menus and dialogs.
+  The glass blurs what is behind it on every platform; Reduce Transparency
+  makes every layer solid.
+- Double-clicking an empty part of the title bar, the sidebar's head, the
+  side panel's head or a full-window page's bar maximizes or restores the
+  window, like a native title bar.
+
+**For developers**
+- [`src-tauri/src/window.rs`](../../crates/z-engine-gui/src-tauri/src/window.rs)
+  builds the window and applies the material; `app_info` reports it as
+  `nativeGlass`, and `applyWindowMaterial()` in `lib/platform.ts` sets
+  `html.native-glass` or `html.solid-surfaces`.
+- The layers are tokens in `styles/tokens.css` and the `.sheet`, `.glass`
+  and `.glass-strong` classes in `styles/materials.css`
+  ([UI guide](../design/gui-ui-guide.md)). The double-click handler is in
+  `chrome/AppShell.svelte`; the Windows buttons are `chrome/WindowControls.svelte`.
 
 ## Self-updates
 

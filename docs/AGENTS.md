@@ -33,7 +33,7 @@ behavior as if it works; remove documentation of removed features.
 | [how-it-works/](how-it-works/README.md) | everyone: plain words first, then mechanism, then developer detail | how each feature works and what each crate does |
 | [architecture/v2-engine.md](architecture/v2-engine.md) | engine contributors | the runtime contract (round loop, gate, stop boundary, persistence, hooks) |
 | [../AGENTS.md](../AGENTS.md) | contributors and coding agents | crate layout, dependency rules, file budget, how to add things |
-| [engineering/style-guide.md](engineering/style-guide.md), [design/gui-ui-guide.md](design/gui-ui-guide.md) | contributors | code and UI conventions |
+| [engineering/style-guide.md](engineering/style-guide.md), [design/gui-ui-guide.md](design/gui-ui-guide.md), [design/gui-surfaces.md](design/gui-surfaces.md) | contributors | code and UI conventions; which component owns each GUI surface |
 | [../README.md](../README.md) | first-time visitors | highlights, install, quick start, pointers |
 | [../CHANGELOG.md](../CHANGELOG.md) | everyone | every user-visible change, under `[Unreleased]` until a release |
 

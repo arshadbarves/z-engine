@@ -10,6 +10,7 @@
   import type { AgentInfo } from "$lib/protocol/AgentInfo";
   import type { Message } from "$lib/protocol/Message";
   import { errorText } from "$lib/runtime";
+  import { Button } from "$lib/ui";
   import Icon, { RefreshCw } from "$lib/ui/icons";
   import { fmtCost, shortModel } from "$lib/util";
   import TurnView from "../chat/TurnView.svelte";
@@ -64,15 +65,9 @@
         ? ` · ${fmtCost(agent.costUsd)}`
         : ""}
     </span>
-    <button
-      type="button"
-      class={`icon-btn${loading ? " spinning" : ""}`}
-      title="Reload transcript"
-      aria-label="Reload transcript"
-      onclick={() => void load()}
-    >
+    <Button variant="icon" spinning={loading} title="Reload transcript" aria-label="Reload transcript" onclick={() => void load()}>
       <Icon icon={RefreshCw} size={13} />
-    </button>
+    </Button>
   </div>
 
   {#if todos.length > 0}

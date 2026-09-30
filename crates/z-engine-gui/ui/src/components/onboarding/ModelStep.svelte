@@ -2,6 +2,7 @@
   import { connectFormDefaults, detectProviderId, presetById, requiresApiKey, type ConnectFormValues } from "$lib/providers";
   import { connectProvider } from "$lib/stores/providerConnect";
   import { settingsStore } from "$lib/stores/settings.svelte";
+  import { Pill } from "$lib/ui";
   import Icon, { Cloud, Computer, KeyRound, LoaderCircle, Sparkles } from "$lib/ui/icons";
   import ProviderForm from "../settings/ProviderForm.svelte";
   import StepLayout from "./StepLayout.svelte";
@@ -62,7 +63,7 @@
     <button type="button" role="radio" aria-checked={choice === "free"} class="choice-card" class:is-selected={choice === "free"} onclick={() => (choice = "free")}>
       <span class="choice-icon"><Icon icon={Sparkles} size={16} /></span>
       <span class="choice-text">
-        <span class="choice-title">Start free <span class="choice-tag">Recommended to try</span></span>
+        <span class="choice-title">Start free <Pill tone="ok">Recommended to try</Pill></span>
         <span class="choice-desc">OpenCode Zen's free models. No account or key needed.</span>
       </span>
     </button>
@@ -120,12 +121,12 @@
     <button type="button" class="btn-ghost" onclick={onBack}>Back</button>
     {#if error}<p class="setting-error step-error" role="alert">{error}</p>{/if}
     {#if choice === "free"}
-      <button type="button" class="btn-accent onboarding-primary" disabled={saving} onclick={() => void startFree()}>
+      <button type="button" class="btn-accent size-l" disabled={saving} onclick={() => void startFree()}>
         {#if saving}<Icon icon={LoaderCircle} size={13} class="spin" />{/if}
         <span>Continue</span>
       </button>
     {:else if choice === "current"}
-      <button type="button" class="btn-accent onboarding-primary" onclick={onNext}>Continue</button>
+      <button type="button" class="btn-accent size-l" onclick={onNext}>Continue</button>
     {/if}
   {/snippet}
 </StepLayout>

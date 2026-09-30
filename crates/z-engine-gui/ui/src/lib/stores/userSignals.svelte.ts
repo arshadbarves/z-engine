@@ -1,4 +1,4 @@
-import type { UserSignals } from "../domain/companion";
+import type { UserSignals } from "../domain/pet/pose";
 
 /** Leaving the window this long or more counts as being away. */
 export const AWAY_MS = 5 * 60_000;

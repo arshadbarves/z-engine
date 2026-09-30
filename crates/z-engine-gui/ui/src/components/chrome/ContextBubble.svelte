@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { CtxMeter } from "$lib/domain/contextMeter";
   import { contextBubble } from "$lib/domain/island";
-  import { companion } from "$lib/stores/companion.svelte";
+  import { island } from "$lib/stores/island.svelte";
   import { Popover, ProgressRing, Tooltip } from "$lib/ui";
   import { fmtTokens } from "$lib/util";
   import ContextCard from "./ContextCard.svelte";
@@ -14,7 +14,7 @@
   const text = $derived(`Context ${meter.pct}% · ${fmtTokens(meter.used)} of ${fmtTokens(meter.max)}`);
 </script>
 
-<Popover.Root bind:open={companion.contextOpen}>
+<Popover.Root bind:open={island.contextOpen}>
   <Tooltip {text}>
     <Popover.Trigger class={`satellite context-bubble tone-${look.tone}`} aria-label={text}>
       <ProgressRing value={meter.pct / 100} size={16} stroke={2.2} tone={look.tone} />
@@ -23,7 +23,7 @@
   </Tooltip>
   <Popover.Portal>
     <Popover.Content class="context-card" side="bottom" align="end" sideOffset={8} collisionPadding={12}>
-      <ContextCard {sessionId} {meter} {busy} onClose={() => (companion.contextOpen = false)} />
+      <ContextCard {sessionId} {meter} {busy} onClose={() => (island.contextOpen = false)} />
     </Popover.Content>
   </Popover.Portal>
 </Popover.Root>

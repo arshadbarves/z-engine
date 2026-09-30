@@ -79,8 +79,10 @@ export function reduce(view: SessionView, event: Event, now: number): SessionVie
       return { ...view, model: event.model, info: patchInfo(view.info, { model: event.model }) };
     case "effortChanged":
       return { ...view, effort: event.effort, info: patchInfo(view.info, { effort: event.effort }) };
+    case "compactionStarted":
+      return { ...view, compacting: true };
     case "compacted":
-      return { ...view, compactions: [...view.compactions, event.marker] };
+      return { ...view, compactions: [...view.compactions, event.marker], compacting: false };
     case "checkpointCreated":
       return {
         ...view,

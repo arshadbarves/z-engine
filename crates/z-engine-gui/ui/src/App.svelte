@@ -3,16 +3,11 @@
   import SplashScreen from "./components/chrome/SplashScreen.svelte";
   import Onboarding from "./components/onboarding/Onboarding.svelte";
   import CommandPalette from "./components/overlays/CommandPalette.svelte";
-  import PromptInspector from "./components/overlays/PromptInspector.svelte";
   import SettingsPage from "./components/settings/SettingsPage.svelte";
   import { needsOnboarding } from "./lib/domain/onboarding";
   import { paletteActions } from "./lib/paletteActions";
-  import { initEvents, sessionList, sessions } from "./lib/runtime";
-  import {
-    addWorkspace,
-    openChat,
-    startNewChat,
-  } from "./lib/stores/app-actions";
+  import { initEvents, pet, sessionList, sessions } from "./lib/runtime";
+  import { addWorkspace, openChat, openSettings, startNewChat } from "./lib/stores/app-actions";
   import { confirmStore } from "./lib/stores/confirm.svelte";
   import { onboarding } from "./lib/stores/onboarding.svelte";
   import { settingsStore } from "./lib/stores/settings.svelte";
@@ -31,8 +26,6 @@
   let booted = $state(false);
 
   const palettePresence = presence(() => ui.paletteOpen, 180);
-  const settingsPresence = presence(() => ui.settingsOpen, 180);
-  const inspectPresence = presence(() => ui.inspectOpen, 180);
 
   const projectRoot = $derived(sessions.active?.info?.projectRoot ?? workspaces.current.active);
 
@@ -40,13 +33,14 @@
     palette: () => ui.togglePalette(),
     newChat: () => void startNewChat(),
     toggleSidebar: () => (ui.sidebarOpen = !ui.sidebarOpen),
-    toggleDiff: () => ui.toggleDiff(),
-    settings: () => (ui.settingsOpen = !ui.settingsOpen),
+    toggleChanges: () => ui.togglePanel("changes"),
+    settings: () => (ui.settingsOpen ? (ui.settingsOpen = false) : openSettings()),
   };
 
   $effect(() => {
     void (async () => {
       try {
+        void pet.load();
         await initEvents();
         await workspaceStore.load();
         await sessionList.refresh();
@@ -55,7 +49,7 @@
           projects: workspaceStore.getSnapshot().roots.length,
           chats: sessionList.summaries.length,
         });
-        if (fresh) onboarding.start();
+        if (fresh) onboarding.start(settingsStore.settings?.ui.pet ?? null);
       } catch (e) {
         console.error("boot failed", e);
       } finally {
@@ -113,20 +107,15 @@
       newTask: () => void startNewChat(),
       addWorkspace: () => void addWorkspace(),
       openWorktree: () => ui.openWorktree(),
-      openDiff: () => ui.openDiff(),
-      openSettings: () => ui.openSettings(),
-      openInspector: () => (ui.inspectOpen = true),
+      openSettings: () => openSettings(),
       toggleSidebar: () => (ui.sidebarOpen = !ui.sidebarOpen),
     })}
     onOpenSession={(id, root) => void openChat(id, root)}
     onActivateWorkspace={(root) => workspaceStore.setActive(root)}
   />
 {/if}
-{#if settingsPresence.mounted}
-  <SettingsPage isClosing={settingsPresence.closing} onClose={() => (ui.settingsOpen = false)} />
-{/if}
-{#if inspectPresence.mounted}
-  <PromptInspector isClosing={inspectPresence.closing} onClose={() => (ui.inspectOpen = false)} />
+{#if ui.settingsOpen}
+  <SettingsPage onClose={() => (ui.settingsOpen = false)} />
 {/if}
 
 <ConfirmDialog

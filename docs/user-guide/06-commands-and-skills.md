@@ -49,8 +49,8 @@ instructions go to the model.
 | Command | What it does |
 |---|---|
 | `/help` | Lists commands and keyboard shortcuts. |
-| `/agents` | Opens the agents panel on its **Agents** tab. |
-| `/jobs` | Opens the agents panel on its **Jobs** tab. |
+| `/agents` | Opens the side panel's **Agents** tab on its helpers. |
+| `/jobs` | Opens the side panel's **Agents** tab on its **Jobs**. |
 | `/context` | Opens the [context card](07-memory-and-context.md#the-context-window): how full the context is, by layer, with **Compact now** and **Inspect prompt**. Without an open chat, it prints the per-layer breakdown in a new chat instead. |
 | `/permissions` | Opens Settings → Permissions. |
 | `/hooks` | Shows the recent hook runs of this chat. |
@@ -75,7 +75,8 @@ projects and settings. Before you type, it lists:
 | **Actions** | **New chat**, **New chat in a worktree…**, **Add a project…** |
 | **Go to** | **Home**, **Inbox**, **Settings**, **Show or hide the sidebar** |
 | **Recent chats** | Your six latest chats |
-| **This chat** | **Review changes**, **Agents**, **Background jobs**, **Inspect the prompt**, **Context usage**, **Compact the conversation**, **Copy the chat as Markdown**, **Copy the chat as JSON** |
+| **This chat** | **Review changes**, **Plan**, **Agents**, **Background jobs** and **Inspect the prompt** (each opens its side panel tab), **Context usage**, **Compact the conversation**, **Copy the chat as Markdown**, **Copy the chat as JSON** |
+| **Pet** | **Rename Zen**, **Change Zen's look** (both open **Settings → Pet** at that field), **Show Zen's card**, and at the **Lively** level **Stop Zen roaming** (or **Let Zen roam**) and **Call Zen back**, with your pet's name; none while the pet is off |
 | **Permission mode** | **Switch to …** each mode except the current one and Bypass |
 | **Help** | **Commands and shortcuts** (the same as `/help`) |
 | **Projects** | Your project folders; picking one makes it the active project |

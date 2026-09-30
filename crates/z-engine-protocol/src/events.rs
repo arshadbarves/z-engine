@@ -12,8 +12,8 @@ use crate::interaction::{Question, TodoItem};
 use crate::jobs::JobInfo;
 use crate::permission::{ApprovalRequest, PermissionMode};
 use crate::session::{
-    CheckpointInfo, CompactionMarker, ContextBreakdown, Effort, SessionSnapshot, SessionStatus,
-    TurnRecord,
+    CheckpointInfo, CompactionMarker, CompactionTrigger, ContextBreakdown, Effort, SessionSnapshot,
+    SessionStatus, TurnRecord,
 };
 use crate::usage::Usage;
 use crate::verification::{CheckRecord, VerificationOutcome};
@@ -174,6 +174,11 @@ pub enum Event {
     EffortChanged {
         effort: Option<Effort>,
     },
+    /// The main agent's older history is being summarized; `Compacted`
+    /// follows on success, a notice on failure.
+    CompactionStarted {
+        trigger: CompactionTrigger,
+    },
     Compacted {
         marker: CompactionMarker,
     },
@@ -241,48 +246,5 @@ impl Event {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn events_use_camel_case_tags_and_fields() {
-        let event = Event::TextDelta {
-            agent_id: AgentId::main(),
-            message_id: MessageId::from("m1"),
-            text: "hi".into(),
-        };
-        let json = serde_json::to_value(&event).unwrap();
-        assert_eq!(json["type"], "textDelta");
-        assert_eq!(json["agentId"], "main");
-        assert_eq!(json["messageId"], "m1");
-        let back: Event = serde_json::from_value(json).unwrap();
-        assert_eq!(back, event);
-    }
-
-    #[test]
-    fn trust_required_round_trips() {
-        let event = Event::TrustRequired {
-            project_root: "/work/app".into(),
-            defines: vec!["hooks".into(), "MCP servers".into()],
-        };
-        let json = serde_json::to_value(&event).unwrap();
-        assert_eq!(json["type"], "trustRequired");
-        assert_eq!(json["projectRoot"], "/work/app");
-        assert_eq!(json["defines"][1], "MCP servers");
-        let back: Event = serde_json::from_value(json).unwrap();
-        assert_eq!(back, event);
-    }
-
-    #[test]
-    fn envelope_nests_the_event() {
-        let envelope = EventEnvelope {
-            session_id: SessionId::from("S"),
-            seq: 3,
-            event: Event::notice(NoticeLevel::Warn, "careful"),
-        };
-        let json = serde_json::to_value(&envelope).unwrap();
-        assert_eq!(json["sessionId"], "S");
-        assert_eq!(json["event"]["type"], "notice");
-        assert_eq!(json["event"]["level"], "warn");
-    }
-}
+#[path = "events_tests.rs"]
+mod tests;

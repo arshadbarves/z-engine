@@ -6,5 +6,6 @@ export { inbox, inboxSnapshot, type InboxSnapshot } from "./inbox.svelte";
 export { projects, type ProjectDetails } from "./projects.svelte";
 export { chatTitle } from "./titles";
 export { initEvents } from "./listen";
+export { pet, type LevelUp } from "./pet.svelte";
 export { dismissToast, errorText, pushToast, toastStore, type Toast, type ToastAction } from "./toasts";
 export * from "./actions";

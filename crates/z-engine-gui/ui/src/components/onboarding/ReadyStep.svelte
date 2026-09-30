@@ -34,6 +34,6 @@
 
   {#snippet footer()}
     <button type="button" class="btn-ghost" onclick={onBack}>Back</button>
-    <button type="button" class="btn-accent onboarding-primary" onclick={() => onFinish(null)}>Open Z Engine</button>
+    <button type="button" class="btn-accent size-l" onclick={() => onFinish(null)}>Open Z Engine</button>
   {/snippet}
 </StepLayout>

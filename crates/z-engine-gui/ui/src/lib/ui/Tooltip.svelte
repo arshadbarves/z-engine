@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Tooltip } from "bits-ui";
   import type { Snippet } from "svelte";
+  import Kbd from "./Kbd.svelte";
 
   type Props = {
     text: string;
@@ -25,7 +26,7 @@
     <Tooltip.Portal>
       <Tooltip.Content class="tip" {side} sideOffset={6}>
         <span>{text}</span>
-        {#if shortcut}<kbd class="tip-key">{shortcut}</kbd>{/if}
+        {#if shortcut}<Kbd keys={shortcut} />{/if}
       </Tooltip.Content>
     </Tooltip.Portal>
   </Tooltip.Root>

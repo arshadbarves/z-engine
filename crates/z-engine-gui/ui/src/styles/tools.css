@@ -9,11 +9,11 @@
 }
 .tool-group-summary {
   gap: 8px;
-  min-height: 30px;
-  padding: 4px 8px 4px 6px;
+  min-height: 28px;
+  padding: 3px 8px 3px 6px;
   border-radius: var(--r-s);
   color: var(--label-2);
-  font-size: var(--text-s);
+  font-size: 12.5px;
 }
 .tool-group-summary:hover {
   background: var(--fill-quiet);
@@ -115,13 +115,13 @@
   gap: 8px;
   width: 100%;
   min-height: 28px;
-  padding: 4px 8px 4px 4px;
+  padding: 3px 8px 3px 4px;
   border: 0;
   border-radius: var(--r-s);
   background: transparent;
   color: var(--label-2);
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
   line-height: 1.5;
   text-align: left;
 }
@@ -162,8 +162,8 @@
 }
 .tool-label {
   flex: none;
-  color: var(--label);
-  font-weight: var(--weight-semibold);
+  color: var(--label-2);
+  font-weight: var(--weight-medium);
 }
 .msg.tool-card.denied .tool-label {
   color: var(--red-label);
@@ -173,6 +173,8 @@
   min-width: 0;
   overflow: hidden;
   color: var(--label-3);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

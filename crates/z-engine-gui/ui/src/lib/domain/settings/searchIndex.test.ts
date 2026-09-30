@@ -12,6 +12,11 @@ describe("searchSettings", () => {
     expect(searchSettings("api key")[0]?.tab).toBe("providers");
   });
 
+  it("finds the pet under its old name too", () => {
+    expect(searchSettings("companion").every((e) => e.tab === "pet")).toBe(true);
+    expect(searchSettings("roam")[0]?.key).toBe("ui.pet.roam");
+  });
+
   it("ranks titles that start with the words first", () => {
     expect(searchSettings("compact")[0]?.key).toBe("context.compact_at_percent");
   });

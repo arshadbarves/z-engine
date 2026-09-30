@@ -6,6 +6,7 @@ import type { CallId } from "./CallId";
 import type { CheckRecord } from "./CheckRecord";
 import type { CheckpointInfo } from "./CheckpointInfo";
 import type { CompactionMarker } from "./CompactionMarker";
+import type { CompactionTrigger } from "./CompactionTrigger";
 import type { ContextBreakdown } from "./ContextBreakdown";
 import type { Effort } from "./Effort";
 import type { JobInfo } from "./JobInfo";
@@ -33,4 +34,4 @@ output: string, durationMs: number, } | { "type": "approvalRequested", request: 
 /**
  * Cumulative usage of this agent.
  */
-usage: Usage, sessionUsage: Usage, costUsd: number, contextTokens: number, contextLimit: number, } | { "type": "modeChanged", mode: PermissionMode, } | { "type": "modelChanged", model: string, } | { "type": "effortChanged", effort: Effort | null, } | { "type": "compacted", marker: CompactionMarker, } | { "type": "checkpointCreated", checkpoint: CheckpointInfo, } | { "type": "checkRecorded", record: CheckRecord, } | { "type": "verificationChanged", outcome: VerificationOutcome, } | { "type": "hookRan", hookEvent: string, command: string, blocked: boolean, message: string | null, } | { "type": "commandOutput", name: string, markdown: string, } | { "type": "contextReport", breakdown: ContextBreakdown, } | { "type": "notice", level: NoticeLevel, text: string, } | { "type": "retrying", attempt: number, delayMs: number, reason: string, } | { "type": "titleChanged", title: string, } | { "type": "queueChanged", queued: Array<string>, } | { "type": "trustRequired", projectRoot: string, defines: Array<string>, } | { "type": "error", message: string, };
+usage: Usage, sessionUsage: Usage, costUsd: number, contextTokens: number, contextLimit: number, } | { "type": "modeChanged", mode: PermissionMode, } | { "type": "modelChanged", model: string, } | { "type": "effortChanged", effort: Effort | null, } | { "type": "compactionStarted", trigger: CompactionTrigger, } | { "type": "compacted", marker: CompactionMarker, } | { "type": "checkpointCreated", checkpoint: CheckpointInfo, } | { "type": "checkRecorded", record: CheckRecord, } | { "type": "verificationChanged", outcome: VerificationOutcome, } | { "type": "hookRan", hookEvent: string, command: string, blocked: boolean, message: string | null, } | { "type": "commandOutput", name: string, markdown: string, } | { "type": "contextReport", breakdown: ContextBreakdown, } | { "type": "notice", level: NoticeLevel, text: string, } | { "type": "retrying", attempt: number, delayMs: number, reason: string, } | { "type": "titleChanged", title: string, } | { "type": "queueChanged", queued: Array<string>, } | { "type": "trustRequired", projectRoot: string, defines: Array<string>, } | { "type": "error", message: string, };

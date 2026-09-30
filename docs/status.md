@@ -31,6 +31,30 @@ gone; they remain in git history.
 | 7 | Errors after edits (engine event) | pending |
 | 8 | Remove legacy stylesheets and token aliases | done |
 
+## After 2.1.0: the pet (unreleased)
+
+| Item | Status |
+|---|---|
+| The pet replaces the title-bar companion orb (`components/pet/`, pure rules in `lib/domain/pet/`); liveliness `ui.companion` moved to **Settings → Pet** | done |
+| Roaming between perches (home spot, composer, sidebar footer, the side panel's tab band, empty Inbox), drag, boop, nap, card | done |
+| Growth: XP, levels, stages, accessories, tricks, saved in `<data dir>/pet.json` (`pet_load`, `pet_save`) | done |
+| `[ui.pet]` settings (`name`, `look`, `roam`), first-run **Meet** step, palette actions | done |
+| One Send/Stop button, helper sprites, inspector ring chart, sliding sidebar selection, full-window page frame for Settings | done |
+| Level-up celebration: confetti once nothing needs you (Lively only) | done |
+| The pet as the logo: boot splash (the pet wakes up, then flies into its place), app icons, favicon and About logo replace the Z mark | done |
+
+## After 2.1.0: the v4 dark frosted redesign (unreleased)
+
+| Item | Status |
+|---|---|
+| Always dark: four material layers, one glass recipe, springs (`lib/ui/springs.ts`), motion on position and opacity only; macOS dark HUD vibrancy, Windows 11 dark Mica, solid elsewhere | done |
+| Side panel with **Changes**, **Plan**, **Agents** and **Context** tabs, replacing the separate panels and the full-window prompt inspector | done |
+| Approvals and questions docked in the composer; the **Plan ready · Review** row and the Plan tab | done |
+| Island shapes and the island card; turn actions, the work summary line, the live compaction row, the long-chat turn window | done |
+| QA in a browser against a mocked backend | done |
+| Performance profile in headless Chrome of a 1,000-turn chat (`__zengine.longChat(1000)`, dev builds only) | done |
+| Native checks: macOS vibrancy under `tauri dev`, Windows 11 Mica, a full Windows MSVC build, title-bar double-click on a real window | pending |
+
 ## After 2.0.0: documentation website
 
 - VitePress site at [arshadbarves.github.io/z-engine](https://arshadbarves.github.io/z-engine/),

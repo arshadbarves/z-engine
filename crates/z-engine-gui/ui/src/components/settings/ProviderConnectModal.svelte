@@ -5,7 +5,7 @@
   import type { ConnectFormValues, ProviderPreset } from "$lib/providers";
   import { settingsStore } from "$lib/stores/settings.svelte";
   import { Dialog, DialogPanel } from "$lib/ui";
-  import Icon, { Sparkles } from "$lib/ui/icons";
+  import { Sparkles } from "$lib/ui/icons";
   import ProviderForm from "./ProviderForm.svelte";
 
   type Props = {
@@ -33,14 +33,13 @@
     if (!open) onClose();
   }}
 >
-  <DialogPanel contentClass="provider-dialog">
-    <header class="provider-dialog-head">
-      <span class="provider-badge-icon" style={`color: ${provider.color}`}><Icon icon={Sparkles} size={16} /></span>
-      <div class="provider-dialog-titles">
-        <p class="provider-dialog-title">Connect {provider.name}</p>
-        <p class="provider-dialog-desc">{provider.desc}</p>
-      </div>
-    </header>
+  <DialogPanel
+    title={`Connect ${provider.name}`}
+    description={provider.desc}
+    icon={Sparkles}
+    iconColor={provider.color}
+    contentClass="provider-dialog"
+  >
     <ProviderForm
       {provider}
       {model}

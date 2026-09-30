@@ -2,6 +2,7 @@
   import { LAYER_LABELS } from "$lib/domain/settings/scopes";
   import type { LayerScope } from "$lib/protocol/config/LayerScope";
   import { settingsStore } from "$lib/stores/settings.svelte";
+  import { Pill } from "$lib/ui";
 
   type Props = { source: LayerScope; prefix?: string };
   let { source, prefix = "" }: Props = $props();
@@ -16,4 +17,4 @@
   );
 </script>
 
-<span class={`source-badge source-${source}`} {title}>{prefix}{LAYER_LABELS[source]}</span>
+<Pill tone={source === "env" ? "attention" : "neutral"} {title}>{prefix}{LAYER_LABELS[source]}</Pill>

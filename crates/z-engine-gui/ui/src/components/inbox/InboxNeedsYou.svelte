@@ -2,6 +2,7 @@
   import type { NeedsYouItem } from "$lib/domain/inbox";
   import { resolveApproval } from "$lib/runtime";
   import { openChatById } from "$lib/stores/app-actions";
+  import { Button, Pill } from "$lib/ui";
   import Icon, { HelpCircle, ListChecks, Lock, Shield } from "$lib/ui/icons";
 
   /** Chats blocked on you. Approvals can be answered right here; the rest open their chat. */
@@ -22,7 +23,7 @@
 </script>
 
 <section class="inbox-section" aria-label="Needs you">
-  <h2 class="inbox-heading">Needs you <span class="inbox-count tone-attention">{items.length}</span></h2>
+  <h2 class="inbox-heading">Needs you <Pill tone="attention">{items.length}</Pill></h2>
   <ul class="inbox-list">
     {#each items as item (item.key)}
       <li class="inbox-item is-attention">
@@ -35,11 +36,11 @@
           </p>
         </div>
         <div class="inbox-actions">
+          <Button onclick={() => void openChatById(item.sessionId)}>{OPEN[item.kind]}</Button>
           {#if item.kind === "approval"}
-            <button type="button" class="btn-accent" disabled={busy[item.key]} onclick={() => void decide(item, true)}>Allow once</button>
-            <button type="button" class="btn-secondary" disabled={busy[item.key]} onclick={() => void decide(item, false)}>Deny</button>
+            <Button variant="secondary" disabled={busy[item.key]} onclick={() => void decide(item, false)}>Deny</Button>
+            <Button variant="accent" disabled={busy[item.key]} onclick={() => void decide(item, true)}>Allow once</Button>
           {/if}
-          <button type="button" class="btn-ghost" onclick={() => void openChatById(item.sessionId)}>{OPEN[item.kind]}</button>
         </div>
       </li>
     {/each}
