@@ -104,6 +104,7 @@ export const setMode = (mode: PermissionMode) => sendEnsured({ type: "setMode", 
 export const setModel = (model: string) => sendEnsured({ type: "setModel", model });
 export const setEffort = (effort: Effort | null) => sendEnsured({ type: "setEffort", effort });
 export const compact = (instructions: string | null = null) => send({ type: "compact", instructions });
+export const includeFullHistory = () => send({ type: "includeFullHistory" });
 export const rewind = (messageId: string, scope: RewindScope) => send({ type: "rewind", messageId, scope });
 export const killJob = (jobId: string) => send({ type: "killJob", jobId });
 export const applyAgentChanges = (agentId: string) => send({ type: "applyAgentChanges", agentId });
@@ -116,6 +117,9 @@ export const answerQuestion = (requestId: string, answers: QuestionAnswer[] | nu
   send({ type: "answerQuestion", requestId, answers });
 export const resolvePlan = (requestId: string, decision: PlanDecision) =>
   send({ type: "resolvePlan", requestId, decision });
+/** Acted on (`accepted`) or dismissed a decision-use card; the engine traces it and clears the card. */
+export const resolveSuggestion = (suggestionId: string, accepted: boolean) =>
+  send({ type: "resolveSuggestion", suggestionId, accepted });
 
 /** Answer `trustRequired`; trusting reloads the session (its snapshot clears the banner). */
 export async function answerTrust(trusted: boolean, sessionId = sessions.activeId): Promise<boolean> {

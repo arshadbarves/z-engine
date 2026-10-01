@@ -13,6 +13,7 @@
   import { scrollParent } from "$lib/ui/whenVisible";
   import { agentLabel } from "../planning/PendingInteractions.svelte";
   import PlanReady from "../planning/PlanReady.svelte";
+  import Suggestions from "../planning/Suggestions.svelte";
   import ChatTimeline from "./ChatTimeline.svelte";
   import TrustBanner from "./TrustBanner.svelte";
   import TurnView from "./TurnView.svelte";
@@ -35,7 +36,9 @@
   const rawOutputs = $derived(view?.outputs ?? NO_LIST);
   const outputs = $derived(rawOutputs.filter((o) => o.name !== "shell"));
   const errors = $derived(view?.errors ?? NO_LIST);
+  const routes = $derived(view?.routes ?? NO_LIST);
   const compactions = $derived(view?.compactions ?? NO_LIST);
+  const taskViews = $derived(view?.taskViews ?? NO_LIST);
   const activeMessageId = $derived(view?.activeTurn?.messageId ?? null);
   const busy = $derived((view?.status ?? "idle") !== "idle");
   const streaming = $derived(view?.streaming ?? NO_RECORD);
@@ -47,7 +50,7 @@
   const plans = $derived(view ? Object.values(view.plans) : NO_LIST);
 
   const timeline: TimelineTurn[] = $derived(
-    buildTimeline({ messages, turns, turnStarts, steeringIds, activeMessageId, busy, outputs, errors, compactions }),
+    buildTimeline({ messages, turns, turnStarts, steeringIds, activeMessageId, busy, outputs, errors, routes, compactions, taskViews }),
   );
   const results = $derived(pairResults(messages));
   const agentLinks = $derived(linkAgentCalls(messages.flatMap(toolUses), Object.values(agents)));
@@ -161,6 +164,7 @@
       {#each plans as pending (pending.requestId)}
         <PlanReady agentLabel={agentLabel(view, pending.agentId)} />
       {/each}
+      <Suggestions {view} />
       {#if view.trustRequest}<TrustBanner request={view.trustRequest} />{/if}
     {/if}
   </div>

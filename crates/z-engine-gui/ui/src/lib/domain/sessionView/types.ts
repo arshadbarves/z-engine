@@ -11,14 +11,20 @@ import type { NoticeLevel } from "../../protocol/NoticeLevel";
 import type { PendingPlan } from "../../protocol/PendingPlan";
 import type { PendingQuestion } from "../../protocol/PendingQuestion";
 import type { PermissionMode } from "../../protocol/PermissionMode";
+import type { RouteInfo } from "../../protocol/RouteInfo";
 import type { SessionInfo } from "../../protocol/SessionInfo";
 import type { SessionStatus } from "../../protocol/SessionStatus";
+import type { TaskViewInfo } from "../../protocol/TaskViewInfo";
 import type { TodoItem } from "../../protocol/TodoItem";
 import type { ToolStatus } from "../../protocol/ToolStatus";
 import type { TurnRecord } from "../../protocol/TurnRecord";
+import type { TurnTone } from "../../protocol/TurnTone";
+import type { UncheckedClaim } from "../../protocol/UncheckedClaim";
+import type { Urgency } from "../../protocol/Urgency";
 import type { Usage } from "../../protocol/Usage";
 import type { VerificationOutcome } from "../../protocol/VerificationOutcome";
 import type { JsonValue } from "../../protocol/serde_json/JsonValue";
+import type { SuggestionView } from "./suggestions";
 
 /** The session's root agent id (`AgentId::main()`). */
 export const MAIN_AGENT = "main";
@@ -90,6 +96,14 @@ export interface ErrorView {
   at: number;
 }
 
+/** A task's routed effort or model (`decisions_routing`), shown as a chip where it was chosen. */
+export interface RouteView {
+  id: number;
+  route: RouteInfo;
+  afterMessageId: string | null;
+  at: number;
+}
+
 /** An untrusted project asked for trust (`trustRequired`); cleared by a snapshot or an answer. */
 export interface TrustRequestView {
   projectRoot: string;
@@ -127,6 +141,8 @@ export interface SessionView {
   activeTurn: ActiveTurn | null;
   checkpoints: CheckpointInfo[];
   compactions: CompactionMarker[];
+  /** Earlier exchanges set aside for a task (`decisions_task_view`), oldest first. */
+  taskViews: TaskViewInfo[];
   /** A summary compaction is running: from `compactionStarted` until its marker, a new main-agent reply, the turn's end or idle. */
   compacting: boolean;
   usage: Usage;
@@ -142,13 +158,23 @@ export interface SessionView {
   title: string | null;
   /** Live badge while the stop boundary runs checks; the turn record keeps the final one. */
   verification: VerificationOutcome | null;
+  /** Turn id -> a success claim no check backed (`decisions_completion_check`); live only. */
+  claims: Record<string, UncheckedClaim>;
   notices: NoticeView[];
   hooks: HookRunView[];
   outputs: CommandOutputView[];
   errors: ErrorView[];
+  /** Routed choices (`routeChosen`); live only. */
+  routes: RouteView[];
   lastError: string | null;
   retrying: RetryingView | null;
   trustRequest: TrustRequestView | null;
+  /** Cards decision uses offered (plan first, save a rule, run a review); live only. */
+  suggestions: SuggestionView[];
+  /** Turn id -> how the turn went (`decisions_pet_mood`); live only. */
+  turnTones: Record<string, TurnTone>;
+  /** Request id, or `notice:<text>`, -> urgency (`decisions_inbox_priority`); live only. */
+  urgency: Record<string, Urgency>;
   nextLocalId: number;
 }
 
@@ -184,6 +210,7 @@ export function emptyView(sessionId: string): SessionView {
     activeTurn: null,
     checkpoints: [],
     compactions: [],
+    taskViews: [],
     compacting: false,
     usage: emptyUsage(),
     agentUsage: {},
@@ -197,13 +224,18 @@ export function emptyView(sessionId: string): SessionView {
     effort: null,
     title: null,
     verification: null,
+    claims: {},
     notices: [],
     hooks: [],
     outputs: [],
     errors: [],
+    routes: [],
     lastError: null,
     retrying: null,
     trustRequest: null,
+    suggestions: [],
+    turnTones: {},
+    urgency: {},
     nextLocalId: 1,
   };
 }

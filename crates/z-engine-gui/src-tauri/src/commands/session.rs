@@ -1,6 +1,6 @@
 //! Session commands (`lib/commands/engine.ts`): open, drive, list, delete,
 //! transcripts, export, the prompt inspector, the context card's
-//! breakdown, and the session-scope diff.
+//! breakdown, the Context tab's decision trace, and the session-scope diff.
 
 use serde_json::Value;
 use tauri::State;
@@ -94,6 +94,21 @@ pub(crate) fn context_breakdown(
     state: State<'_, AppState>,
 ) -> Option<ContextBreakdown> {
     state.engine.context_breakdown(&SessionId::from(session_id))
+}
+
+/// Running decision features and the newest `limit` decisions of a live
+/// session, or null.
+#[tauri::command]
+pub(crate) fn session_decisions(
+    session_id: String,
+    limit: usize,
+    state: State<'_, AppState>,
+) -> IpcResult<Value> {
+    json(
+        state
+            .engine
+            .session_decisions(&SessionId::from(session_id), limit),
+    )
 }
 
 #[tauri::command]

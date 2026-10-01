@@ -1,7 +1,9 @@
 import type { CompanionLevel } from "../../protocol/config/CompanionLevel";
 import type { TurnRecord } from "../../protocol/TurnRecord";
+import type { TurnTone } from "../../protocol/TurnTone";
 import type { LiveActivity, LiveStatus, LiveTone } from "../liveStatus";
 import { MAIN_AGENT, type SessionView } from "../sessionView/types";
+import { latestTurnTone, toneMood } from "./decisionMood";
 
 /** How much the pet reacts (`ui.companion`). */
 export type PetLevel = CompanionLevel;
@@ -77,6 +79,8 @@ export interface PoseContext {
   toolErrorAt: number | null;
   /** When the agent last finished working. */
   workedAt: number | null;
+  /** How the decision model judged the latest finished turn (`decisions_pet_mood`). */
+  turnTone: TurnTone | null;
 }
 
 /** Keystrokes count as "listening" this long after the last one. */
@@ -94,7 +98,13 @@ export const LONG_TASK_MS = 2 * 60_000;
 /** A failed tool call leaves it confused this long. */
 export const TOOL_ERROR_MS = 4000;
 
-export const NO_CONTEXT: PoseContext = { turnStartedAt: null, afterFailure: false, toolErrorAt: null, workedAt: null };
+export const NO_CONTEXT: PoseContext = {
+  turnStartedAt: null,
+  afterFailure: false,
+  toolErrorAt: null,
+  workedAt: null,
+  turnTone: null,
+};
 
 export function pose(mood: PetMood, gaze: Gaze, tone: LiveTone, particles: Particles = "none"): PetPose {
   return { mood, gaze, particles, tone };
@@ -142,6 +152,8 @@ function workPose(status: LiveStatus, ctx: PoseContext, now: number): PetPose {
 
 function outcomePose(status: LiveStatus, ctx: PoseContext): PetPose | null {
   const done = status.kind === "done";
+  const judged = done ? toneMood(ctx.turnTone, status.tone) : null;
+  if (judged) return pose(judged, "center", status.tone);
   if (status.tone === "ok") return pose(done ? (ctx.afterFailure ? "relieved" : "proud") : "happy", "center", "ok");
   if (status.tone === "danger") return pose("sad", "down", "danger");
   if (status.tone === "attention") return pose("worried", "center", "attention");
@@ -224,5 +236,6 @@ export function poseContext(view: SessionView | null): PoseContext {
     afterFailure: failed(turns[turns.length - 2]),
     toolErrorAt,
     workedAt: turns[turns.length - 1]?.finishedAt ?? null,
+    turnTone: latestTurnTone(view),
   };
 }

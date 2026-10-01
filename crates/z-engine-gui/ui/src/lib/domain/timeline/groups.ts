@@ -160,10 +160,10 @@ export function workSection(items: TimelineItem[], done: boolean, failed: (callI
   };
 }
 
-/** A turn's items and the compaction dividers after its last item, which belong after the turn's actions. */
+/** A turn's items and the compaction and task-view dividers after its last item, which belong after the turn's actions. */
 export function splitTrailingCompactions(items: TimelineItem[]): { body: TimelineItem[]; after: TimelineItem[] } {
   let end = items.length;
-  while (end > 0 && items[end - 1].kind === "compaction") end--;
+  while (end > 0 && (items[end - 1].kind === "compaction" || items[end - 1].kind === "taskView")) end--;
   return { body: items.slice(0, end), after: items.slice(end) };
 }
 

@@ -1,0 +1,45 @@
+/* Context tab: the Decisions section, below Insights. One line per
+   decision; a left rule tells acted, shadow and fallback apart. */
+
+.decision-records {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.decision-record {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 8px;
+  border-left: 2px solid var(--tone-working);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.decision-record.tone-shadow {
+  border-left-color: var(--label-4);
+}
+
+.decision-record.tone-fallback {
+  border-left-color: var(--tone-attention);
+}
+
+.decision-record-title {
+  color: var(--label-2);
+  font-weight: 600;
+}
+
+.decision-record-detail,
+.decision-record-why,
+.decision-records-empty {
+  color: var(--label-3);
+}
+
+.decision-records-empty {
+  margin: 10px 0 0;
+  font-size: 12px;
+}

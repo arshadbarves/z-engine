@@ -99,6 +99,7 @@ export function longChatSnapshot(turns = 1000, sessionId = "dev-long-chat", proj
     status: "idle",
     messages,
     compactions: [],
+    taskViews: [],
     turns: records,
     todos: [],
     agents: [],

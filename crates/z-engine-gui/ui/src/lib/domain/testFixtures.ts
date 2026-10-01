@@ -73,6 +73,7 @@ export function snapshot(over: Partial<SessionSnapshot> = {}): SessionSnapshot {
     status: "idle",
     messages: [],
     compactions: [],
+    taskViews: [],
     turns: [],
     todos: [],
     agents: [],

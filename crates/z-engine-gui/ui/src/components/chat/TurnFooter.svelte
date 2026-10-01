@@ -3,9 +3,10 @@
   import { receiptPlan } from "$lib/domain/receipt";
   import { baseName } from "$lib/domain/tools/toolInput";
   import { usageLine } from "$lib/domain/usage";
-  import { outcomeNote, turnEvidence } from "$lib/domain/verification";
+  import { claimNote, outcomeNote, turnEvidence } from "$lib/domain/verification";
   import type { CheckRecord } from "$lib/protocol/CheckRecord";
   import type { TurnRecord } from "$lib/protocol/TurnRecord";
+  import { sessions } from "$lib/runtime";
   import { settingsStore } from "$lib/stores/settings.svelte";
   import { ui } from "$lib/stores/ui.svelte";
   import { fmtCost } from "$lib/util";
@@ -21,6 +22,7 @@
   const FILES_SHOWN = 4;
   const plan = $derived(receiptPlan(settingsStore.settings?.ui.task_report_view ?? "quiet", record));
   const note = $derived(outcomeNote(record.outcome));
+  const claim = $derived(claimNote(sessions.active?.claims[record.turnId], record.verification));
   const evidence = $derived(turnEvidence(record, checks));
   const duration = $derived(fmtDuration(record.finishedAt - record.startedAt));
   const usage = $derived(usageLine(record.usage));
@@ -30,9 +32,10 @@
   const showFiles = $derived(plan.files && files.length > 0);
 </script>
 
-{#if plan.badge || note || stats.length || showFiles}
+{#if plan.badge || note || claim || stats.length || showFiles}
   <footer class="turn-receipt" title={hint || undefined}>
     {#if plan.badge}<VerificationBadge outcome={record.verification} {evidence} startOpen={plan.checksOpen} />{/if}
+    {#if claim}<span class="turn-outcome tone-warn" title={claim.hint}>{claim.label}</span>{/if}
     {#if note}<span class={`turn-outcome tone-${note.tone}`}>{note.label}</span>{/if}
     {#if showFiles}
       <span class="receipt-files" aria-label="Files changed in this turn">

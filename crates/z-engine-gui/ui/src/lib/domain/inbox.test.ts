@@ -67,9 +67,9 @@ describe("inboxNotices", () => {
 describe("inboxCount", () => {
   it("counts what needs you, unread results, and unread problems", () => {
     const notices = [
-      { key: "1", tone: "error" as const, title: "x", text: "x", sessionId: null, chatTitle: null, at: 10 },
-      { key: "2", tone: "info" as const, title: "y", text: "y", sessionId: null, chatTitle: null, at: 11 },
-      { key: "3", tone: "warn" as const, title: "z", text: "z", sessionId: null, chatTitle: null, at: 2 },
+      { key: "1", tone: "error" as const, title: "x", text: "x", sessionId: null, chatTitle: null, at: 10, urgency: null },
+      { key: "2", tone: "info" as const, title: "y", text: "y", sessionId: null, chatTitle: null, at: 11, urgency: null },
+      { key: "3", tone: "warn" as const, title: "z", text: "z", sessionId: null, chatTitle: null, at: 2, urgency: null },
     ];
     expect(inboxCount({ needsYou: 2, finished: 1, notices, readAt: 5 })).toBe(4);
   });

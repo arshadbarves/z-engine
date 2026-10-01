@@ -1,7 +1,8 @@
 import type { CompactionMarker } from "../../protocol/CompactionMarker";
 import type { Message } from "../../protocol/Message";
+import type { TaskViewInfo } from "../../protocol/TaskViewInfo";
 import type { TurnRecord } from "../../protocol/TurnRecord";
-import type { CommandOutputView, ErrorView } from "../sessionView/types";
+import type { CommandOutputView, ErrorView, RouteView } from "../sessionView/types";
 import { hasToolResults, hasVisibleUserContent, visibleText, type ToolUseRef } from "./blocks";
 
 export type TimelineItem =
@@ -11,7 +12,9 @@ export type TimelineItem =
   | { kind: "steer"; key: string; message: Message }
   | { kind: "output"; key: string; output: CommandOutputView }
   | { kind: "error"; key: string; error: ErrorView }
-  | { kind: "compaction"; key: string; marker: CompactionMarker };
+  | { kind: "route"; key: string; route: RouteView }
+  | { kind: "compaction"; key: string; marker: CompactionMarker }
+  | { kind: "taskView"; key: string; view: TaskViewInfo; latest: boolean };
 
 /** One user prompt and everything the agent did for it. `user` is null for leading content. */
 export interface TimelineTurn {
@@ -31,7 +34,9 @@ export interface TimelineInput {
   busy?: boolean;
   outputs?: CommandOutputView[];
   errors?: ErrorView[];
+  routes?: RouteView[];
   compactions?: CompactionMarker[];
+  taskViews?: TaskViewInfo[];
 }
 
 type Anchors = { before: Map<string, TimelineItem[]>; after: Map<string | null, TimelineItem[]> };
@@ -57,6 +62,11 @@ function anchorExtras(input: TimelineInput): Anchors {
       anchor: error.afterMessageId,
       item: { kind: "error", key: `err:${error.id}`, error } as TimelineItem,
     })),
+    ...(input.routes ?? []).map((route) => ({
+      at: route.id,
+      anchor: route.afterMessageId,
+      item: { kind: "route", key: `route:${route.id}`, route } as TimelineItem,
+    })),
   ].sort((a, b) => a.at - b.at);
   for (const { anchor, item } of local) {
     if (anchor === null || ids.has(anchor)) pushTo(after, anchor, item);
@@ -69,6 +79,13 @@ function anchorExtras(input: TimelineInput): Anchors {
     }
     const earlier = input.messages.filter((m) => m.createdAt <= marker.createdAt);
     pushTo(after, earlier.length > 0 ? earlier[earlier.length - 1].id : null, item);
+  });
+  const views = input.taskViews ?? [];
+  const lastCompaction = Math.max(0, ...(input.compactions ?? []).map((m) => m.createdAt));
+  views.forEach((view, i) => {
+    if (!ids.has(view.boundary)) return;
+    const latest = i === views.length - 1 && lastCompaction < view.createdAt;
+    pushTo(before, view.boundary, { kind: "taskView", key: `taskView:${view.boundary}`, view, latest });
   });
   return { before, after };
 }

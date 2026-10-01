@@ -17,6 +17,7 @@ describe("workspace and context IPC", () => {
     ["openPath", () => workspace.openPath("/work/app/src/a.rs"), "open_path", { path: "/work/app/src/a.rs" }],
     ["revealPath", () => workspace.revealPath("/work/app"), "reveal_path", { path: "/work/app" }],
     ["contextBreakdown", () => engine.contextBreakdown("s1"), "context_breakdown", { sessionId: "s1" }],
+    ["sessionDecisions", () => engine.sessionDecisions("s1", 50), "session_decisions", { sessionId: "s1", limit: 50 }],
   ])("%s invokes %s", async (_name, call, command, args) => {
     await call();
     expect(invoke).toHaveBeenCalledWith(command, args);

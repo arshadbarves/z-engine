@@ -1,6 +1,7 @@
 import type { CheckRecord } from "../protocol/CheckRecord";
 import type { TurnOutcome } from "../protocol/TurnOutcome";
 import type { TurnRecord } from "../protocol/TurnRecord";
+import type { UncheckedClaim } from "../protocol/UncheckedClaim";
 import type { VerificationOutcome } from "../protocol/VerificationOutcome";
 import { fmtDuration } from "./format";
 
@@ -39,6 +40,19 @@ export function outcomeNote(outcome: TurnOutcome): { label: string; tone: BadgeT
     default:
       return null;
   }
+}
+
+/**
+ * A success claim no check backed, called out beside an `unverified` badge
+ * only; any other outcome already says what the checks found.
+ */
+export function claimNote(
+  claim: UncheckedClaim | undefined,
+  outcome: VerificationOutcome,
+): { label: string; hint: string } | null {
+  if (!claim || outcome.status !== "unverified") return null;
+  const what = claim.checks ? "says tests or checks passed" : "says the work is done";
+  return { label: "Claimed, not checked", hint: `The final message ${what}, but no check confirmed it.` };
 }
 
 /**

@@ -2,8 +2,10 @@ import type { Event } from "../../protocol/Event";
 import type { SessionInfo } from "../../protocol/SessionInfo";
 import { addCommandOutput, addError, addHookRun, addNotice } from "./notes";
 import { drop, put, upsertBy } from "./records";
+import { addRoute } from "./routes";
 import { fromSnapshot } from "./snapshot";
 import { appendDelta, finishAssistant, startStreaming } from "./streaming";
+import { addSuggestion, dropSuggestion } from "./suggestions";
 import { finishTool, progressTool, startTool } from "./tools";
 import { onTurnFinished, onTurnStarted, onUserMessage, withStatus } from "./turns";
 import { MAIN_AGENT, type SessionView } from "./types";
@@ -92,6 +94,8 @@ export function reduce(view: SessionView, event: Event, now: number): SessionVie
       return { ...view, checks: upsertBy(view.checks, event.record, (r) => r.recordId) };
     case "verificationChanged":
       return { ...view, verification: event.outcome };
+    case "completionClaimUnchecked":
+      return view.activeTurn ? { ...view, claims: put(view.claims, view.activeTurn.turnId, event.claim) } : view;
     case "hookRan": {
       const { hookEvent, command, blocked, message } = event;
       return addHookRun(view, { hookEvent, command, blocked, message }, now);
@@ -113,6 +117,18 @@ export function reduce(view: SessionView, event: Event, now: number): SessionVie
       return { ...view, queue: event.queued };
     case "trustRequired":
       return { ...view, trustRequest: { projectRoot: event.projectRoot, defines: event.defines } };
+    case "routeChosen":
+      return addRoute(view, event.route, now);
+    case "taskViewApplied":
+      return { ...view, taskViews: upsertBy(view.taskViews, event.view, (v) => v.boundary) };
+    case "suggested":
+      return addSuggestion(view, event.suggestion);
+    case "suggestionResolved":
+      return dropSuggestion(view, event.suggestionId);
+    case "turnToneJudged":
+      return { ...view, turnTones: put(view.turnTones, event.turnId, event.tone) };
+    case "urgencyScored":
+      return { ...view, urgency: put(view.urgency, event.urgency.key, event.urgency.urgency) };
     case "error":
       return addError(view, event.message, now);
     default:

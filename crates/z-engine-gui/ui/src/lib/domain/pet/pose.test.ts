@@ -162,7 +162,24 @@ describe("poseContext", () => {
       a: { callId: "a", agentId: "main", tool: "Bash", title: "", input: null, status: "error", summary: "", output: "", progress: "", durationMs: 20, startedAt: 200 },
       b: { callId: "b", agentId: "sub", tool: "Bash", title: "", input: null, status: "error", summary: "", output: "", progress: "", durationMs: 20, startedAt: 900 },
     };
-    expect(poseContext(view)).toEqual({ turnStartedAt: 100, afterFailure: true, toolErrorAt: 220, workedAt: 50 });
+    expect(poseContext(view)).toEqual({ turnStartedAt: 100, afterFailure: true, toolErrorAt: 220, workedAt: 50, turnTone: null });
     expect(poseContext(null)).toEqual(NO_CONTEXT);
+  });
+
+  it("carries the judged tone of the latest turn", () => {
+    const view = { ...emptyView("s"), turns: [turn({ turnId: "t1" })], turnTones: { t1: "struggling" as const } };
+    expect(poseContext(view).turnTone).toBe("struggling");
+  });
+});
+
+describe("petPose: a judged turn tone (decisions_pet_mood)", () => {
+  it("colors a finished turn, and the event-based mood stays without one", () => {
+    const verified = status({ kind: "done", tone: "ok", activity: "done" });
+    const judged = (turnTone: "smooth" | "struggling" | "blocked" | "done_well") => ({ ...NO_CONTEXT, turnTone });
+    expect(mood(verified, judged("struggling"))).toBe("relieved");
+    expect(mood(verified, judged("smooth"))).toBe("happy");
+    expect(mood(verified, judged("blocked"))).toBe("proud");
+    expect(mood(status({ kind: "done", tone: "danger", activity: "failed" }), judged("done_well"))).toBe("sad");
+    expect(mood(status({ kind: "notice", tone: "ok", activity: "done" }), judged("struggling"))).toBe("happy");
   });
 });

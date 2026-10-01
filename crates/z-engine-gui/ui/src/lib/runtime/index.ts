@@ -9,3 +9,4 @@ export { initEvents } from "./listen";
 export { pet, type LevelUp } from "./pet.svelte";
 export { dismissToast, errorText, pushToast, toastStore, type Toast, type ToastAction } from "./toasts";
 export * from "./actions";
+export { saveStandingRule, type RuleScope } from "./standingRule";

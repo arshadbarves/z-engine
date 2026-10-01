@@ -8,6 +8,7 @@
   import { Button, EmptyState } from "$lib/ui";
   import { copyFeedback } from "$lib/ui/copyFeedback.svelte";
   import Icon, { Brain, Check, Copy } from "$lib/ui/icons";
+  import InspectorDecisions from "./InspectorDecisions.svelte";
   import InspectorInsights from "./InspectorInsights.svelte";
   import InspectorMap from "./InspectorMap.svelte";
   import InspectorOutline from "./InspectorOutline.svelte";
@@ -92,6 +93,7 @@
         <InspectorMap {totals} used={snap.totalTokens} {limit} active={only} onPick={(c) => (only = c)} />
         <InspectorOutline {groups} {selected} {query} total={rows.length} onQuery={(q) => (query = q)} onSelect={pick} onStep={step} />
         <InspectorInsights {snap} />
+        <InspectorDecisions />
       </aside>
       {#if expanded}
         <section class="inspector-main">

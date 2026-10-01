@@ -5,9 +5,13 @@
   import Icon, { ChevronRight, CornerDownLeft, Terminal } from "$lib/ui/icons";
   import { fmtTokens } from "$lib/util";
   import Markdown from "./Markdown.svelte";
+  import RouteChip from "./RouteChip.svelte";
+  import TaskViewDivider from "./TaskViewDivider.svelte";
 
-  /** Transcript cards that are not model output: steering, command output, errors, compaction. */
-  type Props = { item: Extract<TimelineItem, { kind: "steer" | "output" | "error" | "compaction" }> };
+  /** Transcript cards that are not model output: steering, command output, errors, routes, compaction, task views. */
+  type Props = {
+    item: Extract<TimelineItem, { kind: "steer" | "output" | "error" | "route" | "compaction" | "taskView" }>;
+  };
   let { item }: Props = $props();
 </script>
 
@@ -27,6 +31,10 @@
   </div>
 {:else if item.kind === "error"}
   <div class="msg error" role="alert">{item.error.message}</div>
+{:else if item.kind === "route"}
+  <RouteChip route={item.route} />
+{:else if item.kind === "taskView"}
+  <TaskViewDivider view={item.view} latest={item.latest} />
 {:else}
   <Disclosure class="compaction-divider" summaryClass="compaction-head" chevron={false}>
     {#snippet summary()}
