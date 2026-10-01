@@ -13,6 +13,7 @@ members = [
     "crates/z-engine-context",
     "crates/z-engine-verify",
     "crates/z-engine-store",
+    "crates/z-engine-decisions",
     "crates/z-engine-tools",
     "crates/z-engine-engine",
     "crates/z-engine-testkit",
@@ -39,6 +40,7 @@ z-engine-integrations = { path = "crates/z-engine-integrations" }
 z-engine-context = { path = "crates/z-engine-context" }
 z-engine-verify = { path = "crates/z-engine-verify" }
 z-engine-store = { path = "crates/z-engine-store" }
+z-engine-decisions = { path = "crates/z-engine-decisions" }
 z-engine-tools = { path = "crates/z-engine-tools" }
 z-engine-engine = { path = "crates/z-engine-engine" }
 z-engine-testkit = { path = "crates/z-engine-testkit" }
@@ -81,6 +83,9 @@ pdf-extract = "0.12"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 which = "7"
 ts-rs = { version = "12", features = ["serde-json-impl", "no-serde-warnings"] }
+# the decision model's native runtime (optional `onnx` feature); rc.10 keeps MSRV 1.85
+ort = { version = "=2.0.0-rc.10", default-features = false, features = ["std", "download-binaries"] }
+tokenizers = { version = "0.23", default-features = false, features = ["onig"] }
 
 # dev-dependencies shared across crates
 tempfile = "3"

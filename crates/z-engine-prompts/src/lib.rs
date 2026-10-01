@@ -5,6 +5,7 @@
 pub mod agents;
 pub mod auxiliary;
 pub mod commands;
+pub mod decisions;
 pub mod reminders;
 pub mod system;
 pub mod tools;
