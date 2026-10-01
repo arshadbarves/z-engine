@@ -246,4 +246,7 @@ pub struct SessionSnapshot {
     pub context_tokens: u64,
     #[ts(type = "number")]
     pub context_limit: u64,
+    /// Task views of `decisions_task_view`, oldest first.
+    #[serde(default)]
+    pub task_views: Vec<crate::decisions::TaskViewInfo>,
 }

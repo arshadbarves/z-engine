@@ -10,6 +10,7 @@ import type { PendingPlan } from "./PendingPlan";
 import type { PendingQuestion } from "./PendingQuestion";
 import type { SessionInfo } from "./SessionInfo";
 import type { SessionStatus } from "./SessionStatus";
+import type { TaskViewInfo } from "./TaskViewInfo";
 import type { TodoItem } from "./TodoItem";
 import type { TurnRecord } from "./TurnRecord";
 import type { Usage } from "./Usage";
@@ -21,4 +22,8 @@ export type SessionSnapshot = { info: SessionInfo, status: SessionStatus,
 /**
  * Full main-agent transcript, including compacted history.
  */
-messages: Array<Message>, compactions: Array<CompactionMarker>, turns: Array<TurnRecord>, todos: Array<TodoItem>, agents: Array<AgentInfo>, jobs: Array<JobInfo>, checks: Array<CheckRecord>, checkpoints: Array<CheckpointInfo>, pendingApprovals: Array<ApprovalRequest>, pendingQuestions: Array<PendingQuestion>, pendingPlans: Array<PendingPlan>, queued: Array<string>, usage: Usage, costUsd: number, contextTokens: number, contextLimit: number, };
+messages: Array<Message>, compactions: Array<CompactionMarker>, turns: Array<TurnRecord>, todos: Array<TodoItem>, agents: Array<AgentInfo>, jobs: Array<JobInfo>, checks: Array<CheckRecord>, checkpoints: Array<CheckpointInfo>, pendingApprovals: Array<ApprovalRequest>, pendingQuestions: Array<PendingQuestion>, pendingPlans: Array<PendingPlan>, queued: Array<string>, usage: Usage, costUsd: number, contextTokens: number, contextLimit: number, 
+/**
+ * Task views of `decisions_task_view`, oldest first.
+ */
+taskViews: Array<TaskViewInfo>, };

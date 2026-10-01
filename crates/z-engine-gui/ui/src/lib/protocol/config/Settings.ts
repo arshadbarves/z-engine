@@ -2,6 +2,8 @@
 import type { AgentSettings } from "./AgentSettings";
 import type { CompatSettings } from "./CompatSettings";
 import type { ContextSettings } from "./ContextSettings";
+import type { DecisionSettings } from "./DecisionSettings";
+import type { FeatureMode } from "./FeatureMode";
 import type { HookConfig } from "./HookConfig";
 import type { LspSettings } from "./LspSettings";
 import type { McpSettings } from "./McpSettings";
@@ -23,4 +25,9 @@ hooks: { [key in string]: Array<HookConfig> }, mcp: McpSettings, lsp: LspSetting
 /**
  * Model id to pricing, overriding the catalog.
  */
-pricing: { [key in string]: PricingOverride }, };
+pricing: { [key in string]: PricingOverride }, 
+/**
+ * Feature id (see `FEATURES`) to its mode; read it with
+ * `Settings::feature`.
+ */
+experimental: { [key in string]: FeatureMode }, decisions: DecisionSettings, };

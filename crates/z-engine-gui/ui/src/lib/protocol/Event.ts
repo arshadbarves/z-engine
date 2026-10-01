@@ -16,12 +16,18 @@ import type { NoticeLevel } from "./NoticeLevel";
 import type { PermissionMode } from "./PermissionMode";
 import type { Question } from "./Question";
 import type { RequestId } from "./RequestId";
+import type { RouteInfo } from "./RouteInfo";
 import type { SessionSnapshot } from "./SessionSnapshot";
 import type { SessionStatus } from "./SessionStatus";
+import type { Suggestion } from "./Suggestion";
+import type { TaskViewInfo } from "./TaskViewInfo";
 import type { TodoItem } from "./TodoItem";
 import type { ToolStatus } from "./ToolStatus";
 import type { TurnId } from "./TurnId";
 import type { TurnRecord } from "./TurnRecord";
+import type { TurnTone } from "./TurnTone";
+import type { UncheckedClaim } from "./UncheckedClaim";
+import type { UrgencyInfo } from "./UrgencyInfo";
 import type { Usage } from "./Usage";
 import type { VerificationOutcome } from "./VerificationOutcome";
 import type { JsonValue } from "./serde_json/JsonValue";
@@ -34,4 +40,4 @@ output: string, durationMs: number, } | { "type": "approvalRequested", request: 
 /**
  * Cumulative usage of this agent.
  */
-usage: Usage, sessionUsage: Usage, costUsd: number, contextTokens: number, contextLimit: number, } | { "type": "modeChanged", mode: PermissionMode, } | { "type": "modelChanged", model: string, } | { "type": "effortChanged", effort: Effort | null, } | { "type": "compactionStarted", trigger: CompactionTrigger, } | { "type": "compacted", marker: CompactionMarker, } | { "type": "checkpointCreated", checkpoint: CheckpointInfo, } | { "type": "checkRecorded", record: CheckRecord, } | { "type": "verificationChanged", outcome: VerificationOutcome, } | { "type": "hookRan", hookEvent: string, command: string, blocked: boolean, message: string | null, } | { "type": "commandOutput", name: string, markdown: string, } | { "type": "contextReport", breakdown: ContextBreakdown, } | { "type": "notice", level: NoticeLevel, text: string, } | { "type": "retrying", attempt: number, delayMs: number, reason: string, } | { "type": "titleChanged", title: string, } | { "type": "queueChanged", queued: Array<string>, } | { "type": "trustRequired", projectRoot: string, defines: Array<string>, } | { "type": "error", message: string, };
+usage: Usage, sessionUsage: Usage, costUsd: number, contextTokens: number, contextLimit: number, } | { "type": "modeChanged", mode: PermissionMode, } | { "type": "modelChanged", model: string, } | { "type": "effortChanged", effort: Effort | null, } | { "type": "compactionStarted", trigger: CompactionTrigger, } | { "type": "compacted", marker: CompactionMarker, } | { "type": "checkpointCreated", checkpoint: CheckpointInfo, } | { "type": "checkRecorded", record: CheckRecord, } | { "type": "verificationChanged", outcome: VerificationOutcome, } | { "type": "hookRan", hookEvent: string, command: string, blocked: boolean, message: string | null, } | { "type": "commandOutput", name: string, markdown: string, } | { "type": "contextReport", breakdown: ContextBreakdown, } | { "type": "notice", level: NoticeLevel, text: string, } | { "type": "retrying", attempt: number, delayMs: number, reason: string, } | { "type": "titleChanged", title: string, } | { "type": "queueChanged", queued: Array<string>, } | { "type": "trustRequired", projectRoot: string, defines: Array<string>, } | { "type": "turnToneJudged", turnId: TurnId, tone: TurnTone, } | { "type": "urgencyScored", urgency: UrgencyInfo, } | { "type": "routeChosen", route: RouteInfo, } | { "type": "suggested", suggestion: Suggestion, } | { "type": "suggestionResolved", suggestionId: string, accepted: boolean, } | { "type": "completionClaimUnchecked", claim: UncheckedClaim, } | { "type": "taskViewApplied", view: TaskViewInfo, } | { "type": "error", message: string, };

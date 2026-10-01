@@ -7,6 +7,7 @@ use ts_rs::TS;
 
 use crate::agents::AgentInfo;
 use crate::content::Message;
+use crate::decisions::{TurnTone, UrgencyInfo};
 use crate::ids::{AgentId, CallId, MessageId, RequestId, SessionId, TurnId};
 use crate::interaction::{Question, TodoItem};
 use crate::jobs::JobInfo;
@@ -230,6 +231,39 @@ pub enum Event {
     TrustRequired {
         project_root: String,
         defines: Vec<String>,
+    },
+    /// `decisions_pet_mood`: how the turn that just ended went.
+    TurnToneJudged {
+        turn_id: TurnId,
+        tone: TurnTone,
+    },
+    /// `decisions_inbox_priority`: how urgent an inbox item is.
+    UrgencyScored {
+        urgency: UrgencyInfo,
+    },
+    /// `decisions_routing`: the effort or model a new task (or a subagent
+    /// that inherits its model) was routed to, and why.
+    RouteChosen {
+        route: crate::decisions::RouteInfo,
+    },
+    /// A decision use offers an action as a card; it waits for the user.
+    Suggested {
+        suggestion: crate::decisions::Suggestion,
+    },
+    /// The user acted on or dismissed a suggestion.
+    SuggestionResolved {
+        suggestion_id: String,
+        accepted: bool,
+    },
+    /// `decisions_completion_check`: the agent's final message claims
+    /// success that no check backs; the turn's receipt says so.
+    CompletionClaimUnchecked {
+        claim: crate::decisions::UncheckedClaim,
+    },
+    /// `decisions_task_view`: earlier exchanges were set aside for a new
+    /// task, or (`restored`) brought back.
+    TaskViewApplied {
+        view: crate::decisions::TaskViewInfo,
     },
     Error {
         message: String,

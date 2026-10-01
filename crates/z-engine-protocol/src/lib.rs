@@ -7,6 +7,7 @@
 pub mod agents;
 pub mod commands;
 pub mod content;
+pub mod decisions;
 pub mod events;
 pub mod ids;
 pub mod interaction;

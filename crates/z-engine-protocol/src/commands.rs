@@ -108,6 +108,14 @@ pub enum Command {
     TrustWorkspace {
         trusted: bool,
     },
+    /// The user acted on (`accepted`) or dismissed a `Suggested` card.
+    ResolveSuggestion {
+        suggestion_id: String,
+        accepted: bool,
+    },
+    /// Bring back the exchanges a task view set aside, until the next
+    /// task boundary.
+    IncludeFullHistory,
     Shutdown,
 }
 
