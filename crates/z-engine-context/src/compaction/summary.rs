@@ -48,6 +48,16 @@ pub fn summary_message(summary: &str) -> Message {
     Message::user_text(text.trim_end())
 }
 
+/// A message made by [`summary_message`].
+pub fn is_summary(message: &Message) -> bool {
+    let head = COMPACTION_SUMMARY
+        .split("{{")
+        .next()
+        .unwrap_or_default()
+        .trim();
+    message.role == Role::User && !head.is_empty() && message.text().starts_with(head)
+}
+
 /// `summary` followed by the verbatim tail `messages[plan.split..]`.
 /// `plan` must come from [`plan_summary`] on the same messages; a split past
 /// the end keeps no tail.
@@ -60,7 +70,7 @@ pub fn apply_summary(messages: &[Message], plan: &SummaryPlan, summary: &Message
 }
 
 /// An assistant message, or a user message that starts a real turn.
-fn is_split_point(message: &Message) -> bool {
+pub(super) fn is_split_point(message: &Message) -> bool {
     match message.role {
         Role::Assistant => true,
         Role::User => {
@@ -76,7 +86,7 @@ fn is_split_point(message: &Message) -> bool {
 /// `crossed[s]` is true when a tool_use and its tool_result sit on
 /// opposite sides of split `s` (one of them before index `s`, the other at
 /// or after it). Has `messages.len() + 1` entries.
-fn crossed_splits(messages: &[Message]) -> Vec<bool> {
+pub(super) fn crossed_splits(messages: &[Message]) -> Vec<bool> {
     let mut uses: HashMap<&CallId, usize> = HashMap::new();
     for (index, message) in messages.iter().enumerate() {
         for (id, _, _) in message.tool_uses() {

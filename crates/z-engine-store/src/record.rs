@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use z_engine_protocol::{
     AgentId, AgentInfo, CheckRecord, CheckpointInfo, CompactionMarker, Effort, Message, MessageId,
     PermissionMode, Question, QuestionAnswer, RequestId, SessionId, TodoItem, TurnId, TurnRecord,
-    Usage,
+    Usage, decisions::TaskViewInfo,
 };
 
 /// Schema of `log.jsonl` and `meta.json` written by this crate.
@@ -125,5 +125,15 @@ pub enum LogRecord {
     /// Imported v1 notes and other annotations; replay ignores it.
     Note {
         text: String,
+    },
+    /// `decisions_task_view`: the working set became the messages with the
+    /// `working` ids, in order (`index` is the index message, which is not
+    /// in the transcript); with `view.restored`, the full history again.
+    TaskView {
+        view: TaskViewInfo,
+        #[serde(default)]
+        working: Vec<MessageId>,
+        #[serde(default)]
+        index: Option<Message>,
     },
 }

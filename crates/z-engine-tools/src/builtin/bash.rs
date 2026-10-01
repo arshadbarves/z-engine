@@ -20,7 +20,7 @@ use crate::input::{Fields, str_field};
 use crate::names;
 use crate::output::ToolOutput;
 use crate::schema;
-use crate::text::truncate_output;
+use crate::text::trim_output;
 use crate::tool::Tool;
 
 const TITLE_CHARS: usize = 80;
@@ -125,7 +125,7 @@ impl Tool for BashTool {
                 ctx.set_cwd(ctx.root.clone());
             }
         }
-        Ok(report(ctx, &out, timeout_ms, notes))
+        Ok(report(ctx, command, &out, timeout_ms, notes).await)
     }
 }
 
@@ -148,11 +148,18 @@ async fn execute(
     run(spec, ctx.cancel.clone(), ctx.progress.clone()).await
 }
 
-fn report(ctx: &ToolCtx, out: &RunOutput, timeout_ms: u64, mut notes: Vec<String>) -> ToolOutput {
+async fn report(
+    ctx: &ToolCtx,
+    command: &str,
+    out: &RunOutput,
+    timeout_ms: u64,
+    mut notes: Vec<String>,
+) -> ToolOutput {
     if let Some(hint) = sandbox_hint(ctx.shell.sandbox.is_some(), out) {
         notes.push(hint.to_string());
     }
-    let mut text = truncate_output(ctx, "bash", out.combined.trim_end_matches('\n'));
+    let combined = out.combined.trim_end_matches('\n');
+    let mut text = trim_output(ctx, "bash", names::BASH, command, combined).await;
     if text.trim().is_empty() {
         text = "(no output)".to_string();
     }

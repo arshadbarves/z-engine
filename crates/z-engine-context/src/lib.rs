@@ -29,7 +29,7 @@ pub use reminders::{
     plan_approved, plan_mode_active, steering, todo_nudge, todo_state, verification_required,
     wrap_reminder,
 };
-pub use repo_map::{SourceFile, repo_map, supported_extension};
+pub use repo_map::{SourceFile, repo_map, repo_map_ranked, supported_extension};
 pub use sections::PromptSection;
 pub use system::{SystemInputs, build_system};
 pub use template::render_template;

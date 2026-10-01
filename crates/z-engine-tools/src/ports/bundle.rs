@@ -5,7 +5,8 @@ use std::fmt;
 use std::sync::Arc;
 
 use super::{
-    AgentPort, CheckPort, InteractionPort, JobPort, LspPort, McpPort, SideModelPort, SkillPort,
+    AgentPort, CheckPort, InteractionPort, JobPort, LspPort, McpPort, RankTarget, RelevancePort,
+    SideModelPort, SkillPort,
 };
 use crate::error::ToolError;
 
@@ -19,6 +20,7 @@ pub struct Ports {
     pub lsp: Option<Arc<dyn LspPort>>,
     pub mcp: Option<Arc<dyn McpPort>>,
     pub side_model: Option<Arc<dyn SideModelPort>>,
+    pub relevance: Option<Arc<dyn RelevancePort>>,
 }
 
 fn require<T: ?Sized>(port: &Option<Arc<T>>, what: &str) -> Result<Arc<T>, ToolError> {
@@ -54,6 +56,11 @@ impl Ports {
     pub(crate) fn mcp(&self) -> Result<Arc<dyn McpPort>, ToolError> {
         require(&self.mcp, "MCP servers")
     }
+
+    /// The ranker, when `target` runs; `None` keeps today's output.
+    pub(crate) fn ranker(&self, target: RankTarget) -> Option<Arc<dyn RelevancePort>> {
+        self.relevance.clone().filter(|port| port.ranks(target))
+    }
 }
 
 impl fmt::Debug for Ports {
@@ -67,6 +74,7 @@ impl fmt::Debug for Ports {
             .field("lsp", &self.lsp.is_some())
             .field("mcp", &self.mcp.is_some())
             .field("side_model", &self.side_model.is_some())
+            .field("relevance", &self.relevance.is_some())
             .finish()
     }
 }

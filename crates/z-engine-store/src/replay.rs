@@ -1,11 +1,12 @@
 //! Fold a session log into the state the engine and GUI resume from.
 //! Replay only restores state; it never repeats side effects.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use z_engine_protocol::{
     AgentId, AgentInfo, CheckRecord, CheckpointInfo, CompactionMarker, Effort, Message, MessageId,
     PermissionMode, Question, RequestId, SessionId, TodoItem, TurnId, TurnRecord, Usage,
+    decisions::TaskViewInfo,
 };
 
 use crate::record::LogRecord;
@@ -38,6 +39,10 @@ pub struct ReplayState {
     pub open_turn: Option<(TurnId, MessageId)>,
     pub pending_plans: Vec<(RequestId, AgentId, String)>,
     pub pending_questions: Vec<(RequestId, AgentId, Vec<Question>)>,
+    /// While a task view applies: the working set without it.
+    pub full_working: Option<Vec<Message>>,
+    /// Latest state of each task view, oldest first.
+    pub task_views: Vec<TaskViewInfo>,
 }
 
 pub fn replay(records: &[LogRecord]) -> ReplayState {
@@ -109,6 +114,9 @@ impl ReplayState {
             LogRecord::Message { message, .. } => {
                 self.transcript.push(message.clone());
                 self.working.push(message.clone());
+                if let Some(full) = &mut self.full_working {
+                    full.push(message.clone());
+                }
             }
             LogRecord::TurnStarted {
                 turn_id,
@@ -159,6 +167,11 @@ impl ReplayState {
                 let title = title.trim();
                 self.title = (!title.is_empty()).then(|| title.to_string());
             }
+            LogRecord::TaskView {
+                view,
+                working,
+                index,
+            } => self.task_view(view, working, index.as_ref()),
             LogRecord::Approval { .. }
             | LogRecord::Rewound { .. }
             | LogRecord::Note { .. }
@@ -201,5 +214,34 @@ impl ReplayState {
         self.working.push(summary.clone());
         self.working.extend(kept);
         self.compactions.push(marker.clone());
+        self.full_working = None;
+    }
+
+    /// Rebuilds the view's working set from the full history by id, or
+    /// restores the full history.
+    fn task_view(&mut self, view: &TaskViewInfo, kept: &[MessageId], index: Option<&Message>) {
+        self.task_views
+            .retain(|seen| seen.boundary != view.boundary);
+        self.task_views.push(view.clone());
+        if view.restored {
+            if let Some(full) = self.full_working.take() {
+                self.working = full;
+            }
+            return;
+        }
+        let full = self
+            .full_working
+            .take()
+            .unwrap_or_else(|| std::mem::take(&mut self.working));
+        let by_id: HashMap<&MessageId, &Message> = full
+            .iter()
+            .chain(index)
+            .map(|message| (&message.id, message))
+            .collect();
+        self.working = kept
+            .iter()
+            .filter_map(|id| by_id.get(id).map(|message| (*message).clone()))
+            .collect();
+        self.full_working = Some(full);
     }
 }

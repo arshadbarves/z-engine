@@ -27,6 +27,15 @@ pub fn plan_microcompact(
     keep_recent: usize,
     min_chars: usize,
 ) -> Vec<ClearTarget> {
+    older_results(messages, keep_recent)
+        .into_iter()
+        .filter(|target| target.chars > min_chars)
+        .collect()
+}
+
+/// Tool results older than the newest `keep_recent` results and not
+/// already cleared, oldest first.
+pub(super) fn older_results(messages: &[Message], keep_recent: usize) -> Vec<ClearTarget> {
     let results: Vec<(usize, usize, &CallId, &[ToolResultPart])> = messages
         .iter()
         .enumerate()
@@ -49,14 +58,11 @@ pub fn plan_microcompact(
         .iter()
         .filter_map(|&(message, block, call_id, parts)| {
             let text = result_text(parts);
-            let chars = text.chars().count();
-            (chars > min_chars && !text.trim_start().starts_with(CLEARED_PREFIX)).then(|| {
-                ClearTarget {
-                    message,
-                    block,
-                    call_id: call_id.clone(),
-                    chars,
-                }
+            (!text.trim_start().starts_with(CLEARED_PREFIX)).then(|| ClearTarget {
+                message,
+                block,
+                call_id: call_id.clone(),
+                chars: text.chars().count(),
             })
         })
         .collect()

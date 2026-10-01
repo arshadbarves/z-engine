@@ -8,6 +8,7 @@ mod interaction;
 mod jobs;
 mod lsp;
 mod mcp;
+mod relevance;
 mod side_model;
 mod skills;
 
@@ -18,5 +19,6 @@ pub use interaction::InteractionPort;
 pub use jobs::{JobOutput, JobPort};
 pub use lsp::{LspPort, LspRequest};
 pub use mcp::McpPort;
+pub use relevance::{RankRequest, RankTarget, RelevancePort};
 pub use side_model::SideModelPort;
 pub use skills::{SkillContent, SkillPort};

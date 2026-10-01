@@ -30,5 +30,6 @@ pub use ports::{
     AgentCard, AgentPort, CheckPort, CheckSummary, InteractionPort, JobOutput, JobPort, LspPort,
     LspRequest, McpPort, Ports, SideModelPort, SkillContent, SkillPort, SpawnOutcome, SpawnRequest,
 };
+pub use ports::{RankRequest, RankTarget, RelevancePort};
 pub use registry::ToolRegistry;
 pub use tool::Tool;

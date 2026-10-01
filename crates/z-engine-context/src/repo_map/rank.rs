@@ -1,8 +1,9 @@
 //! File ranking. A file earns one unit for every reference another file
 //! makes to a name it defines; a name defined in several files splits the
-//! unit between them. Focus files come first, then their neighbours (files
-//! exchanging at least one unit of references with focus files, in either
-//! direction), then the rest. Each tier is ordered by score, then path.
+//! unit between them. Focus files come first, then files judged relevant
+//! to the request, then their neighbours (files exchanging at least one
+//! unit of references with focus or relevant files, in either direction),
+//! then the rest. Each tier is ordered by score, then path.
 
 use std::collections::HashMap;
 
@@ -15,14 +16,19 @@ const UNIT: u64 = 1_000_000;
 const MIN_IDENT_CHARS: usize = 3;
 
 /// Indices of files with a non-empty outline, best first. `texts`,
-/// `outlines`, `focus` and `paths` are parallel slices, one entry per file.
+/// `outlines`, `focus`, `relevant` and `paths` are parallel slices, one
+/// entry per file.
 pub(crate) fn rank(
     texts: &[&str],
     outlines: &[Vec<Symbol>],
     focus: &[bool],
+    relevant: &[bool],
     paths: &[&str],
 ) -> Vec<usize> {
     let owners = definitions(outlines);
+    let anchor: Vec<bool> = (0..outlines.len())
+        .map(|file| focus[file] || relevant[file])
+        .collect();
     let mut scores = vec![0u64; outlines.len()];
     let mut exchange = vec![0u64; outlines.len()];
     for (file, text) in texts.iter().enumerate() {
@@ -33,8 +39,8 @@ pub(crate) fn rank(
             let weight = UNIT / defining.len() as u64;
             for &owner in defining.iter().filter(|&&owner| owner != file) {
                 scores[owner] = scores[owner].saturating_add(weight);
-                if focus[file] != focus[owner] {
-                    let other = if focus[file] { owner } else { file };
+                if anchor[file] != anchor[owner] {
+                    let other = if anchor[file] { owner } else { file };
                     exchange[other] = exchange[other].saturating_add(weight);
                 }
             }
@@ -43,10 +49,12 @@ pub(crate) fn rank(
     let tier = |file: usize| {
         if focus[file] {
             0
-        } else if exchange[file] >= UNIT {
+        } else if relevant[file] {
             1
-        } else {
+        } else if exchange[file] >= UNIT {
             2
+        } else {
+            3
         }
     };
     let mut order: Vec<usize> = (0..outlines.len())
@@ -100,6 +108,14 @@ mod tests {
     }
 
     fn ranked(files: &[(&str, &str, &[&str])], focus: &[&str]) -> Vec<String> {
+        ranked_with(files, focus, &[])
+    }
+
+    fn ranked_with(
+        files: &[(&str, &str, &[&str])],
+        focus: &[&str],
+        relevant: &[&str],
+    ) -> Vec<String> {
         let paths: Vec<&str> = files.iter().map(|(path, _, _)| *path).collect();
         let texts: Vec<&str> = files.iter().map(|(_, text, _)| *text).collect();
         let outlines: Vec<Vec<Symbol>> = files
@@ -107,10 +123,36 @@ mod tests {
             .map(|(_, _, defs)| defs.iter().map(|name| def(name)).collect())
             .collect();
         let focused: Vec<bool> = paths.iter().map(|path| focus.contains(path)).collect();
-        rank(&texts, &outlines, &focused, &paths)
+        let picked: Vec<bool> = paths.iter().map(|path| relevant.contains(path)).collect();
+        rank(&texts, &outlines, &focused, &picked, &paths)
             .into_iter()
             .map(|index| paths[index].to_string())
             .collect()
+    }
+
+    #[test]
+    fn relevant_files_follow_focus_and_pull_their_neighbours_up() {
+        let files: &[(&str, &str, &[&str])] = &[
+            ("popular.rs", "", &["popular_fn"]),
+            ("helper.rs", "", &["helper_fn"]),
+            ("asked.rs", "helper_fn()", &["asked_fn"]),
+            ("focus.rs", "", &["focus_fn"]),
+            ("other.rs", "popular_fn popular_fn", &["other_fn"]),
+        ];
+        assert_eq!(
+            ranked_with(files, &["focus.rs"], &["asked.rs"]),
+            [
+                "focus.rs",
+                "asked.rs",
+                "helper.rs",
+                "popular.rs",
+                "other.rs"
+            ]
+        );
+        assert_eq!(
+            ranked_with(files, &["focus.rs"], &[]),
+            ranked(files, &["focus.rs"])
+        );
     }
 
     #[test]

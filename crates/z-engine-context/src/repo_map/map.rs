@@ -28,6 +28,17 @@ pub struct SourceFile {
 /// (paths relative or absolute) first and their reference neighbours next;
 /// the lowest-ranked files are dropped first when over budget.
 pub fn repo_map(files: &[SourceFile], focus: &[String], budget_chars: usize) -> String {
+    repo_map_ranked(files, focus, &[], budget_chars)
+}
+
+/// [`repo_map`] with `relevant` files (matched like `focus`) ranked right
+/// after the focus files, their neighbours next.
+pub fn repo_map_ranked(
+    files: &[SourceFile],
+    focus: &[String],
+    relevant: &[String],
+    budget_chars: usize,
+) -> String {
     let texts: Vec<&str> = files
         .iter()
         .map(|file| {
@@ -50,7 +61,8 @@ pub fn repo_map(files: &[SourceFile], focus: &[String], budget_chars: usize) -> 
         .collect();
     let paths: Vec<&str> = files.iter().map(|file| file.path.as_str()).collect();
     let focused: Vec<bool> = paths.iter().map(|path| is_focus(path, focus)).collect();
-    let order = rank(&texts, &outlines, &focused, &paths);
+    let picked: Vec<bool> = paths.iter().map(|path| is_focus(path, relevant)).collect();
+    let order = rank(&texts, &outlines, &focused, &picked, &paths);
     render(&paths, &outlines, &order, budget_chars)
 }
 

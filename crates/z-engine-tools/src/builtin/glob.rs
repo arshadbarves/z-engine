@@ -13,9 +13,14 @@ use crate::error::ToolError;
 use crate::input::{Fields, path_field, str_field};
 use crate::names;
 use crate::output::ToolOutput;
+use crate::ports::RankTarget;
 use crate::schema;
-use crate::text::truncate_output;
+use crate::text::{rank_before_cut, truncate_output};
 use crate::tool::Tool;
+
+/// With search ranking on, this many times the limit are walked so useful
+/// files past the newest `limit` can still be shown.
+const RANK_POOL: usize = 3;
 
 #[derive(Debug, Default)]
 pub struct GlobTool;
@@ -70,9 +75,16 @@ impl Tool for GlobTool {
         let base = fields.optional_text("path")?.map(|path| ctx.resolve(path));
         let root = ctx.root.clone();
         let limit = ctx.limits.glob_limit;
+        let ranker = ctx.ports.ranker(RankTarget::SearchHits);
+        let walk_limit = if ranker.is_some() {
+            limit.saturating_mul(RANK_POOL)
+        } else {
+            limit
+        };
         let search_base = base.clone();
+        let subject = pattern.clone();
         let found = tokio::task::spawn_blocking(move || {
-            glob(&root, &pattern, search_base.as_deref(), limit)
+            glob(&root, &pattern, search_base.as_deref(), walk_limit)
         })
         .await
         .map_err(|e| ToolError::failed(format!("the file search failed: {e}")))?
@@ -87,18 +99,29 @@ impl Tool for GlobTool {
         if found.paths.is_empty() {
             return Ok(ToolOutput::text("No files found", "No files found"));
         }
-        let mut text: String = found
-            .paths
-            .iter()
-            .map(|path| format!("{}\n", ctx.display(path)))
-            .collect();
-        if found.truncated {
-            text.push_str(&format!(
-                "(Results are truncated to the {limit} most recently modified files. Use a more specific pattern or path.)\n"
-            ));
+        let mut shown: Vec<String> = found.paths.iter().map(|path| ctx.display(path)).collect();
+        let truncated = found.truncated || shown.len() > limit;
+        let ranked = match shown.len() > limit {
+            true => rank_before_cut(ctx, names::GLOB, &subject, &shown).await,
+            false => None,
+        };
+        if let Some(order) = &ranked {
+            shown = order.iter().map(|&i| shown[i].clone()).collect();
         }
-        let count = found.paths.len();
-        let summary = if found.truncated {
+        shown.truncate(limit);
+        let mut text: String = shown.iter().map(|path| format!("{path}\n")).collect();
+        if truncated {
+            text.push_str(&match ranked {
+                Some(_) => format!(
+                    "(More than {limit} files matched; these {limit} are the most relevant to the task first, then the most recently modified. Use a more specific pattern or path.)\n"
+                ),
+                None => format!(
+                    "(Results are truncated to the {limit} most recently modified files. Use a more specific pattern or path.)\n"
+                ),
+            });
+        }
+        let count = shown.len();
+        let summary = if truncated {
             format!("Found more than {count} files")
         } else {
             format!(

@@ -14,7 +14,7 @@ use crate::input::{Fields, str_field};
 use crate::names;
 use crate::output::ToolOutput;
 use crate::schema;
-use crate::text::truncate_output;
+use crate::text::{trim_output, truncate_output};
 use crate::tool::Tool;
 
 #[derive(Debug, Default)]
@@ -88,10 +88,14 @@ impl Tool for JobOutputTool {
         if let Some(code) = read.exit_code {
             state.push_str(&format!(", exit code {code}"));
         }
+        let output = read.output.trim_end_matches('\n');
         let body = if read.output.trim().is_empty() {
             "(no new output)".to_string()
+        } else if read.kind == JobKind::Shell {
+            let subject = format!("background job {job}");
+            trim_output(ctx, "job", names::JOB_OUTPUT, &subject, output).await
         } else {
-            truncate_output(ctx, "job", read.output.trim_end_matches('\n'))
+            truncate_output(ctx, "job", output)
         };
         let failed = matches!(read.status, JobStatus::Failed);
         Ok(ToolOutput::text(format!("{state}.\n\n{body}"), state).with_error(failed))

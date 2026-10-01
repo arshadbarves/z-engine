@@ -94,7 +94,7 @@ fn clip_strings(value: &Value, max_chars: usize) -> Value {
 
 /// `text` when it fits, else its first and last `max_chars / 2`
 /// characters around a marker naming how many were cut.
-fn truncate(text: &str, max_chars: usize) -> String {
+pub(super) fn truncate(text: &str, max_chars: usize) -> String {
     let total = text.chars().count();
     if total <= max_chars {
         return text.to_string();

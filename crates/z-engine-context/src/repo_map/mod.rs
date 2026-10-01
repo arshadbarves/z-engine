@@ -12,4 +12,4 @@ mod rust;
 mod symbol;
 
 pub use language::supported_extension;
-pub use map::{SourceFile, repo_map};
+pub use map::{SourceFile, repo_map, repo_map_ranked};
