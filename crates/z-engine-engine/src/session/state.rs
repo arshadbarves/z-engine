@@ -5,6 +5,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use z_engine_protocol::decisions::TaskViewInfo;
 use z_engine_protocol::{
     AgentId, AgentInfo, CheckRecord, CheckpointInfo, CompactionMarker, Effort, Message,
     PermissionMode, TodoItem, TurnOutcome, TurnRecord, Usage,
@@ -55,6 +56,11 @@ pub(crate) struct SessionState {
     pub added_dirs: Vec<PathBuf>,
     /// A prompt command's `model`, for its turn only.
     pub turn_model: Option<String>,
+    /// While a task view applies (`decisions_task_view`): the working set
+    /// without it, which new messages extend too.
+    pub full_working: Option<Vec<Message>>,
+    /// Latest state of each task view, oldest first.
+    pub task_views: Vec<TaskViewInfo>,
 }
 
 impl SessionState {
@@ -107,6 +113,8 @@ impl SessionState {
             mutation: Mutation::default(),
             added_dirs: Vec::new(),
             turn_model: None,
+            full_working: replay.full_working,
+            task_views: replay.task_views,
         }
     }
 

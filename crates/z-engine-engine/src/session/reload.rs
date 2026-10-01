@@ -1,8 +1,8 @@
 //! Applying changed settings to a live session: settings, extensions (and
 //! with them the agent types in the `Agent` tool), instructions, the model
 //! client, the policy (session grants and added directories kept), the git
-//! snapshot, the context window, MCP and language servers, the checks, and
-//! the repository map.
+//! snapshot, the context window, MCP and language servers, the checks, the
+//! decision service (its trace kept), and the repository map.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -14,6 +14,7 @@ use z_engine_protocol::NoticeLevel;
 use super::grants::rebuild_policy;
 use super::snapshot::emit_snapshot;
 use super::tools::rebuild_tools;
+use crate::decisions::build_service;
 use crate::mcp::sync_servers;
 use crate::orchestration::AgentRegistry;
 use crate::session::SessionCore;
@@ -37,6 +38,10 @@ pub(crate) async fn reload(core: &Arc<SessionCore>) {
     let catalog = core.catalog();
     let limit = models::context_window(&settings.settings, catalog.as_deref(), &core.main_model());
     let checks = discover_checks(&core.root, &settings.settings.verification.checks).await;
+    let (decisions, warning) = build_service(shared, &settings).await;
+    if let Some(warning) = warning {
+        core.events.notice(NoticeLevel::Warn, warning);
+    }
     core.agents
         .set_registry(AgentRegistry::build(&settings.extensions.agents));
     if let Some(replaced) = core.lsp.configure(&core.root, &settings.settings.lsp) {
@@ -54,6 +59,7 @@ pub(crate) async fn reload(core: &Arc<SessionCore>) {
     *write(&core.client) = client;
     *lock(&core.git) = git;
     core.checks.set(checks);
+    core.decisions.replace(decisions);
     core.repo_map.invalidate();
     core.with_state(|state| state.context_limit = limit);
     sync_servers(core);

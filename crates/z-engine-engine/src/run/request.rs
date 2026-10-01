@@ -1,8 +1,8 @@
 //! Request assembly: cache-stable system sections (base prompt,
 //! environment, instructions, skills, output style, repository map), the
 //! offered tools, the working transcript with cache breakpoints on the
-//! last two user messages, thinking from the session effort, and the
-//! output ceiling.
+//! last two user messages, thinking from the session effort (else the
+//! main agent's routed one, `decisions_routing`), and the output ceiling.
 
 use serde_json::{Value, json};
 use z_engine_context::{
@@ -13,6 +13,7 @@ use z_engine_llm::{ModelRequest, SystemBlock, ThinkingConfig, ToolChoice, ToolSp
 use z_engine_protocol::Message;
 
 use super::spec::RunContext;
+use crate::decisions::routed_effort;
 use crate::settings::models;
 
 /// The parts of a request that do not depend on the working set.
@@ -124,6 +125,7 @@ pub(crate) fn assemble(
         })
         .collect();
     let effort = ctx.core.with_state(|state| state.effort);
+    let effort = effort.or_else(|| ctx.spec.is_main().then(|| routed_effort(&ctx.core))?);
     let mut request = ModelRequest::new(model, well_formed(messages))
         .with_system(system)
         .with_tools(prepared.tools.clone())

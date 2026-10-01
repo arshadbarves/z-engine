@@ -1,13 +1,16 @@
 //! The repository map system section: built once (in the background when a
 //! session opens, awaited by the first request that needs it) and kept
 //! byte-stable so the prompt-cache prefix survives; only a compaction or a
-//! settings reload invalidates it. Files the main agent touched rank first.
+//! settings reload invalidates it. Files the main agent touched rank first;
+//! before the first request includes it, `decisions_session_context` may
+//! rank files relevant to that request next (one rebuild, then fixed).
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use futures::StreamExt;
-use z_engine_context::{SourceFile, render_template, repo_map, supported_extension};
+use z_engine_context::{SourceFile, render_template, repo_map_ranked, supported_extension};
 use z_engine_host::{glob, read_text, relative_display};
 use z_engine_prompts::system::REPO_MAP;
 
@@ -27,21 +30,54 @@ pub(crate) struct RepoMapCache {
     /// `None`: not built yet (or invalidated); `Some(None)`: no map.
     value: Mutex<Option<Option<Arc<str>>>>,
     building: tokio::sync::Mutex<()>,
+    /// Root-relative paths of the sources the last build read.
+    files: Mutex<Vec<String>>,
+    /// Files relevant to the first request, ranked after the focus files.
+    relevant: Mutex<Vec<String>>,
+    /// Bumped by [`RepoMapCache::rank_first`]; an older build is dropped.
+    generation: AtomicU64,
+    /// A request included the section.
+    served: AtomicBool,
 }
 
 impl RepoMapCache {
-    /// The rendered section, when one was built.
+    /// The rendered section for a request, when one was built.
     pub(crate) fn current(&self) -> Option<Arc<str>> {
+        self.served.store(true, Ordering::SeqCst);
+        self.peek()
+    }
+
+    /// The rendered section, without serving it.
+    pub(crate) fn peek(&self) -> Option<Arc<str>> {
         lock(&self.value).clone().flatten()
     }
 
     pub(crate) fn invalidate(&self) {
+        lock(&self.relevant).clear();
         *lock(&self.value) = None;
+    }
+
+    /// Ranks `relevant` files right after the focus files in a rebuild.
+    /// False once a request included the section: its bytes stay as sent.
+    pub(crate) fn rank_first(&self, relevant: Vec<String>) -> bool {
+        if relevant.is_empty() || self.served.load(Ordering::SeqCst) {
+            return false;
+        }
+        *lock(&self.relevant) = relevant;
+        self.generation.fetch_add(1, Ordering::SeqCst);
+        *lock(&self.value) = None;
+        true
     }
 
     fn is_built(&self) -> bool {
         lock(&self.value).is_some()
     }
+}
+
+/// Root-relative paths of the project sources the map reads, once built.
+pub(crate) async fn repo_map_files(core: &SessionCore) -> Vec<String> {
+    build_once(core).await;
+    lock(&core.repo_map.files).clone()
 }
 
 /// Builds the section once for agents working in the project tree.
@@ -67,8 +103,11 @@ async fn build_once(core: &SessionCore) {
     if cache.is_built() {
         return;
     }
+    let generation = cache.generation.load(Ordering::SeqCst);
     let built = build(core).await;
-    *lock(&cache.value) = Some(built);
+    if cache.generation.load(Ordering::SeqCst) == generation {
+        *lock(&cache.value) = Some(built);
+    }
 }
 
 async fn build(core: &SessionCore) -> Option<Arc<str>> {
@@ -88,9 +127,11 @@ async fn build(core: &SessionCore) -> Option<Arc<str>> {
         .filter_map(|file| async move { file })
         .collect()
         .await;
+    *lock(&core.repo_map.files) = files.iter().map(|file| file.path.clone()).collect();
     if files.is_empty() {
         return None;
     }
+    let relevant = lock(&core.repo_map.relevant).clone();
     let focus: Vec<String> = core
         .main
         .files
@@ -99,10 +140,11 @@ async fn build(core: &SessionCore) -> Option<Arc<str>> {
         .map(|path| path.to_string_lossy().into_owned())
         .collect();
     let budget = usize::try_from(context.repo_map_chars).unwrap_or(usize::MAX);
-    let map = tokio::task::spawn_blocking(move || repo_map(&files, &focus, budget))
-        .await
-        .map_err(|error| tracing::warn!(%error, "repo map build failed"))
-        .ok()?;
+    let map =
+        tokio::task::spawn_blocking(move || repo_map_ranked(&files, &focus, &relevant, budget))
+            .await
+            .map_err(|error| tracing::warn!(%error, "repo map build failed"))
+            .ok()?;
     if map.trim().is_empty() {
         return None;
     }

@@ -7,6 +7,7 @@ mod queries;
 
 pub use api::Engine;
 pub use queries::{
-    AgentCard, ChangedKind, ChangedPath, GitChangedFile, McpTestReport, RepoSummary,
-    SlashCommandInfo, SlashKind, TrustReport,
+    AgentCard, ChangedKind, ChangedPath, DecisionModelStatus, DecisionModelTest, GitChangedFile,
+    McpTestReport, RepoSummary, RunningFeature, SessionDecisions, SlashCommandInfo, SlashKind,
+    TrustReport,
 };

@@ -17,6 +17,7 @@ use z_engine_protocol::{AgentId, Command, Message, SessionId, SessionSummary};
 use z_engine_store::SessionStore;
 
 use super::{catalog, export};
+use crate::decisions::Sidecars;
 use crate::error::EngineError;
 use crate::options::{EngineOptions, EventSink, ExportFormat};
 use crate::run::inspect_request;
@@ -70,6 +71,7 @@ impl Engine {
             factory: client_factory,
             catalog: Arc::new(RwLock::new(catalog)),
             web: WebClient::new()?,
+            sidecars: Sidecars::default(),
         };
         Ok(Engine {
             inner: Arc::new(Inner {
@@ -218,8 +220,9 @@ impl Engine {
         Ok(catalog)
     }
 
-    /// Closes every session: turns are cancelled, background jobs killed,
-    /// logs flushed. Later opens fail with `ShutDown`.
+    /// Closes every session (turns cancelled, background jobs killed, logs
+    /// flushed) and stops the decision sidecar. Later opens fail with
+    /// `ShutDown`.
     pub async fn shutdown(&self) {
         self.inner.shut_down.store(true, Ordering::SeqCst);
         let _guard = self.inner.lifecycle.lock().await;
@@ -228,6 +231,7 @@ impl Engine {
             .map(|(_, handle)| handle)
             .collect();
         join_all(handles.iter().map(|handle| handle.close("shutdown"))).await;
+        self.inner.shared.sidecars.shutdown().await;
     }
 
     pub(super) fn handle(&self, id: &SessionId) -> Option<Arc<SessionHandle>> {
@@ -236,6 +240,10 @@ impl Engine {
 
     pub(super) fn handles(&self) -> Vec<Arc<SessionHandle>> {
         lock(&self.inner.sessions).values().cloned().collect()
+    }
+
+    pub(super) fn shared(&self) -> &Shared {
+        &self.inner.shared
     }
 
     fn ensure_running(&self) -> Result<(), EngineError> {

@@ -1,6 +1,7 @@
 //! Running one approved call: `toolStarted`, throttled `toolProgress`, the
 //! call itself (with a short grace period after cancellation so tools can
-//! stop their processes), `PostToolUse` hooks, effects, `toolFinished`.
+//! stop their processes), `PostToolUse` hooks, decision notes (the
+//! after-call seam), effects, `toolFinished`.
 
 use std::future::Future;
 use std::path::PathBuf;
@@ -17,6 +18,7 @@ use super::ctx::tool_ctx;
 use super::gate::ToolCall;
 use super::progress::Progress;
 use super::report::{finished, started};
+use crate::decisions::seams::annotate_result;
 use crate::hooks::{HookEvent, HookInput, run_hooks};
 use crate::run::RunContext;
 
@@ -83,6 +85,7 @@ pub(super) async fn run_call(
     };
     if status != ToolStatus::Cancelled {
         content.extend(post_hooks(ctx, call, &content, is_error).await);
+        annotate_result(ctx, call, status, &mut content).await;
     }
     let duration = clock.elapsed();
     finished(ctx, &call.id, status, summary, &content, duration);

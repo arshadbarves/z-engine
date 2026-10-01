@@ -10,11 +10,12 @@ use super::compact::{CompactJob, summarize};
 use super::meter::ContextMeter;
 use super::sink::TranscriptSink;
 use super::spec::RunContext;
+use crate::decisions::seams::review_clears;
 use crate::error::EngineError;
 use crate::settings::models;
 
-/// Tool results shorter than this are never cleared.
-const MIN_CLEAR_CHARS: usize = 1_000;
+/// Tool results shorter than this are never cleared by size alone.
+pub(crate) const MIN_CLEAR_CHARS: usize = 1_000;
 
 /// The working set after relief. Only cancellation is an error; a failed
 /// summary is reported and the run continues with what it has.
@@ -31,7 +32,7 @@ pub(crate) async fn relieve(
     let mut working = working;
     if forced || meter.measure(&working).saturating_mul(2) > limit {
         let keep = settings.settings.context.keep_recent_tool_results as usize;
-        working = microcompact(ctx, sink, meter, working, keep);
+        working = microcompact(ctx, sink, meter, working, keep).await;
     }
     let threshold =
         limit.saturating_mul(u64::from(settings.settings.context.compact_at_percent)) / 100;
@@ -64,16 +65,28 @@ pub(crate) async fn relieve(
     }
 }
 
-fn microcompact(
+/// Decision uses (the pressure seam) may keep planned clears or add more.
+async fn microcompact(
     ctx: &RunContext,
     sink: &dyn TranscriptSink,
     meter: &mut ContextMeter,
     working: Vec<Message>,
     keep_recent: usize,
 ) -> Vec<Message> {
-    let targets = plan_microcompact(&working, keep_recent, MIN_CLEAR_CHARS);
+    let planned = plan_microcompact(&working, keep_recent, MIN_CLEAR_CHARS);
+    let targets = review_clears(ctx, &working, planned).await;
     if targets.is_empty() {
         return working;
+    }
+    let current = sink.working();
+    if !current
+        .iter()
+        .map(|m| &m.id)
+        .eq(working.iter().map(|m| &m.id))
+    {
+        // The working set changed while decision uses ran (the user
+        // brought back the full history); the plan no longer fits it.
+        return current;
     }
     let artifacts = ctx.core.shared.store.artifacts(&ctx.core.id);
     let mut cleared = working.clone();

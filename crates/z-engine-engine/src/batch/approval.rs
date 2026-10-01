@@ -7,6 +7,7 @@ use z_engine_protocol::{ApprovalDecision, ApprovalRequest, ToolStatus};
 
 use super::gate::{Gated, Verdict};
 use crate::broker::Broker;
+use crate::decisions::seams::AttentionItem;
 use crate::hooks::notify;
 use crate::run::RunContext;
 
@@ -30,7 +31,11 @@ pub(super) async fn resolve(ctx: &RunContext, gated: &mut [Gated]) {
         .map(|(_, request)| request.tool.as_str())
         .collect();
     let message = format!("Z Engine needs your permission to use {}", tools.join(", "));
-    notify(&ctx.core, &message, &ctx.cancel).await;
+    let items = asks
+        .iter()
+        .map(|(_, request)| AttentionItem::approval(request))
+        .collect();
+    notify(&ctx.core, &message, items, &ctx.cancel).await;
     let waits = replies
         .into_iter()
         .map(|reply| Broker::wait(reply, &ctx.cancel));

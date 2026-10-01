@@ -23,6 +23,7 @@ use super::shell::spawn_shell;
 use super::slash::{Slash, run_command};
 use super::trust::trust_workspace;
 use super::turn::run_turn;
+use crate::decisions::{include_full_history, resolve_suggestion};
 use crate::hooks::{HookEvent, HookInput, run_hooks};
 use crate::orchestration::{apply_command, discard_command};
 use crate::session::SessionCore;
@@ -152,6 +153,11 @@ impl Actor {
             Command::EditQueue { queued } => control::edit_queue(core, queued),
             Command::ReloadExtensions => reload(core).await,
             Command::TrustWorkspace { trusted } => trust_workspace(core, trusted).await,
+            Command::ResolveSuggestion {
+                suggestion_id,
+                accepted,
+            } => resolve_suggestion(core, &suggestion_id, accepted),
+            Command::IncludeFullHistory => include_full_history(core),
             Command::Shutdown => {}
         }
     }

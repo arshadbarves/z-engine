@@ -5,8 +5,8 @@
 use std::path::{Path, PathBuf};
 
 use z_engine_config::{
-    Credentials, EnvOverrides, Extensions, Paths, SearchBackend as ConfigSearch, Settings,
-    TrustStore, discover_extensions, load_with_env, resolve_search_key,
+    Credentials, DecisionSettings, EnvOverrides, Extensions, Paths, SearchBackend as ConfigSearch,
+    Settings, TrustStore, discover_extensions, load_with_env, resolve_search_key,
 };
 use z_engine_context::InstructionDoc;
 use z_engine_host::{EnvPolicy, SearchBackend, ShellSpec, expand_tilde, resolve, resolve_shell};
@@ -173,6 +173,7 @@ fn restrict_to_user_level(
     settings.provider = user.provider;
     settings.web = user.web;
     settings.lsp = user.lsp;
+    settings.decisions = user.decisions;
     withheld
 }
 
@@ -197,10 +198,25 @@ pub(crate) fn trust_gated(project: &Settings, user: &Settings) -> Vec<String> {
         ("provider", project.provider != user.provider),
         ("web access", project.web != user.web),
         ("language servers", project.lsp != user.lsp),
+        (
+            "decision model",
+            without_rules(project) != without_rules(user),
+        ),
+        (
+            "decision rules",
+            project.decisions.rules != user.decisions.rules,
+        ),
     ];
     differs
         .into_iter()
         .filter(|(_, differs)| *differs)
         .map(|(what, _)| what.to_string())
         .collect()
+}
+
+fn without_rules(settings: &Settings) -> DecisionSettings {
+    DecisionSettings {
+        rules: Vec::new(),
+        ..settings.decisions.clone()
+    }
 }

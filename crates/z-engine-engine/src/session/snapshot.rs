@@ -42,6 +42,7 @@ pub(crate) fn snapshot(core: &SessionCore) -> SessionSnapshot {
         cost_usd: state.cost_usd,
         context_tokens: state.context_tokens,
         context_limit: state.context_limit,
+        task_views: state.task_views.clone(),
     })
 }
 

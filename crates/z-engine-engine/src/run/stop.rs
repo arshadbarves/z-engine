@@ -1,7 +1,8 @@
 //! The stop boundary: the model ended a response without tool calls.
 //! `Stop`/`SubagentStop` hooks may continue the run (at most five times
 //! per turn), queued steering continues it, and for the main agent the
-//! verifier computes the badge or asks for another round.
+//! verifier computes the badge or asks for another round; after a passing
+//! verdict a decision use may ask for one more (the stop seam).
 
 use std::path::PathBuf;
 
@@ -11,15 +12,18 @@ use z_engine_protocol::{ContentBlock, NoticeLevel, VerificationOutcome};
 
 use super::reminders::take_steering;
 use super::spec::RunContext;
+use crate::decisions::seams::review_stop;
 use crate::hooks::{HookEvent, HookInput, run_hooks};
 use crate::verify::StopVerdict;
 
 const MAX_HOOK_CONTINUATIONS: u32 = 5;
+const MAX_DECISION_CONTINUATIONS: u32 = 1;
 
 #[derive(Debug, Default)]
 pub(crate) struct StopCounters {
     pub hook_continuations: u32,
     pub verify_continuations: u32,
+    pub decision_continuations: u32,
 }
 
 #[derive(Debug)]
@@ -92,8 +96,14 @@ pub(crate) async fn stop_boundary(
         .at_stop(ctx, counters.verify_continuations, changed)
         .await
     {
-        StopVerdict::Done(outcome) => StopAction::End {
-            verification: Some(outcome),
+        StopVerdict::Done(outcome) => match decision_reminder(ctx, counters, changed).await {
+            Some(reminder) => StopAction::Continue {
+                content: vec![ContentBlock::text(reminder)],
+                steering: false,
+            },
+            None => StopAction::End {
+                verification: Some(outcome),
+            },
         },
         StopVerdict::Continue { reminder } => {
             counters.verify_continuations += 1;
@@ -103,4 +113,18 @@ pub(crate) async fn stop_boundary(
             }
         }
     }
+}
+
+/// The stop seam, at most `MAX_DECISION_CONTINUATIONS` times per turn.
+async fn decision_reminder(
+    ctx: &RunContext,
+    counters: &mut StopCounters,
+    changed: &[PathBuf],
+) -> Option<String> {
+    if counters.decision_continuations >= MAX_DECISION_CONTINUATIONS {
+        return None;
+    }
+    let reminder = review_stop(ctx, changed).await?;
+    counters.decision_continuations += 1;
+    Some(reminder)
 }

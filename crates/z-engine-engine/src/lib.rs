@@ -5,6 +5,7 @@
 mod batch;
 mod broker;
 mod commands;
+mod decisions;
 mod engine;
 mod error;
 mod hooks;
@@ -20,8 +21,9 @@ mod sync;
 mod verify;
 
 pub use engine::{
-    AgentCard, ChangedKind, ChangedPath, Engine, GitChangedFile, McpTestReport, RepoSummary,
-    SlashCommandInfo, SlashKind, TrustReport,
+    AgentCard, ChangedKind, ChangedPath, DecisionModelStatus, DecisionModelTest, Engine,
+    GitChangedFile, McpTestReport, RepoSummary, RunningFeature, SessionDecisions, SlashCommandInfo,
+    SlashKind, TrustReport,
 };
 pub use error::EngineError;
 pub use options::{ClientFactory, EngineOptions, EventSink, ExportFormat};

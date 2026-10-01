@@ -1,5 +1,6 @@
 //! Session persistence v2: per-session logs, subagent transcripts,
-//! artifacts, metadata, and import of v1 transcripts.
+//! artifacts, metadata, import of v1 transcripts, and the opt-in decision
+//! dataset.
 //!
 //! Under the sessions directory: `<id>/log.jsonl` (records),
 //! `<id>/meta.json` (listing cache), `<id>/agents/<agent>.jsonl` (subagent
@@ -7,6 +8,7 @@
 
 mod append;
 mod artifacts;
+mod dataset;
 mod durable;
 mod error;
 mod heal;
@@ -21,6 +23,7 @@ mod replay;
 mod store;
 
 pub use artifacts::Artifacts;
+pub use dataset::DecisionDataset;
 pub use error::StoreError;
 pub use legacy::import_v1;
 pub use log::{AgentLog, SessionLog};

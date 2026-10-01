@@ -6,12 +6,13 @@ mod interaction;
 mod jobs;
 mod lsp;
 mod mcp;
+mod relevance;
 mod side_model;
 mod skills;
 
 use std::sync::Arc;
 
-use z_engine_tools::{LspPort, Ports};
+use z_engine_tools::{LspPort, Ports, RelevancePort};
 
 use crate::run::RunContext;
 
@@ -34,5 +35,7 @@ pub(crate) fn run_ports(ctx: &RunContext) -> Ports {
             Arc::clone(&ctx.mcp),
         ))),
         side_model: Some(Arc::new(side_model::SideModel::new(Arc::clone(core)))),
+        relevance: relevance::Relevance::for_run(ctx)
+            .map(|port| Arc::new(port) as Arc<dyn RelevancePort>),
     }
 }

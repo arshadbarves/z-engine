@@ -21,6 +21,8 @@ use super::resume::repair;
 use super::snapshot::emit_snapshot;
 use super::trust::request_trust;
 use crate::broker::Broker;
+use crate::decisions::seams::watch_notices;
+use crate::decisions::{DecisionHub, build_service};
 use crate::error::EngineError;
 use crate::hooks::{HookEvent, HookInput, run_hooks};
 use crate::lsp::LspHub;
@@ -76,6 +78,7 @@ pub(crate) async fn open_session(
         settings,
     };
     let core = assemble(shared, parts, state, &mut notices).await;
+    watch_notices(&core);
     prune_stale_worktrees(&core).await;
     let handle = spawn_actor(Arc::clone(&core));
     emit_snapshot(&core);
@@ -221,6 +224,8 @@ async fn assemble(
     checks.set(discover_checks(&root, &settings.settings.verification.checks).await);
     let lsp = LspHub::default();
     lsp.configure(&root, &settings.settings.lsp);
+    let (decisions, warning) = build_service(shared, &settings).await;
+    notices.extend(warning.map(|warning| (NoticeLevel::Warn, warning)));
     Arc::new(SessionCore {
         id,
         root: root.clone(),
@@ -247,6 +252,7 @@ async fn assemble(
         lsp,
         repo_map: RepoMapCache::default(),
         last_request: Mutex::new(None),
+        decisions: DecisionHub::new(decisions),
         cancel: CancellationToken::new(),
     })
 }

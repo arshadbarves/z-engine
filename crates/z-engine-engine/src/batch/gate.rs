@@ -1,6 +1,7 @@
 //! The gate each call passes in order: unknown tools, malformed JSON and
 //! missing fields fail; `PreToolUse` hooks may block, rewrite the input,
-//! or force a decision; the policy decides on the tool's action.
+//! or force a decision; the policy decides on the tool's action; decision
+//! uses may turn an Allow into an Ask (the tool-gate seam).
 
 use std::sync::Arc;
 
@@ -13,6 +14,7 @@ use z_engine_tools::Tool;
 use super::ctx::tool_ctx;
 use super::toolset::ToolSet;
 use super::{schema, scope};
+use crate::decisions::seams::review_call;
 use crate::hooks::{HookEvent, HookInput, PermissionOverride, run_hooks};
 use crate::run::RunContext;
 
@@ -89,8 +91,8 @@ pub(super) async fn gate(
     }
     let probe = tool_ctx(ctx, &call.id, None);
     let action = tool.action(&call.input, &probe);
-    let decision = scope::decide(ctx, tool.name(), &action);
-    let verdict = match with_override(decision, hooks.permission) {
+    let decision = with_override(scope::decide(ctx, tool.name(), &action), hooks.permission);
+    let verdict = match review_call(ctx, &call, decision).await {
         Decision::Allow { .. } => Verdict::Run(tool),
         Decision::Deny { reason } => Verdict::Refuse {
             status: ToolStatus::Denied,

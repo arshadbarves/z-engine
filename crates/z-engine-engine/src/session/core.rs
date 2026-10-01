@@ -18,6 +18,7 @@ use z_engine_tools::ToolRegistry;
 
 use super::checkpoint::Checkpoints;
 use crate::broker::Broker;
+use crate::decisions::{DecisionHub, Sidecars};
 use crate::hooks::HookEnv;
 use crate::lsp::LspHub;
 use crate::mcp::McpHub;
@@ -66,6 +67,8 @@ pub(crate) struct Shared {
     pub factory: Option<Arc<dyn ClientFactory>>,
     pub catalog: CatalogHandle,
     pub web: WebClient,
+    /// The decision model's sidecar, shared by every session.
+    pub sidecars: Sidecars,
 }
 
 #[derive(Debug)]
@@ -102,6 +105,8 @@ pub(crate) struct SessionCore {
     /// The last main-agent request, rendered for the prompt inspector only
     /// when the inspector asks (rendering every round is costly).
     pub last_request: Mutex<Option<Arc<ModelRequest>>>,
+    /// Experimental decisions: modes, provider and trace.
+    pub decisions: DecisionHub,
     /// Cancelled when the session closes; background work hangs off it.
     pub cancel: CancellationToken,
 }

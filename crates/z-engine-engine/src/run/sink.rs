@@ -66,6 +66,9 @@ impl TranscriptSink for MainSink {
         self.core.with_state(|state| {
             state.transcript.push(message.clone());
             state.working.push(message.clone());
+            if let Some(full) = &mut state.full_working {
+                full.push(message.clone());
+            }
             state.updated_at = now_ms();
         });
         if message.role == Role::User {
@@ -98,6 +101,7 @@ impl TranscriptSink for MainSink {
         })?;
         self.core.with_state(|state| {
             state.working = working;
+            state.full_working = None;
             state.compactions.push(marker.clone());
             state.meter.reset();
         });

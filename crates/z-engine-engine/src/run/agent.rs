@@ -24,6 +24,7 @@ use super::stop::{StopAction, StopCounters, stop_boundary};
 use super::stream::{StreamEnd, stream_response};
 use super::{budget, pressure, usage};
 use crate::batch::{ToolCall, ToolSet, run_batch};
+use crate::decisions::seams::screen_request;
 use crate::sync::lock;
 
 pub(crate) struct AgentRun {
@@ -127,7 +128,7 @@ impl AgentRun {
         meter.set_overhead(prepared.overhead);
         let mut forced = false;
         loop {
-            let working = self.sink.working();
+            let working = screen_request(&self.ctx, &*self.sink, self.sink.working()).await;
             let relieved = pressure::relieve(&self.ctx, &*self.sink, meter, working, forced).await;
             let Ok(working) = relieved else {
                 return Round::End(TurnOutcome::Cancelled);

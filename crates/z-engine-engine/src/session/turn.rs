@@ -1,7 +1,9 @@
 //! One user turn of the main agent: a prompt command's expansion and
 //! turn-scoped grants, `UserPromptSubmit` hooks, the opening message and
 //! `TurnStarted`, a code checkpoint, the title for a new session, the
-//! agent run, and `TurnFinished` with its badge.
+//! agent run, and `TurnFinished` with its badge. Decision uses see the
+//! message first (the turn-start seam); a new task is routed once the
+//! message is saved; the ended turn goes to the turn-end seam.
 
 use std::sync::Arc;
 
@@ -19,6 +21,8 @@ use super::command_turn::{TurnScope, command_texts};
 use super::meta::write_meta;
 use super::prompt::{TurnInput, compose, prompt_text};
 use super::title::spawn_title;
+use crate::decisions::seams::{at_turn_end, at_turn_start};
+use crate::decisions::{apply_task_view_for, preload_tools, route_new_task};
 use crate::hooks::{HookEvent, HookInput, run_hooks};
 use crate::run::{AgentRun, AgentSpec, MainSink, RunContext, RunOutcome, TranscriptSink};
 use crate::session::SessionCore;
@@ -67,6 +71,7 @@ pub(crate) async fn run_turn(
         core.main.clone(),
         cancel,
     );
+    at_turn_start(&ctx, &text).await;
     let content = compose(&ctx, &texts, &input.attachments, hooks.context).await;
     let message = Message::new(Role::User, content);
     let turn_id = TurnId::new();
@@ -78,6 +83,8 @@ pub(crate) async fn run_turn(
             .error(format!("could not save your message: {error}"));
         return None;
     }
+    apply_task_view_for(&core, &message);
+    preload_tools(&ctx);
     let (ready, gate) = oneshot::channel();
     let checkpoint = tokio::spawn({
         let core = Arc::clone(&core);
@@ -89,6 +96,7 @@ pub(crate) async fn run_turn(
             }
         }
     });
+    route_new_task(&ctx, &text).await;
     if fresh {
         spawn_title(Arc::clone(&core), text);
     }
@@ -140,7 +148,7 @@ fn start(
 }
 
 fn finish(
-    core: &SessionCore,
+    core: &Arc<SessionCore>,
     turn_id: TurnId,
     message_id: MessageId,
     started_at: u64,
@@ -167,7 +175,8 @@ fn finish(
         state.interrupted = matches!(run.outcome, TurnOutcome::Cancelled);
         state.updated_at = turn.finished_at;
     });
-    core.events.emit(Event::TurnFinished { turn });
+    core.events.emit(Event::TurnFinished { turn: turn.clone() });
+    at_turn_end(core, &turn);
     write_meta(core);
     core.journal.sync_or_report();
     run.outcome
