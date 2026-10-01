@@ -19,11 +19,13 @@ pub(crate) struct Placement {
     pub worktree: Option<WorktreeScope>,
 }
 
+/// `routed`: the model the launch routed an inheriting definition to.
 pub(crate) fn child_spec(
     def: &AgentDef,
     parent: &RunContext,
     agent_id: AgentId,
     placement: Placement,
+    routed: Option<&str>,
 ) -> AgentSpec {
     let settings = parent.core.settings();
     let limits = &settings.settings.agents;
@@ -44,7 +46,7 @@ pub(crate) fn child_spec(
             allow: def.tools.clone(),
             deny,
         },
-        model: ModelChoice::Fixed(model_for(def, &settings.settings, &parent.model())),
+        model: ModelChoice::Fixed(model_for(def, &settings.settings, &parent.model(), routed)),
         mode: child_mode(def, parent, settings.trusted),
         max_turns: def.max_turns.unwrap_or(limits.max_turns).max(1),
         root: placement.root,
@@ -53,12 +55,27 @@ pub(crate) fn child_spec(
     }
 }
 
-/// `inherit` (or nothing) takes the caller's model; `main`, `fast` and
-/// `review` name the configured roles; anything else is a model id.
-pub(crate) fn model_for(def: &AgentDef, settings: &Settings, parent_model: &str) -> String {
+/// The definition takes its caller's model (`inherit` or nothing), so its
+/// launch may route it (`decisions_routing`).
+pub(crate) fn inherits(def: &AgentDef) -> bool {
+    matches!(
+        def.model.as_deref().map(str::trim),
+        None | Some("" | "inherit")
+    )
+}
+
+/// `inherit` (or nothing) takes the caller's model, unless the launch
+/// `routed` it; `main`, `fast` and `review` name the configured roles;
+/// anything else is a model id.
+pub(crate) fn model_for(
+    def: &AgentDef,
+    settings: &Settings,
+    parent_model: &str,
+    routed: Option<&str>,
+) -> String {
     let named = def.model.as_deref().map(str::trim).unwrap_or_default();
     match named {
-        "" | "inherit" => parent_model.to_string(),
+        "" | "inherit" => routed.unwrap_or(parent_model).to_string(),
         "main" => settings.model.main.clone(),
         "fast" => settings.model.fast_model().to_string(),
         "review" => settings.model.review_model().to_string(),
@@ -71,9 +88,10 @@ pub(crate) fn isolation(def: &AgentDef, requested: Option<Isolation>) -> Isolati
     requested.unwrap_or(def.isolation)
 }
 
-/// The definition's mode, else the caller's. A definition shipped by an
-/// untrusted project may not run looser than its caller (a repository must
-/// not be able to start a `bypass` subagent).
+/// The definition's mode, else the caller's; a session in bypass mode still
+/// overrides it at each call (`RunContext::mode`). A definition shipped by
+/// an untrusted project may not run looser than its caller (a repository
+/// must not be able to start a `bypass` subagent).
 fn child_mode(def: &AgentDef, parent: &RunContext, trusted: bool) -> Option<PermissionMode> {
     let from_project = matches!(
         def.source.scope,
@@ -128,21 +146,37 @@ mod tests {
         let mut settings = Settings::default();
         settings.model.main = "main-model".into();
         settings.model.fast = Some("fast-model".into());
-        assert_eq!(model_for(&def(""), &settings, "parent"), "parent");
+        assert_eq!(model_for(&def(""), &settings, "parent", None), "parent");
         assert_eq!(
-            model_for(&def("model: inherit\n"), &settings, "parent"),
+            model_for(&def("model: inherit\n"), &settings, "parent", None),
             "parent"
         );
         assert_eq!(
-            model_for(&def("model: fast\n"), &settings, "parent"),
+            model_for(&def("model: fast\n"), &settings, "parent", None),
             "fast-model"
         );
         assert_eq!(
-            model_for(&def("model: review\n"), &settings, "parent"),
+            model_for(&def("model: review\n"), &settings, "parent", None),
             "main-model"
         );
         assert_eq!(
-            model_for(&def("model: vendor/x-1\n"), &settings, "parent"),
+            model_for(&def("model: vendor/x-1\n"), &settings, "parent", None),
+            "vendor/x-1"
+        );
+    }
+
+    #[test]
+    fn only_inheriting_definitions_take_a_routed_model() {
+        let settings = Settings::default();
+        for frontmatter in ["", "model: inherit\n"] {
+            assert!(inherits(&def(frontmatter)));
+            let model = model_for(&def(frontmatter), &settings, "parent", Some("fast"));
+            assert_eq!(model, "fast");
+        }
+        let pinned = def("model: vendor/x-1\n");
+        assert!(!inherits(&pinned));
+        assert_eq!(
+            model_for(&pinned, &settings, "parent", Some("fast")),
             "vendor/x-1"
         );
     }

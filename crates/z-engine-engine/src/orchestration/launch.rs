@@ -13,10 +13,11 @@ use z_engine_protocol::{
 };
 use z_engine_tools::SpawnRequest;
 
-use super::blueprint::{Placement, child_spec, isolation};
+use super::blueprint::{Placement, child_spec, inherits, isolation};
 use super::sink::AgentSink;
 use super::tracker::AgentTracker;
 use super::worktree;
+use crate::decisions::route_subagent;
 use crate::run::{ChildTally, ModelChoice, RunContext, TranscriptSink};
 use crate::session::{AgentResources, SessionCore};
 
@@ -75,7 +76,11 @@ pub(crate) async fn prepare(
         .as_ref()
         .and_then(|resumed| resumed.prior.worktree.as_ref());
     let (placement, worktree) = place(core, &agent_id, wanted, prior_worktree).await;
-    let spec = child_spec(def, parent, agent_id.clone(), placement);
+    let routed = match &resumed {
+        None if inherits(def) => route_subagent(parent, &def.name, &agent_id, &req.prompt).await,
+        _ => None,
+    };
+    let spec = child_spec(def, parent, agent_id.clone(), placement, routed.as_deref());
     let description = resumed.as_ref().map_or_else(
         || req.description.clone(),
         |resumed| resumed.prior.description.clone(),

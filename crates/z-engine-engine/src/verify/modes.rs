@@ -2,7 +2,8 @@
 //! changed files. `report` only computes the badge. `auto` runs the
 //! selected checks (trusted workspaces only) when no fresh evidence exists
 //! and feeds failures back; `strict` also keeps the turn going until the
-//! badge is `Verified`. Both are bounded by `max_continuations`.
+//! badge is `Verified`. Both are bounded by `max_continuations`. Decision
+//! uses may narrow the selection and flag claims no check backs.
 
 use std::path::{Path, PathBuf};
 
@@ -11,9 +12,11 @@ use z_engine_context::{auto_check_failed, verification_required};
 use z_engine_protocol::{AgentId, CheckRecord, NoticeLevel, VerificationMode, VerificationOutcome};
 use z_engine_verify::select_checks;
 
+use super::claims::{claim_checks, show, unchecked_claim};
 use super::outcome::current_outcome;
 use super::record::{CheckRun, run_recorded};
 use super::verdict::{StopVerdict, Verifier};
+use crate::decisions::seams::select_needed;
 use crate::run::RunContext;
 
 const UNTRUSTED: &str = "automatic checks are disabled for untrusted projects";
@@ -46,11 +49,27 @@ impl Verifier for ModeVerifier {
         let mutated = core.with_state(|state| state.mutation.mutated);
         let mut outcome = current_outcome(core).await;
         if !mutated || !matches!(mode, VerificationMode::Auto | VerificationMode::Strict) {
+            if mode == VerificationMode::Report
+                && let Some(claim) = unchecked_claim(ctx, &outcome, changed).await
+            {
+                show(ctx, claim);
+            }
             return StopVerdict::Done(outcome);
         }
         let mut failures = None;
         if matches!(outcome, VerificationOutcome::Unverified { .. }) {
-            match auto_run(ctx, changed).await {
+            let mut run = auto_run(ctx, changed, &verification.auto_checks).await;
+            if let AutoRun::Skipped(reason) = run
+                && let Some(claim) = unchecked_claim(ctx, &outcome, changed).await
+            {
+                if reason != UNTRUSTED {
+                    run = auto_run(ctx, changed, &claim_checks()).await;
+                }
+                if matches!(run, AutoRun::Skipped(_)) {
+                    show(ctx, claim);
+                }
+            }
+            match run {
                 AutoRun::Skipped(reason) => outcome = explained(outcome, reason),
                 AutoRun::Ran { failures: failed } => {
                     failures = failed;
@@ -87,9 +106,10 @@ impl Verifier for ModeVerifier {
     }
 }
 
-/// Runs the `auto_checks` selection for the changed paths as the main
-/// agent. A cancelled or broken run stops early; its reason is logged.
-async fn auto_run(ctx: &RunContext, changed: &[PathBuf]) -> AutoRun {
+/// Runs the checks `selectors` pick for the changed paths as the main
+/// agent, less those the check-selection use finds unaffected. A cancelled
+/// or broken run stops early; its reason is logged.
+async fn auto_run(ctx: &RunContext, changed: &[PathBuf], selectors: &[String]) -> AutoRun {
     let core = &ctx.core;
     let settings = core.settings();
     if !settings.trusted {
@@ -101,13 +121,14 @@ async fn auto_run(ctx: &RunContext, changed: &[PathBuf]) -> AutoRun {
         .filter_map(|path| path.strip_prefix(&core.root).ok())
         .map(Path::to_path_buf)
         .collect();
-    let selected = select_checks(
-        &profile,
-        &settings.settings.verification.auto_checks,
-        &relative,
-    );
+    let selected = select_checks(&profile, selectors, &relative);
     if selected.is_empty() {
         return AutoRun::Skipped("no project check matches verification.auto_checks");
+    }
+    let strict = settings.settings.verification.mode == VerificationMode::Strict;
+    let selected = select_needed(ctx, selected, &relative, strict).await;
+    if selected.is_empty() {
+        return AutoRun::Skipped("no selected check can be affected by these changes");
     }
     let mut failed = Vec::new();
     for spec in selected {

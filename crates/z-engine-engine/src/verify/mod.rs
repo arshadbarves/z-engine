@@ -3,6 +3,7 @@
 //! at the main agent's stop boundary. Verification never blocks the user.
 
 mod catalog;
+mod claims;
 mod modes;
 mod outcome;
 mod record;
