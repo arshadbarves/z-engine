@@ -247,5 +247,16 @@ pub fn one_of_each() -> Vec<LogRecord> {
         LogRecord::Note {
             text: "imported note".into(),
         },
+        LogRecord::TaskView {
+            view: z_engine_protocol::decisions::TaskViewInfo {
+                boundary: MessageId::new(),
+                set_aside: 3,
+                tokens: 12_000,
+                restored: false,
+                created_at: 1_700_000_000_000,
+            },
+            working: vec![MessageId::new()],
+            index: Some(Message::user_text("index")),
+        },
     ]
 }

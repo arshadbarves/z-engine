@@ -96,6 +96,7 @@ fn records_are_tagged_by_camel_case_kind() {
         "title",
         "usage",
         "note",
+        "taskView",
     ]
     .into_iter()
     .map(String::from)

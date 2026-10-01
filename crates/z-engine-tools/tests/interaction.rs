@@ -129,6 +129,18 @@ async fn ask_user_question_formats_answers_and_dismissal() {
 }
 
 #[tokio::test]
+async fn ask_user_question_returns_an_earlier_answer_without_asking() {
+    let dir = project(&[]);
+    let mut port = FakeInteraction::new(true);
+    port.answered_earlier = Some("See message 2: \"use PostgreSQL\".".into());
+    let port = Arc::new(port);
+    let ctx = with(&dir, Arc::clone(&port));
+    let text = ok_text(&AskUserQuestionTool, &ctx, question()).await;
+    assert_eq!(text, "See message 2: \"use PostgreSQL\".");
+    assert!(port.asked.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn ask_user_question_validates_and_is_unavailable_to_subagents() {
     let dir = project(&[]);
     let ctx = with(&dir, Arc::new(FakeInteraction::new(true)));

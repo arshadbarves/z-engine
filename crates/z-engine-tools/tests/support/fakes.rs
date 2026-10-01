@@ -58,6 +58,7 @@ impl AgentPort for FakeAgents {
 pub struct FakeInteraction {
     pub can_ask: bool,
     pub answers: Option<Vec<QuestionAnswer>>,
+    pub answered_earlier: Option<String>,
     pub decision: PlanDecision,
     pub asked: Mutex<Vec<Vec<Question>>>,
     pub plans: Mutex<Vec<String>>,
@@ -69,6 +70,7 @@ impl FakeInteraction {
         Self {
             can_ask,
             answers: None,
+            answered_earlier: None,
             decision: PlanDecision::Revise {
                 feedback: "more detail".into(),
             },
@@ -83,6 +85,10 @@ impl FakeInteraction {
 impl InteractionPort for FakeInteraction {
     fn can_ask(&self, _ctx: &ToolCtx) -> bool {
         self.can_ask
+    }
+
+    async fn already_answered(&self, _ctx: &ToolCtx, _questions: &[Question]) -> Option<String> {
+        self.answered_earlier.clone()
     }
 
     async fn ask(
