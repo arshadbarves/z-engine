@@ -228,6 +228,9 @@ flowchart TD
   optional feedback to the model. Targets outside the
   project can be allowed for the session only; protected paths never offer
   a rule. Subagents pass the same gate, with cards labelled by agent.
+- **Subagents** are decided in their own mode (their definition's, else
+  their caller's), except that while the chat is in Bypass they all
+  bypass too; see [the agent registry](features-agents-and-context.md#the-agent-registry-and-custom-agents).
 
 **For developers**
 

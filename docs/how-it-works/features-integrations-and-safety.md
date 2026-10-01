@@ -296,9 +296,10 @@ itself the keys to your machine.
    - hooks, MCP servers and checks (they run programs);
    - the permission mode, `allow` rules, `additional_directories` and
      `auto_allow_read_only_bash` (they would approve actions for you);
-   - the whole `[shell]` (including the sandbox), `[provider]`, `[web]`
-     and `[lsp]` sections (how commands run, where your code is sent, web
-     access, language-server programs).
+   - the whole `[shell]` (including the sandbox), `[provider]`, `[web]`,
+     `[lsp]` and `[decisions]` sections (how commands run, where your code
+     is sent, web access, language-server programs, the decision model and
+     its sidecar).
 3. **Still applied:** the project's `deny` and `ask` rules (they only add
    caution) and its model, context, verification-mode and appearance
    settings.

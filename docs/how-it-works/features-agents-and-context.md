@@ -79,9 +79,10 @@ markdown files, or replace a built-in with one of the same name.
 - The definition shapes the child: `tools`/`disallowedTools` filter tools
   (a trailing `*` matches by prefix); `model` is `inherit`, a role (`main`,
   `fast`, `review`) or a model id; `permissionMode` falls back to the
-  caller's; `maxTurns` to `agents.max_turns`; `isolation` is `shared` or
-  `worktree`. Subagents never get `AskUserQuestion`, `ExitPlanMode` or
-  `ApplyAgentChanges`.
+  caller's (a chat in Bypass overrides it at each tool call, even for
+  `explore`; deny rules still apply); `maxTurns` to `agents.max_turns`;
+  `isolation` is `shared` or `worktree`. Subagents never get
+  `AskUserQuestion`, `ExitPlanMode` or `ApplyAgentChanges`.
 
 **For developers.**
 [`orchestration/registry.rs`](../../crates/z-engine-engine/src/orchestration/registry.rs)
@@ -89,6 +90,8 @@ merges the built-ins (`BUILTIN` in
 [`prompts/src/agents.rs`](../../crates/z-engine-prompts/src/agents.rs)) with
 definitions parsed by [`extensions/agent.rs`](../../crates/z-engine-config/src/extensions/agent.rs)
 and found by [`discover.rs`](../../crates/z-engine-config/src/extensions/discover.rs).
+`RunContext::mode` in [`run/spec.rs`](../../crates/z-engine-engine/src/run/spec.rs)
+applies the session's `Bypass` over the agent's mode.
 
 ## Worktree isolation and merge-back
 
@@ -377,4 +380,5 @@ the files and keeps the section stable. To add a language, add a walker,
 its extensions in `language.rs`, the tree-sitter grammar, and tests.
 
 See also: [Integrations and safety](features-integrations-and-safety.md) ·
+[Experimental features and the decision layer](features-experimental-and-decisions.md) ·
 [Crates](crates.md) · [v2 engine architecture](../architecture/v2-engine.md)

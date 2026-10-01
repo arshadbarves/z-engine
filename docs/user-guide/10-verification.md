@@ -124,6 +124,15 @@ max_continuations = 3
 auto_checks = ["test", "typecheck"]
 ```
 
+Two [experimental decision features](16-decision-features.md#verification)
+work here. **Completion check** reads the final message of a turn that
+ended Unverified. If it claims the work is done or tests passed, `report`
+mode shows **Claimed, not checked** on the receipt; `auto` and `strict`
+run the project's test, build and typecheck checks when none of your auto
+checks matched, and show the badge only when nothing can run. A claim by
+itself never makes a turn Verified. **Check selection** skips auto checks
+that the changed files can't affect.
+
 ## Custom checks
 
 Add your own checks in **Settings → Verification** (the checks list) or in

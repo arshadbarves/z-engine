@@ -26,7 +26,8 @@ How values combine:
   `permissions.allow`, `permissions.ask`, `permissions.deny`,
   `permissions.additional_directories`, `shell.env_passthrough`,
   `shell.sandbox.extra_writable`.
-- Hook lists (`[[hooks.<Event>]]`) are **concatenated**: all run.
+- Hook lists (`[[hooks.<Event>]]`) and `[[decisions.rules]]` are
+  **concatenated**: all run.
 - `[[verification.checks]]` merge by `id`: a later check with the same id
   replaces the earlier one.
 - `[mcp.servers.<name>]` and `[lsp.servers.<name>]`: a later server with the
@@ -47,8 +48,8 @@ Problems never stop the app:
   `verification.checks`, `permissions.mode`, `permissions.allow`,
   `permissions.additional_directories`,
   `permissions.auto_allow_read_only_bash`, and the whole `shell`,
-  `provider`, `web` and `lsp` sections. The project's `deny` and `ask`
-  rules still apply ([workspace trust](03-permissions-and-safety.md#workspace-trust)).
+  `provider`, `web`, `lsp` and `decisions` sections. The project's `deny`
+  and `ask` rules still apply ([workspace trust](03-permissions-and-safety.md#workspace-trust)).
 
 The first line of each file is `schema = 2`; the app manages it.
 
@@ -74,6 +75,7 @@ starts with one line saying what it is for:
 | Integrations | MCP | `mcp.servers.*` |
 | | Hooks | `hooks.*` |
 | System | Advanced | `context.*`, `agents.*`, `web.*`, `shell.*`, `lsp.*`, `compat.claude`, workspace trust |
+| | Experimental | `experimental.*`; `decisions.*` on the **Decision model** card, shown while a decision feature runs |
 | | About & Updates | version, updates, file locations |
 
 - **Search settings** at the top of the navigation finds single settings
@@ -266,6 +268,28 @@ roam = false      # stay in the title bar (and on the project home)
 The pet's level, streak and accessory are not settings: they are kept in
 `pet.json` in the data folder ([Sessions and data](13-sessions-and-data.md#where-things-live)).
 
+## Experimental
+
+`[experimental]` – one line per feature id, set to `"off"` (default),
+`"shadow"` or `"on"` (`false` and `true` also work). Settings →
+Experimental writes them; the 21 ids of this version are listed in
+[Decision features](16-decision-features.md#all-features-at-a-glance).
+A stable feature is always on and its line is ignored with a warning;
+`shadow` or `on` for a feature this version doesn't include stays off with
+a warning; `shadow` for a feature without shadow support stays off with a
+warning; an unknown id is reported as an unknown key. See
+[Experimental features](15-experimental-features.md).
+
+## Decisions
+
+`[decisions]` – the [decision model](15-experimental-features.md#the-decision-model)
+that the decision features ask: its runtime (`"sidecar"` or `"native"`),
+endpoint, checkpoint, timeout, confidence threshold and calibration, plus
+`[decisions.prefetch]`, `[decisions.routing]`, `[decisions.loop_guard]`,
+`[decisions.task_view]` and your own `[[decisions.rules]]`, which add up
+across layers like hooks. Every key, with its default and range, is in the
+[decision settings reference](17-decision-settings.md).
+
 ## Environment variables
 
 | Variable | Effect |
@@ -282,8 +306,10 @@ The pet's level, streak and accessory are not settings: they are kept in
 | `ZENGINE_GIT_BASH_PATH` | Windows: the Git Bash `bash.exe` to use. |
 | `RUST_LOG` | Detail of the app log, for example `debug` (default `info`). |
 
-Z Engine sets `ZENGINE=1` for commands it runs, and `ZENGINE_PROJECT_DIR`
-and `CLAUDE_PROJECT_DIR` for hooks.
+Z Engine sets `ZENGINE=1` for commands it runs, `ZENGINE_PROJECT_DIR`
+and `CLAUDE_PROJECT_DIR` for hooks, and the `LAYA_*` variables above for
+the decision model's sidecar. `decisions.api_key_env` names a variable of
+your choice.
 
 ## Importing v1 settings
 
@@ -307,4 +333,4 @@ entries such as `cargo test*` into `Bash(cargo test:*)`; maps the v1 hooks
 reported. API keys in `auth.json` keep working; keys for custom endpoints
 may need to be entered again because they are now stored per host.
 
-See also: [Permissions and safety](03-permissions-and-safety.md) · [Sessions and data](13-sessions-and-data.md) · [Troubleshooting](14-troubleshooting.md)
+See also: [Permissions and safety](03-permissions-and-safety.md) · [Sessions and data](13-sessions-and-data.md) · [Troubleshooting](14-troubleshooting.md) · [Experimental features](15-experimental-features.md) · [Decision settings reference](17-decision-settings.md)

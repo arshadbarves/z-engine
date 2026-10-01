@@ -98,6 +98,9 @@ other calls); it says why:
 
 - "denied by rule ..." – a deny rule in one of your settings files.
 - "plan mode is read-only" – switch modes (Shift+Tab) or approve a plan.
+  From a subagent such as `explore`, `plan` or `review`, the agent is
+  read-only by design: ask for one that may make changes (`@agent-general`),
+  or [Bypass](03-permissions-and-safety.md#permission-modes) overrides it.
 - "A PreToolUse hook blocked this call" – a hook refused it; `/hooks`
   shows recent hook runs.
 - "The user denied this action" – someone answered **Deny**.
@@ -155,6 +158,58 @@ PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 Add other variables your tools need to `shell.env_passthrough`, for
 example `["SSH_AUTH_SOCK", "JAVA_HOME"]`. To use another shell, set
 `shell.path`.
+
+### "The decision model is not used"
+
+The full notice is "The decision model is not used: *reason*.
+Experimental decisions keep today's behavior." It appears when a chat
+opens, or its settings change, while an
+[experimental decision feature](15-experimental-features.md#the-decision-model)
+runs in Shadow or On and the decision model can't be set up. Nothing
+breaks: those features keep today's behavior. The reason says what to
+fix:
+
+- "its sidecar did not start (...)" – check `decisions.sidecar.command`.
+  The sidecar gets the same limited environment as the agent's commands,
+  so use the program's full path or set `shell.env`
+  ([above](#commands-fail-with-command-not-found)).
+- "decisions.api_key_env names ..., which is not set" – set that variable
+  before you start Z Engine, or remove `api_key_env`.
+- "the decision endpoint ... is not on this machine; set
+  decisions.allow_remote to use it" – use an address on this computer, or
+  turn on `allow_remote` if you mean it.
+- "invalid decision endpoint ..." – use a full `http://` or `https://`
+  address without a user name or password in it.
+
+With **Runtime** set to **In the app** (`decisions.runtime = "native"`):
+
+- "this app was built without the native runtime (the `onnx` feature);
+  use the sidecar runtime" – this build can't run the model itself (the
+  release installers can't yet). Set **Runtime** back to **Sidecar**.
+- "the native model for checkpoint "*X*" is not downloaded; download it in
+  Settings (Experimental, Decision model)" – click **Download** (or
+  **Resume**) in the **Native model** row.
+- "the native runtime has no model for checkpoint "*X*" (it has english,
+  multilingual, typed-decisions)" – set **Checkpoint** to one of those.
+
+The in-app model loads in the background; while it loads, questions fall
+back ("the native model is still loading"), and **Test connection** may
+say "No answer yet". If it says "... of the native model does not match
+its pinned SHA-256; remove the model in Settings and download it again",
+do that: click **Remove**, then **Download**.
+
+A server that is set up but doesn't answer isn't checked when the chat
+opens. Each of its questions falls back instead, and the Context tab's
+**Decisions** section says "fell back: unavailable" or "fell back:
+timeout".
+
+**Test connection** on the Decision model card says "Not connected:" with
+the same reasons, or with what went wrong on the way: "the decision server
+is unreachable" (nothing answers at that address, or the sidecar is still
+starting), "the decision server answered HTTP 401" (a wrong or missing
+key), or "did not answer within 10000 ms". A slow answer, or a wrong
+answer to its test question, gets its own advice; see
+[Test the connection](15-experimental-features.md#test-the-connection).
 
 ### The first request is slow
 
@@ -228,4 +283,4 @@ tab, and a plan is reviewed in the **Plan** tab.
 
 **Is there a command-line version?** No. Z Engine 2.0 is a desktop app.
 
-See also: [Getting started](01-getting-started.md) · [Settings reference](12-settings-reference.md) · [Sessions and data](13-sessions-and-data.md)
+See also: [Getting started](01-getting-started.md) · [Settings reference](12-settings-reference.md) · [Sessions and data](13-sessions-and-data.md) · [Experimental features](15-experimental-features.md)

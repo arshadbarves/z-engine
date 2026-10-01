@@ -53,8 +53,10 @@ behavior as if it works; remove documentation of removed features.
 | verification | [user-guide/10-verification.md](user-guide/10-verification.md); how-it-works integrations page |
 | providers, models, cost | [user-guide/11-models-providers-and-cost.md](user-guide/11-models-providers-and-cost.md); how-it-works integrations page |
 | sessions, data locations, checkpoints, rewind | [user-guide/13-sessions-and-data.md](user-guide/13-sessions-and-data.md); how-it-works integrations page |
-| a UI surface or shortcut | the user-guide page for that flow; [how-it-works/features-desktop-screens.md](how-it-works/features-desktop-screens.md) (the window and engine link: [features-desktop-app.md](how-it-works/features-desktop-app.md)) |
+| a UI surface or shortcut | the user-guide page for that flow; [how-it-works/features-desktop-screens.md](how-it-works/features-desktop-screens.md) (the window and engine link: [features-desktop-app.md](how-it-works/features-desktop-app.md); the pet: [features-desktop-pet.md](how-it-works/features-desktop-pet.md)) |
 | a protocol event/command, a crate, crate ownership | [how-it-works/crates.md](how-it-works/crates.md) (and its diagram); [../AGENTS.md](../AGENTS.md); [architecture/v2-engine.md](architecture/v2-engine.md) |
+| an experimental feature (a new `FeatureId`, a stage change, graduation) | [user-guide/15-experimental-features.md](user-guide/15-experimental-features.md); the feature's own user-guide page once it is available (a decision feature: [16-decision-features.md](user-guide/16-decision-features.md)); [how-it-works/features-experimental-and-decisions.md](how-it-works/features-experimental-and-decisions.md); [status.md](status.md#graduation-criteria) for graduation criteria and results; the changelog as Added (experimental), then Changed (stable), then Removed (old path) |
+| a decision use, a decision question, the decision model or its settings | [user-guide/16-decision-features.md](user-guide/16-decision-features.md) (what each feature does), [17-decision-settings.md](user-guide/17-decision-settings.md) (every `[decisions]` key and rule field) and [15-experimental-features.md](user-guide/15-experimental-features.md) (the model card, runtimes); [how-it-works/features-decision-uses.md](how-it-works/features-decision-uses.md) (the uses) and [features-experimental-and-decisions.md](how-it-works/features-experimental-and-decisions.md) (seams, providers, native runtime, trace); [architecture/v2-engine.md](architecture/v2-engine.md#decision-seams) when a seam, event or command changes |
 | an error message, a new failure mode, a diagnostic | [user-guide/14-troubleshooting.md](user-guide/14-troubleshooting.md) |
 | anything user-visible | an entry under `## [Unreleased]` in [../CHANGELOG.md](../CHANGELOG.md) (Added / Changed / Fixed / Removed) |
 
@@ -78,6 +80,14 @@ Before writing a fact, confirm it where it is defined:
 - permissions: `crates/z-engine-policy/src/rules/` and `src/decide/`;
 - hooks: `crates/z-engine-engine/src/hooks/`, `crates/z-engine-config/src/settings/hooks.rs`;
 - events and commands between app and engine: `crates/z-engine-protocol/src/`;
+- experimental features (ids, stage, `available`, graduation criteria):
+  `crates/z-engine-config/src/features/registry.rs`; their effective mode and
+  warnings: `crates/z-engine-config/src/settings/experimental.rs`;
+- decision questions: `crates/z-engine-prompts/prompts/decisions/`; decision
+  uses and seams: `crates/z-engine-engine/src/decisions/` (`USES` in
+  `registry.rs`); decision settings: `crates/z-engine-config/src/settings/decisions.rs`
+  and its `decisions_*.rs` sub-tables; native model pins:
+  `crates/z-engine-decisions/src/native_model.rs`;
 - UI surfaces and shortcuts: `crates/z-engine-gui/ui/src/components/`, `ui/src/lib/domain/composerKeys.ts`.
 
 If the code and a document disagree, the code wins: fix the document, or

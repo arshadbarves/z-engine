@@ -176,7 +176,8 @@ calls share the same execution gate (hooks, policy, approval).
 
 All runtime LLM instruction prose belongs in
 [prompt Markdown](../../crates/z-engine-prompts/prompts) under an area folder
-(`system`, `agents`, `commands`, `tools`, `reminders`, `auxiliary`), registered
+(`system`, `agents`, `commands`, `tools`, `reminders`, `auxiliary`,
+`decisions`), registered
 with one `pub const` per file in `crates/z-engine-prompts/src/<area>.rs`. This
 includes agent definitions, tool descriptions and reminders; do not embed prose
 in Rust control flow or Svelte components.
@@ -215,8 +216,24 @@ Use the config flow: a section struct with defaults in
   experience records. Use the existing auth boundary.
 - Prefer runtime flags for experiments. Use Cargo features only for optional
   compile-time dependencies/platform capabilities with tested combinations.
-- Every temporary flag records its owner, evaluation criteria, and removal
-  condition; flags cannot disable safety invariants.
+- Every new user-visible feature starts Experimental: a `FeatureId` with a
+  `FeatureSpec` in
+  [the feature registry](../../crates/z-engine-config/src/features/registry.rs)
+  recording its owner, measurable graduation criteria, shadow support and
+  whether it is built (`available`). It defaults to Off.
+- Code asks for a feature's mode only through `Settings::feature(id)`
+  (Off, Shadow, On); never read `[experimental]` directly. Shadow runs the
+  feature and records what it would have done without changing behavior.
+- Graduation: once the criteria are met (results in
+  [status](../status.md)), mark the spec Stable (always on, its setting
+  ignored with a warning); the next release removes the old path, the
+  spec and the flag's docs. The changelog moves it from Added
+  (experimental) to Changed, then lists the old path under Removed.
+- A flag never disables a safety invariant. A decision use may only
+  tighten (turn an Allow into an Ask), never allow, deny or loosen.
+- Every decision-model failure (unset, unreachable, slow, malformed,
+  unsure, cancelled) must behave exactly as Off; prove it in
+  `decisions/seams/tests.rs`.
 
 ## 11. GUI, APIs, and observability
 

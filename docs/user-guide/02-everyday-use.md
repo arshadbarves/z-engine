@@ -190,14 +190,16 @@ maximize or restore the window.
 
 ## Your pet
 
-The pet is a small creature, named **Zen** until you rename it, that lives
-in the island. Its face echoes the status line: busy while the agent works,
-amber and looking at you when something needs you, cheering when a turn is
-verified, drooping when one fails, sleepy after quiet minutes, and greeting
-you when the app opens. It never tells you anything the line doesn't.
+The pet is a small 3D creature, named **Zen** until you rename it, that
+lives in the island (a flat version stands in where 3D can't be drawn). Its
+face echoes the status line: busy while the agent works, amber and looking
+at you when something needs you, cheering when a turn is verified, drooping
+when one fails, sleepy after quiet minutes, and greeting you when the app
+opens. It never tells you anything the line doesn't.
 
 At the default **Lively** level with **Let it roam** on, the pet leaves the
-island while nothing needs you. It sits above **What should we work on?** on
+island while nothing needs you, and the island keeps a small round portrait
+of it that turns to watch it. It sits above **What should we work on?** on
 the project home, stands on the composer's top edge in a chat (and now and
 then walks to the sidebar's bottom edge or sits in the side panel's tab
 bar), sits in an empty Inbox, watches the composer while you type, and naps
@@ -206,7 +208,7 @@ agent works, hops in when something needs you, and tucks itself away while
 a menu or the palette is open. Drag it to the nearest spot, click to boop
 it, and double-click or right-click it for its card. Under Reduce Motion it
 appears in its new spot instead of walking there and does no idle strolls
-or tricks.
+or tricks, and the portrait holds still.
 
 The **pet card** shows its name, level, stage, XP to the next level, day
 streak and counts of **Turns**, **Verified** and **Applied**. **Wears**
@@ -295,6 +297,8 @@ shows is set in **Settings → Appearance → Task report detail**
 
 Notes such as **Cancelled**, **Failed**, **Stopped** or **Interrupted**
 always show. Hover a receipt for the turn's time, tokens and cost.
+[Experimental decision features](16-decision-features.md) may add
+**Claimed, not checked** here and cards (plan first, save a rule, run a review).
 
 ## The side panel
 

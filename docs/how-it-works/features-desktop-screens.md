@@ -2,7 +2,8 @@
 
 What each main surface of the window does, from the project home to the
 palette. How the window talks to the engine, how events become the screen and
-how the app updates itself are on [The desktop app](features-desktop-app.md).
+how the app updates itself are on [The desktop app](features-desktop-app.md);
+the pet has its own page, [The desktop pet](features-desktop-pet.md).
 Terms are in the [glossary](glossary.md); the UI rules in the
 [GUI UI guide](../design/gui-ui-guide.md).
 
@@ -20,7 +21,7 @@ while you looked elsewhere waits.
 - The **Inbox** lists what **needs you** in every chat (approvals can be
   answered there), chats that **finished while you were away**, and every
   **notice** in full while the app runs; its badge counts all three.
-- A fresh install (no projects, no chats) first meets the [pet](#the-pet)
+- A fresh install (no projects, no chats) first meets the [pet](features-desktop-pet.md)
   (its name and look), then sets up a model, a project and its trust, the
   permission mode and how lively the pet is. The pet stays above the setup
   card and reacts to each step.
@@ -68,6 +69,11 @@ the details; failures stay in view.
   jumps to one. While a summary compaction runs (`compactionStarted`), a
   "Compacting context…" row ends the transcript; the marker then becomes a
   "Context compacted · 180k → 24k" divider with the summary.
+- [Experimental decision features](features-decision-uses.md) add a few
+  surfaces: a **Routed** chip (`routeChosen`), a task-view divider with
+  **Include full history** (`taskViewApplied`, kept on reopen),
+  **Claimed, not checked** on the receipt, and suggestion cards at the end
+  of the transcript (`suggested`), which hide once the next turn starts.
 
 **For developers**
 - [`components/chat/`](../../crates/z-engine-gui/ui/src/components/chat/):
@@ -79,6 +85,11 @@ the details; failures stay in view.
   [`chat/tools/ToolCall.svelte`](../../crates/z-engine-gui/ui/src/components/chat/tools/ToolCall.svelte)
   picks the card from the family in [`lib/domain/tools/toolMeta.ts`](../../crates/z-engine-gui/ui/src/lib/domain/tools/toolMeta.ts)
   (a new card: a `FAMILIES` entry, a component, a branch in `ToolCall`).
+- Decision surfaces: `chat/RouteChip.svelte` and `chat/TaskViewDivider.svelte`
+  (through `LocalCards`), the claim in `TurnFooter` (`claimNote()` in
+  `lib/domain/verification.ts`), and `planning/Suggestions.svelte` with
+  `PlanSuggestion`, `RuleSuggestion` and `ReviewSuggestion` (state in
+  `lib/domain/sessionView/suggestions.ts`).
 
 ## Approval, question and plan cards
 
@@ -121,7 +132,7 @@ who knocks before taking down a wall.
 ## The island and the pet
 
 **In plain words.** The middle of the title bar is a small pill, the
-*island*: the [pet](#the-pet) and one line about what the agent is doing,
+*island*: the [pet](features-desktop-pet.md) and one line about what the agent is doing,
 like a colleague you can see across the desk. A ring beside it shows how
 full the context is; an amber count, how many other chats need you.
 
@@ -147,9 +158,10 @@ full the context is; an amber count, how many other chats need you.
   you, cheers when a turn is verified and droops when one fails. Running
   agents orbit it; a ring shows the `TodoWrite` plan's progress.
 - At the default **Lively** level (`ui.companion`) it also reacts to you
-  (typing, scrolling back, quiet minutes, coming back) and may roam;
-  **Calm** reacts only to the agent and stays in the island; **Off** shows
-  a dot.
+  (typing, scrolling back, quiet minutes, coming back) and may roam, while
+  the island shows a small [portrait](features-desktop-pet.md#the-islands-portrait)
+  of it looking its way; **Calm** reacts only to the agent and stays in
+  the island; **Off** shows a dot.
 
 **For developers**
 - [`chrome/TitleStatus.svelte`](../../crates/z-engine-gui/ui/src/components/chrome/TitleStatus.svelte)
@@ -161,84 +173,12 @@ full the context is; an amber count, how many other chats need you.
 - `createLive()` in [`lib/stores/live.svelte.ts`](../../crates/z-engine-gui/ui/src/lib/stores/live.svelte.ts)
   computes the status, the pet's pose (`petPose()` in `lib/domain/pet/pose.ts`)
   and the clock once, for the title bar and the roaming pet;
-  `pet/IslandPet.svelte` draws the pet in the island's slot, and
+  `pet/IslandPet.svelte` draws the pet in the island's slot (its
+  `IslandPortrait` while the pet roams), and
   `lib/stores/island.svelte.ts` holds whether the island card and the
   context card are open.
 - The card calls `context_breakdown` ([`Engine::context_breakdown`](../../crates/z-engine-engine/src/engine/queries/context.rs)),
   the estimate `/context` prints, which also arrives as `contextReport`.
-
-## The pet
-
-**In plain words.** The pet keeps you company like a cat that follows you
-from room to room: it sits where you work while nothing is going on, runs
-back to the title bar when the agent gets busy or needs you, and slowly
-grows as work gets done. It only echoes the status line, never adds to it.
-
-**How it works**
-1. Where it goes follows rules, most important first: being dragged;
-   something needs you (it hops into the island); the agent works (it
-   rides in the island); you type (it watches from the composer's edge); a
-   turn was just verified (it celebrates where it is); a menu, the palette
-   or the island card is open (it tucks itself away); 3 minutes without
-   activity (it naps); otherwise it rests or now and then wanders.
-2. The places it can be are *perches*: slots it sits in (the island, the
-   spot above the home page's question, the empty Inbox, the side panel's
-   tab band) and edges it stands on (the top of the composer, the sidebar
-   footer). It rests on the home spot, in the empty Inbox, else on the
-   composer, and wanders between the composer, the sidebar and the panel;
-   while the panel covers the stage, the stage's perches are out of reach.
-   Dropped after a drag, or thrown, it lands on the nearest perch (dizzy
-   after a hard throw or a shake).
-3. It moves on springs: it hops, walks, turns and swings from your grip,
-   and a frame loop runs only while it moves. Its breathing is a CSS loop;
-   perches are measured on resize and scroll and on the status clock's
-   half-second tick (only while a turn runs or the pet is lively), so an
-   idle pet costs almost nothing.
-4. **Calm** keeps it in the island, `ui.pet.roam = false` leaves only the
-   home spot, and **Off** removes it. Under Reduce Motion it appears at its
-   new spot instead of walking, with no idle strolls or tricks.
-5. It grows from live events of any chat: `turnFinished` (10 XP for a
-   completed turn, 15 more if verified) and `agentUpdated` with a worktree
-   applied (20 XP), plus 5 for the first of the day, which also extends the
-   day streak. Each turn or apply counts once (the last 200 ids are kept),
-   and reopening a chat awards nothing. Level *L* needs 25·*L*·(*L*−1) XP
-   (up to 99); stages change at levels 3, 6 and 10, accessories unlock at
-   2, 4, 6 and 9, idle tricks at 1, 3, 5 and 7. A new level waits in
-   `pet.levelUp` until the island is not asking for you, then plays the
-   `levelUp` reaction (confetti, 1.6 s) at Lively and clears; Calm and
-   Off clear it silently.
-6. Growth is written to `<data dir>/pet.json` shortly after each change,
-   through a temporary file and a rename so a crash cannot cut it short;
-   saves over 64 KB are refused. Its name, look and roaming are settings
-   (`[ui.pet]`). Its card (double-click or right-click it, the palette, or
-   **Settings → Pet**) shows the level ring, XP, streak, counts, what it
-   wears and its tricks.
-
-**For developers**
-- Pure rules, each with vitest tests, in [`lib/domain/pet/`](../../crates/z-engine-gui/ui/src/lib/domain/pet/):
-  `behavior.ts` (`petBehavior()`, `NAP_MS`, `WANDER_PERCHES`), `perches.ts`
-  (`PerchId`, `PERCH_SIZE`, `nearestPerch()`, `STAGE_PERCHES`), `pose.ts`
-  (`petPose()`, the moods), `emotions.ts` (how each mood looks),
-  `motion.ts` (walks, hops, flings and drops), `physics.ts` and `drag.ts`
-  (springs, the swing from your grip), `growth.ts` (`applyGrowth()`,
-  `xpForLevel()`) and `looks.ts` (looks, stages, accessories, tricks).
-- [`components/pet/`](../../crates/z-engine-gui/ui/src/components/pet/):
-  `Pet` (the SVG body inside the HTML `.pet-breath` wrapper), `PetFace`,
-  `PetProps`, `PetBubble`, `IslandPet`, `PetLayer` (the roaming pet above
-  the app: drag, throw, boop), `petMotion.svelte.ts` (plays moves frame by
-  frame), `petEyes` and `petGaze`, `petIdle.svelte.ts` (strolls, wanders,
-  tricks), `PetCard` with `PetCardPopover`, `PetSprite` (helpers) and
-  `PetLookPicker`. An element becomes a perch with the `perch` action in
-  `lib/ui/perch.svelte.ts`; UI-only state (card, perch, reactions) is
-  `petUi` in `lib/stores/pet.svelte.ts`.
-- Growth: `eventEffects()` in `lib/domain/sessions.ts` returns a
-  `petGrowth` effect, `lib/runtime/effects.ts` hands it to `pet` in
-  [`lib/runtime/pet.svelte.ts`](../../crates/z-engine-gui/ui/src/lib/runtime/pet.svelte.ts),
-  which loads and saves through `pet_load` and `pet_save`
-  ([`commands/pet.rs`](../../crates/z-engine-gui/src-tauri/src/commands/pet.rs),
-  stored by `PetStore` in [`src-tauri/src/pet.rs`](../../crates/z-engine-gui/src-tauri/src/pet.rs)).
-  Settings types: `PetSettings`, `PetLook` in
-  [`settings/ui.rs`](../../crates/z-engine-config/src/settings/ui.rs).
 
 ## The side panel
 
@@ -278,7 +218,12 @@ exactly what was last sent to the model.
   conversation, tools), whose legend filters an outline to search, and
   **Insights** (the largest part, what repeats across turns); **Copy all**
   copies it all. With the whole stage, a reader shows one part, rendered
-  or raw; picking a part in the docked panel expands it.
+  or raw; picking a part in the docked panel expands it. Below Insights,
+  **Decisions** appears while an
+  [experimental decision feature](features-experimental-and-decisions.md)
+  runs or has recorded decisions: what runs and in which mode, who answers,
+  speed, tokens saved, and the newest 50 decisions. It refreshes after each
+  turn and when opened.
 
 **For developers**
 - [`components/sidepanel/`](../../crates/z-engine-gui/ui/src/components/sidepanel/)
@@ -307,7 +252,9 @@ exactly what was last sent to the model.
 - Context: [`overlays/PromptInspector.svelte`](../../crates/z-engine-gui/ui/src/components/overlays/PromptInspector.svelte)
   with its `Inspector*` parts (the ring is `InspectorMap`); parsing in
   `lib/domain/requestInspect.ts`, the outline in `lib/domain/inspectOutline.ts`;
-  data from `Engine::last_request`.
+  data from `Engine::last_request`. Decisions: `overlays/InspectorDecisions.svelte`
+  over `session_decisions` (`Engine::session_decisions`), worded by
+  `lib/domain/decisionTrace.ts`.
 
 ## Settings and scopes
 
@@ -319,10 +266,19 @@ comes from.
 **How it works**
 - Pages (⌘, or Ctrl+,) are grouped: **General** (Models, Providers,
   Appearance, Pet), **Agent** (Permissions, Memory, Verification, Agents &
-  Commands), **Integrations** (MCP, Hooks) and **System** (Advanced, About
-  & Updates). Settings covers the window as a sheet that settles into place
-  and reopens where you left it; search finds single settings by everyday
-  words and scrolls to them.
+  Commands), **Integrations** (MCP, Hooks) and **System** (Advanced,
+  Experimental, About & Updates). Settings covers the window as a sheet
+  that settles into place and reopens where you left it; search finds
+  single settings by everyday words and scrolls to them.
+- **Experimental** lists features this version includes that are still
+  experimental (the 21 decision features), each with Off, Shadow and On
+  and an "Experimental" tag. While a decision feature is
+  Shadow or On, the **Decision model** card below sets up the model
+  (runtime **Sidecar** or **In the app**, sidecar or endpoint, timeout,
+  threshold, recording) and offers **Test connection** for the project
+  open in Settings. With **In the app**, its **Native model** row shows
+  whether the pinned files are downloaded, with **Download**, **Cancel**,
+  **Resume** and **Remove**, polling progress twice a second.
 - A layered page names the file it saves to (**Saving to**): **User** (every
   project), **This project** (`.z-engine/settings.toml`, shared) or
   **Personal (local)** (`.z-engine/settings.local.toml`, kept out of git).
@@ -341,8 +297,17 @@ comes from.
   `lib/ui/motion.ts`, a fade under Reduce Motion); `openSettings()` in
   `lib/stores/app-actions.ts` opens it at a page and a setting.
 - Shell: [`commands/settings.rs`](../../crates/z-engine-gui/src-tauri/src/commands/settings.rs)
-  (`set_setting`, `add_permission_rule`, `set_hooks`, ...), `layers.rs`,
-  `commands/access.rs` (keys, trust), `commands/extensions.rs` and `guard.rs`.
+  (`set_setting`, `add_permission_rule`, `set_hooks`, `feature_catalog`,
+  `test_decision_model`, ...), `layers.rs`, `commands/access.rs` (keys,
+  trust), `commands/extensions.rs` and `guard.rs`.
+- Experimental: `ExperimentalTab.svelte`, `DecisionModelCard.svelte` and
+  `DecisionNativeModel.svelte`; the catalog in
+  `lib/stores/features.svelte.ts`, listing and modes in
+  `lib/domain/settings/features.ts` (also the search entries), test
+  wording in `lib/domain/settings/decisionModel.ts`, the native model row's
+  in `nativeModel.ts`; the shell
+  commands `decision_model_status`, `download_decision_model`,
+  `cancel_decision_model_download` and `remove_decision_model`.
 
 ## The composer, palette and shortcuts
 
@@ -375,6 +340,7 @@ chat, a project, a setting or an action.
   with `lib/paletteActions.ts` and `lib/domain/palette.ts`; global keys in
   `lib/stores/shortcuts.ts`.
 
-See also: [The desktop app](features-desktop-app.md) · [How Z Engine works](README.md) ·
+See also: [The desktop app](features-desktop-app.md) · [The desktop pet](features-desktop-pet.md) ·
+[Experimental features and the decision layer](features-experimental-and-decisions.md) · [How Z Engine works](README.md) ·
 [Everyday use](../user-guide/02-everyday-use.md) · [Agents](../user-guide/04-agents.md) ·
 [Settings reference](../user-guide/12-settings-reference.md) · [The crates](crates.md)

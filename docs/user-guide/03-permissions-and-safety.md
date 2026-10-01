@@ -30,8 +30,15 @@ Switch modes:
 The mode chip, the palette, `/mode` and Shift+Tab change only the current
 chat.
 
+[Subagents](04-agents.md) run in the mode their definition sets (the
+built-in `explore`, `plan` and `review` run in Plan), or else in the mode
+of the agent that started them. Bypass is the exception: while the chat is
+in Bypass, every subagent bypasses too, whatever its own mode, and deny
+rules still apply. No other chat mode overrides a subagent's own mode.
+
 > **Warning:** Use Bypass only in a sandbox or a disposable checkout. The
-> agent can then delete files or run any command without asking.
+> agent and its subagents can then delete files or run any command without
+> asking.
 
 ## What runs without asking
 
@@ -51,7 +58,8 @@ With no rules configured, this is what each mode does:
 | Start a subagent, load a skill, update todos | Allow | Allow | Allow | Allow |
 
 Subagents are allowed because each of *their* actions goes through the same
-gate. A command counts as read-only only when Z Engine can prove it: every
+gate, in the subagent's own mode (Bypass when the chat is in Bypass). A
+command counts as read-only only when Z Engine can prove it: every
 part of the command line is a known read-only program and every file it
 reads is inside the project. You can turn this off with **Run read-only
 shell commands without asking** (`permissions.auto_allow_read_only_bash`).
@@ -88,6 +96,18 @@ one; **N more waiting after this** counts them. Cards from subagents are
 labelled with the agent's type and task. Approvals waiting in other chats
 are listed in the [Inbox](02-everyday-use.md#the-inbox), where **Allow
 once** and **Deny** answer them without opening the chat.
+
+### Approvals from experimental features
+
+Some [experimental decision features](16-decision-features.md#safety) add
+cards for calls your rules already allow: **Risk review** ("Risk review:
+this Bash call …"), **Secret screening** ("Send 2 possible secrets from
+Read output to the model?"; Deny replaces them with
+`[secret withheld by the user: <kind>]`), your own
+[decision rules](17-decision-settings.md#custom-rules), and the **Loop
+guard** after repeated reminders. They offer no **Always allow…** rule. A
+decision can only add an approval, a notice or a note; it never allows or
+denies anything. In Bypass mode they post a notice instead of asking.
 
 ## Writing rules
 
@@ -223,6 +243,7 @@ instead:
 | everything under `[provider]` | it decides where your code is sent |
 | everything under `[web]` | it controls web access, including private networks |
 | everything under `[lsp]` | language server commands are programs |
+| everything under `[decisions]`, including `[[decisions.rules]]` | it decides where decision questions are sent, its sidecar command is a program, and its rules can add approvals |
 
 The project's `deny` and `ask` rules **do** apply, because they only add
 caution. Model choices, context, verification mode and appearance also

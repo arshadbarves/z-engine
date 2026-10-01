@@ -34,6 +34,14 @@ agent, not to you; the main agent relays what matters.
 (both default to your main model); see
 [Models, providers and cost](11-models-providers-and-cost.md#model-roles).
 
+While the chat is in **Bypass** mode, every subagent runs in Bypass too,
+including the read-only `explore`, `plan` and `review`, so they no longer
+ask or refuse. Deny rules still apply, and a
+[worktree agent](#worktree-isolation) still changes files only in its
+worktree. Turn Bypass off and each agent returns to its own mode from its
+next action. See
+[Permission modes](03-permissions-and-safety.md#permission-modes).
+
 Subagents never get the tools that talk to you (`AskUserQuestion`,
 `ExitPlanMode`) or `ApplyAgentChanges`.
 
@@ -191,7 +199,7 @@ saves a copy in Z Engine's folder that takes precedence.
 | `tools` | Allowed tools, as a list or a comma-separated string. Omit it or use `*` for all tools. Entries ending in `*` match by prefix (`mcp__github__*`). |
 | `disallowedTools` | Tools to remove (also `disallowed_tools`). |
 | `model` | `inherit` (default: the caller's model), `main`, `fast`, `review`, or a model id. |
-| `permissionMode` | `default`, `acceptEdits`, `plan` or `bypass`. Default: the caller's mode. An agent from an [untrusted](03-permissions-and-safety.md#workspace-trust) project can't use a looser mode than its caller. |
+| `permissionMode` | `default`, `acceptEdits`, `plan` or `bypass`. Default: the caller's mode. An agent from an [untrusted](03-permissions-and-safety.md#workspace-trust) project can't use a looser mode than its caller. While the chat is in Bypass, the agent runs in Bypass whatever this says. |
 | `isolation` | `shared` (default) or `worktree`. |
 | `maxTurns` | Model turns this agent may take (also `max_turns`). Default: `agents.max_turns`. |
 | `color` | A display color; stored with the definition. |

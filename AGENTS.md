@@ -25,15 +25,16 @@ crates/
 ├── z-engine-protocol/     # leaf: ids, conversation model, Event/Command (ts-rs -> ui/src/lib/protocol/)
 ├── z-engine-prompts/      # leaf: ALL prompt prose as markdown under prompts/<area>/*.md
 ├── z-engine-llm/          # ModelClient seam, openai_chat + anthropic adapters, retry, fallback, catalog, cost
-├── z-engine-config/       # settings layering + v1 migration, credentials, trust, extension discovery
+├── z-engine-config/       # settings layering + v1 migration, credentials, trust, extension discovery, feature registry
 ├── z-engine-policy/       # pure permission engine: rules, modes, shell analysis
-├── z-engine-host/         # the ONLY OS/network adapter: fs, processes, jobs, search, git, checkpoints, web
+├── z-engine-host/         # the ONLY OS/network adapter: fs, processes, jobs, search, git, checkpoints, web, model download
 ├── z-engine-integrations/ # MCP (stdio + HTTP) and LSP clients over one JSON-RPC core
 ├── z-engine-context/      # pure prompt assembly, reminders, repo map, tokens, compaction planning
 ├── z-engine-verify/       # check discovery, records, output parsing, freshness, outcome
-├── z-engine-store/        # session logs, subagent transcripts, artifacts, index, v1 import
+├── z-engine-store/        # session logs, subagent transcripts, artifacts, index, v1 import, decision dataset
+├── z-engine-decisions/    # decision layer: questions, answers, DecisionProvider (rules, systemone, onnx, hybrid), native model pins, cache, calibration, trace
 ├── z-engine-tools/        # Tool trait, capability ports, registry, builtin/<tool>.rs (one file per tool)
-├── z-engine-engine/       # orchestrator: sessions, agent runs, gating, hooks, jobs, commands, GUI queries
+├── z-engine-engine/       # orchestrator: sessions, agent runs, gating, hooks, jobs, commands, decision seams and uses, GUI queries
 ├── z-engine-testkit/      # dev-only: ScriptedModel, FixtureRepo, EventRecorder
 └── z-engine-gui/
     ├── src-tauri/         # Tauri shell: builder wiring, AppState, event bridge, commands/<domain>.rs
@@ -50,7 +51,7 @@ tools        -> host, policy
 integrations -> host
 verify       -> host
 context      -> (leaf crates only)
-llm, config, policy, host, store -> (leaf crates only)
+llm, config, policy, host, store, decisions -> (leaf crates only)
 every crate  -> protocol, prompts
 testkit      -> llm (dev-dependency of other crates only)
 ```
@@ -63,7 +64,11 @@ testkit      -> llm (dev-dependency of other crates only)
 - Only `host` touches the OS or network (processes, git, HTTP). The
   documented exceptions: `integrations` owns its server processes and MCP
   HTTP connections, `llm` sends the model-provider and models.dev
-  requests, and the GUI shell checks GitHub for updates and installs them,
+  requests, `decisions` sends `POST /v1/systemone` to the decision model
+  (loopback unless `decisions.allow_remote`; its optional sidecar is
+  started by `engine` through `host` background shells) and, with the
+  `onnx` feature, reads the native model files that `host` downloaded,
+  and the GUI shell checks GitHub for updates and installs them,
   and opens or reveals project files (`open_path`, `reveal_path`) through
   the opener plugin. `config` and `store` read/write their own files;
   `context` and `policy` do no I/O.
@@ -96,6 +101,12 @@ testkit      -> llm (dev-dependency of other crates only)
    use `anyhow`; its commands return display strings to the webview.
 7. **Tests live next to what they test** (`#[cfg(test)] mod tests`) or in
    `tests/` for integration flows. One concern per integration file.
+8. **Every new feature starts Experimental**: a `FeatureId` in
+   `z-engine-config/src/features/registry.rs` (owner, graduation criteria,
+   default off), checked only through `Settings::feature(id)`. It becomes
+   Stable once it meets its criteria (recorded in `docs/status.md`); a flag
+   never disables a safety invariant, and a decision use may only tighten
+   (Allow to Ask), never loosen.
 
 ## GUI shell (`crates/z-engine-gui/src-tauri/src`)
 
@@ -117,7 +128,7 @@ commands/        # ALL #[tauri::command] fns, one file per domain:
 
 ## Frontend (`crates/z-engine-gui/ui/src`)
 
-**Svelte 5 + Bits UI + Vite.** Canonical UI rules:
+**Svelte 5 + Bits UI + Vite**, with Three.js for the pet only. Canonical UI rules:
 [`docs/design/gui-ui-guide.md`](docs/design/gui-ui-guide.md).
 
 ```
@@ -132,29 +143,31 @@ ui/src/
 │   ├── timeline/               #   turns, blocks and tool-run groups for the transcript
 │   ├── tools/                  #   per-tool presentation helpers
 │   ├── settings/               #   forms, scopes, provenance, credentials, settings search
-│   └── pet/                    #   the pet: pose, emotions, motion, looks, growth, perches, behavior
-├── lib/stores/                 # composer, settings, UI chrome (side panel, island, live status), the pet's UI state, shortcuts, confirm, onboarding
+│   └── pet/                    #   the pet: pose, emotions, motion, looks, growth, perches, behavior; face shapes, 3D rig, portrait
+├── lib/pet3d/                  # the pet in 3D (Three.js): shared WebGL renderer, frame loop, palette, scene (ONLY three import)
+├── lib/stores/                 # composer, settings, feature catalog, UI chrome (side panel, island, live status), the pet's UI state, shortcuts, confirm, onboarding
 ├── lib/ui/                     # Bits UI wrappers + Icon + Button + small kit (Pill, SearchField, SelectionCapsule), springs, motion, presence, perch, whenVisible (ONLY bits-ui import)
 └── components/
-    ├── chat/ chat/tools/       # transcript, turn summaries and actions, composer, approval and tool cards, tool-run groups
-    ├── planning/               # questions, the Plan tab, todos
+    ├── chat/ chat/tools/       # transcript, turn summaries and actions, composer, approval and tool cards, tool-run groups, route chip, task-view divider
+    ├── planning/               # questions, the Plan tab, todos, decision suggestion cards
     ├── agents/                 # the Agents tab (helpers and jobs), apply cards, subagent transcripts
-    ├── settings/               # settings page, grouped nav, scope menu and tabs
+    ├── settings/               # settings page, grouped nav, scope menu and tabs, Experimental page and decision model card
     ├── sidepanel/              # the side panel: tab band, Changes / Plan / Agents / Context
-    ├── overlays/               # Changes tab, prompt inspector (Context tab), palette, worktree dialog, shell drawer
+    ├── overlays/               # Changes tab, prompt inspector (Context tab, with its Decisions section), palette, worktree dialog, shell drawer
     ├── chrome/                 # AppShell, MainStage, title bar with the island and satellites, full-window page frame, splash
-    ├── pet/                    # the pet: body, island slot, roaming layer, card
+    ├── pet/                    # the pet: 3D or flat (SVG) view, island slot and portrait, roaming layer, card
     ├── sidebar/                # projects and chats, nav, footer
     ├── home/                   # project home: starters, Continue / Changes / setup cards
     ├── inbox/                  # Activity inbox: needs you, finished, notices
     └── onboarding/             # first-run steps
 ```
 
-Rules: screens never `invoke()` or import `bits-ui`; engine events are
-listened to only in `lib/runtime/listen.ts` (the updater's progress events
-in `lib/updateStore.ts`); stylesheets live only in `styles/`; file budget
-≤300 / hard cap 400. Do not add SvelteKit, Tailwind, shadcn-svelte, React,
-or a second design system.
+Rules: screens never `invoke()` or import `bits-ui`; only `lib/pet3d/`
+imports `three`, and it is loaded lazily (`components/pet/petView.ts`);
+engine events are listened to only in `lib/runtime/listen.ts` (the
+updater's progress events in `lib/updateStore.ts`); stylesheets live only
+in `styles/`; file budget ≤300 / hard cap 400. Do not add SvelteKit,
+Tailwind, shadcn-svelte, React, or a second design system.
 
 ## How to add things (follow exactly)
 
@@ -170,6 +183,8 @@ or a second design system.
 | an event/command variant | `z-engine-protocol` enum, handle it in the engine (actor / emitter) and in `lib/domain/sessionView`; run `cargo test -p z-engine-protocol` and commit the TS |
 | a built-in agent | `z-engine-prompts/prompts/agents/<name>.md` (frontmatter) + `BUILTIN` entry in `src/agents.rs` |
 | a hook event | `HOOK_EVENTS` in `z-engine-config/src/settings/hooks.rs`, fire it from `z-engine-engine/src/hooks/`, document it in `docs/architecture/v2-engine.md` and `docs/user-guide/08-hooks.md` |
+| a feature | a `FeatureId` variant (`features/id.rs`) and its `FeatureSpec` in `z-engine-config/src/features/registry.rs` (Experimental, owner, graduation criteria, `available` once built); gate the code on `settings.feature(id)`; it is listed in Settings > Experimental by itself; document it in `docs/user-guide/15-experimental-features.md` (a decision feature in `16-decision-features.md`, its settings in `17-decision-settings.md`) and the CHANGELOG as Added (experimental); regenerate TS |
+| a decision use | `z-engine-engine/src/decisions/uses/<name>.rs` implementing `DecisionUse` for its seams, added to `USES` in `decisions/registry.rs`; question wording in `z-engine-prompts/prompts/decisions/<name>.md` with a `pub const` in `src/decisions.rs`; every failure must behave as Off (extend `decisions/seams/tests.rs`) |
 
 Every row above also means updating the documentation (next section).
 

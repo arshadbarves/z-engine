@@ -36,7 +36,8 @@ Do not add a component library that ships its own theme.
   updater's progress in `lib/updateStore.ts`); window and webview APIs only
   in `WindowControls`, `AppShell` and `lib/runtime/pathDrop.ts` (OS drops).
 - Bits UI is imported only inside `lib/ui/*`. Feature components use our
-  wrappers (`Dialog`, `Menu`, `Popover`, …).
+  wrappers (`Dialog`, `Menu`, `Popover`, …). Three.js (`three`) is imported
+  only inside `lib/pet3d/`, which `components/pet/petView.ts` loads lazily.
 - The IPC contract in `lib/commands/*.ts` is the seam to the Tauri shell;
   engine events arrive as `EventEnvelope`s on the `engineEvent` channel and
   their types are generated into `lib/protocol/` (never edit those files).
@@ -89,7 +90,8 @@ crates/z-engine-gui/ui/src/
 │   │   ├── timeline/       # transcript turns, blocks, tool-run groups, the long-chat window
 │   │   ├── tools/          # per-tool presentation helpers
 │   │   ├── settings/       # forms, scopes, provenance, credentials, settings search
-│   │   └── pet/            # pose, emotions, motion, looks, growth, perches, behavior
+│   │   └── pet/            # pose, emotions, motion, looks, growth, perches, behavior; face shapes and layout, 3D rig, portrait
+│   ├── pet3d/              # the pet in 3D: shared WebGL renderer, frame loop (petFrames), palette, scene; the only three import
 │   ├── stores/             # composer, settings, ui chrome and side panel, panel nudges, island, live, pet, stage, shortcuts, confirm, onboarding, app actions
 │   ├── ui/                 # Bits UI kit + Icon + Button + small primitives (4.3); motion, springs, presence, perch, whenVisible (4.5)
 │   └── svelte/             # bindStore() — store → rune
@@ -101,7 +103,7 @@ crates/z-engine-gui/ui/src/
     ├── sidepanel/          # the side panel card and its tab band
     ├── overlays/           # Changes tab (DiffPanel), prompt inspector (Context tab), palette, worktree dialog, shell drawer
     ├── chrome/             # AppShell, MainStage, TopBar, the island (capsule, card) and satellites, FullPage, splash
-    ├── pet/                # the pet: body, face, props, motion, island slot, roaming layer, card, look picker, helper sprite
+    ├── pet/                # the pet: 3D/flat switch, SVG body, face, props, motion, island slot and portrait, roaming layer, card, look picker, helper sprite
     ├── sidebar/            # AppSidebar, SidebarNav, ProjectGroup, ChatRow, SidebarFooter
     ├── home/               # project home: header, starters, Continue / Changes / setup cards
     ├── inbox/              # Activity inbox: needs you, finished, notices
@@ -221,7 +223,7 @@ adding a banner, pill, panel tab or pet behavior.
   (`.sheet`, `.glass`, `.glass-strong`, edge blurs), the kit (`kit.css`,
   `kit-parts.css`, `buttons.css`, `fields.css`, `segmented.css`,
   `panels.css`) and one or more files per area (`sidepanel.css`,
-  `island.css`, `island-card.css`, `pet-*.css`, …), each under 400 lines.
+  `island*.css`, `pet-*.css`, …), each under 400 lines.
 - Canonical tokens only (`--l1-bg` … `--l3-*`, `--sheet`, `--raised`,
   `--label-2`, `--separator`, `--r-m`, `--elev-2`, …); the legacy aliases
   (`--surface`, `--text-2`, …) are gone.
@@ -260,7 +262,8 @@ adding a banner, pill, panel tab or pet behavior.
 - Looping decorative animations run on HTML elements (the compositor
   animates them), never on SVG groups, which restyle and repaint every
   frame: the pet breathes on its `.pet-breath` wrapper (`pet-moves.css`),
-  so an idle window does no per-frame work.
+  and the 3D pet draws only through `petFrames` (`lib/pet3d/scheduler.ts`)
+  while something plays, so an idle window does no per-frame work.
 - Read layout in a frame callback, never in the middle of an update
   (`perches.measure()` in `lib/ui/perch.svelte.ts`), and let work needed
   only on screen wait for `whenVisible()` (`lib/ui/whenVisible.ts`: turn

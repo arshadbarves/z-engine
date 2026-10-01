@@ -73,6 +73,22 @@ A Rust package, the unit the code is split into. Z Engine has one crate per
 responsibility, such as `z-engine-host` for everything that touches the
 operating system. See [Crates](crates.md).
 
+## D
+
+### Decision model
+
+A small, fast model on your computer (a server, a [sidecar](#sidecar) or
+the [native runtime](#native-runtime)) that experimental decision features
+ask short questions. Its answer counts only when it is confident. See
+[The decision layer](features-experimental-and-decisions.md#the-decision-layer).
+
+### Decision use
+
+The code behind one decision feature: it asks the
+[decision model](#decision-model) at a [seam](#seam) and may act on a
+confident answer. This version has 21. See
+[Decision uses](features-decision-uses.md).
+
 ## E
 
 ### Effort and thinking
@@ -88,7 +104,20 @@ A typed message the engine sends to the app when something happens, such
 as `textDelta`, `toolStarted` or `turnFinished`. The window is drawn from
 events. See [From events to a screen](features-desktop-app.md#from-events-to-a-screen).
 
+### Experimental feature
+
+A new feature that stays optional, and off unless you turn it on in
+**Settings → Experimental**, until it meets a measured bar and
+[graduates](#graduation).
+See [Experimental features and graduation](features-experimental-and-decisions.md#experimental-features-and-graduation).
+
 ## F
+
+### Fallback (decision)
+
+When the [decision model](#decision-model) is unset, fails, is slow or is
+unsure, the feature does exactly what it does when Off. See
+[The decision layer](features-experimental-and-decisions.md#the-decision-layer).
 
 ### Fallback model
 
@@ -97,11 +126,25 @@ fails after retries and before any answer text arrived. They are listed in
 `model.fallbacks`. See
 [Providers and models](features-integrations-and-safety.md#providers-and-models).
 
+### Feature flag
+
+An [experimental feature](#experimental-feature)'s mode in
+`[experimental]`: Off (the default), [Shadow](#shadow-mode) or On. See
+[Experimental features and graduation](features-experimental-and-decisions.md#experimental-features-and-graduation).
+
 ### Fingerprint
 
 A short digest of the size and modification time of every project file.
 If it changed after a [check](#check) ran, that check's evidence is stale.
 See [Verification](features-integrations-and-safety.md#verification).
+
+## G
+
+### Graduation
+
+An [experimental feature](#experimental-feature) that met its bar becomes
+Stable and always on; the next release removes the old behavior and its
+flag. See [Experimental features and graduation](features-experimental-and-decisions.md#experimental-features-and-graduation).
 
 ## H
 
@@ -177,6 +220,15 @@ The AI program that reads text and writes text, such as Claude or GPT. On
 its own it cannot open a file or run a command; the engine does that for
 it. See [What an AI coding agent is](README.md#what-an-ai-coding-agent-is).
 
+## N
+
+### Native runtime
+
+Running the [decision model](#decision-model) inside the app instead of as
+a separate server, from files downloaded once in Settings and checked
+against pinned checksums (`decisions.runtime = "native"`). See
+[Reaching the decision model](features-experimental-and-decisions.md#reaching-the-decision-model).
+
 ## P
 
 ### Permission mode
@@ -187,11 +239,12 @@ The chat-wide setting for how much runs without asking: **Ask**,
 
 ### Pet
 
-The small creature in the title bar's [island](#island) (named Zen unless
+The small 3D creature in the title bar's [island](#island) (named Zen unless
 you rename it; it replaced the older "companion" orb). It shows the agent's
 state as body language, may roam onto the composer, the sidebar and the
-[side panel](#side-panel) while nothing needs you, and levels up as turns
-finish. See [The pet](features-desktop-screens.md#the-pet).
+[side panel](#side-panel) while nothing needs you (the island then shows a
+small portrait of it), and levels up as turns finish. See
+[The desktop pet](features-desktop-pet.md).
 
 ### Prompt
 
@@ -259,10 +312,22 @@ An operating-system fence around shell commands: they may write only in the
 project and a few safe folders, and can be kept off the network. It is off
 by default. See [The sandbox](features-integrations-and-safety.md#the-sandbox).
 
+### Seam
+
+One of the fixed points of a turn where a [decision use](#decision-use)
+may give advice, each with limits; at the tool gate it can only turn an
+allow into an ask. See [Seams](features-experimental-and-decisions.md#seams-where-a-decision-may-act).
+
 ### Session
 
 One chat: its messages, turns, approvals and checks, stored in its own
 folder so it can be reopened and resumed. See [Sessions and persistence](features-integrations-and-safety.md#sessions-and-persistence).
+
+### Shadow mode
+
+A [feature flag](#feature-flag) setting where the feature runs and records
+what it would have done, but never changes a turn. See
+[Seams](features-experimental-and-decisions.md#seams-where-a-decision-may-act).
 
 ### Side panel
 
@@ -270,6 +335,12 @@ The panel beside the chat with four tabs: **Changes** (what changed in your
 files), **Plan**, **Agents** (helpers and background jobs) and **Context**
 (the last prompt sent to the model). It can be resized or cover the whole
 stage. See [The side panel](features-desktop-screens.md#the-side-panel).
+
+### Sidecar
+
+The [decision model](#decision-model) server Z Engine starts itself from
+`decisions.sidecar.command`, once for the whole app, and stops on quit. See
+[Reaching the decision model](features-experimental-and-decisions.md#reaching-the-decision-model).
 
 ### Skill
 
@@ -313,6 +384,13 @@ and the [repo map](#repo-map). See
 [One turn at a glance](README.md#one-turn-at-a-glance).
 
 ## T
+
+### Task view
+
+The working set a decision feature gives the model at a new task: earlier
+exchanges the task doesn't need are set aside, saved to files and listed
+in one index, while your transcript keeps everything. See
+[Task-scoped history](features-decision-uses.md#task-scoped-history-and-its-record).
 
 ### Token
 

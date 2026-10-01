@@ -39,6 +39,17 @@ panel and overlays, and the pet. Keep it true when a surface moves.
   the transcript ends in a "Compacting context…" row. Each marker is a
   divider in `LocalCards`, "Context compacted · 180k → 24k · Summary", whose
   disclosure holds the summary.
+- **Decision surfaces** (experimental features, all quiet one-liners):
+  `RouteChip` ("Routed" or "Subagent routed" · effort · model · reason,
+  from `routeChosen`) and `TaskViewDivider` ("N earlier exchanges (X
+  tokens) set aside for this task", with **Include full history** on the
+  latest; from `taskViewApplied`) sit in `LocalCards`; the claim badge
+  "Claimed, not checked" is a warn note in `TurnFooter` (`claimNote()` in
+  `lib/domain/verification.ts`); `planning/Suggestions` ends the transcript
+  with `PlanSuggestion`, `RuleSuggestion` and `ReviewSuggestion`
+  (`currentSuggestions()` in `sessionView/suggestions.ts`: the current
+  turn's cards, at most five kept, plan first only in Default mode). Only
+  task views survive a reopen.
 - **Approvals and questions** wait in the composer, not the transcript
   (`planning/PendingInteractions` inside `Composer`): the oldest approval
   (focused) or else the oldest question takes the draft's place, the draft
@@ -122,8 +133,8 @@ is the pet's `panel` perch.
 | Changes tab | `overlays/DiffPanel` with `DiffHeader`, `DiffFileTree`, `DiffView`, `DiffRows`, `DiffCode`, `DiffFileBar`; under 640 px wide it drops the layout switch and slims the file list, under 560 px it stacks the list above the diff (`diff.css`) | `foldContext()`, `splitRows()` in `diffRows.ts`; `highlightLine()` in `lib/highlight.ts` |
 | Plan tab | `planning/PlanView` (review, edit, approve); `PlanReady` is its row in the transcript | `panelPlan()` in `plans.ts` |
 | Agents tab | `agents/WorkPanel`, `ApplyCard`, `AgentRow`, `JobRow`; `AgentSummary` (with `pet/PetSprite`) is the one helper layout for its rows and the transcript's Agent card | `agentSections()`, `agentActivity()` in `agentTree.ts` |
-| Context tab | `overlays/PromptInspector` with `InspectorMap` (a ring of the context window whose legend filters the outline), `InspectorOutline`, `InspectorInsights`; `InspectorReader` while expanded | `outlineGroups()` in `inspectOutline.ts` |
-| Settings (full-window page) | `settings/SettingsPage`, `SettingsNav`, `ScopeMenu`, `SettingsGroup` | `SETTINGS_SECTIONS`, `searchSettings()` in `settings/searchIndex.ts`; `foldGroups()` in `components/settings/folding.ts` |
+| Context tab | `overlays/PromptInspector` with `InspectorMap` (a ring of the context window whose legend filters the outline), `InspectorOutline`, `InspectorInsights`, `InspectorDecisions` (while a decision feature runs or has run); `InspectorReader` while expanded | `outlineGroups()` in `inspectOutline.ts`; `decisionFacts()`, `decisionLine()` in `decisionTrace.ts` |
+| Settings (full-window page) | `settings/SettingsPage`, `SettingsNav`, `ScopeMenu`, `SettingsGroup`; the Experimental page is `ExperimentalTab` with `DecisionModelCard` (runtime, connection, Test connection) and its `DecisionNativeModel` row (download, cancel, resume, remove) | `SETTINGS_SECTIONS`, `searchSettings()` in `settings/searchIndex.ts`; `foldGroups()` in `components/settings/folding.ts`; `listedFeatures()`, `featureEntries()` in `settings/features.ts`; card wording in `settings/decisionModel.ts` and `settings/nativeModel.ts` |
 | Palette | `overlays/CommandPalette` | `paletteActions()` in `lib/paletteActions.ts`; `rankPalette()` in `palette.ts` |
 | Worktree dialog, shell drawer | `overlays/WorktreeDialog`, `overlays/ShellOverlay` (inside `Composer`) | `create_worktree`; `lib/shellStore.ts` |
 | Home, Inbox, first run | `home/`, `inbox/`, `onboarding/` | `startersFor()`, `setupChecklist()`; `inboxSnapshot()`; `needsOnboarding()`, `onboardingPose()` |
@@ -143,8 +154,28 @@ is the pet's `panel` perch.
   resizes, on window resize and scroll, and on the live clock's tick (twice
   a second while a turn runs or the pet is lively). `petMotion.svelte.ts`
   runs a frame loop only while the pet hops, walks, turns, is thrown, drops
-  or swings from your grip; breathing is a CSS loop on the HTML
-  `.pet-breath` wrapper, so an idle pet costs no frames.
+  or swings from your grip. The 3D pet draws through `petFrames`
+  (`lib/pet3d/scheduler.ts`), one `requestAnimationFrame` loop for every
+  view that runs only while one wants frames (60 fps for moves, blinks and
+  morphs, 30 fps for mood loops and helpers), stops while the document is
+  hidden, and draws once per change under Reduce Motion. Breathing is a
+  CSS loop on the HTML `.pet-breath` wrapper, so an idle pet costs no
+  frames.
+- Every screen draws `pet/Pet`: the 3D `Pet3D` once `loadPet3D()`
+  (`petView.ts`) has loaded it and `lib/pet3d` in their own chunk, else the
+  SVG `PetFlat` (while loading, without WebGL, and while `webgl.lost`).
+  `lib/pet3d/` is the only code that imports `three`; its one offscreen
+  `WebGLRenderer` draws every view and copies it into the view's own 2D
+  canvas. The boot splash and `PetSprite` stay SVG. A new prop or
+  accessory needs its SVG part and its model (`lib/pet3d/props.ts`,
+  `accessories.ts`); a new body motion its CSS keyframes and its entry in
+  `lib/domain/pet/rig3d.ts`; face shapes live once, in `faceShapes.ts`.
+- While the pet roams, the island's slot shows `pet/IslandPortrait`, so
+  the island keeps its width: the pet's head (`framing="portrait"`),
+  turned toward the roaming pet (`petUi.at`, published by `PetLayer`) by
+  `portraitLook()` in `lib/domain/pet/portrait.ts`, in a ring of the
+  status tone; still under Reduce Motion. The slot, the ring and the Off
+  dot are in `styles/island-pet.css`.
 - `ui.companion`: lively reacts to the agent and the user and roams while
   `ui.pet.roam`; calm reacts only to the agent and stays in the island;
   off shows the island's dot. Reactions (`petUi.react`: a boop, a level-up
@@ -155,4 +186,4 @@ is the pet's `panel` perch.
   interrupting. Under Reduce Motion its springs jump, it neither walks nor
   blinks, and `petIdle` plays no strolls or tricks. Only
   `lib/runtime/pet.svelte.ts` loads and saves `pet.json`
-  ([how the pet works](../how-it-works/features-desktop-screens.md#the-pet)).
+  ([how the pet works](../how-it-works/features-desktop-pet.md)).

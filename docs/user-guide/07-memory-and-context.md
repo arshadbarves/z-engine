@@ -150,7 +150,9 @@ shows the model and **Copy all**.
 - **Insights**, folded at the bottom, names the largest part, how many
   tokens are reusable across turns (system prompt and tools, which the
   provider can cache) and how many change every turn, with hints to shrink
-  the request.
+  the request. Below it, a **Decisions** section appears while an
+  [experimental decision feature](15-experimental-features.md#see-what-decisions-did)
+  runs, or has run, in the chat.
 - **The selected part** reads on the right while the panel uses the whole
   stage (picking a part in the docked panel expands it), with its kind,
   tokens and share of the request. **Reader** shows it formatted (a tool as
@@ -189,6 +191,23 @@ palette. `/compact` takes optional focus instructions:
 ```
 
 A `PreCompact` [hook](08-hooks.md) runs before each summary.
+
+### Experimental: smarter context
+
+Several [experimental decision features](16-decision-features.md#context-and-cost)
+change what the model is sent, never your transcript:
+
+- **Relevance-aware compaction** clears the old tool results the current
+  task no longer needs first.
+- **Task-scoped history** sets earlier exchanges aside when you start a
+  new task in a long chat. A divider says "N earlier exchanges (X tokens)
+  set aside for this task"; click **Include full history** to bring them
+  back for this task.
+- **First-request context** orders the repository map for the chat's
+  first request, and **File prefetch** attaches files the request will
+  likely need.
+- **Relevant output trimming** and **Search ranking** keep the parts of
+  long command output and capped search results that matter to the task.
 
 ## The repository map
 
@@ -229,4 +248,4 @@ points on the system prompt, the tool list and the last two user messages.
 Cache reads and writes are counted separately in `/cost`. See
 [Models, providers and cost](11-models-providers-and-cost.md#prompt-caching-and-cost).
 
-See also: [Commands and skills](06-commands-and-skills.md) · [Settings reference](12-settings-reference.md#context) · [Hooks](08-hooks.md)
+See also: [Commands and skills](06-commands-and-skills.md) · [Settings reference](12-settings-reference.md#context) · [Hooks](08-hooks.md) · [Decision features](16-decision-features.md)

@@ -26,10 +26,16 @@ flowchart LR
 ```
 
 - **Engine** (process-wide): paths, session store, model catalog, web client,
-  a `ClientFactory` (tests inject a scripted model), and an event sink
-  (`Arc<dyn Fn(EventEnvelope)>`) shared by every session.
+  a `ClientFactory` (tests inject a scripted model), an event sink
+  (`Arc<dyn Fn(EventEnvelope)>`) shared by every session, at most one
+  decision-model sidecar (`decisions/sidecar.rs`), shared by sessions with
+  the same launch settings and stopped by `Engine::shutdown`, and the
+  `NativeRuntime` (`decisions/native/`): one model download at a time and,
+  with the `onnx` feature, the loaded native model sessions share.
 - **Session**: `SessionCore` is shared state behind short-lived locks
-  (settings, policy, transcript state, session log, broker, jobs, tools).
+  (settings, policy, transcript state, session log, broker, jobs, tools,
+  and the `DecisionHub`: decision service, trace, shadow slots, and what
+  the uses remember between seams).
   The **session actor** task owns the command channel and never blocks on
   the model or a tool: turns run in their own tasks and report back through
   an internal channel. Approvals, questions and plan reviews wait on the
@@ -49,12 +55,17 @@ background jobs have tokens under the session and survive.
 1. Check cancellation, the per-run turn budget (`agents.max_turns`) and the
    session cost cap.
 2. Relieve context pressure: above 50% of the window, clear old tool results
-   (spilling originals to artifacts); above `context.compact_at_percent`,
-   summarize older history with the `fast` model (`PreCompact` hook first).
+   (spilling originals to artifacts; the pressure decision seam may keep
+   planned clears or add more, keeping wins); above
+   `context.compact_at_percent`, summarize older history with the `fast`
+   model (`PreCompact` hook first).
 3. Build the request: cache-stable system sections (base prompt,
    environment, instructions, skills, output style), filtered tool specs,
    the working transcript, cache breakpoints on the last two user messages,
    thinking/effort, and pending reminders appended to the last user message.
+   The request decision seam (`screen_request`) may first ask the user
+   before likely credentials in new tool results are sent; withheld values
+   become placeholders in this and every later request.
 4. Stream the response: text/thinking deltas become events; `Retrying`
    becomes a `retrying` event; a context-overflow error forces compaction
    and one retry.
@@ -80,12 +91,17 @@ For each call, in order:
    request. All asks in a batch are requested together; the GUI may answer
    them in any order. `AllowSession` adds a session rule; `AllowProject`
    also persists the rule to `.z-engine/settings.local.toml`; `Deny` returns
-   the user's feedback to the model.
+   the user's feedback to the model. Between the decision (policy plus any
+   hook override) and the approval, the tool-gate decision seam
+   (`review_call`) may only turn an `Allow` into an `Ask` with no rule to
+   suggest or persist; it never allows, denies or changes an `Ask`.
 
 Execution keeps call order: neighbouring calls that are concurrency-safe
 run together; any other call is a barrier and runs alone. Each call emits
 `toolStarted`, streamed `toolProgress`, and `toolFinished`, then runs
-`PostToolUse` hooks (extra context or feedback is appended to the result).
+`PostToolUse` hooks (extra context or feedback is appended to the result)
+and, unless the call was cancelled, the after-call decision seam, whose
+notes are put ahead of the result as reminders.
 Writes mark the run as mutated, refresh read tracking, and queue nested
 `AGENTS.md`/rules reminders for newly touched directories.
 
@@ -100,9 +116,52 @@ When the model ends a response without tool calls:
    `auto` runs the configured checks and feeds failures back; `strict`
    additionally continues until checks pass. Both are bounded by
    `verification.max_continuations`; `report` only computes the badge.
-4. Otherwise the run ends. The turn records its outcome, usage, cost and
+4. Main agent only, when verification is done: the stop decision seam may
+   continue the run once per turn with a reminder
+   (`MAX_DECISION_CONTINUATIONS`).
+5. Otherwise the run ends. The turn records its outcome, usage, cost and
    verification badge (`Verified` / `Unverified` / `Failed` /
    `NotApplicable`).
+
+### Decision seams
+
+Experimental decision features (`decisions_*` in `[experimental]`) act only
+at the seams in `decisions/seams/` (`Seam` in `decisions/registry.rs`):
+
+| Seam | Called from | On advice |
+|---|---|---|
+| turn start | `session/turn.rs`, after `UserPromptSubmit` hooks | reminders in the opening message |
+| context pressure | `run/pressure.rs` | keep or add planned clears; keeping wins |
+| before a request | `run/agent.rs` | flag credentials for one approval |
+| tool gate | `batch/gate.rs` | Allow becomes Ask (no rule to persist) |
+| after a call | `batch/call.rs` | notes ahead of the result |
+| stop boundary | `run/stop.rs` | one reminder per turn |
+| ask user | `ports/interaction.rs` | a tool result instead of asking |
+| route | `routing/start.rs`, `orchestration/launch.rs` | effort or model within what the task allows |
+| completion | `verify/claims.rs` | a claim the verifier may act on |
+| check select | `verify/modes.rs` | check ids to skip |
+| relevance | `ports/relevance.rs` | which parts of a long result matter |
+| turn end | `session/turn.rs`, in the background | the turn's tone |
+| attention | `hooks/notify.rs`, `session/open.rs` | urgency per item |
+
+A seam returns at once when no running use joins it. Shadow uses run
+detached, at most four per session (extra ones skipped), and their advice
+is dropped; `on` uses share a deadline of twice `decisions.timeout_ms`
+plus 50 ms, and advice applies in `USES` order. Decisions only escalate:
+no seam can allow, deny, cancel a turn or set a badge. Any model failure
+abstains, so behavior equals Off (`decisions/seams/tests.rs`,
+`tests/decisions_fallback.rs`; `tests/decisions_all_on.rs` and
+`tests/decisions_shadow.rs` hold the safety rules with every feature On
+or in Shadow). `USES` registers 21 uses, one per feature.
+
+Their protocol surface: events `routeChosen { route }`,
+`taskViewApplied { view }`, `completionClaimUnchecked { claim }`,
+`suggested { suggestion }`, `suggestionResolved { suggestionId, accepted }`,
+`turnToneJudged { turnId, tone }` and `urgencyScored { urgency }`;
+commands `resolveSuggestion { suggestionId, accepted }` and
+`includeFullHistory`. Only task views persist (below); the rest are live.
+Details: [the decision layer](../how-it-works/features-experimental-and-decisions.md)
+and [decision uses](../how-it-works/features-decision-uses.md).
 
 ## Tools contract (`z-engine-tools`)
 
@@ -144,8 +203,10 @@ the engine:
   `.z-engine/agents` and `.claude/agents`. Tools are filtered by the
   definition; `AskUserQuestion` and `ExitPlanMode` are never given to
   subagents; `Agent` is removed at the depth limit.
-- A subagent's permission mode is its definition's mode, else the parent's.
-  Its approvals appear in the GUI labelled with its agent id.
+- A subagent's permission mode is its definition's mode, else the parent's,
+  except that a session in `bypass` overrides it at every tool call
+  (`RunContext::mode`). Its approvals appear in the GUI labelled with its
+  agent id.
 - Foreground agents return their final message (plus usage and changed
   files) as the `Agent` tool result. Background agents return a job id at
   once; completion queues a reminder for the parent. `resume` continues a
@@ -161,10 +222,14 @@ the engine:
 
 `z-engine-store` keeps one directory per session: `log.jsonl` (records:
 messages, turns, todos, plans, questions, approvals, agents, checks,
-checkpoints, compactions, rewinds, mode/model/title changes, usage),
-`meta.json`, `agents/<id>.jsonl`, and `artifacts/`. Replay rebuilds the
-display transcript and the model's working set; a turn that started but
-never finished is reported as `Interrupted`. v1 files are imported on
+checkpoints, compactions, rewinds, mode/model/title changes, usage, task
+views), `meta.json`, `agents/<id>.jsonl`, and `artifacts/`. Replay rebuilds
+the display transcript and the model's working set; a turn that started but
+never finished is reported as `Interrupted`. A `TaskView` record
+(`decisions_task_view`) stores the kept message ids in order plus the
+index message, so replay rebuilds the same reduced working set; one with
+`restored` set brings the full history back. `SessionSnapshot.task_views`
+lists them for the GUI's dividers. v1 files are imported on
 first open and left untouched.
 
 Before each user turn the engine snapshots the working tree into a shadow
@@ -197,8 +262,8 @@ stderr as the reason; other codes warn. JSON stdout may set `decision`
 **Workspace trust.** Until the user trusts a workspace, its project layers
 may only restrict: `settings/effective.rs` takes hooks, MCP servers,
 checks, the permission mode, allow rules, additional directories,
-`auto_allow_read_only_bash`, and the whole `shell`, `provider`, `web` and
-`lsp` sections from the user layer, while the project's deny and ask rules
+`auto_allow_read_only_bash`, and the whole `shell`, `provider`, `web`,
+`lsp` and `decisions` sections from the user layer, while the project's deny and ask rules
 still apply. A project agent definition cannot run looser than its caller
 (`orchestration/blueprint.rs`), and a project command's `allowed-tools`
 grant nothing (`commands/expand.rs`). Opening a session of an untrusted

@@ -38,6 +38,8 @@ Updates → Files & storage** shows the actual paths with copy buttons.
 | `sessions/<id>.jsonl` | v1 chat files not imported yet. |
 | `checkpoints/` | Shadow git repositories for code checkpoints, one per project. |
 | `cache/models-dev.json` | The cached model catalog. |
+| `decisions/dataset/` | Only when `decisions.record_dataset` is on: one `<question>.jsonl` file per decision question, a line per answer with the question's full input, which can include text from your chats ([Record decisions](15-experimental-features.md#record-decisions)). |
+| `models/laya/<revision>/` | Only after you download the decision model on **Settings → Experimental** ([Run it in the app](15-experimental-features.md#run-it-in-the-app-native)): its files, each checked against a pinned SHA-256 checksum. An unfinished file is kept as `<name>.part` so the download can resume. **Remove** on the card deletes the folder. |
 | `workspaces.json` | The project folders listed under **Projects** in the sidebar. |
 | `pet.json` | Your [pet](02-everyday-use.md#your-pet)'s growth: XP, day streak, counts of turns, verified turns and applied changes, what it wears, and the last 200 turns and applies it counted (so none counts twice). If it is missing or unreadable, the pet starts fresh. |
 | `z-engine-gui.log` | The app log. |
@@ -62,7 +64,7 @@ next time you open Z Engine.
 | `log.jsonl` | Every event of the chat in order: messages, turns, approvals, questions, plans, todos, agents, checks, checkpoints, compactions, rewinds, mode/model changes, usage. |
 | `meta.json` | Title, project, dates, message count, cost. Rebuilt from the log if missing. |
 | `agents/<agent id>.jsonl` | Each subagent's transcript. |
-| `artifacts/` | Full outputs that were too long for the chat: long command output, cleared tool results, check logs. |
+| `artifacts/` | Full outputs that were too long for the chat: long command output, cleared tool results, check logs, and the exchanges [task-scoped history](16-decision-features.md#task-scoped-history) set aside (`task-view-turn-N.txt`). |
 
 Chats are written as they happen, so they survive a crash. If the app
 closes in the middle of a turn, that turn shows **Interrupted · the app
@@ -142,16 +144,26 @@ answer its question about them).
 - Web searches go to your search provider (Brave, Tavily, Exa or your
   SearXNG), and WebFetch requests go to the sites being fetched.
 - MCP servers receive the arguments of the tool calls made to them.
+- The [decision model](15-experimental-features.md#the-decision-model),
+  if you turn on a decision feature, receives its questions: short digests
+  of your request, the agent's recent steps and tool output. A sidecar
+  must be on this computer unless you turn on `decisions.allow_remote`;
+  the in-app model sends nothing. Downloading the in-app model fetches
+  its files from Hugging Face.
+- [Secret screening](16-decision-features.md#secret-screening), when On,
+  asks before likely credentials in tool output are sent to your model
+  provider; side requests to the fast model are not screened.
 - Z Engine downloads the model catalog from `models.dev` when it has none
   cached or the cached copy is a day old, and checks GitHub for updates
   when it starts.
 
 **Stays on your computer:** your chats, logs and artifacts, checkpoints,
-settings, keys (except each key going to its own provider), and trust
-decisions. Z Engine has no account and sends no usage data of its own.
+settings, keys (except each key going to its own provider), trust
+decisions, and the decision dataset. Z Engine has no account and sends no
+usage data of its own.
 
 > **Tip:** To keep secrets away from the model, deny them:
 > `deny = ["Read(./.env)", "Read(~/.ssh/**)"]`. A deny rule for `Read`
 > also stops shell commands from reading those files.
 
-See also: [Everyday use](02-everyday-use.md) · [Settings reference](12-settings-reference.md) · [Troubleshooting](14-troubleshooting.md)
+See also: [Everyday use](02-everyday-use.md) · [Settings reference](12-settings-reference.md) · [Troubleshooting](14-troubleshooting.md) · [Experimental features](15-experimental-features.md)

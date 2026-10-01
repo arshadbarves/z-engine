@@ -147,6 +147,14 @@ model uses its own default.
 The agent's thinking appears in the transcript as a collapsible section.
 More effort is slower and costs more.
 
+> **Note:** With the experimental
+> [Per-task routing](16-decision-features.md#per-task-routing) feature On
+> and effort left on **auto**, Z Engine picks low, medium or high effort
+> once per task and keeps it for the follow-ups. With
+> `[decisions.routing] allow_model_switch = true` it may also run a simple
+> task on the fast model. A **Routed** chip in the transcript shows the
+> choice and why.
+
 ## Fallback models and retries
 
 When a request fails for a temporary reason (rate limit, overload, server

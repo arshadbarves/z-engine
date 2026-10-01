@@ -75,6 +75,13 @@ menu lists what `@`, `/`, `#` and `!` do.
     checkpoints, v1 import and privacy.
 14. [Troubleshooting](14-troubleshooting.md) – `/doctor`, the log file and
     fixes for common problems.
+15. [Experimental features](15-experimental-features.md) – trying new
+    features (Off, Shadow, On), the decision model (sidecar or in the
+    app), and how a feature becomes standard.
+16. [Decision features](16-decision-features.md) – what each of the 21
+    experimental decision features does and what you see when it is on.
+17. [Decision settings reference](17-decision-settings.md) – every
+    `[decisions]` key, the feature settings and your own decision rules.
 
 > **Note:** Z Engine 2.0 is a desktop app only. There is no separate
 > command-line version.

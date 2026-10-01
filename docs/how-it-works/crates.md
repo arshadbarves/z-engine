@@ -22,9 +22,11 @@ where the customer sits.
   *capability traits* (ports).
 - Only `z-engine-host` touches the operating system; `z-engine-integrations`
   owns its server processes, `z-engine-llm` makes the provider HTTP calls,
-  and the GUI shell checks GitHub for updates, installs them, and opens
-  project files through the opener plugin. `config` and `store` read and
-  write only their own files; `context` and `policy` do no I/O at all.
+  `z-engine-decisions` sends the decision-model request (the native model
+  is downloaded by host and run in process), and the GUI shell
+  checks GitHub for updates, installs them, and opens project files
+  through the opener plugin. `config` and `store` read and write only
+  their own files; `context` and `policy` do no I/O at all.
 
 ```mermaid
 flowchart TD
@@ -37,6 +39,7 @@ flowchart TD
   engine --> llm["z-engine-llm"]
   engine --> config
   engine --> store["z-engine-store"]
+  engine --> decisions["z-engine-decisions"]
   engine --> policy["z-engine-policy"]
   engine --> host["z-engine-host"]
   engine -->|"dev-dependency"| testkit["z-engine-testkit"]
@@ -93,9 +96,9 @@ own.
 - [`prompts/`](../../crates/z-engine-prompts/prompts/): `system/`, `tools/`
   (one file per tool), `agents/` (explore, general, plan, review, verify),
   `commands/` (commit, init, review, security-review), `reminders/`,
-  `auxiliary/`. One module per area in [`src/`](../../crates/z-engine-prompts/src/);
+  `auxiliary/`, `decisions/` (decision questions). One module per area in [`src/`](../../crates/z-engine-prompts/src/);
   `agents.rs` and `commands.rs` hold the `BUILTIN` lists.
-- Used by: context, tools, engine.
+- Used by: context, tools, engine, decisions.
 
 ## z-engine-llm
 
@@ -128,9 +131,10 @@ folders, and finds the agents, commands and instructions you wrote.
 **How it works**
 - Owns: settings layering (defaults, user, project, project-local,
   environment), import of v1 `config.toml`, targeted edits for the settings
-  screens, credentials (`auth.json`), workspace trust, on-disk paths, and
-  discovery of extensions (agents, commands, skills, rules, output styles)
-  and instruction files (`AGENTS.md`).
+  screens, credentials (`auth.json`), workspace trust, on-disk paths, the
+  registry of [experimental features](features-experimental-and-decisions.md),
+  and discovery of extensions (agents, commands, skills, rules, output
+  styles) and instruction files (`AGENTS.md`).
 - Loading never fails: a broken layer is skipped and reported.
 - Must not: touch files other than its own; import anything but the leaf
   crates.
@@ -140,7 +144,9 @@ folders, and finds the agents, commands and instructions you wrote.
   per section, clamps in `normalize.rs`),
   [`default_config.toml`](../../crates/z-engine-config/src/default_config.toml),
   `loader.rs`, `merge.rs`, `writer.rs`, `migrate/`, `credentials.rs`,
-  `trust.rs`, `paths.rs`, `extensions/`, `instructions.rs`.
+  `trust.rs`, `paths.rs`, `extensions/`, `instructions.rs`, and
+  [`features/`](../../crates/z-engine-config/src/features/) (`FeatureId`,
+  `FeatureMode`, `FEATURES`; `Settings::feature` in `settings/experimental.rs`).
 - Types export to `ui/src/lib/protocol/config/`. Used by: engine, gui.
 
 ## z-engine-policy
@@ -174,14 +180,15 @@ asks the hands.
   background shells (with process-tree kill), the optional command sandbox
   (macOS seatbelt, Linux bubblewrap), search (ripgrep or a built-in engine,
   globs, fuzzy file search), git (status, worktrees, patches), code
-  checkpoints in a shadow git repository, web fetch and search, and
-  workspace fingerprints.
+  checkpoints in a shadow git repository, web fetch and search, workspace
+  fingerprints, and the resumable, checksum-verified model download.
 - Must not: know about sessions, models or permissions; import anything but
   the leaf crates.
 
 **For developers**
 - [`src/`](../../crates/z-engine-host/src/): `fs/`, `process/`, `sandbox/`,
-  `search/`, `git/`, `checkpoint/`, `web/`, `media.rs`, `fingerprint.rs`.
+  `search/`, `git/`, `checkpoint/`, `web/`, `media.rs`, `fingerprint.rs`,
+  `net.rs` (the sidecar's free port), `download.rs` (`.part` resume).
 - Used by: tools, integrations, verify, engine.
 
 ## z-engine-integrations
@@ -214,7 +221,7 @@ and what to summarize when the briefcase is too full.
 - Owns: the layered system prompt ordered for prompt-cache stability,
   cache breakpoints, `<system-reminder>` blocks, instruction rendering, the
   tree-sitter repo map, token estimates, the `/context` breakdown,
-  compaction planning, and the final pass that shapes messages the way
+  compaction and task-view planning, and the final pass that shapes messages the way
   every provider accepts.
 - Must not: do I/O; callers pass file contents in.
 
@@ -241,7 +248,7 @@ without ever stopping you from finishing.
 **For developers**
 - [`src/`](../../crates/z-engine-verify/src/): `discovery/` (with
   `ecosystems/`), `parse/` (one parser per test runner), `run.rs`,
-  `select.rs`, `assess.rs`, `artifact.rs`, `spec.rs`.
+  `select.rs`, `narrow.rs` (check selection), `assess.rs`, `artifact.rs`, `spec.rs`.
 - Used by: engine (`src/verify/` holds the modes).
 
 ## z-engine-store
@@ -253,14 +260,37 @@ by line as it happens, and can be read back to resume it.
 - Owns: one directory per session with `log.jsonl` (append-only records),
   `meta.json` (listing cache), `agents/<id>.jsonl` (subagent transcripts)
   and `artifacts/` (spilled outputs, check logs, images); replay into the
-  state a session resumes from; import of v1 transcripts.
-- Must not: touch files outside its sessions directory; import anything but
-  the leaf crates.
+  state a session resumes from; import of v1 transcripts; the opt-in
+  decision dataset (`decisions/dataset/<question>.jsonl`).
+- Must not: touch files outside its sessions and dataset directories;
+  import anything but the leaf crates.
 
 **For developers**
 - [`src/`](../../crates/z-engine-store/src/): `store.rs` (`SessionStore`),
   `log.rs`, `append.rs`, `record.rs`, `replay.rs`, `meta.rs`, `heal.rs`,
-  `listing.rs`, `artifacts.rs`, `legacy/`. Used by: engine.
+  `listing.rs`, `artifacts.rs`, `dataset.rs` (`DecisionDataset`), `legacy/`.
+  Used by: engine.
+
+## z-engine-decisions
+
+**In plain words.** The quick second opinion: it puts short, typed
+questions to a small local model and hands back an answer only when the
+model is sure, otherwise "keep today's behavior".
+
+**How it works**
+- Owns: typed questions and answers, the `DecisionProvider` seam (rules,
+  SystemOne for laya-serve or Jev, `onnx` for the native runtime behind the
+  `onnx` Cargo feature, hybrid), pinned native models, calibration, cache, probe, trace.
+- A documented network exception: it sends the `POST /v1/systemone`
+  request itself. The sidecar and the model download are the engine's.
+- Must not: know about sessions, settings or seams; import anything but
+  the leaf crates.
+
+**For developers**
+- [`src/`](../../crates/z-engine-decisions/src/): `question.rs`,
+  `answer.rs`, `provider.rs`, `providers/` (with `onnx/`),
+  `native_model.rs`, `calibration.rs`, `cache.rs`, `probe.rs`, `trace.rs`.
+  Used by: engine. More: [the decision layer](features-experimental-and-decisions.md#the-decision-layer).
 
 ## z-engine-tools
 
@@ -297,7 +327,8 @@ going, saves everything, and announces each change as an event.
   compaction, stop boundary); the tool gate (hooks, policy, batched
   approvals, ordered execution); the broker for approvals, questions and
   plans; subagents, worktrees and jobs; hooks; slash commands; per-session
-  MCP and language servers; verification modes.
+  MCP and language servers; verification modes; the decision layer's
+  service, seams, uses, sidecar and native runtime.
 - It alone knows the concrete implementations and wires them into tools
   through ports.
 - Must not: depend on the GUI, inline prompt prose, or reach the OS other
@@ -307,9 +338,9 @@ going, saves everything, and announces each change as an event.
 - [`src/`](../../crates/z-engine-engine/src/): `engine/` (API, catalog,
   export, and [`queries/`](../../crates/z-engine-engine/src/engine/queries/):
   diffs, git summary and worktrees, context breakdown, catalogs, file
-  search, MCP tests, trust), `session/`, `run/`, `batch/`, `broker/`,
-  `orchestration/`, `ports/`, `hooks/`, `commands/`, `mcp/`, `lsp/`,
-  `verify/`, `settings/`.
+  search, MCP tests, trust, decisions, decision model), `session/`, `run/`, `batch/`,
+  `broker/`, `orchestration/`, `ports/`, `hooks/`, `commands/`, `mcp/`,
+  `lsp/`, `verify/`, `settings/`, [`decisions/`](../../crates/z-engine-engine/src/decisions/).
 - Uses every crate above (testkit only in tests); used by: gui. Contract: [v2 engine architecture](../architecture/v2-engine.md).
 
 ## z-engine-testkit
@@ -340,9 +371,9 @@ the engine.
   `engineEvent` bridge, the window (dark vibrancy on macOS, dark Mica on
   Windows 11, else solid), the log and the pet's growth
   (`<data dir>/z-engine-gui.log`, `pet.json`), `#[tauri::command]`s.
-- Frontend (`ui`): Svelte 5, Bits UI and Vite; generated protocol types,
-  invoke wrappers, one event listener, pure reducers, stores, primitives,
-  screens, and every stylesheet in `styles/`.
+- Frontend (`ui`): Svelte 5, Bits UI, Vite and, for the pet, Three.js;
+  generated protocol types, invoke wrappers, one event listener, pure
+  reducers, stores, primitives, screens, and every stylesheet in `styles/`.
 - Must not: be imported by any crate. The shell uses only engine, protocol
   and config (settings files, credentials, trust, discovery); screens never
   call `invoke()` or import `bits-ui`; no terminal or headless replacement.
@@ -353,8 +384,8 @@ the engine.
   `pet.rs`, `layers.rs`, `guard.rs`, `ipc.rs`, `commands/`.
 - Frontend: [`ui/src/`](../../crates/z-engine-gui/ui/src/): `lib/protocol/`,
   `lib/commands/`, `lib/runtime/`, `lib/domain/`, `lib/stores/`, `lib/ui/`,
-  `styles/`, `components/`. How it works: [the desktop app](features-desktop-app.md);
-  rules: [GUI UI guide](../design/gui-ui-guide.md).
+  `lib/pet3d/`, `styles/`, `components/`. How it works: [the desktop app](features-desktop-app.md),
+  [the pet](features-desktop-pet.md); rules: [GUI UI guide](../design/gui-ui-guide.md).
 
 ## Where do I change X?
 
@@ -368,6 +399,8 @@ listed in the [documentation contract](../AGENTS.md#3-what-to-update-for-each-ki
 | add a setting | field and default in [`z-engine-config/src/settings/<section>.rs`](../../crates/z-engine-config/src/settings/) (clamps in `normalize.rs`), a commented example in `default_config.toml`, a v1 mapping in `migrate/convert.rs` if v1 had it; run `cargo test -p z-engine-config` |
 | add a slash command | engine built-in: [`z-engine-engine/src/commands/`](../../crates/z-engine-engine/src/commands/) (`catalog.rs`); prompt built-in: `z-engine-prompts/prompts/commands/<name>.md` plus `BUILTIN` in `src/commands.rs`; app-only: `z-engine-gui/ui/src/lib/stores/uiCommands.ts` |
 | add a built-in agent | `z-engine-prompts/prompts/agents/<name>.md` (frontmatter) plus a `BUILTIN` entry in [`src/agents.rs`](../../crates/z-engine-prompts/src/agents.rs) |
+| add an experimental feature | a `FeatureId` variant in [`z-engine-config/src/features/id.rs`](../../crates/z-engine-config/src/features/id.rs) and its `FeatureSpec` in `registry.rs`; gate the code on `settings.feature(id)`; run `cargo test -p z-engine-config` |
+| add a decision use | `z-engine-engine/src/decisions/uses/<name>.rs` (or a `<name>/` folder) implementing `DecisionUse` for its seams, added to `USES` in [`decisions/registry.rs`](../../crates/z-engine-engine/src/decisions/registry.rs); its question in `z-engine-prompts/prompts/decisions/<name>.md` with a `pub const` in `src/decisions.rs` |
 | add a hook event | `HOOK_EVENTS` in [`z-engine-config/src/settings/hooks.rs`](../../crates/z-engine-config/src/settings/hooks.rs); fire it from `z-engine-engine/src/hooks/` |
 | add a protocol event | a variant of `Event` in [`z-engine-protocol/src/events.rs`](../../crates/z-engine-protocol/src/events.rs); emit it in the engine; a `case` in `z-engine-gui/ui/src/lib/domain/sessionView/reduce.ts`; run `cargo test -p z-engine-protocol` and commit the TypeScript |
 | add an IPC command | a `#[tauri::command]` fn in `z-engine-gui/src-tauri/src/commands/<domain>.rs`, listed in `generate_handler!` in `main.rs`; a wrapper in `ui/src/lib/commands/<domain>.ts`; engine data from [`engine/queries/<topic>.rs`](../../crates/z-engine-engine/src/engine/queries/) |
@@ -376,5 +409,4 @@ listed in the [documentation contract](../AGENTS.md#3-what-to-update-for-each-ki
 | add a check parser | `z-engine-verify/src/parse/<runner>.rs` plus runner detection in [`parse/dispatch.rs`](../../crates/z-engine-verify/src/parse/dispatch.rs); discovery for a new ecosystem in `discovery/ecosystems/` |
 | add a provider adapter | a module like `anthropic/` or `openai/` in [`z-engine-llm/src/`](../../crates/z-engine-llm/src/) implementing `ModelClient`; construction in `provider/build.rs`, endpoint detection in `provider/detect.rs`; the settings-side `ProviderKind` in `z-engine-config/src/settings/provider.rs`, mapped in `z-engine-engine/src/settings/client.rs` |
 
-See also: [How Z Engine works](README.md) · [The desktop app](features-desktop-app.md) ·
-[v2 engine architecture](../architecture/v2-engine.md) · [AGENTS.md](../../AGENTS.md)
+See also: [How Z Engine works](README.md) · [The desktop app](features-desktop-app.md) · [v2 engine architecture](../architecture/v2-engine.md) · [AGENTS.md](../../AGENTS.md)

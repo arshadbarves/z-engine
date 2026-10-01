@@ -103,7 +103,7 @@ news, like a scorekeeper who updates the board after every play.
 4. Some events also ask for a side effect: a passing notice (only for the
    chat on screen), `!cmd` output for the shell drawer, a chat-list
    refresh when a title changes or a turn starts or ends, or XP for the
-   [pet](features-desktop-screens.md#the-pet) when a turn finishes or a
+   [pet](features-desktop-pet.md) when a turn finishes or a
    helper's worktree changes are applied (in any chat).
 
 **For developers**

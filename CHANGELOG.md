@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Experimental features**: new features now start in **Settings →
+  Experimental** (or `[experimental]` in a settings file), each Off,
+  Shadow (runs and records what it would have done, without changing
+  anything) or On, until they meet a measured bar and become standard.
+  This version includes 21, all decision features, all Off by default.
+- **The decision model**: a small local model (laya-serve or a
+  Jev-compatible server) that the experimental decision features ask
+  quick questions, set up in `[decisions]`: an address on this computer
+  or a sidecar command Z Engine starts and stops, timeout, confidence
+  threshold, per-question calibration, **Test connection**, and an opt-in
+  dataset in the data folder; a **Decisions** section in the Context tab
+  shows what each feature decided. Every unanswered, slow or unsure
+  question keeps today's behavior, and a decision can only add an
+  approval, a notice, a note or a card, never allow anything.
+- **Native runtime (experimental)**: native in-process runtime for the
+  decision model (`decisions.runtime = "native"`), with a pinned, verified
+  model download in Settings (resumable, checked against SHA-256
+  checksums, removable). It needs a build with the `onnx` feature; the
+  release installers don't include it yet.
+- **Smarter context (experimental)**: relevance-aware compaction,
+  task-scoped history (earlier exchanges set aside at a new task, with a
+  divider and **Include full history**), first-request context, file
+  prefetch (`[decisions.prefetch]`), and relevant trimming of long command
+  output and search results.
+- **Per-task routing (experimental)**: the reasoning effort picked once
+  per task while yours is on auto, optionally the fast model for simple
+  tasks (`[decisions.routing] allow_model_switch`), shown as a **Routed**
+  chip.
+- **Safety reviews (experimental)**: risk review approvals and warnings on
+  web and MCP results that try to instruct the agent; secret screening,
+  which asks before likely credentials in tool output reach your provider;
+  your own decision rules (`[[decisions.rules]]`); and a loop guard that
+  reminds a stuck agent, then asks you.
+- **Verification help (experimental)**: a completion check that marks
+  **Claimed, not checked** when the final message claims success without
+  a check, and check selection that skips checks the changes can't affect.
+- **Suggestions and guidance (experimental)**: "Plan first?", "Remember
+  this for next time?" and "Run a review?" cards; a correction signal;
+  skill and agent hints; and a check that points the agent to your earlier
+  answer instead of asking again.
+- **Pet mood and inbox priority (experimental)**: the pet's mood after a
+  turn follows how the turn went, and the Inbox sorts what needs you by
+  urgency, with `Notification` hooks firing only for urgent or unrated
+  items.
+
+### Changed
+- **The pet is now 3D**, drawn with WebGL, with every mood, prop,
+  accessory, stage, move and trick it had. It turns its body to face where
+  it goes (its spin trick is a full turn), has glossy eyes, and its face
+  slides over its body as it looks around. It draws frames only while
+  something plays, so an idle pet costs nothing. Where WebGL is missing, or
+  after the graphics context is lost, the flat pet stands in; the boot
+  splash and the helper sprites stay flat.
+
+### Fixed
+- Bypass mode now applies to subagents: agents that set their own
+  `permissionMode` (the built-in `explore`, `plan` and `review` run in
+  Plan) no longer ask or refuse while the chat is in Bypass. Deny rules
+  still apply.
+- The island no longer looks empty while the pet roams: instead of a faint
+  dash, its slot shows a small live portrait of the pet's head that turns
+  toward where the pet is, in a thin ring of the status color (breathing
+  while the agent works, amber when something needs you). The island keeps
+  its width; **Calm** and **Off** are unchanged.
+- **Customize…** on the pet's card no longer raises an error as the card
+  closes and **Settings → Pet** opens.
+
 ## [2.2.0] - 2026-09-30
 
 ### Added

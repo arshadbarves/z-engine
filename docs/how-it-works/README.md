@@ -291,7 +291,10 @@ stale and the badge would say so.
 | [Agents and context](features-agents-and-context.md) | Subagents and background agents; what the model sees and how instruction files, memory, compaction and caching shape it |
 | [Integrations and safety](features-integrations-and-safety.md) | MCP and language servers, verification, checkpoints and rewind, sessions, providers, models and cost, settings layers and workspace trust, the sandbox |
 | [The desktop app](features-desktop-app.md) | How the window follows the engine: events, many chats at once, the window's glass and title bar, self-updates |
-| [The desktop app's screens](features-desktop-screens.md) | Each screen and panel: home, Inbox, transcript, approvals in the composer, island, the pet, the side panel (Changes, Plan, Agents, Context), settings, composer and palette |
+| [The desktop app's screens](features-desktop-screens.md) | Each screen and panel: home, Inbox, transcript, approvals in the composer, island, the side panel (Changes, Plan, Agents, Context), settings, composer and palette |
+| [The desktop pet](features-desktop-pet.md) | Where the pet goes and how it grows, how it is drawn in 3D (and when it falls back to flat), and the island's portrait of it while it roams |
+| [Experimental features and the decision layer](features-experimental-and-decisions.md) | How a feature is tried (Off, Shadow, On) and becomes standard; the decision model, the seams where it may act, its sidecar or native runtime, and the decision trace |
+| [Decision uses](features-decision-uses.md) | What each of the 21 decision features does: context and cost, task-scoped history and its log record, routing, safety, verification, suggestions, and how they are tested |
 | [Crates](crates.md) | What each crate does, its main modules, and how the crates depend on each other |
 | [Glossary](glossary.md) | Short definitions of every term used on these pages |
 
