@@ -6,17 +6,23 @@ mod blocking;
 mod digest;
 
 pub mod checkpoint;
+pub mod download;
 pub mod error;
 pub mod fingerprint;
 pub mod fs;
 pub mod git;
 pub mod media;
+pub mod net;
 pub mod process;
 pub mod sandbox;
 pub mod search;
 pub mod web;
 
 pub use checkpoint::{ChangeKind, PathChange, RestoreReport, ShadowRepo};
+pub use download::{
+    DownloadSpec, Downloader, downloaded_bytes, file_matches, part_path, remove_download_dir,
+    sha256_file,
+};
 pub use error::HostError;
 pub use fingerprint::workspace_fingerprint;
 pub use fs::{
@@ -30,6 +36,7 @@ pub use git::{
     remove_worktree, repo_root, status_porcelain, summary,
 };
 pub use media::{DEFAULT_MAX_IMAGE_BYTES, pdf_text, read_image, read_pdf_base64};
+pub use net::free_loopback_port;
 pub use process::{
     BackgroundShells, BackgroundSpec, DEFAULT_MAX_OUTPUT_BYTES, DEFAULT_RUN_TIMEOUT, EnvPolicy,
     JobEvent, JobEventSink, JobRead, JobSnapshot, OutputSink, RunOutput, RunSpec, ShellKind,

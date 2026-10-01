@@ -10,6 +10,10 @@ license.workspace = true
 name = "zengine-gui"
 path = "src/main.rs"
 
+[features]
+# The decision model's native runtime (Laya through ONNX Runtime); off by default.
+onnx = ["z-engine-engine/onnx"]
+
 [dependencies]
 z-engine-engine.workspace = true
 z-engine-protocol.workspace = true
