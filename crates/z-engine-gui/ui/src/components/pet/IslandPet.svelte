@@ -4,13 +4,15 @@
   import { petUi } from "$lib/stores/pet.svelte";
   import { prefersReducedMotion } from "$lib/ui/motion";
   import { perch } from "$lib/ui/perch.svelte";
+  import IslandPortrait from "./IslandPortrait.svelte";
   import Pet from "./Pet.svelte";
   import { useLookTarget } from "./petGaze.svelte";
 
   /**
    * The pet riding in the island: the island's orb slot is its home perch.
-   * While it roams elsewhere the slot keeps a faint nest, so the island does
-   * not change width. While you type it watches the text cursor.
+   * While it roams elsewhere the slot shows a live portrait of it looking
+   * its way, so the island does not change width. While you type it
+   * watches the text cursor.
    */
   type Props = { pose: PetPose; progress: number | null; helpers: number };
   let { pose, progress, helpers }: Props = $props();
@@ -33,6 +35,6 @@
       lookAt={look.point}
     />
   {:else}
-    <span class="island-nest" aria-hidden="true"></span>
+    <IslandPortrait {pose} />
   {/if}
 </span>

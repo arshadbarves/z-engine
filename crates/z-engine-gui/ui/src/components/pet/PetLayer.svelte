@@ -171,6 +171,15 @@
     });
   });
 
+  // Where it is, for the island's portrait to look at while it roams.
+  $effect(() => {
+    const at = petUi.docked || !face ? null : { x: motion.x, y: motion.y - drawn * (PET_FEET - 0.5) };
+    untrack(() => {
+      petUi.at = at;
+    });
+  });
+  $effect(() => () => (petUi.at = null));
+
   // Home: once it has landed in the island's slot, the island shows it.
   $effect(() => {
     if (behavior?.perch !== "island" || petUi.docked || petUi.dragging || !motion.resting) return;
@@ -268,6 +277,9 @@
           facing={motion.face < 0 ? -1 : 1}
           routine={petUi.routine}
           lookAt={look.point}
+          turn={motion.face}
+          lift={motion.lift}
+          bob={motion.bob}
         />
       </div>
     </div>

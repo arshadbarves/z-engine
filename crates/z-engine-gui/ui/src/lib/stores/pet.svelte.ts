@@ -1,6 +1,7 @@
 import { boopReaction, type PetReaction } from "../domain/pet/behavior";
 import { petName, type PetLook } from "../domain/pet/looks";
 import type { PerchId } from "../domain/pet/perches";
+import type { Point } from "../domain/pet/physics";
 import type { PetRoutine } from "../domain/pet/routines";
 import { settingsStore } from "./settings.svelte";
 
@@ -19,6 +20,8 @@ class PetUi {
   perch = $state<PerchId>("island");
   /** The pet is in the island (not travelling to or from it). */
   docked = $state(true);
+  /** The roaming pet's middle in viewport pixels, for the island's portrait to look at; null while docked. */
+  at = $state<Point | null>(null);
   dragging = $state(false);
   /** Where an idle pet goes next (a wander, a drop, or "call back"). */
   wander = $state<PerchId | null>(null);

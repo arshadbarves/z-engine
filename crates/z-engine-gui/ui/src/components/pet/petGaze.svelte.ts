@@ -1,3 +1,4 @@
+import { on } from "svelte/events";
 import type { Point } from "$lib/domain/pet/physics";
 import { TYPING_MS } from "$lib/domain/pet/pose";
 import { perches } from "$lib/ui/perch.svelte";
@@ -96,7 +97,9 @@ export function useLookTarget(options: { pointer: () => boolean; enabled: () => 
     };
     document.addEventListener("input", onEdit, true);
     document.addEventListener("selectionchange", onEdit);
-    document.addEventListener("focusout", onLeave, true);
+    // Removing a focused node fires focusout mid-update, where only a
+    // handler attached through Svelte may write state.
+    const offLeave = on(document, "focusout", onLeave, { capture: true });
     if (follow) window.addEventListener("pointermove", onMove, { passive: true });
     return () => {
       cancelAnimationFrame(frame);
@@ -105,7 +108,7 @@ export function useLookTarget(options: { pointer: () => boolean; enabled: () => 
       window.clearTimeout(pointerTimer);
       document.removeEventListener("input", onEdit, true);
       document.removeEventListener("selectionchange", onEdit);
-      document.removeEventListener("focusout", onLeave, true);
+      offLeave();
       window.removeEventListener("pointermove", onMove);
       caret = null;
       pointer = null;

@@ -171,28 +171,6 @@
 .island-action:focus-visible {
   outline: none;
 }
-.island-pet-slot {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: var(--island-h);
-  height: var(--island-h);
-}
-/* The pet's home slot (IslandPet); while it roams, a faint nest keeps the width. */
-.island-pet {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-}
-.island-nest {
-  width: 10px;
-  height: 3px;
-  border-radius: var(--r-full);
-  background: var(--fill-press);
-}
 .island-text {
   flex: 1 1 auto;
   min-width: 0;
@@ -254,16 +232,6 @@
 }
 .island-action:active {
   scale: 0.95;
-}
-.island-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--r-full);
-  background: var(--island-tone, var(--label-3));
-}
-.island-dot.tone-working {
-  background: var(--label);
-  animation: live-breathe var(--live-period) var(--ease-inout) infinite;
 }
 
 /* Progress fills the capsule from the left; compacting sweeps across it. */
