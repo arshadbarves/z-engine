@@ -131,6 +131,12 @@ impl Tool for AskUserQuestionTool {
                 "AskUserQuestion is not available here: subagents cannot ask the user. Make the most reasonable choice, state it as an assumption, and continue.",
             ));
         }
+        if let Some(note) = ctx
+            .until_cancelled(interaction.already_answered(ctx, &questions))
+            .await?
+        {
+            return Ok(ToolOutput::text(note, "Answered earlier in this chat"));
+        }
         let asked = questions.len();
         let answers = ctx
             .until_cancelled(interaction.ask(ctx, questions))

@@ -9,8 +9,12 @@ use z_engine_store::LogRecord;
 use z_engine_tools::{InteractionPort, ToolCtx};
 
 use crate::broker::Broker;
+use crate::decisions::seams::{AttentionItem, AttentionKind, review_questions};
 use crate::hooks::notify;
 use crate::session::SessionCore;
+
+/// Characters of a proposed plan an urgency score reads.
+const PLAN_CHARS: usize = 600;
 
 #[derive(Debug)]
 pub(crate) struct Interaction {
@@ -29,6 +33,10 @@ impl InteractionPort for Interaction {
         ctx.agent_id.is_main()
     }
 
+    async fn already_answered(&self, ctx: &ToolCtx, questions: &[Question]) -> Option<String> {
+        review_questions(&self.core, &ctx.cancel, questions).await
+    }
+
     async fn ask(
         &self,
         ctx: &ToolCtx,
@@ -38,10 +46,17 @@ impl InteractionPort for Interaction {
             return Err("only the main agent can ask the user".to_string());
         }
         let broker = &self.core.broker;
+        let asked = questions
+            .iter()
+            .map(|q| q.question.as_str())
+            .collect::<Vec<_>>();
+        let text = asked.join("\n");
         let (request_id, reply) = broker
             .ask(ctx.agent_id.clone(), questions)
             .map_err(|error| error.to_string())?;
-        notify(&self.core, "Z Engine has a question for you", &ctx.cancel).await;
+        let item = AttentionItem::request(AttentionKind::Question, request_id.as_str(), text);
+        let message = "Z Engine has a question for you";
+        notify(&self.core, message, vec![item], &ctx.cancel).await;
         match Broker::wait(reply, &ctx.cancel).await {
             Some(answers) => Ok(answers),
             None => {
@@ -56,15 +71,13 @@ impl InteractionPort for Interaction {
             return Err("only the main agent can propose a plan".to_string());
         }
         let broker = &self.core.broker;
+        let text = plan.chars().take(PLAN_CHARS).collect();
         let (request_id, reply) = broker
             .propose_plan(ctx.agent_id.clone(), plan)
             .map_err(|error| error.to_string())?;
-        notify(
-            &self.core,
-            "Z Engine has a plan for you to review",
-            &ctx.cancel,
-        )
-        .await;
+        let item = AttentionItem::request(AttentionKind::Plan, request_id.as_str(), text);
+        let message = "Z Engine has a plan for you to review";
+        notify(&self.core, message, vec![item], &ctx.cancel).await;
         match Broker::wait(reply, &ctx.cancel).await {
             Some(decision) => Ok(decision),
             None => {

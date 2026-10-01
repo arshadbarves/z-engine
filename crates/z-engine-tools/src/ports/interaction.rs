@@ -10,6 +10,12 @@ pub trait InteractionPort: Send + Sync {
     /// False where nobody can answer (subagents).
     fn can_ask(&self, ctx: &ToolCtx) -> bool;
 
+    /// A note for the model instead of asking, when the chat already
+    /// answered `questions`; `None` asks the user as usual.
+    async fn already_answered(&self, _ctx: &ToolCtx, _questions: &[Question]) -> Option<String> {
+        None
+    }
+
     /// `Ok(None)` when the user dismissed the questions.
     async fn ask(
         &self,
