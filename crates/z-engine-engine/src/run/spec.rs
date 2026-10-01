@@ -10,6 +10,7 @@ use z_engine_context::GitInfo;
 use z_engine_protocol::{AgentId, PermissionMode, TurnOutcome, Usage, VerificationOutcome};
 
 use super::tally::ChildTally;
+use crate::decisions::routed_model;
 use crate::mcp::McpRunState;
 use crate::orchestration::AgentTracker;
 use crate::session::{AgentResources, SessionCore};
@@ -57,7 +58,8 @@ pub(crate) struct AgentSpec {
     pub base_prompt: String,
     pub tools: ToolFilter,
     pub model: ModelChoice,
-    /// `None` follows the session's permission mode.
+    /// `None` follows the session's permission mode; a session in bypass
+    /// mode overrides it.
     pub mode: Option<PermissionMode>,
     pub max_turns: u32,
     /// Project root, or the agent's worktree.
@@ -120,13 +122,26 @@ impl RunContext {
         }
     }
 
+    /// The agent's own mode, except that a session in bypass mode bypasses
+    /// for every agent, whatever mode its definition sets (as in Claude
+    /// Code).
     pub(crate) fn mode(&self) -> PermissionMode {
-        self.spec.mode.unwrap_or_else(|| self.core.mode())
+        let session = self.core.mode();
+        match self.spec.mode {
+            Some(mode) if session != PermissionMode::Bypass => mode,
+            _ => session,
+        }
     }
 
+    /// The fixed model, else the session's, or the task's routed model
+    /// (`decisions_routing`) while the session still runs the one it was
+    /// routed from.
     pub(crate) fn model(&self) -> String {
         match &self.spec.model {
-            ModelChoice::Session => self.core.main_model(),
+            ModelChoice::Session => {
+                let model = self.core.main_model();
+                routed_model(&self.core, &model).unwrap_or(model)
+            }
             ModelChoice::Fixed(model) => model.clone(),
         }
     }

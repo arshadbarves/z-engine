@@ -1,6 +1,7 @@
 //! Custom agents from `.z-engine/agents`: the tool allowlist decides what
 //! the agent is offered (anything else is an unknown tool),
-//! `permissionMode: plan` denies writes, and a reload picks up new types.
+//! `permissionMode: plan` denies writes unless the session bypasses, and a
+//! reload picks up new types.
 
 mod support;
 
@@ -65,11 +66,7 @@ async fn allowlist_limits_the_tools() {
 async fn plan_mode_agent_cannot_write() {
     let repo = FixtureRepo::empty();
     write_agent(&repo, "planner", "permissionMode: plan\n", "Plan things.");
-    let settings = format!(
-        "{}\n[permissions]\nmode = \"bypass\"\n",
-        support::BASE_SETTINGS
-    );
-    let mut h = Harness::builder(repo).settings(&settings).start().await;
+    let mut h = Harness::start(repo).await;
     route_task(
         &h.model,
         "PLAN-TASK",
@@ -99,6 +96,36 @@ async fn plan_mode_agent_cannot_write() {
         h.agent_finished(&agent).await.status,
         AgentStatus::Completed
     );
+}
+
+#[tokio::test]
+async fn bypass_session_overrides_the_agent_mode() {
+    let repo = FixtureRepo::empty();
+    write_agent(&repo, "planner", "permissionMode: plan\n", "Plan things.");
+    let settings = format!(
+        "{}\n[permissions]\nmode = \"bypass\"\n",
+        support::BASE_SETTINGS
+    );
+    let mut h = Harness::builder(repo).settings(&settings).start().await;
+    route_task(
+        &h.model,
+        "PLAN-TASK",
+        vec![
+            Script::tool("Write", json!({ "file_path": "plan.txt", "content": "p" })),
+            Script::text("plan written"),
+        ],
+    );
+    h.model.push(Script::tool(
+        "Agent",
+        agent_call("planner", "plan", "PLAN-TASK plan it"),
+    ));
+    h.model.push(Script::text("planned"));
+    h.run_turn("plan").await;
+
+    let child = task_requests(&h.model, "PLAN-TASK");
+    let answered = results(child[1].messages.last().unwrap());
+    assert!(!answered[0].1, "{}", answered[0].2);
+    assert!(h.repo.exists("plan.txt"));
 }
 
 #[tokio::test]
