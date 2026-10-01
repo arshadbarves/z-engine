@@ -63,6 +63,22 @@ describe("v2 settings IPC", () => {
       { scope: "project", projectRoot: "/work/app", name: "fs" },
     ],
     ["testMcpServer", () => settings.testMcpServer(server, "/work/app"), "test_mcp_server", { server, projectRoot: "/work/app" }],
+    ["featureCatalog", () => settings.featureCatalog(), "feature_catalog", undefined],
+    ["testDecisionModel", () => settings.testDecisionModel(null), "test_decision_model", { projectRoot: null }],
+    ["decisionModelStatus", () => settings.decisionModelStatus(null), "decision_model_status", { projectRoot: null }],
+    [
+      "downloadDecisionModel",
+      () => settings.downloadDecisionModel("/work/app"),
+      "download_decision_model",
+      { projectRoot: "/work/app" },
+    ],
+    [
+      "cancelDecisionModelDownload",
+      () => settings.cancelDecisionModelDownload(),
+      "cancel_decision_model_download",
+      undefined,
+    ],
+    ["removeDecisionModel", () => settings.removeDecisionModel(null), "remove_decision_model", { projectRoot: null }],
     [
       "setHooks",
       () => settings.setHooks(project, "PreToolUse", [hook]),

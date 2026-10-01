@@ -1,13 +1,18 @@
 //! Settings commands (`lib/commands/settings.ts`): the effective settings,
-//! one layer's table, and writes to the user, project or local file. Every
-//! write reloads the sessions it affects.
+//! one layer's table, writes to the user, project or local file (every
+//! write reloads the sessions it affects), the feature registry, and the
+//! MCP and decision-model connection tests, and the native decision model's
+//! download.
 
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 use tauri::State;
-use z_engine_config::{ConfigError, HookConfig, LoadedSettings, McpServerConfig, RuleKind, writer};
-use z_engine_engine::McpTestReport;
+use z_engine_config::{
+    ConfigError, FEATURES, FeatureSpec, HookConfig, LoadedSettings, McpServerConfig, RuleKind,
+    writer,
+};
+use z_engine_engine::{DecisionModelStatus, DecisionModelTest, McpTestReport};
 
 use crate::ipc::{IpcResult, fail};
 use crate::layers::{LayerFile, Scope, layer_file, read_layer, toml_value};
@@ -136,6 +141,64 @@ pub(crate) async fn test_mcp_server(
         .engine
         .test_mcp_server("test", &server, root.as_deref())
         .await)
+}
+
+/// Every registered feature, for the Experimental tab.
+#[tauri::command]
+pub(crate) fn feature_catalog() -> Vec<FeatureSpec> {
+    FEATURES.to_vec()
+}
+
+/// Asks the configured decision model one known question.
+#[tauri::command]
+pub(crate) async fn test_decision_model(
+    project_root: Option<String>,
+    state: State<'_, AppState>,
+) -> IpcResult<DecisionModelTest> {
+    let root = project_root.map(PathBuf::from);
+    Ok(state.engine.test_decision_model(root.as_deref()).await)
+}
+
+/// The native decision model for the effective checkpoint: on disk, downloading or missing.
+#[tauri::command]
+pub(crate) async fn decision_model_status(
+    project_root: Option<String>,
+    state: State<'_, AppState>,
+) -> IpcResult<DecisionModelStatus> {
+    let root = project_root.map(PathBuf::from);
+    Ok(state.engine.decision_model_status(root.as_deref()).await)
+}
+
+/// Starts or resumes the model download; the UI polls the status for progress.
+#[tauri::command]
+pub(crate) async fn download_decision_model(
+    project_root: Option<String>,
+    state: State<'_, AppState>,
+) -> IpcResult<DecisionModelStatus> {
+    let root = project_root.map(PathBuf::from);
+    let engine = &state.engine;
+    engine
+        .download_decision_model(root.as_deref())
+        .await
+        .map_err(fail)
+}
+
+#[tauri::command]
+pub(crate) fn cancel_decision_model_download(state: State<'_, AppState>) {
+    state.engine.cancel_decision_model_download();
+}
+
+#[tauri::command]
+pub(crate) async fn remove_decision_model(
+    project_root: Option<String>,
+    state: State<'_, AppState>,
+) -> IpcResult<DecisionModelStatus> {
+    let root = project_root.map(PathBuf::from);
+    let engine = &state.engine;
+    engine
+        .remove_decision_model(root.as_deref())
+        .await
+        .map_err(fail)
 }
 
 fn keys(key_path: &[String]) -> Vec<&str> {

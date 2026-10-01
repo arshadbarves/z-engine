@@ -6,6 +6,7 @@
     Brain,
     Eye,
     Info,
+    Lightbulb,
     ListChecks,
     Server,
     Shield,
@@ -37,12 +38,16 @@
     { id: "mcp", label: "MCP", hint: "External tool servers the agent can use.", icon: Server, scoped: true },
     { id: "hooks", label: "Hooks", hint: "Your own commands, run on agent events.", icon: Workflow, scoped: true },
     { id: "advanced", label: "Advanced", hint: "Context, limits, web, shell and language servers.", icon: Sliders, scoped: true },
+    { id: "experimental", label: "Experimental", hint: "New features still being measured. Try them in Shadow first.", icon: Lightbulb, scoped: true },
     { id: "about", label: "About & Updates", hint: "Version, updates and where files live.", icon: Info, scoped: false },
   ];
 </script>
 
 <script lang="ts">
+  import { featureEntries } from "$lib/domain/settings/features";
   import { searchSettings, SETTINGS_SECTIONS, type SettingEntry } from "$lib/domain/settings/searchIndex";
+  import { featureStore } from "$lib/stores/features.svelte";
+  import { settingsStore } from "$lib/stores/settings.svelte";
   import { SearchField, SelectionCapsule } from "$lib/ui";
   import Icon from "$lib/ui/icons";
 
@@ -58,7 +63,7 @@
 
   let query = $state("");
   let highlighted = $state(0);
-  const results = $derived(searchSettings(query));
+  const results = $derived(searchSettings(query, 8, featureEntries(featureStore.catalog, settingsStore.settings)));
   const byId = new Map(SETTINGS_TABS.map((t) => [t.id, t]));
 
   function jump(entry: SettingEntry) {

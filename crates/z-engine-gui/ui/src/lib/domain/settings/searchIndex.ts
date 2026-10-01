@@ -16,7 +16,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { label: "General", tabs: ["models", "providers", "appearance", "pet"] },
   { label: "Agent", tabs: ["permissions", "memory", "verification", "extensions"] },
   { label: "Integrations", tabs: ["mcp", "hooks"] },
-  { label: "System", tabs: ["advanced", "about"] },
+  { label: "System", tabs: ["advanced", "experimental", "about"] },
 ];
 
 export interface SettingEntry {
@@ -85,6 +85,7 @@ export const SETTING_ENTRIES: readonly SettingEntry[] = [
   e("advanced", "shell.sandbox.allow_network", "Allow network in the sandbox", "Shell", "internet sandbox"),
   e("advanced", "lsp.enabled", "Use language servers", "Language servers", "lsp diagnostics rust-analyzer typescript"),
   e("advanced", "compat.claude", "Read .claude folders", "Workspace", "claude code compatibility agents commands"),
+  e("experimental", "@Experimental features", "Experimental features", null, "beta preview flags shadow try new decision model laya native onnx download runtime"),
   e("about", "@Updates", "Updates", null, "version upgrade release install about"),
 ];
 
@@ -98,11 +99,11 @@ function rank(entry: SettingEntry, words: string[]): number | null {
   return words.every((w) => title.includes(w)) ? 2 : 3;
 }
 
-/** The settings matching every word of `query`, best first. */
-export function searchSettings(query: string, limit = 8): SettingEntry[] {
+/** The settings matching every word of `query`, best first; `extra` adds entries known only at runtime. */
+export function searchSettings(query: string, limit = 8, extra: readonly SettingEntry[] = []): SettingEntry[] {
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   if (words.length === 0) return [];
-  return SETTING_ENTRIES.map((entry, order) => ({ entry, order, score: rank(entry, words) }))
+  return [...SETTING_ENTRIES, ...extra].map((entry, order) => ({ entry, order, score: rank(entry, words) }))
     .filter((r): r is { entry: SettingEntry; order: number; score: number } => r.score !== null)
     .sort((a, b) => a.score - b.score || a.order - b.order)
     .slice(0, limit)

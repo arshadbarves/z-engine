@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Extensions } from "../protocol/config/Extensions";
+import type { FeatureSpec } from "../protocol/config/FeatureSpec";
 import type { HookConfig } from "../protocol/config/HookConfig";
 import type { InstructionFile } from "../protocol/config/InstructionFile";
 import type { KeyStatus } from "../protocol/config/KeyStatus";
@@ -35,6 +36,42 @@ export interface McpTestResult {
   resources: number;
   prompts: number;
   error: string | null;
+}
+
+/** "Test connection" of the decision model: one known question, asked directly. */
+export interface DecisionModelTest {
+  ok: boolean;
+  latencyMs: number;
+  /** The answer's label; a working model answers the probe `yes`. */
+  answer: string | null;
+  confidence: number | null;
+  error: string | null;
+  /** The URL the probe went to; null when no connection was made. */
+  endpoint: string | null;
+  /** The sidecar was started recently, or the native model is still loading. */
+  warmingUp: boolean;
+  /** `decisions.timeout_ms`, to compare with the latency. */
+  timeoutMs: number;
+}
+
+/** The native runtime's model for the effective `decisions.checkpoint`. */
+export interface DecisionModelStatus {
+  checkpoint: string;
+  /** A pinned model exists for the checkpoint. */
+  available: boolean;
+  repo: string | null;
+  revision: string | null;
+  /** `<data dir>/models/laya/<revision>/`. */
+  dir: string | null;
+  totalBytes: number;
+  downloadedBytes: number;
+  /** Every file is on disk with its pinned size. */
+  installed: boolean;
+  downloading: boolean;
+  /** Why the last download stopped, or why there is no model. */
+  error: string | null;
+  /** This app was built with the native runtime. */
+  nativeBuilt: boolean;
 }
 
 export interface TrustStatus {
@@ -78,6 +115,26 @@ export const removeMcpServer = (target: LayerTarget, name: string) =>
 
 export const testMcpServer = (server: McpServerConfig, projectRoot: string | null) =>
   invoke<McpTestResult>("test_mcp_server", { server, projectRoot });
+
+/** Every registered feature; only `available` ones are listed in Settings. */
+export const featureCatalog = () => invoke<FeatureSpec[]>("feature_catalog");
+
+/** Starts the sidecar when one is configured; `projectRoot` null tests the user settings. */
+export const testDecisionModel = (projectRoot: string | null) =>
+  invoke<DecisionModelTest>("test_decision_model", { projectRoot });
+
+export const decisionModelStatus = (projectRoot: string | null) =>
+  invoke<DecisionModelStatus>("decision_model_status", { projectRoot });
+
+/** Starts or resumes the download in the background; poll the status for progress. */
+export const downloadDecisionModel = (projectRoot: string | null) =>
+  invoke<DecisionModelStatus>("download_decision_model", { projectRoot });
+
+/** Partial files stay, so downloading again resumes. */
+export const cancelDecisionModelDownload = () => invoke<void>("cancel_decision_model_download");
+
+export const removeDecisionModel = (projectRoot: string | null) =>
+  invoke<DecisionModelStatus>("remove_decision_model", { projectRoot });
 
 /** Replaces the layer's hooks for `event`; an empty list removes them. */
 export const setHooks = (target: LayerTarget, event: string, hooks: HookConfig[]) =>

@@ -13,9 +13,10 @@
     value: T;
     /** The stored value of a choice; null removes the key. Defaults to the choice itself. */
     toValue?: (choice: T) => unknown;
+    tag?: string;
   };
 
-  let { title, description, keyPath, options, value, toValue = (choice) => choice }: Props = $props();
+  let { title, description, keyPath, options, value, toValue = (choice) => choice, tag }: Props = $props();
 
   let pending = $state<T | null>(null);
   let error = $state<string | null>(null);
@@ -30,7 +31,7 @@
   }
 </script>
 
-<SettingRow {title} {description} {keyPath} {error}>
+<SettingRow {title} {description} {keyPath} {error} {tag}>
   <SegmentedChoice label={title} {options} value={shown} busy={pending !== null} onSelect={(choice) => void pick(choice)} />
   {#if selected}<p class="setting-choice-desc" aria-live="polite">{selected.description}</p>{/if}
 </SettingRow>

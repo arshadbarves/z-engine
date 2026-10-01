@@ -3,6 +3,7 @@
   import type { SettingEntry } from "$lib/domain/settings/searchIndex";
   import { layerError } from "$lib/domain/settings/provenance";
   import { activeProjectRoot } from "$lib/runtime";
+  import { featureStore } from "$lib/stores/features.svelte";
   import { settingsStore } from "$lib/stores/settings.svelte";
   import { ui } from "$lib/stores/ui.svelte";
   import { bindStore } from "$lib/svelte/bind.svelte";
@@ -12,6 +13,7 @@
   import AboutTab from "./AboutTab.svelte";
   import AdvancedTab from "./AdvancedTab.svelte";
   import AppearanceTab from "./AppearanceTab.svelte";
+  import ExperimentalTab from "./ExperimentalTab.svelte";
   import ExtensionsTab from "./ExtensionsTab.svelte";
   import HooksTab from "./HooksTab.svelte";
   import McpTab from "./McpTab.svelte";
@@ -38,7 +40,7 @@
 
   $effect(() => {
     const root = activeProjectRoot();
-    untrack(() => void settingsStore.open(root));
+    untrack(() => void Promise.all([settingsStore.open(root), featureStore.ensure()]));
   });
 
   // A search result (here or in the palette): once its page and folded
@@ -115,6 +117,8 @@
             <MemoryTab />
           {:else if tab === "advanced"}
             <AdvancedTab {settings} />
+          {:else if tab === "experimental"}
+            <ExperimentalTab {settings} />
           {:else if tab === "pet"}
             <PetTab {settings} />
           {:else}

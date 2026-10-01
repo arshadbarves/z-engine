@@ -3,6 +3,7 @@
   import type { KeyPath } from "$lib/domain/settings/provenance";
   import { LAYER_LABELS, scopeLabel } from "$lib/domain/settings/scopes";
   import { settingsStore } from "$lib/stores/settings.svelte";
+  import { Pill } from "$lib/ui";
   import SourceBadge from "./SourceBadge.svelte";
 
   type Props = {
@@ -14,10 +15,12 @@
     /** Title and control on one line, for switches. */
     inline?: boolean;
     error?: string | null;
+    /** A short label beside the title, such as "Experimental". */
+    tag?: string;
     children: Snippet;
   };
 
-  let { title, description = "", keyPath, controlId, inline = false, error = null, children }: Props = $props();
+  let { title, description = "", keyPath, controlId, inline = false, error = null, tag, children }: Props = $props();
 
   let resetting = $state(false);
   let resetError = $state<string | null>(null);
@@ -45,6 +48,7 @@
       {#if description}<span class="form-label-desc">{description}</span>{/if}
     </div>
     <div class="setting-row-meta">
+      {#if tag}<Pill tone="attention">{tag}</Pill>{/if}
       {#if source && source !== "default"}<SourceBadge {source} />{/if}
       {#if definedHere}
         <button

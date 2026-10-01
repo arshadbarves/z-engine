@@ -20,6 +20,10 @@ export const LIMITS = {
   maxTurns: { min: 1, max: U32_MAX, integer: true },
   sessionCostCapUsd: { min: 0, integer: false },
   timeoutSecs: { min: 1, max: Number.MAX_SAFE_INTEGER, integer: true },
+  decisionTimeoutMs: { min: 50, max: 10_000, integer: true },
+  decisionMaxLen: { min: 128, max: 8_192, integer: true },
+  decisionMaxBatch: { min: 1, max: 64, integer: true },
+  probability: { min: 0, max: 1, integer: false },
 } satisfies Record<string, NumberRange>;
 
 export type NumberResult = { ok: true; value: number | null } | { ok: false; error: string };

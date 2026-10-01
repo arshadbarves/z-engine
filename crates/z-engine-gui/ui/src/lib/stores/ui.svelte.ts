@@ -11,6 +11,7 @@ export type SettingsTab =
   | "verification"
   | "memory"
   | "advanced"
+  | "experimental"
   | "appearance"
   | "pet"
   | "about";
