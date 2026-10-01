@@ -6704,7 +6704,7 @@ dependencies = [
 
 [[package]]
 name = "z-engine-config"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "chrono",
  "dirs",
@@ -6723,7 +6723,7 @@ dependencies = [
 
 [[package]]
 name = "z-engine-context"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "chrono",
  "serde",
@@ -6741,7 +6741,7 @@ dependencies = [
 
 [[package]]
 name = "z-engine-decisions"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -6762,7 +6762,7 @@ dependencies = [
 
 [[package]]
 name = "z-engine-engine"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "async-trait",
  "futures",
@@ -6794,7 +6794,7 @@ dependencies = [
 
 [[package]]
 name = "z-engine-gui"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "anyhow",
  "reqwest 0.12.28",
@@ -6820,7 +6820,7 @@ dependencies = [
 
 [[package]]
 name = "z-engine-host"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -6845,7 +6845,7 @@ dependencies = [
 
 [[package]]
 name = "z-engine-integrations"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -6865,7 +6865,7 @@ dependencies = [
 
 [[package]]
 name = "z-engine-llm"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -6885,7 +6885,7 @@ dependencies = [
 
 [[package]]
 name = "z-engine-policy"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "globset",
  "regex",
@@ -6897,14 +6897,14 @@ dependencies = [
 
 [[package]]
 name = "z-engine-prompts"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "serde_yaml_ng",
 ]
 
 [[package]]
 name = "z-engine-protocol"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -6914,7 +6914,7 @@ dependencies = [
 
 [[package]]
 name = "z-engine-store"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -6927,7 +6927,7 @@ dependencies = [
 
 [[package]]
 name = "z-engine-testkit"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -6944,7 +6944,7 @@ dependencies = [
 
 [[package]]
 name = "z-engine-tools"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -6969,7 +6969,7 @@ dependencies = [
 
 [[package]]
 name = "z-engine-verify"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "regex",
  "serde",
