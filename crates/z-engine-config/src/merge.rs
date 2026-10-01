@@ -4,7 +4,8 @@
 //! Tables merge recursively and scalars and other arrays override, except:
 //! rule lists, `shell.env_passthrough` and `shell.sandbox.extra_writable`
 //! union (deduplicated, in order);
-//! `hooks.<event>` lists concatenate; `verification.checks` merge by `id`,
+//! `hooks.<event>` and `decisions.rules` lists concatenate;
+//! `verification.checks` merge by `id`,
 //! a later check replacing the earlier one with that id in place; and a
 //! later `mcp.servers.<name>` or `lsp.servers.<name>` replaces the earlier
 //! server entirely.
@@ -33,6 +34,7 @@ fn rule_for(path: &[String]) -> Rule {
     match path {
         _ if UNION_ARRAYS.iter().any(|union| union.iter().eq(path)) => Rule::Union,
         [section, _] if section == "hooks" => Rule::Concat,
+        [section, key] if section == "decisions" && key == "rules" => Rule::Concat,
         [section, key] if section == "verification" && key == "checks" => Rule::ById,
         [section, servers, _] if (section == "mcp" || section == "lsp") && servers == "servers" => {
             Rule::Replace
@@ -187,6 +189,19 @@ mod tests {
             .map(|h| h["command"].as_str().unwrap())
             .collect();
         assert_eq!(commands, ["one", "two", "one"]);
+    }
+
+    #[test]
+    fn decision_rules_concatenate() {
+        let user = "[[decisions.rules]]\nquestion = \"user\"";
+        let t = merged(&[user, "[[decisions.rules]]\nquestion = \"project\""]);
+        let questions: Vec<_> = t["decisions"]["rules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|rule| rule["question"].as_str().unwrap())
+            .collect();
+        assert_eq!(questions, ["user", "project"]);
     }
 
     #[test]

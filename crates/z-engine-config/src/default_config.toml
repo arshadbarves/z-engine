@@ -99,3 +99,48 @@ schema = 2
 
 # [compat]
 # claude = true                 # also read .claude/ folders and CLAUDE.md
+
+# Experimental features, one mode each: off (default) | shadow (runs and
+# records what it would do, never acts) | on. Settings > Experimental lists
+# the features this version has built; other ids stay off.
+# [experimental]
+# decisions_compaction = "shadow"
+
+# The small model the decisions_* features ask (laya-serve or Jev). Any
+# slow, missing or unsure answer keeps today's behavior.
+# [decisions]
+# endpoint = "http://127.0.0.1:8000"  # loopback only unless allow_remote
+# api_key_env = "LAYA_API_KEY"  # variable holding the endpoint's key; default: none
+# checkpoint = "multilingual"
+# max_len = 1024                # tokens read per question, 128 to 8192
+# timeout_ms = 250              # 50 to 10000; slower answers count as none
+# threshold = 0.8               # confidence needed to act, 0 to 1
+# max_batch = 16                # questions per request, 1 to 64
+# allow_remote = false
+# runtime = "sidecar"           # sidecar (laya-serve at endpoint) | native (in-process; needs
+#                               # an app built with the onnx feature and the model downloaded in
+#                               # Settings to <data dir>/models/laya/<revision>/)
+# record_dataset = false        # append inputs and answers to <data dir>/decisions/dataset/
+# [decisions.sidecar]
+# command = "laya-serve"        # started on a free local port with a new key; replaces endpoint
+# [decisions.calibration.connection_probe]
+# temperature = 1.0             # above 1 softens an over-confident question
+# threshold = 0.9               # default: decisions.threshold
+# [decisions.prefetch]          # decisions_prefetch: files attached at a task start
+# max_files = 3                 # 1 to 10
+# max_tokens = 6000             # estimated tokens for all attached files, 500 to 50000
+# [decisions.routing]           # decisions_routing: effort (and model) chosen once per task
+# allow_model_switch = false    # also choose between model.main and model.fast
+# [decisions.loop_guard]        # decisions_loop_guard: reminders when the agent repeats itself
+# max_reminders = 3             # reminders per turn before you are asked, 1 to 10
+# [decisions.task_view]         # decisions_task_view: earlier exchanges set aside for a new task
+# keep_recent_exchanges = 2     # newest exchanges that always stay, 1 to 20
+# [[decisions.rules]]           # decisions_custom_rules: your own questions; user and
+#                               # project rules add up (project rules only when trusted)
+# name = "prod"                 # optional label
+# event = "PreToolUse"          # PreToolUse | UserPromptSubmit
+# matcher = "Bash"              # PreToolUse only: tool name regex, like hooks; default: all
+# question = "Does this command touch production?"
+# options = []                  # empty: yes/no; else 2 to 20 choices
+# when = ["yes"]                # answers that fire the rule; default: yes (or the first option)
+# action = "ask"                # ask (approval before an allowed call) | notice | remind

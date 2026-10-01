@@ -6,10 +6,11 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::{
-    AgentSettings, CompatSettings, ContextSettings, HookConfig, LspSettings, McpSettings,
-    ModelSettings, PermissionSettings, PricingOverride, ProviderSettings, ShellSettings,
-    UiSettings, VerificationSettings, WebSettings,
+    AgentSettings, CompatSettings, ContextSettings, DecisionSettings, HookConfig, LspSettings,
+    McpSettings, ModelSettings, PermissionSettings, PricingOverride, ProviderSettings,
+    ShellSettings, UiSettings, VerificationSettings, WebSettings,
 };
+use crate::features::FeatureMode;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "snake_case")]
@@ -32,4 +33,8 @@ pub struct Settings {
     pub compat: CompatSettings,
     /// Model id to pricing, overriding the catalog.
     pub pricing: BTreeMap<String, PricingOverride>,
+    /// Feature id (see `FEATURES`) to its mode; read it with
+    /// `Settings::feature`.
+    pub experimental: BTreeMap<String, FeatureMode>,
+    pub decisions: DecisionSettings,
 }

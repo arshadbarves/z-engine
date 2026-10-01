@@ -1,10 +1,9 @@
-//! Post-merge normalization: clamp numeric ranges, drop entries that cannot
-//! run, and describe every adjustment as a warning for the settings screen.
+//! Post-merge normalization: clamp ranges, drop what cannot run, and warn about each change.
 
 use super::{
     DEFAULT_BASE_URL, DEFAULT_MODEL, DEFAULT_PET_NAME, MAX_COMPACT_AT_PERCENT, MAX_CONTINUATIONS,
     MAX_OUTPUT_TOKENS, MAX_PET_NAME_CHARS, MIN_COMPACT_AT_PERCENT, MIN_OUTPUT_TOKENS,
-    SearchBackend, Settings, is_hook_event,
+    SearchBackend, Settings, is_hook_event, normalize_decisions, normalize_experimental,
 };
 
 pub(crate) fn normalize(settings: &mut Settings) -> Vec<String> {
@@ -73,6 +72,8 @@ pub(crate) fn normalize(settings: &mut Settings) -> Vec<String> {
     normalize_servers(settings, w);
     normalize_sandbox(settings, w);
     normalize_pet_name(settings, w);
+    normalize_experimental(settings, w);
+    normalize_decisions(&mut settings.decisions, w);
     warnings
 }
 

@@ -12,6 +12,7 @@ pub mod credentials;
 mod document;
 mod error;
 pub mod extensions;
+pub mod features;
 mod files;
 mod gitignore;
 pub mod instructions;
@@ -34,6 +35,7 @@ pub use extensions::{
     OutputStyleDef, RuleDef, SkillDef, discover_extensions, load_skill_body, parse_agent,
     parse_command,
 };
+pub use features::{FEATURES, FeatureGroup, FeatureId, FeatureMode, FeatureSpec, FeatureStage};
 pub use instructions::{
     InstructionFile, InstructionScope, discover_instructions, nested_instructions,
 };
@@ -45,7 +47,8 @@ pub use paths::{
     project_settings_file,
 };
 pub use settings::{
-    AgentSettings, CheckConfig, CompanionLevel, CompatSettings, ContextSettings, HOOK_EVENTS,
+    AgentSettings, CalibrationEntry, CheckConfig, CompanionLevel, CompatSettings, ContextSettings,
+    DecisionRule, DecisionRuntime, DecisionSettings, DecisionSidecarSettings, HOOK_EVENTS,
     HookConfig, LspServerConfig, LspSettings, McpServerConfig, McpSettings, ModelSettings,
     PermissionSettings, PricingOverride, ProviderKind, ProviderSettings, RuleKind, SandboxSettings,
     SearchBackend, Settings, ShellSettings, TaskReportView, UiSettings, VerificationSettings,

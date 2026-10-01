@@ -5,6 +5,7 @@ use serde_json::Value as Json;
 use toml::Table;
 
 use super::Settings;
+use crate::features::FeatureId;
 
 /// Sections whose keys are user-chosen names rather than schema fields.
 const NAMED_SECTIONS: [&str; 2] = ["hooks", "pricing"];
@@ -17,6 +18,11 @@ pub(crate) fn unknown_keys(table: &Table) -> Vec<String> {
     let mut unknown = Vec::new();
     for (key, value) in table {
         if key == "schema" || NAMED_SECTIONS.contains(&key.as_str()) {
+            continue;
+        }
+        if let ("experimental", toml::Value::Table(features)) = (key.as_str(), value) {
+            let ids = features.keys().filter(|id| FeatureId::parse(id).is_none());
+            unknown.extend(ids.map(|id| format!("experimental.{id}")));
             continue;
         }
         match (schema.get(key), value) {
@@ -76,12 +82,29 @@ MY_VAR = "1"
 [shell.sandbox]
 enabled = true
 alow_network = true
+[experimental]
+decisions_compaction = "shadow"
+decisions_compacton = "on"
+[decisions]
+timeout_ms = 300
+time_out = 1
+[decisions.calibration.compaction_relevant]
+temperature = 1.5
+[decisions.sidecar]
+comand = "laya-serve"
 "#,
         )
         .unwrap();
         assert_eq!(
             unknown_keys(&table),
-            vec!["model.effrot", "modle", "shell.sandbox.alow_network"]
+            vec![
+                "decisions.sidecar.comand",
+                "decisions.time_out",
+                "experimental.decisions_compacton",
+                "model.effrot",
+                "modle",
+                "shell.sandbox.alow_network"
+            ]
         );
     }
 }
